@@ -60,8 +60,14 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 		c.jobManager.SendProgressUpdate(job.ID, 10)
 	}
 
-	// Open and decode image
-	src, err := imaging.Open(inputPath)
+	// Ensure output directory exists
+	outputDir := filepath.Dir(outputPath)
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %v", err)
+	}
+
+	// Open and decode image with auto-orientation disabled to prevent unwanted rotation
+	src, err := imaging.Open(inputPath, imaging.AutoOrientation(false))
 	if err != nil {
 		return fmt.Errorf("failed to open image: %v", err)
 	}
@@ -93,17 +99,19 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 	}
 
 	// Apply filters
-	switch options.Filter {
-	case "grayscale":
-		img = imaging.Grayscale(img)
-	case "sepia":
-		// Create sepia effect by applying color matrix
-		img = imaging.AdjustSaturation(img, -100)
-		img = imaging.AdjustBrightness(img, 10)
-	case "blur":
-		img = imaging.Blur(img, 2.0)
-	case "sharpen":
-		img = imaging.Sharpen(img, 1.0)
+	if options.Filter != "" && options.Filter != "none" {
+		switch options.Filter {
+		case "grayscale":
+			img = imaging.Grayscale(img)
+		case "sepia":
+			// Create sepia effect by applying color matrix
+			img = imaging.AdjustSaturation(img, -100)
+			img = imaging.AdjustBrightness(img, 10)
+		case "blur":
+			img = imaging.Blur(img, 2.0)
+		case "sharpen":
+			img = imaging.Sharpen(img, 1.0)
+		}
 	}
 
 	// Update progress
@@ -112,11 +120,12 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 	}
 
 	// Save image based on format
+	var saveErr error
 	switch options.Format {
 	case "jpg", "jpeg":
-		return c.saveJPEG(img, outputPath, options.Quality)
+		saveErr = c.saveJPEG(img, outputPath, options.Quality)
 	case "png":
-		return c.savePNG(img, outputPath)
+		saveErr = c.savePNG(img, outputPath)
 	case "webp":
 		// For WebP, we'll use ffmpeg since Go doesn't have native WebP support
 		tempPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".png"
@@ -124,12 +133,23 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 			return err
 		}
 		defer os.Remove(tempPath)
-		return c.convertToWebP(tempPath, outputPath, options.Quality)
+		saveErr = c.convertToWebP(tempPath, outputPath, options.Quality)
 	case "gif":
-		return c.saveGIF(img, outputPath)
+		saveErr = c.saveGIF(img, outputPath)
+	default:
+		return fmt.Errorf("unsupported image format: %s", options.Format)
 	}
 
-	return fmt.Errorf("unsupported image format: %s", options.Format)
+	if saveErr != nil {
+		return saveErr
+	}
+
+	// Update progress to 100% after successful completion
+	if c.jobManager != nil {
+		c.jobManager.SendProgressUpdate(job.ID, 100)
+	}
+
+	return nil
 }
 
 func (c *Converter) convertVideo(job *models.ConversionJob, inputPath, outputPath string) error {
