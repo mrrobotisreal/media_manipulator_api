@@ -140,21 +140,27 @@ func (h *ConversionHandler) DownloadFile(c *gin.Context) {
 }
 
 func (h *ConversionHandler) processConversion(job *models.ConversionJob, inputPath string) {
+	fmt.Printf("[DEBUG] Starting processConversion for job %s\n", job.ID)
+
 	// Update job status to processing
 	if err := h.jobManager.UpdateJobStatus(job.ID, models.StatusProcessing); err != nil {
 		log.Printf("Failed to update job status: %v", err)
 		return
 	}
+	fmt.Printf("[DEBUG] Job status updated to processing\n")
 
 	// Determine output path and extension
 	outputPath := filepath.Join("outputs", job.ID+"_converted"+h.getOutputExtension(job))
+	fmt.Printf("[DEBUG] Output path: %s\n", outputPath)
 
 	// Perform conversion
+	fmt.Printf("[DEBUG] Starting conversion...\n")
 	if err := h.converter.ConvertFile(job, inputPath, outputPath); err != nil {
 		log.Printf("Conversion failed for job %s: %v", job.ID, err)
 		h.jobManager.UpdateJobError(job.ID, err.Error())
 		return
 	}
+	fmt.Printf("[DEBUG] Conversion completed successfully\n")
 
 	// Update job with result
 	resultURL := "/api/download/" + job.ID
@@ -163,14 +169,17 @@ func (h *ConversionHandler) processConversion(job *models.ConversionJob, inputPa
 		h.jobManager.UpdateJobError(job.ID, "Failed to update job result")
 		return
 	}
+	fmt.Printf("[DEBUG] Job result updated: %s\n", resultURL)
 
 	// Mark job as completed
 	if err := h.jobManager.UpdateJobStatus(job.ID, models.StatusCompleted); err != nil {
 		log.Printf("Failed to update job status to completed: %v", err)
 	}
+	fmt.Printf("[DEBUG] Job status updated to completed\n")
 
 	// Clean up input file
 	os.Remove(inputPath)
+	fmt.Printf("[DEBUG] Input file cleaned up: %s\n", inputPath)
 }
 
 func (h *ConversionHandler) saveUploadedFile(file io.Reader, path string) error {

@@ -79,15 +79,18 @@ func (jm *JobManager) UpdateJobStatus(jobID string, status models.JobStatus) err
 }
 
 func (jm *JobManager) UpdateJobProgress(jobID string, progress int) error {
+	fmt.Printf("[DEBUG] UpdateJobProgress called: jobID=%s, progress=%d\n", jobID, progress)
 	jm.mu.Lock()
 	defer jm.mu.Unlock()
 
 	job, exists := jm.jobs[jobID]
 	if !exists {
+		fmt.Printf("[DEBUG] Job not found: %s\n", jobID)
 		return fmt.Errorf("job not found")
 	}
 
 	job.Progress = progress
+	fmt.Printf("[DEBUG] Job progress updated: %s -> %d%%\n", jobID, progress)
 	return nil
 }
 
@@ -121,15 +124,20 @@ func (jm *JobManager) UpdateJobError(jobID string, errorMsg string) error {
 }
 
 func (jm *JobManager) SendProgressUpdate(jobID string, progress int) {
+	fmt.Printf("[DEBUG] SendProgressUpdate called: jobID=%s, progress=%d\n", jobID, progress)
 	select {
 	case jm.progressCh <- models.ProgressUpdate{JobID: jobID, Progress: progress}:
+		fmt.Printf("[DEBUG] Progress update sent to channel\n")
 	default:
 		// Channel is full, skip this update
+		fmt.Printf("[DEBUG] Progress channel full, skipping update\n")
 	}
 }
 
 func (jm *JobManager) handleProgressUpdates() {
+	fmt.Printf("[DEBUG] Progress update handler started\n")
 	for update := range jm.progressCh {
+		fmt.Printf("[DEBUG] Processing progress update: jobID=%s, progress=%d\n", update.JobID, update.Progress)
 		jm.UpdateJobProgress(update.JobID, update.Progress)
 	}
 }

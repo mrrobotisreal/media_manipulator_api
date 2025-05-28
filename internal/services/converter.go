@@ -48,6 +48,9 @@ func (c *Converter) ConvertFile(job *models.ConversionJob, inputPath, outputPath
 }
 
 func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPath string) error {
+	fmt.Printf("[DEBUG] Starting image conversion for job %s\n", job.ID)
+	fmt.Printf("[DEBUG] Input: %s, Output: %s\n", inputPath, outputPath)
+
 	// Parse options
 	optionsBytes, _ := json.Marshal(job.Options)
 	var options models.ImageConversionOptions
@@ -55,8 +58,11 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 		return fmt.Errorf("invalid image options: %v", err)
 	}
 
+	fmt.Printf("[DEBUG] Parsed options: %+v\n", options)
+
 	// Update progress
 	if c.jobManager != nil {
+		fmt.Printf("[DEBUG] Sending progress update: 10%%\n")
 		c.jobManager.SendProgressUpdate(job.ID, 10)
 	}
 
@@ -65,15 +71,18 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %v", err)
 	}
+	fmt.Printf("[DEBUG] Output directory created: %s\n", outputDir)
 
 	// Open and decode image with auto-orientation disabled to prevent unwanted rotation
 	src, err := imaging.Open(inputPath, imaging.AutoOrientation(false))
 	if err != nil {
 		return fmt.Errorf("failed to open image: %v", err)
 	}
+	fmt.Printf("[DEBUG] Image opened successfully, size: %dx%d\n", src.Bounds().Dx(), src.Bounds().Dy())
 
 	// Update progress
 	if c.jobManager != nil {
+		fmt.Printf("[DEBUG] Sending progress update: 30%%\n")
 		c.jobManager.SendProgressUpdate(job.ID, 30)
 	}
 
@@ -91,15 +100,18 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 			height = *options.Height
 		}
 		img = imaging.Resize(img, width, height, imaging.Lanczos)
+		fmt.Printf("[DEBUG] Image resized to: %dx%d\n", img.Bounds().Dx(), img.Bounds().Dy())
 	}
 
 	// Update progress
 	if c.jobManager != nil {
+		fmt.Printf("[DEBUG] Sending progress update: 50%%\n")
 		c.jobManager.SendProgressUpdate(job.ID, 50)
 	}
 
 	// Apply filters
 	if options.Filter != "" && options.Filter != "none" {
+		fmt.Printf("[DEBUG] Applying filter: %s\n", options.Filter)
 		switch options.Filter {
 		case "grayscale":
 			img = imaging.Grayscale(img)
@@ -109,17 +121,22 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 			img = imaging.AdjustBrightness(img, 10)
 		case "blur":
 			img = imaging.Blur(img, 2.0)
+			fmt.Printf("[DEBUG] Blur filter applied\n")
 		case "sharpen":
 			img = imaging.Sharpen(img, 1.0)
 		}
+	} else {
+		fmt.Printf("[DEBUG] No filter applied (filter value: '%s')\n", options.Filter)
 	}
 
 	// Update progress
 	if c.jobManager != nil {
+		fmt.Printf("[DEBUG] Sending progress update: 80%%\n")
 		c.jobManager.SendProgressUpdate(job.ID, 80)
 	}
 
 	// Save image based on format
+	fmt.Printf("[DEBUG] Saving image to: %s\n", outputPath)
 	var saveErr error
 	switch options.Format {
 	case "jpg", "jpeg":
@@ -141,14 +158,18 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 	}
 
 	if saveErr != nil {
+		fmt.Printf("[DEBUG] Error saving image: %v\n", saveErr)
 		return saveErr
 	}
+	fmt.Printf("[DEBUG] Image saved successfully\n")
 
 	// Update progress to 100% after successful completion
 	if c.jobManager != nil {
+		fmt.Printf("[DEBUG] Sending final progress update: 100%%\n")
 		c.jobManager.SendProgressUpdate(job.ID, 100)
 	}
 
+	fmt.Printf("[DEBUG] Image conversion completed successfully\n")
 	return nil
 }
 
