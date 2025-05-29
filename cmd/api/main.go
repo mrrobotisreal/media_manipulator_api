@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/handlers"
@@ -21,7 +22,7 @@ func main() {
 	// Create required directories
 	createDirs()
 
-	// Check if we're in development mode
+	// Check if it's in development mode
 	isDev := os.Getenv("DEV") == "true"
 
 	// Initialize services
@@ -73,14 +74,21 @@ func setupRouter(conversionHandler *handlers.ConversionHandler, isDev bool) *gin
 		corsConfig.AllowAllOrigins = true
 		log.Printf("CORS: Allowing all origins (Development Mode)")
 	} else {
-		// Production mode - restricted CORS (include variations with/without trailing slash)
-		corsConfig.AllowOrigins = []string{
-			"https://ui.converter.winapps.io",
-			"https://ui.converter.winapps.io/",  // Handle trailing slash
-			"https://api.converter.winapps.io",  // Allow HTTPS self-requests
-			"https://api.converter.winapps.io/", // Handle trailing slash for self-requests
-		}
-		log.Printf("CORS: Restricting origins to production domains (including trailing slash variations)")
+		// Production mode - TEMPORARILY more permissive for debugging
+		// TODO: Restrict this once the exact origin is identified
+		corsConfig.AllowAllOrigins = true
+		log.Printf("CORS: TEMPORARILY allowing all origins for debugging (Production Mode)")
+		log.Printf("TODO: Restrict CORS once the exact origin causing issues is identified")
+
+		/*
+			corsConfig.AllowOrigins = []string{
+				"https://ui.converter.winapps.io",
+				"https://ui.converter.winapps.io/",
+				"https://api.converter.winapps.io",
+				"https://api.converter.winapps.io/",
+			}
+			log.Printf("CORS: Restricting origins to production domains (including trailing slash variations)")
+		*/
 	}
 
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
@@ -98,12 +106,33 @@ func setupRouter(conversionHandler *handlers.ConversionHandler, isDev bool) *gin
 	corsConfig.ExposeHeaders = []string{"Content-Length", "Content-Disposition"}
 	router.Use(cors.New(corsConfig))
 
-	// Add debug middleware to log request origins (helps with CORS debugging)
+	// Enhanced debug middleware to log ALL request details
 	router.Use(func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		if origin != "" {
-			log.Printf("Request from origin: %s, Method: %s, Path: %s", origin, c.Request.Method, c.Request.URL.Path)
+		referer := c.GetHeader("Referer")
+		userAgent := c.GetHeader("User-Agent")
+		method := c.Request.Method
+		path := c.Request.URL.Path
+
+		log.Printf("=== INCOMING REQUEST ===")
+		log.Printf("Method: %s", method)
+		log.Printf("Path: %s", path)
+		log.Printf("Origin: '%s'", origin)
+		log.Printf("Referer: '%s'", referer)
+		log.Printf("User-Agent: %s", userAgent)
+		log.Printf("Content-Type: %s", c.GetHeader("Content-Type"))
+		log.Printf("Host: %s", c.Request.Host)
+		log.Printf("Remote Addr: %s", c.Request.RemoteAddr)
+
+		// Log all headers for debugging
+		log.Printf("All Headers:")
+		for name, values := range c.Request.Header {
+			for _, value := range values {
+				log.Printf("  %s: %s", name, value)
+			}
 		}
+		log.Printf("========================")
+
 		c.Next()
 	})
 
@@ -112,6 +141,34 @@ func setupRouter(conversionHandler *handlers.ConversionHandler, isDev bool) *gin
 	{
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+		})
+
+		// Debug endpoint for CORS testing
+		api.GET("/debug", func(c *gin.Context) {
+			response := gin.H{
+				"message":     "Debug endpoint reached successfully",
+				"origin":      c.GetHeader("Origin"),
+				"referer":     c.GetHeader("Referer"),
+				"user_agent":  c.GetHeader("User-Agent"),
+				"host":        c.Request.Host,
+				"remote_addr": c.Request.RemoteAddr,
+				"method":      c.Request.Method,
+				"path":        c.Request.URL.Path,
+				"timestamp":   fmt.Sprintf("%v", time.Now()),
+			}
+			c.JSON(http.StatusOK, response)
+		})
+
+		// Debug endpoint for POST requests (like upload)
+		api.POST("/debug", func(c *gin.Context) {
+			response := gin.H{
+				"message":      "Debug POST endpoint reached successfully",
+				"origin":       c.GetHeader("Origin"),
+				"content_type": c.GetHeader("Content-Type"),
+				"method":       c.Request.Method,
+				"timestamp":    fmt.Sprintf("%v", time.Now()),
+			}
+			c.JSON(http.StatusOK, response)
 		})
 
 		api.POST("/upload", conversionHandler.UploadFile)
