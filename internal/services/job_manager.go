@@ -46,23 +46,35 @@ func (jm *JobManager) CreateJob(originalFile models.OriginalFileInfo, options ma
 }
 
 func (jm *JobManager) GetJob(jobID string) (*models.ConversionJob, error) {
+	fmt.Printf("[DEBUG] GetJob called: jobID=%s\n", jobID)
 	jm.mu.RLock()
 	defer jm.mu.RUnlock()
 
 	job, exists := jm.jobs[jobID]
 	if !exists {
+		fmt.Printf("[DEBUG] Job not found in GetJob: %s\n", jobID)
+		fmt.Printf("[DEBUG] Available jobs: %v\n", func() []string {
+			var keys []string
+			for k := range jm.jobs {
+				keys = append(keys, k)
+			}
+			return keys
+		}())
 		return nil, fmt.Errorf("job not found")
 	}
 
+	fmt.Printf("[DEBUG] Job found: %s, status=%s, progress=%d%%\n", jobID, job.Status, job.Progress)
 	return job, nil
 }
 
 func (jm *JobManager) UpdateJobStatus(jobID string, status models.JobStatus) error {
+	fmt.Printf("[DEBUG] UpdateJobStatus called: jobID=%s, status=%s\n", jobID, status)
 	jm.mu.Lock()
 	defer jm.mu.Unlock()
 
 	job, exists := jm.jobs[jobID]
 	if !exists {
+		fmt.Printf("[DEBUG] Job not found in UpdateJobStatus: %s\n", jobID)
 		return fmt.Errorf("job not found")
 	}
 
@@ -72,9 +84,11 @@ func (jm *JobManager) UpdateJobStatus(jobID string, status models.JobStatus) err
 		job.CompletedAt = &now
 		if status == models.StatusCompleted {
 			job.Progress = 100
+			fmt.Printf("[DEBUG] Job marked as completed with 100%% progress: %s\n", jobID)
 		}
 	}
 
+	fmt.Printf("[DEBUG] Job status updated: %s -> %s (progress: %d%%)\n", jobID, status, job.Progress)
 	return nil
 }
 
@@ -87,6 +101,12 @@ func (jm *JobManager) UpdateJobProgress(jobID string, progress int) error {
 	if !exists {
 		fmt.Printf("[DEBUG] Job not found: %s\n", jobID)
 		return fmt.Errorf("job not found")
+	}
+
+	// Don't update progress if job is already completed
+	if job.Status == models.StatusCompleted || job.Status == models.StatusFailed {
+		fmt.Printf("[DEBUG] Job already completed/failed, skipping progress update: %s\n", jobID)
+		return nil
 	}
 
 	job.Progress = progress
