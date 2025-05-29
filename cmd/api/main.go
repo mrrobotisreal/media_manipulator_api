@@ -73,17 +73,39 @@ func setupRouter(conversionHandler *handlers.ConversionHandler, isDev bool) *gin
 		corsConfig.AllowAllOrigins = true
 		log.Printf("CORS: Allowing all origins (Development Mode)")
 	} else {
-		// Production mode - restricted CORS
+		// Production mode - restricted CORS (include variations with/without trailing slash)
 		corsConfig.AllowOrigins = []string{
 			"https://ui.converter.winapps.io",
-			"https://api.converter.winapps.io", // Allow HTTPS self-requests
+			"https://ui.converter.winapps.io/",  // Handle trailing slash
+			"https://api.converter.winapps.io",  // Allow HTTPS self-requests
+			"https://api.converter.winapps.io/", // Handle trailing slash for self-requests
 		}
-		log.Printf("CORS: Restricting origins to production domains")
+		log.Printf("CORS: Restricting origins to production domains (including trailing slash variations)")
 	}
 
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
+	corsConfig.AllowHeaders = []string{
+		"Origin",
+		"Content-Type",
+		"Accept",
+		"Authorization",
+		"X-Requested-With",
+		"Content-Length",
+		"Accept-Encoding",
+		"X-CSRF-Token",
+	}
+	corsConfig.AllowCredentials = true
+	corsConfig.ExposeHeaders = []string{"Content-Length", "Content-Disposition"}
 	router.Use(cors.New(corsConfig))
+
+	// Add debug middleware to log request origins (helps with CORS debugging)
+	router.Use(func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin != "" {
+			log.Printf("Request from origin: %s, Method: %s, Path: %s", origin, c.Request.Method, c.Request.URL.Path)
+		}
+		c.Next()
+	})
 
 	// API routes
 	api := router.Group("/api")
