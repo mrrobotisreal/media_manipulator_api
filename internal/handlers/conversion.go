@@ -298,7 +298,7 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 
 func (h *ConversionHandler) identifyImageFile(tempPath string, fileHeader *multipart.FileHeader) (*models.FileIdentificationResponse, error) {
 	// Use ImageMagick identify with verbose output for comprehensive details
-	cmd := exec.Command("magick", "identify", "-verbose", tempPath)
+	cmd := exec.Command("identify", "-verbose", tempPath)
 	rawOutput, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to identify image with magick: %v", err)
