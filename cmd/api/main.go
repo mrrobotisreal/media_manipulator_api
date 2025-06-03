@@ -171,6 +171,7 @@ func setupRouter(conversionHandler *handlers.ConversionHandler, isDev bool) *gin
 			c.JSON(http.StatusOK, response)
 		})
 
+		api.POST("/details", conversionHandler.IdentifyFile)
 		api.POST("/upload", conversionHandler.UploadFile)
 		api.GET("/job/:jobId", conversionHandler.GetJobStatus)
 		api.GET("/download/:jobId", conversionHandler.DownloadFile)

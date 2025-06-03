@@ -7,13 +7,16 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 
 	"github.com/gin-gonic/gin"
+	"mime/multipart"
 )
 
 type ConversionHandler struct {
@@ -27,6 +30,65 @@ func NewConversionHandler(jobManager *services.JobManager, converter *services.C
 		jobManager: jobManager,
 		converter:  converter,
 	}
+}
+
+func (h *ConversionHandler) IdentifyFile(c *gin.Context) {
+	// Parse multipart form
+	if err := c.Request.ParseMultipartForm(100 << 20); err != nil { // 100MB max
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse form"})
+		return
+	}
+
+	// Get file from form
+	file, fileHeader, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No file provided"})
+		return
+	}
+	defer file.Close()
+
+	// Validate file type
+	mimeType := fileHeader.Header.Get("Content-Type")
+	fileType := models.GetFileType(mimeType)
+
+	// Create a temporary file for analysis
+	tempDir := "temp"
+	os.MkdirAll(tempDir, 0755)
+	tempFileName := fmt.Sprintf("identify_%d_%s", time.Now().UnixNano(), fileHeader.Filename)
+	tempPath := filepath.Join(tempDir, tempFileName)
+
+	// Save uploaded file temporarily
+	if err := h.saveUploadedFile(file, tempPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save temporary file"})
+		return
+	}
+	defer os.Remove(tempPath) // Clean up
+
+	// Get file details based on type
+	var response *models.FileIdentificationResponse
+	switch fileType {
+	case models.FileTypeImage:
+		response, err = h.identifyImageFile(tempPath, fileHeader)
+	case models.FileTypeVideo:
+		response, err = h.identifyVideoFile(tempPath, fileHeader)
+	case models.FileTypeAudio:
+		response, err = h.identifyAudioFile(tempPath, fileHeader)
+	default:
+		response, err = h.identifyGenericFile(tempPath, fileHeader)
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to identify file: %v", err)})
+		return
+	}
+
+	// Set common fields
+	response.FileName = fileHeader.Filename
+	response.FileSize = fileHeader.Size
+	response.FileType = fileType
+	response.MimeType = mimeType
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *ConversionHandler) UploadFile(c *gin.Context) {
@@ -232,4 +294,107 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 	// Remove original extension and add new one
 	name := strings.TrimSuffix(originalName, filepath.Ext(originalName))
 	return fmt.Sprintf("%s_converted%s", name, ext)
+}
+
+func (h *ConversionHandler) identifyImageFile(tempPath string, fileHeader *multipart.FileHeader) (*models.FileIdentificationResponse, error) {
+	// Use ImageMagick identify with verbose output for comprehensive details
+	cmd := exec.Command("magick", "identify", "-verbose", tempPath)
+	rawOutput, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to identify image with magick: %v", err)
+	}
+
+	// Parse the verbose output into structured data
+	details := make(map[string]interface{})
+	lines := strings.Split(string(rawOutput), "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Parse key-value pairs from ImageMagick verbose output
+		if strings.Contains(line, ":") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+				details[key] = value
+			}
+		}
+	}
+
+	return &models.FileIdentificationResponse{
+		Details:   details,
+		Tool:      "ImageMagick identify",
+		RawOutput: string(rawOutput),
+	}, nil
+}
+
+func (h *ConversionHandler) identifyVideoFile(tempPath string, fileHeader *multipart.FileHeader) (*models.FileIdentificationResponse, error) {
+	// Use ffprobe with JSON output for comprehensive video details
+	cmd := exec.Command("ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", tempPath)
+	rawOutput, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to identify video with ffprobe: %v", err)
+	}
+
+	// Parse JSON output
+	var ffprobeData map[string]interface{}
+	if err := json.Unmarshal(rawOutput, &ffprobeData); err != nil {
+		return nil, fmt.Errorf("failed to parse ffprobe output: %v", err)
+	}
+
+	return &models.FileIdentificationResponse{
+		Details:   ffprobeData,
+		Tool:      "FFprobe",
+		RawOutput: string(rawOutput),
+	}, nil
+}
+
+func (h *ConversionHandler) identifyAudioFile(tempPath string, fileHeader *multipart.FileHeader) (*models.FileIdentificationResponse, error) {
+	// Use ffprobe with JSON output for comprehensive audio details
+	cmd := exec.Command("ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", tempPath)
+	rawOutput, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to identify audio with ffprobe: %v", err)
+	}
+
+	// Parse JSON output
+	var ffprobeData map[string]interface{}
+	if err := json.Unmarshal(rawOutput, &ffprobeData); err != nil {
+		return nil, fmt.Errorf("failed to parse ffprobe output: %v", err)
+	}
+
+	return &models.FileIdentificationResponse{
+		Details:   ffprobeData,
+		Tool:      "FFprobe",
+		RawOutput: string(rawOutput),
+	}, nil
+}
+
+func (h *ConversionHandler) identifyGenericFile(tempPath string, fileHeader *multipart.FileHeader) (*models.FileIdentificationResponse, error) {
+	// For generic files, try to get basic file information using system tools
+	details := make(map[string]interface{})
+
+	// Get file info using 'file' command if available
+	if cmd := exec.Command("file", "-b", "--mime-all", tempPath); cmd != nil {
+		if output, err := cmd.Output(); err == nil {
+			details["file_command_output"] = strings.TrimSpace(string(output))
+		}
+	}
+
+	// Get basic file stats
+	if stat, err := os.Stat(tempPath); err == nil {
+		details["modification_time"] = stat.ModTime()
+		details["permissions"] = stat.Mode().String()
+		details["size_bytes"] = stat.Size()
+	}
+
+	return &models.FileIdentificationResponse{
+		Details:   details,
+		Tool:      "System file command",
+		RawOutput: fmt.Sprintf("Generic file analysis for: %s", fileHeader.Filename),
+	}, nil
 }
