@@ -76,19 +76,19 @@ func setupRouter(conversionHandler *handlers.ConversionHandler, isDev bool) *gin
 	} else {
 		// Production mode - TEMPORARILY more permissive for debugging
 		// TODO: Restrict this once the exact origin is identified
-		corsConfig.AllowAllOrigins = true
-		log.Printf("CORS: TEMPORARILY allowing all origins for debugging (Production Mode)")
-		log.Printf("TODO: Restrict CORS once the exact origin causing issues is identified")
+		// corsConfig.AllowAllOrigins = true
+		// log.Printf("CORS: TEMPORARILY allowing all origins for debugging (Production Mode)")
+		// log.Printf("TODO: Restrict CORS once the exact origin causing issues is identified")
 
-		/*
-			corsConfig.AllowOrigins = []string{
-				"https://ui.converter.winapps.io",
-				"https://ui.converter.winapps.io/",
-				"https://api.converter.winapps.io",
-				"https://api.converter.winapps.io/",
-			}
-			log.Printf("CORS: Restricting origins to production domains (including trailing slash variations)")
-		*/
+		corsConfig.AllowOrigins = []string{
+			"https://wintrow.io",
+			"https://wintrow.io/",
+			"https://ui.converter.winapps.io",
+			"https://ui.converter.winapps.io/",
+			"https://api.converter.winapps.io",
+			"https://api.converter.winapps.io/",
+		}
+		log.Printf("CORS: Restricting origins to production domains (including trailing slash variations)")
 	}
 
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
