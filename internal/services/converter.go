@@ -114,7 +114,15 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 	// Build filter chain
 	var filters []string
 
-	// Resize if specified
+	// Apply cropping first if specified
+	if options.Crop != nil {
+		cropFilter := fmt.Sprintf("crop=%d:%d:%d:%d",
+			options.Crop.Width, options.Crop.Height, options.Crop.X, options.Crop.Y)
+		filters = append(filters, cropFilter)
+		fmt.Printf("[DEBUG] Added crop filter: %s\n", cropFilter)
+	}
+
+	// Resize if specified (after cropping)
 	if options.Width != nil || options.Height != nil {
 		var scaleFilter string
 		if options.Width != nil && options.Height != nil {
@@ -236,6 +244,28 @@ func (c *Converter) validateImageOptions(options *models.ImageConversionOptions)
 		return fmt.Errorf("unsupported filter: %s", options.Filter)
 	}
 
+	// Validate crop area if specified
+	if options.Crop != nil {
+		if options.Crop.X < 0 {
+			return fmt.Errorf("crop X position must be non-negative, got %d", options.Crop.X)
+		}
+		if options.Crop.Y < 0 {
+			return fmt.Errorf("crop Y position must be non-negative, got %d", options.Crop.Y)
+		}
+		if options.Crop.Width <= 0 {
+			return fmt.Errorf("crop width must be positive, got %d", options.Crop.Width)
+		}
+		if options.Crop.Height <= 0 {
+			return fmt.Errorf("crop height must be positive, got %d", options.Crop.Height)
+		}
+		if options.Crop.Width > 10000 {
+			return fmt.Errorf("crop width too large (max 10000), got %d", options.Crop.Width)
+		}
+		if options.Crop.Height > 10000 {
+			return fmt.Errorf("crop height too large (max 10000), got %d", options.Crop.Height)
+		}
+	}
+
 	return nil
 }
 
@@ -254,6 +284,16 @@ func (c *Converter) convertVideo(job *models.ConversionJob, inputPath, outputPat
 
 	// Build ffmpeg command
 	args := []string{"-i", inputPath}
+
+	// Add trimming if specified (must come after input)
+	if options.Trim != nil {
+		// Seek to start time
+		args = append(args, "-ss", fmt.Sprintf("%.2f", options.Trim.StartTime))
+		// Set duration (end time - start time)
+		duration := options.Trim.EndTime - options.Trim.StartTime
+		args = append(args, "-t", fmt.Sprintf("%.2f", duration))
+		fmt.Printf("[DEBUG] Added trimming: start=%.2f, duration=%.2f\n", options.Trim.StartTime, duration)
+	}
 
 	// Video codec and quality settings
 	switch options.Quality {
@@ -332,6 +372,22 @@ func (c *Converter) validateVideoOptions(options *models.VideoConversionOptions)
 		return fmt.Errorf("unsupported format: %s", options.Format)
 	}
 
+	// Validate trim range if specified
+	if options.Trim != nil {
+		if options.Trim.StartTime < 0 {
+			return fmt.Errorf("trim start time must be non-negative, got %.2f", options.Trim.StartTime)
+		}
+		if options.Trim.EndTime < 0 {
+			return fmt.Errorf("trim end time must be non-negative, got %.2f", options.Trim.EndTime)
+		}
+		if options.Trim.EndTime <= options.Trim.StartTime {
+			return fmt.Errorf("trim end time (%.2f) must be greater than start time (%.2f)", options.Trim.EndTime, options.Trim.StartTime)
+		}
+		if options.Trim.EndTime - options.Trim.StartTime < 0.1 {
+			return fmt.Errorf("trim duration must be at least 0.1 seconds, got %.2f", options.Trim.EndTime - options.Trim.StartTime)
+		}
+	}
+
 	return nil
 }
 
@@ -350,6 +406,16 @@ func (c *Converter) convertAudio(job *models.ConversionJob, inputPath, outputPat
 
 	// Build ffmpeg command
 	args := []string{"-i", inputPath}
+
+	// Add trimming if specified (must come after input)
+	if options.Trim != nil {
+		// Seek to start time
+		args = append(args, "-ss", fmt.Sprintf("%.2f", options.Trim.StartTime))
+		// Set duration (end time - start time)
+		duration := options.Trim.EndTime - options.Trim.StartTime
+		args = append(args, "-t", fmt.Sprintf("%.2f", duration))
+		fmt.Printf("[DEBUG] Added trimming: start=%.2f, duration=%.2f\n", options.Trim.StartTime, duration)
+	}
 
 	// Audio codec based on format
 	switch options.Format {
@@ -410,6 +476,22 @@ func (c *Converter) validateAudioOptions(options *models.AudioConversionOptions)
 	validFormats := map[string]bool{"mp3": true, "wav": true, "aac": true, "ogg": true}
 	if !validFormats[options.Format] {
 		return fmt.Errorf("unsupported format: %s", options.Format)
+	}
+
+	// Validate trim range if specified
+	if options.Trim != nil {
+		if options.Trim.StartTime < 0 {
+			return fmt.Errorf("trim start time must be non-negative, got %.2f", options.Trim.StartTime)
+		}
+		if options.Trim.EndTime < 0 {
+			return fmt.Errorf("trim end time must be non-negative, got %.2f", options.Trim.EndTime)
+		}
+		if options.Trim.EndTime <= options.Trim.StartTime {
+			return fmt.Errorf("trim end time (%.2f) must be greater than start time (%.2f)", options.Trim.EndTime, options.Trim.StartTime)
+		}
+		if options.Trim.EndTime - options.Trim.StartTime < 0.1 {
+			return fmt.Errorf("trim duration must be at least 0.1 seconds, got %.2f", options.Trim.EndTime - options.Trim.StartTime)
+		}
 	}
 
 	return nil
