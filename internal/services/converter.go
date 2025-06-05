@@ -434,10 +434,9 @@ func (c *Converter) convertVideo(job *models.ConversionJob, inputPath, outputPat
 		if ve.UnsharpMask != nil && ve.UnsharpMask.Amount > 0 {
 			amount := ve.UnsharpMask.Amount / 100.0
 			radius := int(ve.UnsharpMask.Radius)
-			threshold := int(ve.UnsharpMask.Threshold)
 
-			unsharpFilter := fmt.Sprintf("unsharp=luma_msize_x=%d:luma_msize_y=%d:luma_amount=%.2f:luma_threshold=%d",
-				radius*2+1, radius*2+1, amount, threshold)
+			unsharpFilter := fmt.Sprintf("unsharp=luma_msize_x=%d:luma_msize_y=%d:luma_amount=%.2f",
+				radius*2+1, radius*2+1, amount)
 			videoFilters = append(videoFilters, unsharpFilter)
 			fmt.Printf("[DEBUG] Added unsharp mask filter: %s\n", unsharpFilter)
 		}
