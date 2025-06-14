@@ -3,3 +3,4 @@ main
 api
 outputs/
 uploads/
+!cmd/api/main.go

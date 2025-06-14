@@ -81,6 +81,12 @@ func setupRouter(conversionHandler *handlers.ConversionHandler, isDev bool) *gin
 		// log.Printf("TODO: Restrict CORS once the exact origin causing issues is identified")
 
 		corsConfig.AllowOrigins = []string{
+			"https://www.media-manipulator.com",
+			"https://www.media-manipulator.com/",
+			"https://media-manipulator.com",
+			"https://media-manipulator.com/",
+			"https://www.wintrow.io",
+			"https://www.wintrow.io/",
 			"https://wintrow.io",
 			"https://wintrow.io/",
 			"https://ui.converter.winapps.io",
