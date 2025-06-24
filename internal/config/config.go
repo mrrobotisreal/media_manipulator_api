@@ -13,7 +13,7 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:        getEnv("PORT", "8080"),
+		Port:        getEnv("PORT", "9090"),
 		UploadDir:   getEnv("UPLOAD_DIR", "uploads"),
 		OutputDir:   getEnv("OUTPUT_DIR", "outputs"),
 		MaxFileSize: 100 * 1024 * 1024, // 100MB default
