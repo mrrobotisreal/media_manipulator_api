@@ -52,8 +52,8 @@ func main() {
 		// }
 
 		log.Printf("Starting HTTPS server on port %s (Production Mode)", cfg.Port)
-		log.Printf("Using TLS cert: %s", certFile)
-		log.Printf("Using TLS key: %s", keyFile)
+		// log.Printf("Using TLS cert: %s", certFile)
+		// log.Printf("Using TLS key: %s", keyFile)
 		// log.Fatal(http.ListenAndServeTLS(":"+cfg.Port, certFile, keyFile, router))
 		// USING HTTP and letting Cloudflare handle TLS
 		log.Fatal(http.ListenAndServe(":"+cfg.Port, router))
