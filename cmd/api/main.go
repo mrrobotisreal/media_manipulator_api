@@ -43,18 +43,20 @@ func main() {
 		log.Fatal(http.ListenAndServe(":"+cfg.Port, router))
 	} else {
 		// Production mode - use HTTPS with TLS
-		certFile := "/etc/letsencrypt/live/api.converter.winapps.io/fullchain.pem"
-		keyFile := "/etc/letsencrypt/live/api.converter.winapps.io/privkey.pem"
+		// certFile := "/etc/letsencrypt/live/api.converter.winapps.io/fullchain.pem"
+		// keyFile := "/etc/letsencrypt/live/api.converter.winapps.io/privkey.pem"
 
 		// Validate TLS certificate files exist
-		if err := validateTLSFiles(certFile, keyFile); err != nil {
-			log.Fatalf("TLS certificate validation failed: %v", err)
-		}
+		// if err := validateTLSFiles(certFile, keyFile); err != nil {
+		// 	log.Fatalf("TLS certificate validation failed: %v", err)
+		// }
 
 		log.Printf("Starting HTTPS server on port %s (Production Mode)", cfg.Port)
 		log.Printf("Using TLS cert: %s", certFile)
 		log.Printf("Using TLS key: %s", keyFile)
-		log.Fatal(http.ListenAndServeTLS(":"+cfg.Port, certFile, keyFile, router))
+		// log.Fatal(http.ListenAndServeTLS(":"+cfg.Port, certFile, keyFile, router))
+		// USING HTTP and letting Cloudflare handle TLS
+		log.Fatal(http.ListenAndServe(":"+cfg.Port, router))
 	}
 }
 
