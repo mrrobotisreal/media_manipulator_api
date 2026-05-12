@@ -3,6 +3,7 @@ package services
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -12,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 )
@@ -648,8 +650,8 @@ func (c *Converter) validateVideoOptions(options *models.VideoConversionOptions)
 		if options.Trim.EndTime <= options.Trim.StartTime {
 			return fmt.Errorf("trim end time (%.2f) must be greater than start time (%.2f)", options.Trim.EndTime, options.Trim.StartTime)
 		}
-		if options.Trim.EndTime - options.Trim.StartTime < 0.1 {
-			return fmt.Errorf("trim duration must be at least 0.1 seconds, got %.2f", options.Trim.EndTime - options.Trim.StartTime)
+		if options.Trim.EndTime-options.Trim.StartTime < 0.1 {
+			return fmt.Errorf("trim duration must be at least 0.1 seconds, got %.2f", options.Trim.EndTime-options.Trim.StartTime)
 		}
 	}
 
@@ -920,7 +922,7 @@ func (c *Converter) convertAudio(job *models.ConversionJob, inputPath, outputPat
 				delayFilter = fmt.Sprintf("aecho=0.8:%.2f:%.0f:%.2f", feedback, tbe.Delay.Time, feedback)
 			case "multi-tap":
 				delayFilter = fmt.Sprintf("aecho=0.8:%.2f:%.0f:%.2f,aecho=0.6:%.2f:%.0f:%.2f",
-					feedback, tbe.Delay.Time, feedback*0.8, tbe.Delay.Time*1.5, feedback*0.6)
+					feedback, tbe.Delay.Time, feedback*0.8, feedback*0.8, tbe.Delay.Time*1.5, feedback*0.6)
 			case "ping-pong":
 				// Simplified ping-pong delay
 				delayFilter = fmt.Sprintf("aecho=0.8:%.2f:%.0f:%.2f", feedback, tbe.Delay.Time, feedback)
@@ -1207,8 +1209,8 @@ func (c *Converter) validateAudioOptions(options *models.AudioConversionOptions)
 		if options.Trim.EndTime <= options.Trim.StartTime {
 			return fmt.Errorf("trim end time (%.2f) must be greater than start time (%.2f)", options.Trim.EndTime, options.Trim.StartTime)
 		}
-		if options.Trim.EndTime - options.Trim.StartTime < 0.1 {
-			return fmt.Errorf("trim duration must be at least 0.1 seconds, got %.2f", options.Trim.EndTime - options.Trim.StartTime)
+		if options.Trim.EndTime-options.Trim.StartTime < 0.1 {
+			return fmt.Errorf("trim duration must be at least 0.1 seconds, got %.2f", options.Trim.EndTime-options.Trim.StartTime)
 		}
 	}
 
@@ -1414,7 +1416,14 @@ func (c *Converter) diagnoseExitCode8Error(errorMsg, inputPath, outputPath strin
 // Helper functions
 
 func (c *Converter) runFFmpegWithProgress(jobID string, name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Hour)
+	defer cancel()
+
+	if _, err := exec.LookPath(name); err != nil {
+		return fmt.Errorf("%s not found in PATH", name)
+	}
+
+	cmd := exec.CommandContext(ctx, name, args...)
 
 	// Create pipes for both stdout and stderr to capture all output
 	stderr, err := cmd.StderrPipe()
@@ -1472,8 +1481,11 @@ func (c *Converter) runFFmpegWithProgress(jobID string, name string, args ...str
 
 	// Wait for command to complete
 	if err := cmd.Wait(); err != nil {
+		if ctx.Err() != nil {
+			return fmt.Errorf("FFmpeg timed out: %w", ctx.Err())
+		}
 		// Include stderr output in error for better debugging
-		stderrOutput := stderrBuf.String()
+		stderrOutput := commandTail(stderrBuf.String(), 8000)
 		if stderrOutput != "" {
 			return fmt.Errorf("%v. FFmpeg stderr: %s", err, stderrOutput)
 		}
@@ -1484,7 +1496,11 @@ func (c *Converter) runFFmpegWithProgress(jobID string, name string, args ...str
 }
 
 func (c *Converter) runImageMagickWithProgress(jobID string, name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Hour)
+	defer cancel()
+
+	commandName, commandArgs := resolveImageMagickConvertCommand(name, args)
+	cmd := exec.CommandContext(ctx, commandName, commandArgs...)
 
 	// Create pipes for stderr to capture any error output
 	stderr, err := cmd.StderrPipe()
@@ -1496,7 +1512,7 @@ func (c *Converter) runImageMagickWithProgress(jobID string, name string, args .
 	var stderrBuf bytes.Buffer
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start ImageMagick: %v", err)
+		return fmt.Errorf("failed to start ImageMagick (%s): %v", commandName, err)
 	}
 
 	// Read stderr output for error detection
@@ -1508,8 +1524,11 @@ func (c *Converter) runImageMagickWithProgress(jobID string, name string, args .
 
 	// Wait for command to complete
 	if err := cmd.Wait(); err != nil {
+		if ctx.Err() != nil {
+			return fmt.Errorf("ImageMagick timed out: %w", ctx.Err())
+		}
 		// Include stderr output in error for better debugging
-		stderrOutput := stderrBuf.String()
+		stderrOutput := commandTail(stderrBuf.String(), 8000)
 		if stderrOutput != "" {
 			return fmt.Errorf("%v. ImageMagick stderr: %s", err, stderrOutput)
 		}
@@ -1517,4 +1536,21 @@ func (c *Converter) runImageMagickWithProgress(jobID string, name string, args .
 	}
 
 	return nil
+}
+
+func resolveImageMagickConvertCommand(name string, args []string) (string, []string) {
+	if name == "convert" {
+		if _, err := exec.LookPath("magick"); err == nil {
+			return "magick", append([]string{"convert"}, args...)
+		}
+	}
+	return name, args
+}
+
+func commandTail(value string, max int) string {
+	value = strings.TrimSpace(value)
+	if len(value) <= max {
+		return value
+	}
+	return value[len(value)-max:]
 }

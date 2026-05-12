@@ -1,6 +1,6 @@
 .env
 main
-api
+!api/main.go
 outputs/
 uploads/
 !cmd/api/main.go

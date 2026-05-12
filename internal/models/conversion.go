@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 )
 
@@ -56,19 +57,19 @@ type TrimRange struct {
 
 // Video Effects Structures
 type VisualEffects struct {
-	Brightness    *int         `json:"brightness,omitempty"`
-	Contrast      *int         `json:"contrast,omitempty"`
-	Saturation    *int         `json:"saturation,omitempty"`
-	Hue           *int         `json:"hue,omitempty"`
-	Gamma         *float64     `json:"gamma,omitempty"`
-	Exposure      *float64     `json:"exposure,omitempty"`
-	Shadows       *int         `json:"shadows,omitempty"`
-	Highlights    *int         `json:"highlights,omitempty"`
-	GaussianBlur  *int         `json:"gaussianBlur,omitempty"`
-	MotionBlur    *MotionBlur  `json:"motionBlur,omitempty"`
-	UnsharpMask   *UnsharpMask `json:"unsharpMask,omitempty"`
-	Artistic      *string      `json:"artistic,omitempty"`
-	Noise         *NoiseEffect `json:"noise,omitempty"`
+	Brightness   *int         `json:"brightness,omitempty"`
+	Contrast     *int         `json:"contrast,omitempty"`
+	Saturation   *int         `json:"saturation,omitempty"`
+	Hue          *int         `json:"hue,omitempty"`
+	Gamma        *float64     `json:"gamma,omitempty"`
+	Exposure     *float64     `json:"exposure,omitempty"`
+	Shadows      *int         `json:"shadows,omitempty"`
+	Highlights   *int         `json:"highlights,omitempty"`
+	GaussianBlur *int         `json:"gaussianBlur,omitempty"`
+	MotionBlur   *MotionBlur  `json:"motionBlur,omitempty"`
+	UnsharpMask  *UnsharpMask `json:"unsharpMask,omitempty"`
+	Artistic     *string      `json:"artistic,omitempty"`
+	Noise        *NoiseEffect `json:"noise,omitempty"`
 }
 
 type MotionBlur struct {
@@ -88,11 +89,11 @@ type NoiseEffect struct {
 }
 
 type Transform struct {
-	Rotation      *float64 `json:"rotation,omitempty"`
-	FlipHorizontal *bool    `json:"flipHorizontal,omitempty"`
-	FlipVertical   *bool    `json:"flipVertical,omitempty"`
-	Crop          *CropArea `json:"crop,omitempty"`
-	Padding       *Padding  `json:"padding,omitempty"`
+	Rotation       *float64  `json:"rotation,omitempty"`
+	FlipHorizontal *bool     `json:"flipHorizontal,omitempty"`
+	FlipVertical   *bool     `json:"flipVertical,omitempty"`
+	Crop           *CropArea `json:"crop,omitempty"`
+	Padding        *Padding  `json:"padding,omitempty"`
 }
 
 type Padding struct {
@@ -104,11 +105,11 @@ type Padding struct {
 }
 
 type TemporalEffects struct {
-	VariableSpeed   []SpeedPoint     `json:"variableSpeed,omitempty"`
-	Reverse         *bool            `json:"reverse,omitempty"`
-	PingPong        *bool            `json:"pingPong,omitempty"`
-	FrameRate       *FrameRateConfig `json:"frameRate,omitempty"`
-	Stabilization   *Stabilization   `json:"stabilization,omitempty"`
+	VariableSpeed []SpeedPoint     `json:"variableSpeed,omitempty"`
+	Reverse       *bool            `json:"reverse,omitempty"`
+	PingPong      *bool            `json:"pingPong,omitempty"`
+	FrameRate     *FrameRateConfig `json:"frameRate,omitempty"`
+	Stabilization *Stabilization   `json:"stabilization,omitempty"`
 }
 
 type SpeedPoint struct {
@@ -122,7 +123,7 @@ type FrameRateConfig struct {
 }
 
 type Stabilization struct {
-	Enabled  bool `json:"enabled"`
+	Enabled   bool `json:"enabled"`
 	Shakiness int  `json:"shakiness"`
 	Accuracy  int  `json:"accuracy"`
 }
@@ -145,13 +146,13 @@ type ColorSpace struct {
 
 // Audio Effects Structures
 type BasicProcessing struct {
-	Normalize      *bool           `json:"normalize,omitempty"`
-	Amplify        *float64        `json:"amplify,omitempty"`
-	FadeIn         *float64        `json:"fadeIn,omitempty"`
-	FadeOut        *float64        `json:"fadeOut,omitempty"`
-	DynamicRange   *DynamicRange   `json:"dynamicRange,omitempty"`
-	Equalizer      *Equalizer      `json:"equalizer,omitempty"`
-	Stereo         *StereoProcessing `json:"stereo,omitempty"`
+	Normalize    *bool             `json:"normalize,omitempty"`
+	Amplify      *float64          `json:"amplify,omitempty"`
+	FadeIn       *float64          `json:"fadeIn,omitempty"`
+	FadeOut      *float64          `json:"fadeOut,omitempty"`
+	DynamicRange *DynamicRange     `json:"dynamicRange,omitempty"`
+	Equalizer    *Equalizer        `json:"equalizer,omitempty"`
+	Stereo       *StereoProcessing `json:"stereo,omitempty"`
 }
 
 type DynamicRange struct {
@@ -161,11 +162,11 @@ type DynamicRange struct {
 }
 
 type Equalizer struct {
-	Enabled  bool       `json:"enabled"`
-	Preset   string     `json:"preset"`
-	LowPass  *float64   `json:"lowPass,omitempty"`
-	HighPass *float64   `json:"highPass,omitempty"`
-	Bands    []EQBand   `json:"bands,omitempty"`
+	Enabled  bool     `json:"enabled"`
+	Preset   string   `json:"preset"`
+	LowPass  *float64 `json:"lowPass,omitempty"`
+	HighPass *float64 `json:"highPass,omitempty"`
+	Bands    []EQBand `json:"bands,omitempty"`
 }
 
 type EQBand struct {
@@ -285,43 +286,43 @@ type Spectral struct {
 
 // Image conversion options
 type ImageConversionOptions struct {
-	Format  string     `json:"format" binding:"required,oneof=jpg png webp gif"`
-	Width   *int       `json:"width,omitempty"`
-	Height  *int       `json:"height,omitempty"`
-	Quality int        `json:"quality" binding:"min=1,max=100"`
-	Filter  string     `json:"filter" binding:"oneof=none grayscale sepia blur sharpen"`
-	Tint    *string    `json:"tint,omitempty"`
-	Crop    *CropArea  `json:"crop,omitempty"`
+	Format  string    `json:"format" binding:"required,oneof=jpg png webp gif"`
+	Width   *int      `json:"width,omitempty"`
+	Height  *int      `json:"height,omitempty"`
+	Quality int       `json:"quality" binding:"min=1,max=100"`
+	Filter  string    `json:"filter" binding:"oneof=none grayscale sepia blur sharpen"`
+	Tint    *string   `json:"tint,omitempty"`
+	Crop    *CropArea `json:"crop,omitempty"`
 }
 
 // Video conversion options
 type VideoConversionOptions struct {
-	Format              string               `json:"format" binding:"required,oneof=mp4 webm avi mov mkv flv wmv prores dnxhd"`
-	Width               *int                 `json:"width,omitempty"`
-	Height              *int                 `json:"height,omitempty"`
-	PreserveAspectRatio bool                 `json:"preserveAspectRatio"`
-	Speed               float64              `json:"speed" binding:"min=0.25,max=4"`
-	Quality             string               `json:"quality" binding:"oneof=low medium high"`
-	Trim                *TrimRange           `json:"trim,omitempty"`
-	VisualEffects       *VisualEffects       `json:"visualEffects,omitempty"`
-	Transform           *Transform           `json:"transform,omitempty"`
-	Temporal            *TemporalEffects     `json:"temporal,omitempty"`
-	Advanced            *AdvancedProcessing  `json:"advanced,omitempty"`
+	Format              string              `json:"format" binding:"required,oneof=mp4 webm avi mov mkv flv wmv prores dnxhd"`
+	Width               *int                `json:"width,omitempty"`
+	Height              *int                `json:"height,omitempty"`
+	PreserveAspectRatio bool                `json:"preserveAspectRatio"`
+	Speed               float64             `json:"speed" binding:"min=0.25,max=4"`
+	Quality             string              `json:"quality" binding:"oneof=low medium high"`
+	Trim                *TrimRange          `json:"trim,omitempty"`
+	VisualEffects       *VisualEffects      `json:"visualEffects,omitempty"`
+	Transform           *Transform          `json:"transform,omitempty"`
+	Temporal            *TemporalEffects    `json:"temporal,omitempty"`
+	Advanced            *AdvancedProcessing `json:"advanced,omitempty"`
 }
 
 // Audio conversion options
 type AudioConversionOptions struct {
-	Format           string             `json:"format" binding:"required,oneof=mp3 wav aac ogg flac alac opus ac3 dts"`
-	Bitrate          string             `json:"bitrate" binding:"oneof=128 192 256 320 512 1024"`
-	SampleRate       string             `json:"sampleRate" binding:"oneof=22050 44100 48000 96000 192000"`
-	Channels         string             `json:"channels" binding:"oneof=mono stereo 5.1 7.1"`
-	Speed            float64            `json:"speed" binding:"min=0.25,max=4"`
-	Volume           float64            `json:"volume" binding:"min=0.1,max=2"`
-	Trim             *TrimRange         `json:"trim,omitempty"`
-	BasicProcessing  *BasicProcessing   `json:"basicProcessing,omitempty"`
-	TimeBasedEffects *TimeBasedEffects  `json:"timeBasedEffects,omitempty"`
-	Restoration      *Restoration       `json:"restoration,omitempty"`
-	Advanced         *AdvancedAudio     `json:"advanced,omitempty"`
+	Format           string            `json:"format" binding:"required,oneof=mp3 wav aac ogg flac alac opus ac3 dts"`
+	Bitrate          string            `json:"bitrate" binding:"oneof=128 192 256 320 512 1024"`
+	SampleRate       string            `json:"sampleRate" binding:"oneof=22050 44100 48000 96000 192000"`
+	Channels         string            `json:"channels" binding:"oneof=mono stereo 5.1 7.1"`
+	Speed            float64           `json:"speed" binding:"min=0.25,max=4"`
+	Volume           float64           `json:"volume" binding:"min=0.1,max=2"`
+	Trim             *TrimRange        `json:"trim,omitempty"`
+	BasicProcessing  *BasicProcessing  `json:"basicProcessing,omitempty"`
+	TimeBasedEffects *TimeBasedEffects `json:"timeBasedEffects,omitempty"`
+	Restoration      *Restoration      `json:"restoration,omitempty"`
+	Advanced         *AdvancedAudio    `json:"advanced,omitempty"`
 }
 
 // Upload request
@@ -342,23 +343,24 @@ type ProgressUpdate struct {
 
 // File identification response
 type FileIdentificationResponse struct {
-	FileName    string                 `json:"fileName"`
-	FileSize    int64                  `json:"fileSize"`
-	FileType    FileType               `json:"fileType"`
-	MimeType    string                 `json:"mimeType"`
-	Details     map[string]interface{} `json:"details"`
-	Tool        string                 `json:"tool"`        // Which tool was used for identification
-	RawOutput   string                 `json:"rawOutput"`   // Raw command output for debugging
+	FileName  string                 `json:"fileName"`
+	FileSize  int64                  `json:"fileSize"`
+	FileType  FileType               `json:"fileType"`
+	MimeType  string                 `json:"mimeType"`
+	Details   map[string]interface{} `json:"details"`
+	Tool      string                 `json:"tool"`      // Which tool was used for identification
+	RawOutput string                 `json:"rawOutput"` // Raw command output for debugging
 }
 
 // Helper function to determine file type from MIME type
 func GetFileType(mimeType string) FileType {
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
 	switch {
-	case mimeType[:6] == "image/":
+	case strings.HasPrefix(mimeType, "image/"):
 		return FileTypeImage
-	case mimeType[:6] == "video/":
+	case strings.HasPrefix(mimeType, "video/"):
 		return FileTypeVideo
-	case mimeType[:6] == "audio/":
+	case strings.HasPrefix(mimeType, "audio/"):
 		return FileTypeAudio
 	default:
 		return FileTypeUnknown
