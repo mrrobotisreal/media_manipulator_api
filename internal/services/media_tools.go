@@ -21,12 +21,13 @@ type MediaInspector struct {
 }
 
 type MediaMetadata struct {
-	FileType models.FileType `json:"fileType"`
-	MimeType string          `json:"mimeType"`
-	Tool     string          `json:"tool"`
-	Details  map[string]any  `json:"details"`
-	Raw      string          `json:"raw,omitempty"`
-	Error    string          `json:"error,omitempty"`
+	FileType      models.FileType                 `json:"fileType"`
+	MimeType      string                          `json:"mimeType"`
+	Tool          string                          `json:"tool"`
+	Details       map[string]any                  `json:"details"`
+	ImageMetadata *models.StructuredImageMetadata `json:"imageMetadata,omitempty"`
+	Raw           string                          `json:"raw,omitempty"`
+	Error         string                          `json:"error,omitempty"`
 }
 
 func NewMediaInspector(commandTimeout time.Duration) *MediaInspector {
@@ -69,7 +70,20 @@ func (m *MediaInspector) ProbeFile(ctx context.Context, path string, fileType mo
 			metadata.Error = strings.TrimSpace(stderr)
 			return metadata, fmt.Errorf("identify image: %w", err)
 		}
-		metadata.Details = parseIdentifyVerbose(stdout)
+		container := parseIdentifyVerbose(stdout)
+		metadata.Details = cloneAnyMap(container)
+		metadata.ImageMetadata = &models.StructuredImageMetadata{Container: cloneAnyMap(container)}
+		if exifMetadata, raw, exifErr := probeExiftool(ctx, path, container); exifErr != nil {
+			metadata.Details["exiftool_error"] = strings.TrimSpace(exifErr.Error())
+		} else {
+			metadata.Tool += " + exiftool"
+			metadata.Raw = strings.TrimSpace(metadata.Raw) + "\n\n--- exiftool ---\n" + raw
+			metadata.ImageMetadata = exifMetadata
+			metadata.Details["container"] = exifMetadata.Container
+			metadata.Details["exifTiff"] = exifMetadata.ExifTiff
+			metadata.Details["gpsLocation"] = exifMetadata.GPSLocation
+			metadata.Details["advancedDeviceMetadata"] = exifMetadata.AdvancedDeviceMetadata
+		}
 	case models.FileTypeVideo, models.FileTypeAudio:
 		stdout, stderr, err := runCommand(ctx, "ffprobe", "-v", "error", "-print_format", "json", "-show_streams", "-show_format", path)
 		metadata.Tool = "ffprobe"
@@ -139,6 +153,137 @@ func parseIdentifyVerbose(raw string) map[string]any {
 		}
 	}
 	return details
+}
+
+func probeExiftool(ctx context.Context, path string, container map[string]any) (*models.StructuredImageMetadata, string, error) {
+	stdout, stderr, err := runCommand(ctx, "exiftool", "-json", "-G1", "-s", "-a", path)
+	if err != nil {
+		if strings.TrimSpace(stderr) != "" {
+			return nil, stdout, fmt.Errorf("%s", strings.TrimSpace(stderr))
+		}
+		return nil, stdout, err
+	}
+	var records []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &records); err != nil {
+		return nil, stdout, fmt.Errorf("parse exiftool json: %w", err)
+	}
+	metadata := &models.StructuredImageMetadata{
+		Container:              cloneAnyMap(container),
+		ExifTiff:               map[string]any{},
+		GPSLocation:            map[string]any{},
+		AdvancedDeviceMetadata: map[string]map[string]any{},
+	}
+	if len(records) == 0 {
+		return metadata, stdout, nil
+	}
+
+	for rawKey, value := range records[0] {
+		if rawKey == "SourceFile" || value == nil || value == "" {
+			continue
+		}
+		group, tag := splitExiftoolKey(rawKey)
+		if exifTiffTags()[tag] {
+			metadata.ExifTiff[tag] = value
+			continue
+		}
+		if gpsLocationTags()[tag] {
+			metadata.GPSLocation[tag] = value
+			continue
+		}
+		if isContainerExifGroup(group) {
+			if _, exists := metadata.Container[tag]; !exists {
+				metadata.Container[tag] = value
+			}
+			continue
+		}
+		if isAdvancedMetadataGroup(group) {
+			if metadata.AdvancedDeviceMetadata[group] == nil {
+				metadata.AdvancedDeviceMetadata[group] = map[string]any{}
+			}
+			metadata.AdvancedDeviceMetadata[group][tag] = value
+		}
+	}
+	return metadata, stdout, nil
+}
+
+func splitExiftoolKey(key string) (string, string) {
+	parts := strings.Split(key, ":")
+	if len(parts) < 2 {
+		return "Unknown", key
+	}
+	group := strings.TrimSpace(parts[0])
+	tag := strings.TrimSpace(parts[len(parts)-1])
+	if group == "" {
+		group = "Unknown"
+	}
+	return group, tag
+}
+
+func cloneAnyMap(input map[string]any) map[string]any {
+	out := make(map[string]any, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
+}
+
+func isContainerExifGroup(group string) bool {
+	switch strings.ToUpper(strings.TrimSpace(group)) {
+	case "FILE", "JFIF", "PNG", "RIFF", "WEBP", "ICC_PROFILE", "COMPOSITE":
+		return true
+	default:
+		return false
+	}
+}
+
+func isAdvancedMetadataGroup(group string) bool {
+	group = strings.ToUpper(strings.TrimSpace(group))
+	if group == "" || group == "FILE" || group == "EXIF" || group == "GPS" || group == "COMPOSITE" {
+		return false
+	}
+	return true
+}
+
+func exifTiffTags() map[string]bool {
+	return map[string]bool{
+		"ImageDescription": true, "Make": true, "Model": true, "Software": true,
+		"Artist": true, "Copyright": true, "Orientation": true, "DateTime": true,
+		"DateTimeOriginal": true, "CreateDate": true, "ModifyDate": true, "SubSecTime": true,
+		"SubSecTimeOriginal": true, "SubSecTimeDigitized": true, "OffsetTime": true,
+		"OffsetTimeOriginal": true, "OffsetTimeDigitized": true, "ExposureTime": true,
+		"FNumber": true, "ExposureProgram": true, "ISO": true, "SensitivityType": true,
+		"RecommendedExposureIndex": true, "ExifVersion": true, "ShutterSpeedValue": true,
+		"ApertureValue": true, "BrightnessValue": true, "ExposureCompensation": true,
+		"MaxApertureValue": true, "SubjectDistance": true, "MeteringMode": true,
+		"LightSource": true, "Flash": true, "FocalLength": true,
+		"FocalLengthIn35mmFormat": true, "SubjectArea": true, "MakerNote": true,
+		"UserComment": true, "FlashpixVersion": true, "ColorSpace": true,
+		"ExifImageWidth": true, "ExifImageHeight": true, "SensingMethod": true,
+		"FileSource": true, "SceneType": true, "CustomRendered": true,
+		"ExposureMode": true, "WhiteBalance": true, "DigitalZoomRatio": true,
+		"SceneCaptureType": true, "GainControl": true, "Contrast": true,
+		"Saturation": true, "Sharpness": true, "SubjectDistanceRange": true,
+		"LensMake": true, "LensModel": true, "LensSerialNumber": true,
+		"CameraOwnerName": true, "BodySerialNumber": true,
+	}
+}
+
+func gpsLocationTags() map[string]bool {
+	return map[string]bool{
+		"GPSVersionID": true, "GPSLatitudeRef": true, "GPSLatitude": true,
+		"GPSLongitudeRef": true, "GPSLongitude": true, "GPSAltitudeRef": true,
+		"GPSAltitude": true, "GPSTimeStamp": true, "GPSSatellites": true,
+		"GPSStatus": true, "GPSMeasureMode": true, "GPSDOP": true,
+		"GPSSpeedRef": true, "GPSSpeed": true, "GPSTrackRef": true,
+		"GPSTrack": true, "GPSImgDirectionRef": true, "GPSImgDirection": true,
+		"GPSMapDatum": true, "GPSDestLatitudeRef": true, "GPSDestLatitude": true,
+		"GPSDestLongitudeRef": true, "GPSDestLongitude": true,
+		"GPSDestBearingRef": true, "GPSDestBearing": true,
+		"GPSDestDistanceRef": true, "GPSDestDistance": true,
+		"GPSProcessingMethod": true, "GPSAreaInformation": true,
+		"GPSDateStamp": true, "GPSDifferential": true,
+		"GPSHPositioningError": true,
+	}
 }
 
 func detectTypeByExtension(path string) models.FileType {

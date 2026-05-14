@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
@@ -24,22 +25,32 @@ type ConversionHandler struct {
 	cfg          *config.Config
 	inspector    *services.MediaInspector
 	analysisJobs *services.AnalysisQueue
+	s3Client     *s3.Client
+	s3Presign    *s3.PresignClient
 }
 
-func NewConversionHandler(jobManager *services.JobManager, converter *services.Converter, cfg *config.Config, inspector *services.MediaInspector, analysisJobs *services.AnalysisQueue) *ConversionHandler {
+func NewConversionHandler(jobManager *services.JobManager, converter *services.Converter, cfg *config.Config, inspector *services.MediaInspector, analysisJobs *services.AnalysisQueue, s3Client *s3.Client) *ConversionHandler {
 	converter.SetJobManager(jobManager)
+	var presign *s3.PresignClient
+	if s3Client != nil {
+		presign = s3.NewPresignClient(s3Client)
+	}
 	return &ConversionHandler{
 		jobManager:   jobManager,
 		converter:    converter,
 		cfg:          cfg,
 		inspector:    inspector,
 		analysisJobs: analysisJobs,
+		s3Client:     s3Client,
+		s3Presign:    presign,
 	}
 }
 
 func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.POST("/details", h.IdentifyFile)
 	r.POST("/upload", h.UploadFile)
+	r.POST("/video-upload/presign", h.PresignVideoUpload)
+	r.POST("/video-upload/complete", h.CompleteVideoUpload)
 	r.GET("/job/:jobId", h.GetJobStatus)
 	r.GET("/download/:jobId", h.DownloadFile)
 }
@@ -73,13 +84,14 @@ func (h *ConversionHandler) IdentifyFile(c *gin.Context) {
 	}
 
 	response := &models.FileIdentificationResponse{
-		FileName:  fileHeader.Filename,
-		FileSize:  fileHeader.Size,
-		FileType:  fileType,
-		MimeType:  mimeType,
-		Details:   metadata.Details,
-		Tool:      metadata.Tool,
-		RawOutput: metadata.Raw,
+		FileName:      fileHeader.Filename,
+		FileSize:      fileHeader.Size,
+		FileType:      fileType,
+		MimeType:      mimeType,
+		Details:       metadata.Details,
+		ImageMetadata: metadata.ImageMetadata,
+		Tool:          metadata.Tool,
+		RawOutput:     metadata.Raw,
 	}
 	if metadata.Error != "" {
 		response.Details["probe_error"] = metadata.Error

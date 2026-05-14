@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -30,8 +34,9 @@ func main() {
 	inspector := services.NewMediaInspector(cfg.CommandTimeout)
 	analysisQueue := services.NewAnalysisQueue(cfg, inspector)
 	analysisQueue.Start()
+	s3Client := newS3Client(cfg)
 
-	conversionHandler := handlers.NewConversionHandler(jobManager, converter, cfg, inspector, analysisQueue)
+	conversionHandler := handlers.NewConversionHandler(jobManager, converter, cfg, inspector, analysisQueue, s3Client)
 	router := setupRouter(conversionHandler)
 
 	server := &http.Server{
@@ -42,6 +47,18 @@ func main() {
 
 	log.Printf("media-manipulator-api listening on :%s", cfg.Port)
 	log.Fatal(server.ListenAndServe())
+}
+
+func newS3Client(cfg *config.Config) *s3.Client {
+	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(), awsconfig.WithRegion(cfg.AWSRegion))
+	if err != nil {
+		log.Fatalf("failed to load AWS config: %v", err)
+	}
+	return s3.NewFromConfig(awsCfg, func(options *s3.Options) {
+		if cfg.S3Endpoint != "" {
+			options.BaseEndpoint = aws.String(cfg.S3Endpoint)
+		}
+	})
 }
 
 func setupRouter(conversionHandler *handlers.ConversionHandler) *gin.Engine {

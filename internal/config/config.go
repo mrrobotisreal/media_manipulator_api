@@ -15,19 +15,30 @@ type Config struct {
 	OutputDir       string
 	TempDir         string
 	MaxFileSize     int64
+	MaxVideoUpload  int64
 	CommandTimeout  time.Duration
 	AnalysisWorkers int
+	AWSRegion       string
+	S3Bucket        string
+	S3Endpoint      string
+	S3PresignTTL    time.Duration
 }
 
 func Load() *Config {
+	maxFileSize := getEnvInt64("MAX_FILE_SIZE_BYTES", 1000*1024*1024)
 	return &Config{
 		Port:            DefaultPort,
 		UploadDir:       getEnv("UPLOAD_DIR", "uploads"),
 		OutputDir:       getEnv("OUTPUT_DIR", "outputs"),
 		TempDir:         getEnv("TEMP_DIR", "temp"),
-		MaxFileSize:     getEnvInt64("MAX_FILE_SIZE_BYTES", 1000*1024*1024),
+		MaxFileSize:     maxFileSize,
+		MaxVideoUpload:  getEnvInt64("MAX_VIDEO_UPLOAD_SIZE_BYTES", maxFileSize),
 		CommandTimeout:  time.Duration(getEnvInt("COMMAND_TIMEOUT_SECONDS", 6*60*60)) * time.Second,
 		AnalysisWorkers: getEnvInt("ANALYSIS_WORKERS", 1),
+		AWSRegion:       getEnv("AWS_REGION", "us-west-2"),
+		S3Bucket:        getEnv("S3_BUCKET", "media-manipulator"),
+		S3Endpoint:      getEnv("AWS_S3_ENDPOINT", ""),
+		S3PresignTTL:    time.Duration(getEnvInt("S3_PRESIGN_TTL_SECONDS", 15*60)) * time.Second,
 	}
 }
 

@@ -111,8 +111,12 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 	}
 	fmt.Printf("[DEBUG] Output directory created: %s\n", outputDir)
 
-	// Build ImageMagick convert command
-	args := []string{inputPath}
+	// Build ImageMagick convert command.
+	// -auto-orient is intentionally first so EXIF-oriented JPEGs are normalized
+	// before format conversion/crop/resize. Without this, PNG/WebP outputs can
+	// appear rotated 90 degrees because those formats do not preserve the same
+	// display-orientation hint browsers use for the original JPEG.
+	args := []string{inputPath, "-auto-orient"}
 
 	// Apply cropping first if specified
 	if options.Crop != nil {
@@ -187,8 +191,9 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 		c.jobManager.SendProgressUpdate(job.ID, 60)
 	}
 
-	// Set quality for JPEG output
-	if options.Format == "jpg" || options.Format == "jpeg" {
+	// Set quality for lossy and web output formats. ImageMagick ignores quality
+	// where it is not applicable, but this keeps WebP quality controllable too.
+	if options.Format == "jpg" || options.Format == "jpeg" || options.Format == "webp" {
 		args = append(args, "-quality", strconv.Itoa(options.Quality))
 	}
 
@@ -196,6 +201,11 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 	if options.Tint != nil && *options.Tint != "" && *options.Tint != "#000000" {
 		args = append(args, "-fill", *options.Tint, "-tint", "30")
 		fmt.Printf("[DEBUG] Added tint: %s\n", *options.Tint)
+	}
+
+	if options.TextOverlay != nil && strings.TrimSpace(options.TextOverlay.Text) != "" {
+		args = append(args, imageTextOverlayArgs(options.TextOverlay)...)
+		fmt.Printf("[DEBUG] Added text overlay\n")
 	}
 
 	// Set output file
@@ -212,6 +222,9 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 	if err := c.runImageMagickWithProgress(job.ID, "convert", args...); err != nil {
 		fmt.Printf("[DEBUG] ImageMagick error: %v\n", err)
 		return fmt.Errorf("ImageMagick conversion failed: %v", err)
+	}
+	if err := applyImageMetadataOptions(inputPath, outputPath, &options); err != nil {
+		return fmt.Errorf("image metadata update failed: %v", err)
 	}
 
 	fmt.Printf("[DEBUG] Image conversion completed successfully\n")
@@ -283,8 +296,371 @@ func (c *Converter) validateImageOptions(options *models.ImageConversionOptions)
 			return fmt.Errorf("crop height too large (max 10000), got %d", options.Crop.Height)
 		}
 	}
+	if options.TextOverlay != nil {
+		if err := validateImageTextOverlay(options.TextOverlay); err != nil {
+			return err
+		}
+	}
+
+	metadataMode := strings.TrimSpace(options.MetadataMode)
+	if metadataMode != "" {
+		validMetadataModes := map[string]bool{"keep": true, "strip": true, "custom": true}
+		if !validMetadataModes[metadataMode] {
+			return fmt.Errorf("unsupported metadata mode: %s", metadataMode)
+		}
+	}
+	if options.Metadata != nil {
+		if err := validateImageMetadata(options.Metadata); err != nil {
+			return err
+		}
+	}
 
 	return nil
+}
+
+func validateImageTextOverlay(overlay *models.ImageTextOverlay) error {
+	text := strings.TrimSpace(overlay.Text)
+	if text == "" {
+		return nil
+	}
+	if len([]rune(text)) > 500 {
+		return fmt.Errorf("text overlay must be 500 characters or less")
+	}
+	if overlay.Size != 0 && (overlay.Size < 8 || overlay.Size > 512) {
+		return fmt.Errorf("text overlay size must be between 8 and 512")
+	}
+	if overlay.X < 0 || overlay.Y < 0 {
+		return fmt.Errorf("text overlay offsets must be non-negative")
+	}
+	if overlay.StrokeWidth < 0 || overlay.StrokeWidth > 32 {
+		return fmt.Errorf("text overlay stroke width must be between 0 and 32")
+	}
+	if overlay.Color != "" && !isSafeImageColor(overlay.Color) {
+		return fmt.Errorf("invalid text overlay color")
+	}
+	if overlay.StrokeColor != "" && !isSafeImageColor(overlay.StrokeColor) {
+		return fmt.Errorf("invalid text overlay stroke color")
+	}
+	if overlay.Gravity != "" && !validImageGravities()[overlay.Gravity] {
+		return fmt.Errorf("unsupported text overlay gravity: %s", overlay.Gravity)
+	}
+	if overlay.Font != "" && overlay.Font != "default" && !validImageFonts()[overlay.Font] {
+		return fmt.Errorf("unsupported text overlay font: %s", overlay.Font)
+	}
+	return nil
+}
+
+func validateImageMetadata(metadata *models.ImageMetadataFields) error {
+	values := []string{metadata.Title, metadata.Author, metadata.Description, metadata.Copyright, metadata.Comment, metadata.Keywords}
+	for _, value := range values {
+		if len([]rune(value)) > 1000 {
+			return fmt.Errorf("metadata fields must be 1000 characters or less")
+		}
+	}
+	for key, value := range metadata.ExifTiff {
+		if !exifTiffTags()[key] {
+			return fmt.Errorf("unsupported EXIF/TIFF metadata field: %s", key)
+		}
+		if len([]rune(value)) > 1000 {
+			return fmt.Errorf("metadata fields must be 1000 characters or less")
+		}
+	}
+	for key, value := range metadata.GPSLocation {
+		if !gpsLocationTags()[key] {
+			return fmt.Errorf("unsupported GPS metadata field: %s", key)
+		}
+		if len([]rune(value)) > 1000 {
+			return fmt.Errorf("metadata fields must be 1000 characters or less")
+		}
+	}
+	for key, value := range metadata.IPTC {
+		if !isAllowedAdvancedMetadataTag(key) {
+			return fmt.Errorf("unsupported IPTC metadata field: %s", key)
+		}
+		if len([]rune(value)) > 1000 {
+			return fmt.Errorf("metadata fields must be 1000 characters or less")
+		}
+	}
+	for key, value := range metadata.Advanced {
+		if !isAllowedAdvancedMetadataTag(key) {
+			return fmt.Errorf("unsupported advanced metadata field: %s", key)
+		}
+		if len([]rune(value)) > 1000 {
+			return fmt.Errorf("metadata fields must be 1000 characters or less")
+		}
+	}
+	return nil
+}
+
+func imageTextOverlayArgs(overlay *models.ImageTextOverlay) []string {
+	text := sanitizeAnnotationText(overlay.Text)
+	size := overlay.Size
+	if size == 0 {
+		size = 48
+	}
+	color := overlay.Color
+	if color == "" {
+		color = "#ffffff"
+	}
+	gravity := overlay.Gravity
+	if gravity == "" {
+		gravity = "South"
+	}
+	args := []string{"-gravity", gravity}
+	if overlay.Font != "" && overlay.Font != "default" {
+		args = append(args, "-font", overlay.Font)
+	}
+	args = append(args, "-pointsize", strconv.Itoa(size), "-fill", color)
+	if overlay.StrokeWidth > 0 {
+		strokeColor := overlay.StrokeColor
+		if strokeColor == "" {
+			strokeColor = "#000000"
+		}
+		args = append(args, "-stroke", strokeColor, "-strokewidth", strconv.Itoa(overlay.StrokeWidth))
+	}
+	args = append(args, "-annotate", fmt.Sprintf("+%d+%d", overlay.X, overlay.Y), text)
+	return args
+}
+
+func imageMetadataArgs(options *models.ImageConversionOptions) []string {
+	mode := strings.TrimSpace(options.MetadataMode)
+	if options.RemoveMetadata {
+		mode = "strip"
+	}
+	var args []string
+	if mode == "strip" || mode == "custom" {
+		args = append(args, "-strip")
+	}
+	if mode != "custom" || options.Metadata == nil {
+		return args
+	}
+	fields := map[string]string{
+		"title":       options.Metadata.Title,
+		"author":      options.Metadata.Author,
+		"description": options.Metadata.Description,
+		"copyright":   options.Metadata.Copyright,
+		"comment":     options.Metadata.Comment,
+		"keywords":    options.Metadata.Keywords,
+	}
+	for key, value := range fields {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		args = append(args, "-set", key, value)
+	}
+	return args
+}
+
+func applyImageMetadataOptions(inputPath, outputPath string, options *models.ImageConversionOptions) error {
+	mode := strings.TrimSpace(options.MetadataMode)
+	if options.RemoveMetadata {
+		mode = "strip"
+	}
+	switch mode {
+	case "", "keep":
+		if err := copyImageMetadata(inputPath, outputPath); err != nil {
+			fmt.Printf("[DEBUG] Metadata preservation skipped: %v\n", err)
+		}
+		return nil
+	case "strip":
+		return stripImageMetadata(outputPath)
+	case "custom":
+		if err := stripImageMetadata(outputPath); err != nil {
+			return err
+		}
+		return writeCustomImageMetadata(outputPath, options)
+	default:
+		return fmt.Errorf("unsupported metadata mode: %s", mode)
+	}
+}
+
+func copyImageMetadata(inputPath, outputPath string) error {
+	_, stderr, err := runCommand(context.Background(), "exiftool", "-overwrite_original", "-TagsFromFile", inputPath, "-all:all", "-unsafe", outputPath)
+	if err != nil {
+		return fmt.Errorf("copy metadata with exiftool: %s", strings.TrimSpace(stderr))
+	}
+	return nil
+}
+
+func stripImageMetadata(outputPath string) error {
+	_, stderr, err := runCommand(context.Background(), "exiftool", "-overwrite_original", "-all=", outputPath)
+	if err != nil {
+		return fmt.Errorf("strip metadata with exiftool: %s", strings.TrimSpace(stderr))
+	}
+	return nil
+}
+
+func writeCustomImageMetadata(outputPath string, options *models.ImageConversionOptions) error {
+	args := []string{"-overwrite_original"}
+	if options.GPSOptions != nil {
+		args = append(args, gpsMetadataArgs(options.GPSOptions)...)
+	}
+	if options.Metadata != nil {
+		args = append(args, metadataFieldArgs(options.Metadata)...)
+	}
+	for key, value := range options.AdvancedTags {
+		if isAllowedAdvancedMetadataTag(key) && strings.TrimSpace(value) != "" {
+			args = append(args, fmt.Sprintf("-%s=%s", key, strings.TrimSpace(value)))
+		}
+	}
+	if len(args) == 1 {
+		return nil
+	}
+	args = append(args, outputPath)
+	_, stderr, err := runCommand(context.Background(), "exiftool", args...)
+	if err != nil {
+		return fmt.Errorf("write metadata with exiftool: %s", strings.TrimSpace(stderr))
+	}
+	return nil
+}
+
+func metadataFieldArgs(metadata *models.ImageMetadataFields) []string {
+	fields := map[string]string{
+		"XMP:Title":        metadata.Title,
+		"Artist":           metadata.Author,
+		"ImageDescription": metadata.Description,
+		"Copyright":        metadata.Copyright,
+		"UserComment":      metadata.Comment,
+		"IPTC:Keywords":    metadata.Keywords,
+	}
+	args := make([]string, 0, len(fields)*2)
+	for key, value := range fields {
+		if strings.TrimSpace(value) != "" {
+			args = append(args, fmt.Sprintf("-%s=%s", key, strings.TrimSpace(value)))
+		}
+	}
+	for key, value := range metadata.ExifTiff {
+		if exifTiffTags()[key] && strings.TrimSpace(value) != "" {
+			args = append(args, fmt.Sprintf("-%s=%s", key, strings.TrimSpace(value)))
+		}
+	}
+	for key, value := range metadata.GPSLocation {
+		if gpsLocationTags()[key] && strings.TrimSpace(value) != "" {
+			args = append(args, fmt.Sprintf("-%s=%s", key, strings.TrimSpace(value)))
+		}
+	}
+	for key, value := range metadata.IPTC {
+		if isAllowedAdvancedMetadataTag("IPTC:"+key) && strings.TrimSpace(value) != "" {
+			args = append(args, fmt.Sprintf("-IPTC:%s=%s", key, strings.TrimSpace(value)))
+		}
+	}
+	for key, value := range metadata.Advanced {
+		if isAllowedAdvancedMetadataTag(key) && strings.TrimSpace(value) != "" {
+			args = append(args, fmt.Sprintf("-%s=%s", key, strings.TrimSpace(value)))
+		}
+	}
+	return args
+}
+
+func gpsMetadataArgs(gps *models.ImageGPSOptions) []string {
+	var args []string
+	if gps.RemoveLocationData {
+		args = append(args, "-GPS:all=")
+	} else if gps.ReplaceLocationData && gps.Latitude != nil && gps.Longitude != nil {
+		lat := *gps.Latitude
+		lng := *gps.Longitude
+		if gps.RoundLocationPrecision {
+			decimals := 3
+			if gps.PrecisionDecimals != nil && *gps.PrecisionDecimals >= 0 && *gps.PrecisionDecimals <= 8 {
+				decimals = *gps.PrecisionDecimals
+			}
+			lat = roundFloat(lat, decimals)
+			lng = roundFloat(lng, decimals)
+		}
+		args = append(args,
+			fmt.Sprintf("-GPSLatitude=%f", math.Abs(lat)),
+			fmt.Sprintf("-GPSLatitudeRef=%s", latitudeRef(lat)),
+			fmt.Sprintf("-GPSLongitude=%f", math.Abs(lng)),
+			fmt.Sprintf("-GPSLongitudeRef=%s", longitudeRef(lng)),
+		)
+		if gps.Altitude != nil {
+			alt := *gps.Altitude
+			args = append(args, fmt.Sprintf("-GPSAltitude=%f", math.Abs(alt)))
+			if alt < 0 {
+				args = append(args, "-GPSAltitudeRef=1")
+			} else {
+				args = append(args, "-GPSAltitudeRef=0")
+			}
+		}
+	}
+	if gps.RemoveCaptureDirection {
+		args = append(args, "-GPSImgDirection=", "-GPSImgDirectionRef=", "-GPSTrack=", "-GPSTrackRef=")
+	}
+	if gps.RemoveGPSTimestamp {
+		args = append(args, "-GPSTimeStamp=", "-GPSDateStamp=")
+	}
+	if gps.RemoveAltitude {
+		args = append(args, "-GPSAltitude=", "-GPSAltitudeRef=")
+	}
+	if gps.RemoveDestinationFields {
+		args = append(args,
+			"-GPSDestLatitude=", "-GPSDestLatitudeRef=", "-GPSDestLongitude=", "-GPSDestLongitudeRef=",
+			"-GPSDestBearing=", "-GPSDestBearingRef=", "-GPSDestDistance=", "-GPSDestDistanceRef=",
+		)
+	}
+	return args
+}
+
+func latitudeRef(latitude float64) string {
+	if latitude < 0 {
+		return "S"
+	}
+	return "N"
+}
+
+func longitudeRef(longitude float64) string {
+	if longitude < 0 {
+		return "W"
+	}
+	return "E"
+}
+
+func roundFloat(value float64, decimals int) float64 {
+	pow := math.Pow(10, float64(decimals))
+	return math.Round(value*pow) / pow
+}
+
+func isAllowedAdvancedMetadataTag(tag string) bool {
+	tag = strings.TrimSpace(tag)
+	if tag == "" || strings.ContainsAny(tag, "\x00\r\n") || strings.Contains(tag, "..") {
+		return false
+	}
+	for _, r := range tag {
+		if !(r == ':' || r == '_' || r == '-' || r == '/' || r == '.' || (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')) {
+			return false
+		}
+	}
+	return strings.HasPrefix(tag, "IPTC:") || strings.HasPrefix(tag, "XMP:") || strings.HasPrefix(tag, "ICC_Profile:") || strings.HasPrefix(tag, "MakerNotes:")
+}
+
+func validImageGravities() map[string]bool {
+	return map[string]bool{
+		"NorthWest": true, "North": true, "NorthEast": true,
+		"West": true, "Center": true, "East": true,
+		"SouthWest": true, "South": true, "SouthEast": true,
+	}
+}
+
+func validImageFonts() map[string]bool {
+	return map[string]bool{
+		"DejaVu-Sans": true, "DejaVu-Serif": true, "DejaVu-Sans-Mono": true,
+		"Liberation-Sans": true, "Liberation-Serif": true, "Liberation-Mono": true,
+	}
+}
+
+func isSafeImageColor(value string) bool {
+	matched, _ := regexp.MatchString(`^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$`, value)
+	return matched
+}
+
+func sanitizeAnnotationText(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.ReplaceAll(value, "\x00", "")
+	if strings.HasPrefix(value, "@") {
+		value = `\` + value
+	}
+	return value
 }
 
 func (c *Converter) convertVideo(job *models.ConversionJob, inputPath, outputPath string) error {

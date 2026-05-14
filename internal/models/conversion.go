@@ -286,13 +286,58 @@ type Spectral struct {
 
 // Image conversion options
 type ImageConversionOptions struct {
-	Format  string    `json:"format" binding:"required,oneof=jpg png webp gif"`
-	Width   *int      `json:"width,omitempty"`
-	Height  *int      `json:"height,omitempty"`
-	Quality int       `json:"quality" binding:"min=1,max=100"`
-	Filter  string    `json:"filter" binding:"oneof=none grayscale sepia blur sharpen"`
-	Tint    *string   `json:"tint,omitempty"`
-	Crop    *CropArea `json:"crop,omitempty"`
+	Format         string               `json:"format" binding:"required,oneof=jpg png webp gif"`
+	Width          *int                 `json:"width,omitempty"`
+	Height         *int                 `json:"height,omitempty"`
+	Quality        int                  `json:"quality" binding:"min=1,max=100"`
+	Filter         string               `json:"filter" binding:"oneof=none grayscale sepia blur sharpen"`
+	Tint           *string              `json:"tint,omitempty"`
+	Crop           *CropArea            `json:"crop,omitempty"`
+	TextOverlay    *ImageTextOverlay    `json:"textOverlay,omitempty"`
+	RemoveMetadata bool                 `json:"removeMetadata,omitempty"`
+	MetadataMode   string               `json:"metadataMode,omitempty"`
+	Metadata       *ImageMetadataFields `json:"metadata,omitempty"`
+	GPSOptions     *ImageGPSOptions     `json:"gpsOptions,omitempty"`
+	AdvancedTags   map[string]string    `json:"advancedTags,omitempty"`
+}
+
+type ImageTextOverlay struct {
+	Text        string `json:"text,omitempty"`
+	Size        int    `json:"size,omitempty"`
+	Color       string `json:"color,omitempty"`
+	StrokeColor string `json:"strokeColor,omitempty"`
+	StrokeWidth int    `json:"strokeWidth,omitempty"`
+	Gravity     string `json:"gravity,omitempty"`
+	Font        string `json:"font,omitempty"`
+	X           int    `json:"x,omitempty"`
+	Y           int    `json:"y,omitempty"`
+}
+
+type ImageMetadataFields struct {
+	Title       string            `json:"title,omitempty"`
+	Author      string            `json:"author,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Copyright   string            `json:"copyright,omitempty"`
+	Comment     string            `json:"comment,omitempty"`
+	Keywords    string            `json:"keywords,omitempty"`
+	ExifTiff    map[string]string `json:"exifTiff,omitempty"`
+	GPSLocation map[string]string `json:"gpsLocation,omitempty"`
+	IPTC        map[string]string `json:"iptc,omitempty"`
+	Advanced    map[string]string `json:"advanced,omitempty"`
+}
+
+type ImageGPSOptions struct {
+	RemoveLocationData      bool     `json:"removeLocationData,omitempty"`
+	ReplaceLocationData     bool     `json:"replaceLocationData,omitempty"`
+	Latitude                *float64 `json:"latitude,omitempty"`
+	Longitude               *float64 `json:"longitude,omitempty"`
+	Altitude                *float64 `json:"altitude,omitempty"`
+	RoundLocationPrecision  bool     `json:"roundLocationPrecision,omitempty"`
+	PrecisionDecimals       *int     `json:"precisionDecimals,omitempty"`
+	RemoveCaptureDirection  bool     `json:"removeCaptureDirection,omitempty"`
+	RemoveGPSTimestamp      bool     `json:"removeGpsTimestamp,omitempty"`
+	RemoveAltitude          bool     `json:"removeAltitude,omitempty"`
+	RemoveDestinationFields bool     `json:"removeDestinationFields,omitempty"`
 }
 
 // Video conversion options
@@ -335,6 +380,35 @@ type UploadResponse struct {
 	JobID string `json:"jobId"`
 }
 
+type VideoUploadPresignRequest struct {
+	FileName      string `json:"fileName"`
+	ContentType   string `json:"contentType"`
+	FileSizeBytes int64  `json:"fileSizeBytes"`
+	SessionID     string `json:"sessionId,omitempty"`
+}
+
+type VideoUploadTarget struct {
+	UploadURL string `json:"uploadUrl"`
+	S3Key     string `json:"s3Key"`
+	Bucket    string `json:"bucket"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
+type VideoUploadCompleteRequest struct {
+	S3Key         string                 `json:"s3Key"`
+	FileName      string                 `json:"fileName"`
+	ContentType   string                 `json:"contentType"`
+	FileSizeBytes int64                  `json:"fileSizeBytes"`
+	Options       map[string]interface{} `json:"options"`
+}
+
+type StructuredImageMetadata struct {
+	Container              map[string]interface{}            `json:"container,omitempty"`
+	ExifTiff               map[string]interface{}            `json:"exifTiff,omitempty"`
+	GPSLocation            map[string]interface{}            `json:"gpsLocation,omitempty"`
+	AdvancedDeviceMetadata map[string]map[string]interface{} `json:"advancedDeviceMetadata,omitempty"`
+}
+
 // Progress update
 type ProgressUpdate struct {
 	JobID    string `json:"jobId"`
@@ -343,13 +417,14 @@ type ProgressUpdate struct {
 
 // File identification response
 type FileIdentificationResponse struct {
-	FileName  string                 `json:"fileName"`
-	FileSize  int64                  `json:"fileSize"`
-	FileType  FileType               `json:"fileType"`
-	MimeType  string                 `json:"mimeType"`
-	Details   map[string]interface{} `json:"details"`
-	Tool      string                 `json:"tool"`      // Which tool was used for identification
-	RawOutput string                 `json:"rawOutput"` // Raw command output for debugging
+	FileName      string                   `json:"fileName"`
+	FileSize      int64                    `json:"fileSize"`
+	FileType      FileType                 `json:"fileType"`
+	MimeType      string                   `json:"mimeType"`
+	Details       map[string]interface{}   `json:"details"`
+	ImageMetadata *StructuredImageMetadata `json:"imageMetadata,omitempty"`
+	Tool          string                   `json:"tool"`      // Which tool was used for identification
+	RawOutput     string                   `json:"rawOutput"` // Raw command output for debugging
 }
 
 // Helper function to determine file type from MIME type
