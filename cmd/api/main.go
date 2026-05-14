@@ -71,6 +71,7 @@ func setupRouter(conversionHandler *handlers.ConversionHandler) *gin.Engine {
 	corsConfig.AllowOrigins = []string{
 		"https://media-manipulator.com",
 		"https://www.media-manipulator.com",
+		"http://localhost:5175",
 	}
 	corsConfig.AllowMethods = []string{"GET", "POST", "OPTIONS"}
 	corsConfig.AllowHeaders = []string{
