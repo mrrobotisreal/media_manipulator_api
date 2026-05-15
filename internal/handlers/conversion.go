@@ -20,29 +20,31 @@ import (
 )
 
 type ConversionHandler struct {
-	jobManager   *services.JobManager
-	converter    *services.Converter
-	cfg          *config.Config
-	inspector    *services.MediaInspector
-	analysisJobs *services.AnalysisQueue
-	s3Client     *s3.Client
-	s3Presign    *s3.PresignClient
+	jobManager    *services.JobManager
+	converter     *services.Converter
+	cfg           *config.Config
+	inspector     *services.MediaInspector
+	analysisJobs  *services.AnalysisQueue
+	transcription *services.TranscriptionService
+	s3Client      *s3.Client
+	s3Presign     *s3.PresignClient
 }
 
-func NewConversionHandler(jobManager *services.JobManager, converter *services.Converter, cfg *config.Config, inspector *services.MediaInspector, analysisJobs *services.AnalysisQueue, s3Client *s3.Client) *ConversionHandler {
+func NewConversionHandler(jobManager *services.JobManager, converter *services.Converter, cfg *config.Config, inspector *services.MediaInspector, analysisJobs *services.AnalysisQueue, transcription *services.TranscriptionService, s3Client *s3.Client) *ConversionHandler {
 	converter.SetJobManager(jobManager)
 	var presign *s3.PresignClient
 	if s3Client != nil {
 		presign = s3.NewPresignClient(s3Client)
 	}
 	return &ConversionHandler{
-		jobManager:   jobManager,
-		converter:    converter,
-		cfg:          cfg,
-		inspector:    inspector,
-		analysisJobs: analysisJobs,
-		s3Client:     s3Client,
-		s3Presign:    presign,
+		jobManager:    jobManager,
+		converter:     converter,
+		cfg:           cfg,
+		inspector:     inspector,
+		analysisJobs:  analysisJobs,
+		transcription: transcription,
+		s3Client:      s3Client,
+		s3Presign:     presign,
 	}
 }
 
@@ -53,6 +55,8 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.POST("/video-upload/complete", h.CompleteVideoUpload)
 	r.GET("/job/:jobId", h.GetJobStatus)
 	r.GET("/download/:jobId", h.DownloadFile)
+	r.GET("/transcript/:jobId", h.GetTranscriptResult)
+	r.GET("/analysis/:jobId", h.GetAnalysisResult)
 }
 
 func (h *ConversionHandler) IdentifyFile(c *gin.Context) {
@@ -162,7 +166,9 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 		log.Printf("failed to write metadata for job %s: %v", job.ID, err)
 	}
 
-	h.analysisJobs.Enqueue(services.AnalysisJob{JobID: job.ID, InputPath: uploadPath, OutputDir: jobOutputDir, FileType: fileType, MimeType: mimeType})
+	if !isTranscribeMode(job) {
+		h.analysisJobs.Enqueue(services.AnalysisJob{JobID: job.ID, InputPath: uploadPath, OutputDir: jobOutputDir, FileType: fileType, MimeType: mimeType})
+	}
 	go h.processConversion(job, uploadPath, jobOutputDir)
 
 	c.JSON(http.StatusOK, models.UploadResponse{JobID: job.ID})
@@ -208,9 +214,41 @@ func (h *ConversionHandler) DownloadFile(c *gin.Context) {
 	c.File(outputPath)
 }
 
+func (h *ConversionHandler) GetTranscriptResult(c *gin.Context) {
+	jobID := strings.TrimSpace(c.Param("jobId"))
+	if jobID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Job ID is required"})
+		return
+	}
+	resultPath := filepath.Join(h.cfg.OutputDir, jobID, "transcribe_result.json")
+	if _, err := os.Stat(resultPath); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Transcript result not found"})
+		return
+	}
+	c.File(resultPath)
+}
+
+func (h *ConversionHandler) GetAnalysisResult(c *gin.Context) {
+	jobID := strings.TrimSpace(c.Param("jobId"))
+	if jobID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Job ID is required"})
+		return
+	}
+	resultPath := filepath.Join(h.cfg.OutputDir, jobID, "analysis.json")
+	if _, err := os.Stat(resultPath); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Analysis result not yet available"})
+		return
+	}
+	c.File(resultPath)
+}
+
 func (h *ConversionHandler) processConversion(job *models.ConversionJob, inputPath string, outputDir string) {
 	if err := h.jobManager.UpdateJobStatus(job.ID, models.StatusProcessing); err != nil {
 		log.Printf("failed to update job %s status: %v", job.ID, err)
+		return
+	}
+	if isTranscribeMode(job) {
+		h.processTranscription(job, inputPath, outputDir)
 		return
 	}
 	outputPath := h.outputPath(job, outputDir)
@@ -227,6 +265,46 @@ func (h *ConversionHandler) processConversion(job *models.ConversionJob, inputPa
 	if err := h.jobManager.UpdateJobStatus(job.ID, models.StatusCompleted); err != nil {
 		log.Printf("failed to mark job %s completed: %v", job.ID, err)
 	}
+}
+
+func (h *ConversionHandler) processTranscription(job *models.ConversionJob, inputPath, outputDir string) {
+	if h.transcription == nil {
+		_ = h.jobManager.UpdateJobError(job.ID, "Transcription service is not available")
+		return
+	}
+	fileType := models.GetFileType(job.OriginalFile.Type)
+	if fileType != models.FileTypeVideo && fileType != models.FileTypeAudio {
+		_ = h.jobManager.UpdateJobError(job.ID, "Transcription only supports video or audio files")
+		return
+	}
+	format, _ := job.Options["format"].(string)
+	language, _ := job.Options["language"].(string)
+	opts := services.TranscribeOptions{Format: format, Language: language}
+	outputPath := h.outputPath(job, outputDir)
+
+	ctx, cancel := context.WithTimeout(context.Background(), h.cfg.CommandTimeout)
+	defer cancel()
+	if _, err := h.transcription.Transcribe(ctx, job, inputPath, outputPath, opts); err != nil {
+		log.Printf("transcription failed for job %s: %v", job.ID, err)
+		_ = h.jobManager.UpdateJobError(job.ID, err.Error())
+		return
+	}
+	if err := h.jobManager.UpdateJobResult(job.ID, "/api/download/"+job.ID); err != nil {
+		log.Printf("failed to update job %s result: %v", job.ID, err)
+		_ = h.jobManager.UpdateJobError(job.ID, "Failed to update job result")
+		return
+	}
+	if err := h.jobManager.UpdateJobStatus(job.ID, models.StatusCompleted); err != nil {
+		log.Printf("failed to mark job %s completed: %v", job.ID, err)
+	}
+}
+
+func isTranscribeMode(job *models.ConversionJob) bool {
+	if job == nil || job.Options == nil {
+		return false
+	}
+	mode, _ := job.Options["mode"].(string)
+	return strings.EqualFold(strings.TrimSpace(mode), "transcribe")
 }
 
 func (h *ConversionHandler) multipartFile(c *gin.Context) (io.ReadCloser, *multipartFileHeader, error) {
@@ -262,11 +340,13 @@ func (h *ConversionHandler) saveUploadedFile(file io.Reader, path string) error 
 	return err
 }
 
-func (h *ConversionHandler) outputPath(job *models.ConversionJob, outputDir string) string {
-	return filepath.Join(outputDir, "converted"+h.getOutputExtension(job))
-}
-
 func (h *ConversionHandler) getOutputExtension(job *models.ConversionJob) string {
+	if isTranscribeMode(job) {
+		if format, ok := job.Options["format"].(string); ok && format != "" {
+			return "." + strings.TrimPrefix(strings.ToLower(format), ".")
+		}
+		return ".txt"
+	}
 	switch models.GetFileType(job.OriginalFile.Type) {
 	case models.FileTypeImage:
 		if format, ok := job.Options["format"].(string); ok && format != "" {
@@ -293,7 +373,17 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 	if name == "" {
 		name = "converted"
 	}
+	if isTranscribeMode(job) {
+		return fmt.Sprintf("%s_transcript%s", name, h.getOutputExtension(job))
+	}
 	return fmt.Sprintf("%s_converted%s", name, h.getOutputExtension(job))
+}
+
+func (h *ConversionHandler) outputPath(job *models.ConversionJob, outputDir string) string {
+	if isTranscribeMode(job) {
+		return filepath.Join(outputDir, "transcript"+h.getOutputExtension(job))
+	}
+	return filepath.Join(outputDir, "converted"+h.getOutputExtension(job))
 }
 
 func parseOptions(optionsStr string) (map[string]interface{}, error) {

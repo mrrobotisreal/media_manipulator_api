@@ -34,9 +34,10 @@ func main() {
 	inspector := services.NewMediaInspector(cfg.CommandTimeout)
 	analysisQueue := services.NewAnalysisQueue(cfg, inspector)
 	analysisQueue.Start()
+	transcription := services.NewTranscriptionService(cfg, inspector, jobManager, analysisQueue)
 	s3Client := newS3Client(cfg)
 
-	conversionHandler := handlers.NewConversionHandler(jobManager, converter, cfg, inspector, analysisQueue, s3Client)
+	conversionHandler := handlers.NewConversionHandler(jobManager, converter, cfg, inspector, analysisQueue, transcription, s3Client)
 	router := setupRouter(conversionHandler)
 
 	server := &http.Server{

@@ -186,7 +186,9 @@ func (h *ConversionHandler) CompleteVideoUpload(c *gin.Context) {
 		log.Printf("failed to write metadata for S3 video job %s: %v", job.ID, err)
 	}
 
-	h.analysisJobs.Enqueue(services.AnalysisJob{JobID: job.ID, InputPath: uploadPath, OutputDir: jobOutputDir, FileType: fileType, MimeType: mimeType})
+	if !isTranscribeMode(job) {
+		h.analysisJobs.Enqueue(services.AnalysisJob{JobID: job.ID, InputPath: uploadPath, OutputDir: jobOutputDir, FileType: fileType, MimeType: mimeType})
+	}
 	go h.processConversion(job, uploadPath, jobOutputDir)
 
 	c.JSON(http.StatusOK, models.UploadResponse{JobID: job.ID})

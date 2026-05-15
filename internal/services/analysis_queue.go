@@ -28,25 +28,32 @@ type AnalysisQueue struct {
 }
 
 type AnalysisJob struct {
-	JobID     string          `json:"jobId"`
-	InputPath string          `json:"inputPath"`
-	OutputDir string          `json:"outputDir"`
-	FileType  models.FileType `json:"fileType"`
-	MimeType  string          `json:"mimeType"`
+	JobID            string          `json:"jobId"`
+	InputPath        string          `json:"inputPath"`
+	OutputDir        string          `json:"outputDir"`
+	FileType         models.FileType `json:"fileType"`
+	MimeType         string          `json:"mimeType"`
+	Mode             string          `json:"mode,omitempty"`
+	Transcript       string          `json:"transcript,omitempty"`
+	Language         string          `json:"language,omitempty"`
+	AudioDescription string          `json:"audioDescription,omitempty"`
 }
 
 type analysisResult struct {
-	JobID          string          `json:"jobId"`
-	FileType       models.FileType `json:"fileType"`
-	Model          string          `json:"model"`
-	StartedAt      time.Time       `json:"startedAt"`
-	CompletedAt    time.Time       `json:"completedAt"`
-	TranscriptPath string          `json:"transcriptPath,omitempty"`
-	FramesDir      string          `json:"framesDir,omitempty"`
-	AudioDetected  bool            `json:"audioDetected,omitempty"`
-	Summary        any             `json:"summary,omitempty"`
-	Batches        []any           `json:"batches,omitempty"`
-	Error          string          `json:"error,omitempty"`
+	JobID            string          `json:"jobId"`
+	FileType         models.FileType `json:"fileType"`
+	Mode             string          `json:"mode,omitempty"`
+	Model            string          `json:"model"`
+	StartedAt        time.Time       `json:"startedAt"`
+	CompletedAt      time.Time       `json:"completedAt"`
+	TranscriptPath   string          `json:"transcriptPath,omitempty"`
+	FramesDir        string          `json:"framesDir,omitempty"`
+	AudioDetected    bool            `json:"audioDetected,omitempty"`
+	Summary          any             `json:"summary,omitempty"`
+	Batches          []any           `json:"batches,omitempty"`
+	TranscriptReview any             `json:"transcriptReview,omitempty"`
+	AudioDescription string          `json:"audioDescription,omitempty"`
+	Error            string          `json:"error,omitempty"`
 }
 
 func NewAnalysisQueue(cfg *config.Config, inspector *MediaInspector) *AnalysisQueue {
@@ -83,11 +90,35 @@ func (q *AnalysisQueue) worker() {
 
 func (q *AnalysisQueue) run(ctx context.Context, job AnalysisJob) error {
 	started := time.Now().UTC()
-	result := analysisResult{JobID: job.JobID, FileType: job.FileType, Model: envOrDefault("OLLAMA_VLM_MODEL", defaultVLMModel), StartedAt: started}
+	result := analysisResult{JobID: job.JobID, FileType: job.FileType, Mode: job.Mode, Model: envOrDefault("OLLAMA_VLM_MODEL", defaultVLMModel), StartedAt: started, AudioDescription: job.AudioDescription}
 	defer func() {
 		result.CompletedAt = time.Now().UTC()
 		_ = writeJSON(filepath.Join(job.OutputDir, "analysis.json"), result)
 	}()
+
+	switch job.Mode {
+	case "transcript":
+		review, err := q.analyzeTranscript(ctx, job.Transcript, job.Language)
+		if err != nil {
+			result.Error = err.Error()
+			return err
+		}
+		result.TranscriptReview = review
+		return nil
+	case "no_speech", "no_audio":
+		summary, err := q.describeSilentMedia(ctx, job)
+		if err != nil {
+			result.Error = err.Error()
+			return err
+		}
+		result.Summary = summary
+		if description, ok := summary.(map[string]any); ok {
+			if desc, ok := description["audio_description"].(string); ok && desc != "" {
+				result.AudioDescription = desc
+			}
+		}
+		return nil
+	}
 
 	switch job.FileType {
 	case models.FileTypeImage:
@@ -267,6 +298,127 @@ func (q *AnalysisQueue) analyzeImages(ctx context.Context, paths []string, promp
 		return nil, fmt.Errorf("ollama status %d: %v", resp.StatusCode, response)
 	}
 	return response, nil
+}
+
+func (q *AnalysisQueue) analyzeTranscript(ctx context.Context, transcript, language string) (any, error) {
+	transcript = strings.TrimSpace(transcript)
+	if transcript == "" {
+		return map[string]any{
+			"summary":          "Transcript is empty; no analysis available.",
+			"extended_summary": "",
+			"main_topics":      []string{},
+			"audience_level":   "unspecified",
+			"language":         language,
+			"sentiment_label":  "neutral",
+			"sentiment_score":  0,
+			"content_safety": map[string]any{
+				"rating":   "safe",
+				"labels":   []string{},
+				"concerns": "Empty transcript — nothing to assess.",
+			},
+			"harmful_content":         false,
+			"harmful_content_reasons": []string{},
+		}, nil
+	}
+	prompt := buildTranscriptAnalysisPrompt(transcript, language)
+	payload := map[string]any{
+		"model":    envOrDefault("OLLAMA_TEXT_MODEL", envOrDefault("OLLAMA_VLM_MODEL", defaultVLMModel)),
+		"stream":   false,
+		"messages": []map[string]any{{"role": "user", "content": prompt}},
+		"format":   "json",
+	}
+	body, _ := json.Marshal(payload)
+	url := strings.TrimRight(envOrDefault("OLLAMA_URL", "http://localhost:11434"), "/") + "/api/chat"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: time.Duration(envInt("OLLAMA_TIMEOUT_SECONDS", 300)) * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var response map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("ollama status %d: %v", resp.StatusCode, response)
+	}
+	if message, ok := response["message"].(map[string]any); ok {
+		if content, ok := message["content"].(string); ok && strings.TrimSpace(content) != "" {
+			trimmed := strings.TrimSpace(content)
+			var parsed map[string]any
+			if err := json.Unmarshal([]byte(trimmed), &parsed); err == nil {
+				return parsed, nil
+			}
+			return map[string]any{"raw": trimmed}, nil
+		}
+	}
+	return response, nil
+}
+
+func (q *AnalysisQueue) describeSilentMedia(ctx context.Context, job AnalysisJob) (any, error) {
+	switch job.FileType {
+	case models.FileTypeVideo:
+		framesDir, frames, err := q.extractFrames(ctx, job)
+		if err != nil {
+			return map[string]any{
+				"audio_description": job.AudioDescription,
+				"frames_error":      err.Error(),
+			}, nil
+		}
+		if len(frames) == 0 {
+			return map[string]any{"audio_description": job.AudioDescription, "frames_dir": framesDir}, nil
+		}
+		prompt := "This media has no recognizable speech. Describe what is shown across these frames in 2-3 concise sentences. Return strict JSON with fields: visual_description, likely_content_type (music_video|silent_video|ambient|other), notable_objects, harmful_content (boolean), harmful_content_reasons."
+		batch, err := q.analyzeImages(ctx, frames, prompt)
+		if err != nil {
+			return map[string]any{"audio_description": job.AudioDescription, "frames_dir": framesDir, "ollama_error": err.Error()}, nil
+		}
+		return map[string]any{
+			"audio_description": job.AudioDescription,
+			"frames_dir":        framesDir,
+			"visual_summary":    batch,
+		}, nil
+	case models.FileTypeAudio:
+		return map[string]any{
+			"audio_description": job.AudioDescription,
+			"likely_content_type": "music_or_ambient_or_silent",
+		}, nil
+	default:
+		return map[string]any{"audio_description": job.AudioDescription}, nil
+	}
+}
+
+func buildTranscriptAnalysisPrompt(transcript, language string) string {
+	if language == "" {
+		language = "unknown"
+	}
+	var b strings.Builder
+	b.WriteString("You are analyzing a media transcript for internal product review. ")
+	b.WriteString("Return STRICT JSON only, with the following fields: ")
+	b.WriteString("summary (1-2 sentence summary), ")
+	b.WriteString("extended_summary (3-5 sentence summary), ")
+	b.WriteString("main_topics (string array, up to 5 items), ")
+	b.WriteString("keywords (string array, up to 10 items), ")
+	b.WriteString("audience_level (one of: beginner, intermediate, advanced, expert, all, unspecified), ")
+	b.WriteString("language (BCP-47 language code, prefer the transcript's actual language), ")
+	b.WriteString("sentiment_label (positive | negative | neutral | mixed), ")
+	b.WriteString("sentiment_score (number between -1 and 1), ")
+	b.WriteString("content_safety { rating (safe|moderate|unsafe), labels (string array), concerns (string) }, ")
+	b.WriteString("harmful_content (boolean), ")
+	b.WriteString("harmful_content_reasons (string array). ")
+	b.WriteString("Detected language: ")
+	b.WriteString(language)
+	b.WriteString(". Transcript:\n\n")
+	if len(transcript) > 16000 {
+		transcript = transcript[:16000] + "\n...[truncated]"
+	}
+	b.WriteString(transcript)
+	return b.String()
 }
 
 func writeJSON(path string, value any) error {
