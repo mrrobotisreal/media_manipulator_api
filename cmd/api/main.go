@@ -30,7 +30,7 @@ func main() {
 	createDirs(cfg)
 
 	jobManager := services.NewJobManager()
-	converter := services.NewConverter()
+	converter := services.NewConverter(cfg)
 	inspector := services.NewMediaInspector(cfg.CommandTimeout)
 	analysisQueue := services.NewAnalysisQueue(cfg, inspector)
 	analysisQueue.Start()

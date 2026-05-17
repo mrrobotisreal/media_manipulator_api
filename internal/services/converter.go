@@ -15,19 +15,29 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 )
 
 type Converter struct {
 	jobManager *JobManager
+	cfg        *config.Config
+	ai         *AIService
 }
 
-func NewConverter() *Converter {
-	return &Converter{}
+func NewConverter(cfg *config.Config) *Converter {
+	c := &Converter{cfg: cfg}
+	if cfg != nil && cfg.AIEnabled {
+		c.ai = NewAIService(cfg)
+	}
+	return c
 }
 
 func (c *Converter) SetJobManager(jm *JobManager) {
 	c.jobManager = jm
+	if c.ai != nil {
+		c.ai.SetJobManager(jm)
+	}
 }
 
 func (c *Converter) ConvertFile(job *models.ConversionJob, inputPath, outputPath string) error {
@@ -97,6 +107,15 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 	}
 
 	fmt.Printf("[DEBUG] Parsed options: %+v\n", options)
+
+	// If an AI image operation is selected, route to the AI service and skip
+	// the normal ImageMagick pipeline. AI ops are mutually exclusive with the
+	// conventional convert chain at execution time.
+	if c.ai != nil && options.AI != nil && options.AI.Enabled && isActiveAIOp(options.AI.Operation) {
+		ctx, cancel := context.WithTimeout(context.Background(), c.cfg.CommandTimeout)
+		defer cancel()
+		return c.runImageAI(ctx, job, &options, inputPath, outputPath)
+	}
 
 	// Update progress
 	if c.jobManager != nil {
@@ -313,6 +332,9 @@ func (c *Converter) validateImageOptions(options *models.ImageConversionOptions)
 		if err := validateImageMetadata(options.Metadata); err != nil {
 			return err
 		}
+	}
+	if err := validateAIImageOptions(options.AI); err != nil {
+		return err
 	}
 
 	return nil
@@ -1137,6 +1159,14 @@ func (c *Converter) convertAudio(job *models.ConversionJob, inputPath, outputPat
 	fmt.Printf("[DEBUG] Input: %s, Output: %s\n", inputPath, outputPath)
 	fmt.Printf("[DEBUG] Parsed options: %+v\n", options)
 
+	// If an AI audio operation is selected, route to the AI service and skip
+	// the normal FFmpeg pipeline.
+	if c.ai != nil && options.AI != nil && options.AI.Enabled && isActiveAIOp(options.AI.Operation) {
+		ctx, cancel := context.WithTimeout(context.Background(), c.cfg.CommandTimeout)
+		defer cancel()
+		return c.runAudioAI(ctx, job, &options, inputPath, outputPath)
+	}
+
 	// Update progress
 	if c.jobManager != nil {
 		c.jobManager.SendProgressUpdate(job.ID, 10)
@@ -1694,6 +1724,9 @@ func (c *Converter) validateAudioOptions(options *models.AudioConversionOptions)
 			}
 		}
 	}
+	if err := validateAIAudioOptions(options.AI); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -1929,4 +1962,104 @@ func commandTail(value string, max int) string {
 		return value
 	}
 	return value[len(value)-max:]
+}
+
+// isActiveAIOp returns true when the operation string identifies an enabled AI
+// operation (not empty and not "none"). Used to decide whether to bypass the
+// normal conversion pipeline.
+func isActiveAIOp(op string) bool {
+	op = strings.TrimSpace(strings.ToLower(op))
+	return op != "" && op != "none"
+}
+
+func (c *Converter) runImageAI(ctx context.Context, job *models.ConversionJob, options *models.ImageConversionOptions, inputPath, outputPath string) error {
+	if c.ai == nil {
+		return fmt.Errorf("AI service not available")
+	}
+	op := strings.ToLower(strings.TrimSpace(options.AI.Operation))
+	fmt.Printf("[DEBUG] Routing image job %s to AI op %s\n", job.ID, op)
+	switch op {
+	case AIImageOpFacePrivacy:
+		return c.ai.FacePrivacy(ctx, job.ID, inputPath, outputPath, options.AI.FaceMode)
+	case AIImageOpRemoveBackground:
+		return c.ai.RemoveBackground(ctx, job.ID, inputPath, outputPath, options.AI.BackgroundModel)
+	case AIImageOpUpscale:
+		return c.ai.UpscaleImage(ctx, job.ID, inputPath, outputPath, options.AI.UpscaleScale, options.AI.UpscaleModel)
+	case AIImageOpRedactText:
+		return c.ai.RedactText(ctx, job.ID, inputPath, outputPath, options.AI.TextDetect, options.AI.TextRedaction)
+	default:
+		return fmt.Errorf("unsupported AI image operation: %s", op)
+	}
+}
+
+func (c *Converter) runAudioAI(ctx context.Context, job *models.ConversionJob, options *models.AudioConversionOptions, inputPath, outputPath string) error {
+	if c.ai == nil {
+		return fmt.Errorf("AI service not available")
+	}
+	op := strings.ToLower(strings.TrimSpace(options.AI.Operation))
+	fmt.Printf("[DEBUG] Routing audio job %s to AI op %s\n", job.ID, op)
+	switch op {
+	case AIAudioOpCleanVoice:
+		return c.ai.CleanVoice(ctx, job.ID, inputPath, outputPath, true)
+	case AIAudioOpRemoveNoise:
+		return c.ai.RemoveBackgroundNoise(ctx, job.ID, inputPath, outputPath)
+	case AIAudioOpIsolateVocals, AIAudioOpRemoveVocals:
+		return c.ai.SeparateVocals(ctx, job.ID, inputPath, outputPath, op)
+	default:
+		return fmt.Errorf("unsupported AI audio operation: %s", op)
+	}
+}
+
+func validateAIImageOptions(ai *models.AIImageOptions) error {
+	if ai == nil {
+		return nil
+	}
+	op := strings.ToLower(strings.TrimSpace(ai.Operation))
+	if op == "" || op == "none" {
+		return nil
+	}
+	switch op {
+	case AIImageOpFacePrivacy:
+		if mode := strings.TrimSpace(ai.FaceMode); mode != "" && !validFaceModes[mode] {
+			return fmt.Errorf("unsupported face mode: %s", ai.FaceMode)
+		}
+	case AIImageOpRemoveBackground:
+		if model := strings.TrimSpace(ai.BackgroundModel); model != "" && !validBackgroundModels[model] {
+			return fmt.Errorf("unsupported background model: %s", ai.BackgroundModel)
+		}
+	case AIImageOpUpscale:
+		if ai.UpscaleScale != 0 && ai.UpscaleScale != 2 && ai.UpscaleScale != 4 {
+			return fmt.Errorf("upscale scale must be 2 or 4, got %d", ai.UpscaleScale)
+		}
+		if model := strings.TrimSpace(ai.UpscaleModel); model != "" && !validUpscaleModels[model] {
+			return fmt.Errorf("unsupported upscale model: %s", ai.UpscaleModel)
+		}
+	case AIImageOpRedactText:
+		if detect := strings.TrimSpace(ai.TextDetect); detect != "" && !validTextDetect[detect] {
+			return fmt.Errorf("unsupported text detect mode: %s", ai.TextDetect)
+		}
+		if redaction := strings.TrimSpace(ai.TextRedaction); redaction != "" && !validTextRedaction[redaction] {
+			return fmt.Errorf("unsupported text redaction style: %s", ai.TextRedaction)
+		}
+	default:
+		return fmt.Errorf("unsupported AI image operation: %s", ai.Operation)
+	}
+	return nil
+}
+
+func validateAIAudioOptions(ai *models.AIAudioOptions) error {
+	if ai == nil {
+		return nil
+	}
+	op := strings.ToLower(strings.TrimSpace(ai.Operation))
+	switch op {
+	case "", "none",
+		AIAudioOpCleanVoice,
+		AIAudioOpRemoveNoise,
+		AIAudioOpIsolateVocals,
+		AIAudioOpRemoveVocals:
+		return nil
+	default:
+		return fmt.Errorf("unsupported AI audio operation: %s", ai.Operation)
+	}
 }

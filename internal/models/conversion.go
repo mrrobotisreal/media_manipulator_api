@@ -299,6 +299,21 @@ type ImageConversionOptions struct {
 	Metadata       *ImageMetadataFields `json:"metadata,omitempty"`
 	GPSOptions     *ImageGPSOptions     `json:"gpsOptions,omitempty"`
 	AdvancedTags   map[string]string    `json:"advancedTags,omitempty"`
+	AI             *AIImageOptions      `json:"ai,omitempty"`
+}
+
+// AIImageOptions selects a Phase 1 AI image operation. Only one operation runs
+// per job. When Enabled is true and Operation is not empty/"none", the normal
+// ImageMagick pipeline is skipped.
+type AIImageOptions struct {
+	Enabled         bool   `json:"enabled,omitempty"`
+	Operation       string `json:"operation,omitempty"`
+	FaceMode        string `json:"faceMode,omitempty"`
+	BackgroundModel string `json:"backgroundModel,omitempty"`
+	UpscaleScale    int    `json:"upscaleScale,omitempty"`
+	UpscaleModel    string `json:"upscaleModel,omitempty"`
+	TextDetect      string `json:"textDetect,omitempty"`
+	TextRedaction   string `json:"textRedaction,omitempty"`
 }
 
 type ImageTextOverlay struct {
@@ -368,6 +383,15 @@ type AudioConversionOptions struct {
 	TimeBasedEffects *TimeBasedEffects `json:"timeBasedEffects,omitempty"`
 	Restoration      *Restoration      `json:"restoration,omitempty"`
 	Advanced         *AdvancedAudio    `json:"advanced,omitempty"`
+	AI               *AIAudioOptions   `json:"ai,omitempty"`
+}
+
+// AIAudioOptions selects a Phase 1 AI audio operation. Only one operation runs
+// per job. When Enabled is true and Operation is not empty/"none", the normal
+// FFmpeg pipeline is skipped.
+type AIAudioOptions struct {
+	Enabled   bool   `json:"enabled,omitempty"`
+	Operation string `json:"operation,omitempty"`
 }
 
 // Upload request

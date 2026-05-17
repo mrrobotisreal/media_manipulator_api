@@ -349,6 +349,9 @@ func (h *ConversionHandler) getOutputExtension(job *models.ConversionJob) string
 	}
 	switch models.GetFileType(job.OriginalFile.Type) {
 	case models.FileTypeImage:
+		if ext := aiImageExtension(job); ext != "" {
+			return ext
+		}
 		if format, ok := job.Options["format"].(string); ok && format != "" {
 			return "." + strings.TrimPrefix(format, ".")
 		}
@@ -359,6 +362,9 @@ func (h *ConversionHandler) getOutputExtension(job *models.ConversionJob) string
 		}
 		return ".mp4"
 	case models.FileTypeAudio:
+		if ext := aiAudioExtension(job); ext != "" {
+			return ext
+		}
 		if format, ok := job.Options["format"].(string); ok && format != "" {
 			return "." + strings.TrimPrefix(format, ".")
 		}
@@ -366,6 +372,52 @@ func (h *ConversionHandler) getOutputExtension(job *models.ConversionJob) string
 	default:
 		return ".bin"
 	}
+}
+
+// aiImageExtension forces AI ops that need a specific container to use it.
+// remove_background must be PNG (transparency); ai_upscale prefers PNG for
+// safety. Other ops fall back to the user's chosen format.
+func aiImageExtension(job *models.ConversionJob) string {
+	op, enabled := aiOperation(job)
+	if !enabled {
+		return ""
+	}
+	switch op {
+	case "remove_background", "ai_upscale":
+		return ".png"
+	}
+	return ""
+}
+
+// aiAudioExtension defaults vocals/no_vocals stems to WAV when the caller did
+// not pick a format. Other AI audio ops honor the requested format.
+func aiAudioExtension(job *models.ConversionJob) string {
+	op, enabled := aiOperation(job)
+	if !enabled {
+		return ""
+	}
+	switch op {
+	case "isolate_vocals", "remove_vocals":
+		if format, ok := job.Options["format"].(string); ok && strings.TrimSpace(format) != "" {
+			return "." + strings.TrimPrefix(format, ".")
+		}
+		return ".wav"
+	}
+	return ""
+}
+
+func aiOperation(job *models.ConversionJob) (string, bool) {
+	ai, ok := job.Options["ai"].(map[string]interface{})
+	if !ok {
+		return "", false
+	}
+	enabled, _ := ai["enabled"].(bool)
+	op, _ := ai["operation"].(string)
+	op = strings.ToLower(strings.TrimSpace(op))
+	if !enabled || op == "" || op == "none" {
+		return "", false
+	}
+	return op, true
 }
 
 func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string {

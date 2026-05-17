@@ -1,0 +1,469 @@
+package services
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
+)
+
+// AIService runs Phase 1 local AI tools (audio + image). Commands route through
+// the binaries configured in cfg; the parent Converter is responsible for
+// deciding when to invoke this service.
+type AIService struct {
+	cfg        *config.Config
+	jobManager *JobManager
+}
+
+func NewAIService(cfg *config.Config) *AIService {
+	return &AIService{cfg: cfg}
+}
+
+func (a *AIService) SetJobManager(jm *JobManager) {
+	a.jobManager = jm
+}
+
+// Image operation identifiers.
+const (
+	AIImageOpFacePrivacy      = "face_privacy"
+	AIImageOpRemoveBackground = "remove_background"
+	AIImageOpUpscale          = "ai_upscale"
+	AIImageOpRedactText       = "redact_text"
+
+	AIAudioOpCleanVoice      = "clean_voice"
+	AIAudioOpRemoveNoise     = "remove_background_noise"
+	AIAudioOpIsolateVocals   = "isolate_vocals"
+	AIAudioOpRemoveVocals    = "remove_vocals"
+	AIAudioDemucsTrackVocals = "vocals.wav"
+	AIAudioDemucsTrackNoVox  = "no_vocals.wav"
+)
+
+var validFaceModes = map[string]bool{
+	"blur": true, "pixelate": true, "blackbox": true,
+}
+
+var validBackgroundModels = map[string]bool{
+	"birefnet-general":      true,
+	"birefnet-general-lite": true,
+	"isnet-general-use":     true,
+	"u2net":                 true,
+	"u2netp":                true,
+	"u2net_human_seg":       true,
+	"birefnet-portrait":     true,
+}
+
+var validUpscaleModels = map[string]bool{
+	"realesrgan-x4plus":       true,
+	"realesrgan-x4plus-anime": true,
+	"realesr-animevideov3":    true,
+}
+
+var validTextDetect = map[string]bool{
+	"pii":      true,
+	"all-text": true,
+}
+
+var validTextRedaction = map[string]bool{
+	"blackbox": true,
+	"blur":     true,
+	"pixelate": true,
+}
+
+func (a *AIService) sendProgress(jobID string, progress int) {
+	if a.jobManager != nil {
+		a.jobManager.SendProgressUpdate(jobID, progress)
+	}
+}
+
+// runAI executes a command with optional extra env vars merged onto the parent
+// environment. Combined stdout/stderr are returned; the error wraps a tail of
+// that output so callers surface useful diagnostics to the job log.
+func (a *AIService) runAI(ctx context.Context, label string, env []string, name string, args ...string) error {
+	if _, err := exec.LookPath(name); err != nil {
+		// Allow absolute paths that exist but aren't on PATH.
+		if _, statErr := os.Stat(name); statErr != nil {
+			return fmt.Errorf("%s: %s not found: %v", label, name, err)
+		}
+	}
+	cmd := exec.CommandContext(ctx, name, args...)
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
+	var combined bytes.Buffer
+	cmd.Stdout = &combined
+	cmd.Stderr = &combined
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return fmt.Errorf("%s timed out: %w", label, ctx.Err())
+		}
+		return fmt.Errorf("%s failed: %v\n%s", label, err, commandTail(combined.String(), 4000))
+	}
+	return nil
+}
+
+// shellQuote single-quotes value safely for inclusion in a bash command line.
+// Single quotes are escaped using the '\” pattern so file paths with quotes
+// or spaces remain intact.
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
+}
+
+func (a *AIService) cudaEnv() []string {
+	return []string{
+		"CUDA_DEVICE_ORDER=PCI_BUS_ID",
+		fmt.Sprintf("CUDA_VISIBLE_DEVICES=%d", a.cfg.AICUDAGPU),
+		"PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True",
+	}
+}
+
+// CleanVoice runs DeepFilterNet voice cleanup. When polish is true the output
+// is post-processed through a presence/loudness/limiter chain ideal for spoken
+// voice; otherwise the denoised signal is re-encoded directly. outputPath
+// extension drives the encoder choice.
+func (a *AIService) CleanVoice(ctx context.Context, jobID, inputPath, outputPath string, polish bool) error {
+	return a.runDeepFilter(ctx, jobID, inputPath, outputPath, polish)
+}
+
+// RemoveBackgroundNoise is CleanVoice without the broadcast polish chain. It
+// is preferred when callers want raw denoise without color/level changes.
+func (a *AIService) RemoveBackgroundNoise(ctx context.Context, jobID, inputPath, outputPath string) error {
+	return a.runDeepFilter(ctx, jobID, inputPath, outputPath, false)
+}
+
+func (a *AIService) runDeepFilter(ctx context.Context, jobID, inputPath, outputPath string, polish bool) error {
+	a.sendProgress(jobID, 10)
+	workDir, err := os.MkdirTemp(a.cfg.TempDir, "ai_deepfilter_")
+	if err != nil {
+		return fmt.Errorf("create temp dir: %w", err)
+	}
+	defer os.RemoveAll(workDir)
+
+	a.sendProgress(jobID, 25)
+	normalizedWav := filepath.Join(workDir, "input_48k_mono.wav")
+	if err := a.runAI(ctx, "ffmpeg normalize", nil, "ffmpeg",
+		"-y", "-i", inputPath, "-ac", "1", "-ar", "48000", normalizedWav,
+	); err != nil {
+		return err
+	}
+
+	a.sendProgress(jobID, 55)
+	if err := a.runAI(ctx, "deepFilter", a.cudaEnv(), a.cfg.DeepFilterBin,
+		"--output-dir", workDir, normalizedWav,
+	); err != nil {
+		return err
+	}
+
+	enhanced, err := findEnhancedWav(workDir, normalizedWav)
+	if err != nil {
+		return err
+	}
+
+	a.sendProgress(jobID, 85)
+	args := []string{"-y", "-i", enhanced}
+	if polish {
+		args = append(args,
+			"-af",
+			"highpass=f=80,lowpass=f=14000,loudnorm=I=-16:TP=-1.5:LRA=11,alimiter=limit=0.95",
+		)
+	}
+	args = append(args, audioEncoderArgs(outputPath)...)
+	args = append(args, outputPath)
+	if err := a.runAI(ctx, "ffmpeg encode", nil, "ffmpeg", args...); err != nil {
+		return err
+	}
+	a.sendProgress(jobID, 95)
+	return nil
+}
+
+// findEnhancedWav scans workDir for the DeepFilterNet output. It explicitly
+// excludes the normalized input WAV so we never re-encode the un-denoised
+// source. Preference goes to files matching the DeepFilterNet naming hint;
+// otherwise the newest WAV (by mtime) wins.
+func findEnhancedWav(workDir, originalWav string) (string, error) {
+	entries, err := os.ReadDir(workDir)
+	if err != nil {
+		return "", fmt.Errorf("read deepFilter output dir: %w", err)
+	}
+	originalBase := filepath.Base(originalWav)
+	type candidate struct {
+		path  string
+		mtime int64
+		hint  bool
+	}
+	var candidates []candidate
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.EqualFold(filepath.Ext(name), ".wav") {
+			continue
+		}
+		if name == originalBase {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		candidates = append(candidates, candidate{
+			path:  filepath.Join(workDir, name),
+			mtime: info.ModTime().UnixNano(),
+			hint:  strings.Contains(strings.ToLower(name), "deepfilter"),
+		})
+	}
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("deepFilter did not produce an enhanced WAV in %s", workDir)
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].hint != candidates[j].hint {
+			return candidates[i].hint
+		}
+		return candidates[i].mtime > candidates[j].mtime
+	})
+	return candidates[0].path, nil
+}
+
+// SeparateVocals runs Demucs htdemucs in two-stems vocals mode. mode picks
+// which stem we keep: AIAudioOpIsolateVocals → vocals.wav,
+// AIAudioOpRemoveVocals → no_vocals.wav.
+func (a *AIService) SeparateVocals(ctx context.Context, jobID, inputPath, outputPath, mode string) error {
+	var stemFile string
+	switch mode {
+	case AIAudioOpIsolateVocals:
+		stemFile = AIAudioDemucsTrackVocals
+	case AIAudioOpRemoveVocals:
+		stemFile = AIAudioDemucsTrackNoVox
+	default:
+		return fmt.Errorf("unsupported demucs mode: %s", mode)
+	}
+
+	a.sendProgress(jobID, 10)
+	workDir, err := os.MkdirTemp(a.cfg.TempDir, "ai_demucs_")
+	if err != nil {
+		return fmt.Errorf("create temp dir: %w", err)
+	}
+	defer os.RemoveAll(workDir)
+
+	a.sendProgress(jobID, 25)
+	if err := a.runAI(ctx, "demucs", a.cudaEnv(), a.cfg.DemucsBin,
+		"-n", "htdemucs",
+		"--two-stems=vocals",
+		"--segment", "7",
+		"-o", workDir,
+		inputPath,
+	); err != nil {
+		return err
+	}
+
+	a.sendProgress(jobID, 80)
+	stemPath, err := findFileByName(workDir, stemFile)
+	if err != nil {
+		return err
+	}
+
+	a.sendProgress(jobID, 90)
+	args := []string{"-y", "-i", stemPath}
+	args = append(args, audioEncoderArgs(outputPath)...)
+	args = append(args, outputPath)
+	if err := a.runAI(ctx, "ffmpeg encode stem", nil, "ffmpeg", args...); err != nil {
+		return err
+	}
+	a.sendProgress(jobID, 95)
+	return nil
+}
+
+func findFileByName(root, name string) (string, error) {
+	var found string
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && filepath.Base(path) == name {
+			found = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	if err != nil && err != filepath.SkipAll {
+		return "", err
+	}
+	if found == "" {
+		return "", fmt.Errorf("expected %s under %s but it was not produced", name, root)
+	}
+	return found, nil
+}
+
+// audioEncoderArgs returns ffmpeg codec/bitrate args inferred from the output
+// extension. WAV defaults to pcm_s16le so stems stay lossless.
+func audioEncoderArgs(outputPath string) []string {
+	switch strings.ToLower(strings.TrimPrefix(filepath.Ext(outputPath), ".")) {
+	case "wav":
+		return []string{"-c:a", "pcm_s16le"}
+	case "flac":
+		return []string{"-c:a", "flac"}
+	case "mp3":
+		return []string{"-c:a", "libmp3lame", "-b:a", "192k"}
+	case "aac", "m4a":
+		return []string{"-c:a", "aac", "-b:a", "192k"}
+	case "ogg":
+		return []string{"-c:a", "libvorbis", "-b:a", "192k"}
+	case "opus":
+		return []string{"-c:a", "libopus", "-b:a", "128k"}
+	case "ac3":
+		return []string{"-c:a", "ac3", "-b:a", "192k"}
+	default:
+		return []string{"-c:a", "pcm_s16le"}
+	}
+}
+
+// FacePrivacy obscures detected faces. mode picks the redaction style.
+func (a *AIService) FacePrivacy(ctx context.Context, jobID, inputPath, outputPath, mode string) error {
+	if mode == "" {
+		mode = "blur"
+	}
+	if !validFaceModes[mode] {
+		return fmt.Errorf("unsupported face mode: %s", mode)
+	}
+	a.sendProgress(jobID, 10)
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
+	}
+	a.sendProgress(jobID, 30)
+	if err := a.runAI(ctx, "face_privacy", a.cudaEnv(), a.cfg.VisionPython,
+		a.cfg.FacePrivacyScript,
+		"--input", inputPath,
+		"--output", outputPath,
+		"--mode", mode,
+	); err != nil {
+		return err
+	}
+	a.sendProgress(jobID, 95)
+	return nil
+}
+
+// RemoveBackground runs rembg through the project's CUDA/ONNXRuntime helper
+// script. The helper must be sourced in a shell so its environment exports
+// reach rembg, so we use bash -lc with explicit shell quoting on user-supplied
+// paths.
+func (a *AIService) RemoveBackground(ctx context.Context, jobID, inputPath, outputPath, model string) error {
+	if model == "" {
+		model = "birefnet-general"
+	}
+	if !validBackgroundModels[model] {
+		return fmt.Errorf("unsupported background model: %s", model)
+	}
+	if !strings.EqualFold(filepath.Ext(outputPath), ".png") {
+		return fmt.Errorf("remove_background output must be a .png path, got %s", outputPath)
+	}
+	a.sendProgress(jobID, 10)
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
+	}
+	a.sendProgress(jobID, 30)
+	script := fmt.Sprintf(
+		"set -e; source %s; U2NET_HOME=%s %s i -m %s %s %s",
+		shellQuote(a.cfg.RembgEnvScript),
+		shellQuote(a.cfg.RembgModelDir),
+		shellQuote(a.cfg.RembgBin),
+		shellQuote(model),
+		shellQuote(inputPath),
+		shellQuote(outputPath),
+	)
+	if err := a.runAI(ctx, "rembg", nil, "bash", "-lc", script); err != nil {
+		return err
+	}
+	a.sendProgress(jobID, 95)
+	return nil
+}
+
+// UpscaleImage runs Real-ESRGAN ncnn Vulkan. The Vulkan loader needs the
+// project-pinned ICD JSON so we set env vars directly rather than sourcing the
+// helper. NOTE: On this server we observed -s 2 with realesrgan-x4plus
+// producing apparent crop/zoom on at least one 640x360 photo even though the
+// output dimensions doubled. -t 0 (auto tiling) was required to avoid tile
+// seams; we deliberately do NOT secretly run 4x and downscale — keep behavior
+// honest and let the UI surface a caveat.
+func (a *AIService) UpscaleImage(ctx context.Context, jobID, inputPath, outputPath string, scale int, model string) error {
+	if scale == 0 {
+		scale = 4
+	}
+	if scale != 2 && scale != 4 {
+		return fmt.Errorf("upscale scale must be 2 or 4, got %d", scale)
+	}
+	if model == "" {
+		model = "realesrgan-x4plus"
+	}
+	if !validUpscaleModels[model] {
+		return fmt.Errorf("unsupported upscale model: %s", model)
+	}
+	if !strings.EqualFold(filepath.Ext(outputPath), ".png") {
+		return fmt.Errorf("ai_upscale output must be a .png path, got %s", outputPath)
+	}
+	a.sendProgress(jobID, 10)
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
+	}
+	a.sendProgress(jobID, 30)
+	env := []string{
+		"VK_ICD_FILENAMES=/opt/media-manipulator-ai/vulkan/nvidia_icd_egl.json",
+		"VK_DRIVER_FILES=/opt/media-manipulator-ai/vulkan/nvidia_icd_egl.json",
+		"VK_LOADER_LAYERS_DISABLE=*",
+	}
+	args := []string{
+		"-i", inputPath,
+		"-o", outputPath,
+		"-n", model,
+		"-s", strconv.Itoa(scale),
+		"-t", "0",
+		"-g", strconv.Itoa(a.cfg.AIVulkanGPU),
+		"-f", "png",
+	}
+	if err := a.runAI(ctx, "realesrgan-ncnn-vulkan", env, a.cfg.RealESRGANBin, args...); err != nil {
+		return err
+	}
+	a.sendProgress(jobID, 95)
+	return nil
+}
+
+// RedactText runs the OCR-based PII redactor. detect picks pii vs all-text and
+// redaction picks the obscuring style (blackbox/blur/pixelate). The script
+// reads --gpu to opt into CUDA.
+func (a *AIService) RedactText(ctx context.Context, jobID, inputPath, outputPath, detect, redaction string) error {
+	if detect == "" {
+		detect = "pii"
+	}
+	if !validTextDetect[detect] {
+		return fmt.Errorf("unsupported text detect mode: %s", detect)
+	}
+	if redaction == "" {
+		redaction = "blackbox"
+	}
+	if !validTextRedaction[redaction] {
+		return fmt.Errorf("unsupported text redaction style: %s", redaction)
+	}
+	a.sendProgress(jobID, 10)
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
+	}
+	a.sendProgress(jobID, 30)
+	if err := a.runAI(ctx, "redact_text_pii", a.cudaEnv(), a.cfg.VisionPython,
+		a.cfg.TextRedactScript,
+		"--input", inputPath,
+		"--output", outputPath,
+		"--detect", detect,
+		"--redaction", redaction,
+		"--gpu",
+	); err != nil {
+		return err
+	}
+	a.sendProgress(jobID, 95)
+	return nil
+}
