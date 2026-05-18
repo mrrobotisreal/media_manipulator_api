@@ -26,6 +26,7 @@ import cv2
 import numpy as np
 
 
+# This was previously corrupted somehow, so adding this comment to make a new commit.
 FaceBox = Dict[str, Any]
 
 
@@ -71,7 +72,7 @@ def detect_faces(
 
     detected: List[FaceBox] = []
     for index, face in enumerate(faces, start=1):
-        x, y, bw, bh = face[:4].astype(int)
+        x, y, bw, bh = (int(v) for v in face[:4].astype(int))
         score = float(face[-1]) if len(face) >= 15 else float(face[4]) if len(face) > 4 else 0.0
 
         pad_x = int(bw * padding)
@@ -85,6 +86,7 @@ def detect_faces(
             width,
             height,
         )
+        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
 
         if x2 <= x1 or y2 <= y1:
             continue
