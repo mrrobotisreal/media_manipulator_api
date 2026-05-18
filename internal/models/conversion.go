@@ -306,14 +306,68 @@ type ImageConversionOptions struct {
 // per job. When Enabled is true and Operation is not empty/"none", the normal
 // ImageMagick pipeline is skipped.
 type AIImageOptions struct {
-	Enabled         bool   `json:"enabled,omitempty"`
-	Operation       string `json:"operation,omitempty"`
-	FaceMode        string `json:"faceMode,omitempty"`
-	BackgroundModel string `json:"backgroundModel,omitempty"`
-	UpscaleScale    int    `json:"upscaleScale,omitempty"`
-	UpscaleModel    string `json:"upscaleModel,omitempty"`
-	TextDetect      string `json:"textDetect,omitempty"`
-	TextRedaction   string `json:"textRedaction,omitempty"`
+	Enabled         bool                  `json:"enabled,omitempty"`
+	Operation       string                `json:"operation,omitempty"`
+	FaceMode        string                `json:"faceMode,omitempty"`
+	FaceSelection   *FaceSelectionOptions `json:"faceSelection,omitempty"`
+	BackgroundModel string                `json:"backgroundModel,omitempty"`
+	UpscaleScale    int                   `json:"upscaleScale,omitempty"`
+	UpscaleModel    string                `json:"upscaleModel,omitempty"`
+	TextDetect      string                `json:"textDetect,omitempty"`
+	TextRedaction   string                `json:"textRedaction,omitempty"`
+}
+
+// FaceSelectionMode selects how the stored face boxes are applied during the
+// face_privacy AI op. The default ("" or "all") preserves the original behavior
+// of obscuring every detected face.
+type FaceSelectionMode string
+
+const (
+	FaceSelectionAll               FaceSelectionMode = "all"
+	FaceSelectionOnlySelected      FaceSelectionMode = "only_selected"
+	FaceSelectionAllExceptSelected FaceSelectionMode = "all_except_selected"
+)
+
+// FaceSelectionOptions pairs a detect-face session with a user selection so the
+// final /api/upload job can reuse the exact face boxes the user saw in the
+// preview overlay. SessionID is only required for non-"all" modes.
+type FaceSelectionOptions struct {
+	SessionID       string   `json:"sessionId,omitempty"`
+	SelectionMode   string   `json:"selectionMode,omitempty"`
+	SelectedFaceIDs []string `json:"selectedFaceIds,omitempty"`
+}
+
+// FaceBox describes one detected face. Normalized fields (x/y/width/height) are
+// in [0,1] relative to the original image dimensions so the UI can overlay
+// boxes using CSS percentages without knowing the rendered size. PixelBox is
+// the absolute box the backend uses when re-applying the effect.
+type FaceBox struct {
+	ID         string        `json:"id"`
+	Index      int           `json:"index,omitempty"`
+	Confidence float64       `json:"confidence,omitempty"`
+	X          float64       `json:"x"`
+	Y          float64       `json:"y"`
+	Width      float64       `json:"width"`
+	Height     float64       `json:"height"`
+	PixelBox   *FacePixelBox `json:"pixelBox,omitempty"`
+}
+
+type FacePixelBox struct {
+	X      int `json:"x"`
+	Y      int `json:"y"`
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+// FaceDetectionResponse is returned by POST /api/ai/faces/detect. The session
+// ID must be echoed back in AIImageOptions.FaceSelection for the final
+// /api/upload job to reuse the stored boxes.
+type FaceDetectionResponse struct {
+	FaceDetectionSessionID string    `json:"faceDetectionSessionId"`
+	ImageWidth             int       `json:"imageWidth"`
+	ImageHeight            int       `json:"imageHeight"`
+	Faces                  []FaceBox `json:"faces"`
+	ExpiresAt              time.Time `json:"expiresAt"`
 }
 
 type ImageTextOverlay struct {

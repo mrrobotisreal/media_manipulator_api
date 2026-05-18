@@ -36,8 +36,9 @@ func main() {
 	analysisQueue.Start()
 	transcription := services.NewTranscriptionService(cfg, inspector, jobManager, analysisQueue)
 	s3Client := newS3Client(cfg)
+	faceDetectionStore := services.NewFaceDetectionStore(30 * time.Minute)
 
-	conversionHandler := handlers.NewConversionHandler(jobManager, converter, cfg, inspector, analysisQueue, transcription, s3Client)
+	conversionHandler := handlers.NewConversionHandler(jobManager, converter, cfg, inspector, analysisQueue, transcription, s3Client, faceDetectionStore)
 	router := setupRouter(conversionHandler)
 
 	server := &http.Server{

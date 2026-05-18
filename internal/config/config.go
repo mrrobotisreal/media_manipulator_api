@@ -24,13 +24,20 @@ type Config struct {
 	S3PresignTTL    time.Duration
 
 	// Local AI toolchain (Phase 1: audio + image AI tools)
-	AIEnabled         bool
-	AIRootDir         string
-	AICUDAGPU         int
-	AIVulkanGPU       int
-	DeepFilterBin     string
-	DemucsBin         string
-	VisionPython      string
+	AIEnabled     bool
+	AIRootDir     string
+	AICUDAGPU     int
+	AIVulkanGPU   int
+	DeepFilterBin string
+	DemucsBin     string
+	VisionPython  string
+	// FacePrivacyScript is the path to the runtime face privacy script on the
+	// GPU host (configured via AI_FACE_PRIVACY_SCRIPT, default
+	// /opt/media-manipulator-ai/scripts/face_privacy.py). A reference copy of
+	// the script lives at scripts/server/face_privacy.py — that copy is not
+	// loaded by the API but is checked in so updates are reviewable. Deploy
+	// new versions with:
+	//   sudo cp scripts/server/face_privacy.py /opt/media-manipulator-ai/scripts/face_privacy.py
 	FacePrivacyScript string
 	TextRedactScript  string
 	RembgBin          string

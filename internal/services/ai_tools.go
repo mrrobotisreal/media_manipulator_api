@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 )
 
 // AIService runs Phase 1 local AI tools (audio + image). Commands route through
@@ -325,7 +327,13 @@ func audioEncoderArgs(outputPath string) []string {
 }
 
 // FacePrivacy obscures detected faces. mode picks the redaction style.
-func (a *AIService) FacePrivacy(ctx context.Context, jobID, inputPath, outputPath, mode string) error {
+// selectionJSONPath, when non-empty, is forwarded to the runtime script
+// (configured by AI_FACE_PRIVACY_SCRIPT, default
+// /opt/media-manipulator-ai/scripts/face_privacy.py) via --selection-json. The
+// JSON contains the face boxes from a prior detect session plus the
+// selectionMode/selectedFaceIds, so the script reuses the same boxes the user
+// saw in the overlay instead of redetecting.
+func (a *AIService) FacePrivacy(ctx context.Context, jobID, inputPath, outputPath, mode, selectionJSONPath string) error {
 	if mode == "" {
 		mode = "blur"
 	}
@@ -337,16 +345,85 @@ func (a *AIService) FacePrivacy(ctx context.Context, jobID, inputPath, outputPat
 		return fmt.Errorf("create output dir: %w", err)
 	}
 	a.sendProgress(jobID, 30)
-	if err := a.runAI(ctx, "face_privacy", a.cudaEnv(), a.cfg.VisionPython,
+	args := []string{
 		a.cfg.FacePrivacyScript,
 		"--input", inputPath,
 		"--output", outputPath,
 		"--mode", mode,
-	); err != nil {
+	}
+	if strings.TrimSpace(selectionJSONPath) != "" {
+		args = append(args, "--selection-json", selectionJSONPath)
+	}
+	if err := a.runAI(ctx, "face_privacy", a.cudaEnv(), a.cfg.VisionPython, args...); err != nil {
 		return err
 	}
 	a.sendProgress(jobID, 95)
 	return nil
+}
+
+// DetectFaces runs the runtime script in --detect-only mode. The script
+// (configured via AI_FACE_PRIVACY_SCRIPT, defaults to
+// /opt/media-manipulator-ai/scripts/face_privacy.py) writes a JSON document
+// with image dimensions and normalized face boxes; we parse and return them so
+// the handler can persist a session and respond to the UI. The temp working
+// directory is removed before returning.
+func (a *AIService) DetectFaces(ctx context.Context, inputPath string) (*models.FaceDetectionResponse, error) {
+	workDir, err := os.MkdirTemp(a.cfg.TempDir, "ai_face_detect_")
+	if err != nil {
+		return nil, fmt.Errorf("create temp dir: %w", err)
+	}
+	defer os.RemoveAll(workDir)
+
+	jsonOut := filepath.Join(workDir, "faces.json")
+	if err := a.runAI(ctx, "face_privacy detect", a.cudaEnv(), a.cfg.VisionPython,
+		a.cfg.FacePrivacyScript,
+		"--input", inputPath,
+		"--detect-only",
+		"--json-out", jsonOut,
+	); err != nil {
+		return nil, err
+	}
+
+	raw, err := os.ReadFile(jsonOut)
+	if err != nil {
+		return nil, fmt.Errorf("read detect json: %w", err)
+	}
+
+	var payload struct {
+		ImageWidth  int              `json:"imageWidth"`
+		ImageHeight int              `json:"imageHeight"`
+		Faces       []models.FaceBox `json:"faces"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("parse detect json: %w", err)
+	}
+
+	// Clamp normalized fields defensively. The script clamps in pixel space,
+	// but rounding could still nudge a value barely past 1.0 — capping here
+	// keeps the UI overlay from rendering off-image.
+	for i := range payload.Faces {
+		f := &payload.Faces[i]
+		f.X = clampUnit(f.X)
+		f.Y = clampUnit(f.Y)
+		f.Width = clampUnit(f.Width)
+		f.Height = clampUnit(f.Height)
+	}
+
+	return &models.FaceDetectionResponse{
+		ImageWidth:  payload.ImageWidth,
+		ImageHeight: payload.ImageHeight,
+		Faces:       payload.Faces,
+	}, nil
+}
+
+func clampUnit(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }
 
 // RemoveBackground runs rembg through the project's CUDA/ONNXRuntime helper

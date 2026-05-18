@@ -4,8 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -20,9 +23,10 @@ import (
 )
 
 type Converter struct {
-	jobManager *JobManager
-	cfg        *config.Config
-	ai         *AIService
+	jobManager         *JobManager
+	cfg                *config.Config
+	ai                 *AIService
+	faceDetectionStore *FaceDetectionStore
 }
 
 func NewConverter(cfg *config.Config) *Converter {
@@ -31,6 +35,14 @@ func NewConverter(cfg *config.Config) *Converter {
 		c.ai = NewAIService(cfg)
 	}
 	return c
+}
+
+// SetFaceDetectionStore wires the in-memory face detect session cache so
+// runImageAI can resolve a session-id back to the boxes the user saw in the
+// overlay. Without a store set, face_privacy falls back to detecting all faces
+// (the legacy behavior).
+func (c *Converter) SetFaceDetectionStore(store *FaceDetectionStore) {
+	c.faceDetectionStore = store
 }
 
 func (c *Converter) SetJobManager(jm *JobManager) {
@@ -1980,7 +1992,14 @@ func (c *Converter) runImageAI(ctx context.Context, job *models.ConversionJob, o
 	fmt.Printf("[DEBUG] Routing image job %s to AI op %s\n", job.ID, op)
 	switch op {
 	case AIImageOpFacePrivacy:
-		return c.ai.FacePrivacy(ctx, job.ID, inputPath, outputPath, options.AI.FaceMode)
+		selectionPath, cleanup, err := c.prepareFaceSelection(options.AI, inputPath)
+		if err != nil {
+			return err
+		}
+		if cleanup != nil {
+			defer cleanup()
+		}
+		return c.ai.FacePrivacy(ctx, job.ID, inputPath, outputPath, options.AI.FaceMode, selectionPath)
 	case AIImageOpRemoveBackground:
 		return c.ai.RemoveBackground(ctx, job.ID, inputPath, outputPath, options.AI.BackgroundModel)
 	case AIImageOpUpscale:
@@ -2023,6 +2042,9 @@ func validateAIImageOptions(ai *models.AIImageOptions) error {
 		if mode := strings.TrimSpace(ai.FaceMode); mode != "" && !validFaceModes[mode] {
 			return fmt.Errorf("unsupported face mode: %s", ai.FaceMode)
 		}
+		if err := validateFaceSelectionOptions(ai.FaceSelection); err != nil {
+			return err
+		}
 	case AIImageOpRemoveBackground:
 		if model := strings.TrimSpace(ai.BackgroundModel); model != "" && !validBackgroundModels[model] {
 			return fmt.Errorf("unsupported background model: %s", ai.BackgroundModel)
@@ -2045,6 +2067,136 @@ func validateAIImageOptions(ai *models.AIImageOptions) error {
 		return fmt.Errorf("unsupported AI image operation: %s", ai.Operation)
 	}
 	return nil
+}
+
+func validateFaceSelectionOptions(sel *models.FaceSelectionOptions) error {
+	if sel == nil {
+		return nil
+	}
+	mode := strings.ToLower(strings.TrimSpace(sel.SelectionMode))
+	switch mode {
+	case "", string(models.FaceSelectionAll):
+		// OK — session is not required for "all" mode.
+	case string(models.FaceSelectionOnlySelected), string(models.FaceSelectionAllExceptSelected):
+		if strings.TrimSpace(sel.SessionID) == "" {
+			return fmt.Errorf("faceSelection.sessionId is required for selection mode %q", mode)
+		}
+	default:
+		return fmt.Errorf("unsupported face selection mode: %s", sel.SelectionMode)
+	}
+	for _, id := range sel.SelectedFaceIDs {
+		if strings.TrimSpace(id) == "" {
+			return fmt.Errorf("faceSelection.selectedFaceIds must not contain empty entries")
+		}
+	}
+	return nil
+}
+
+// prepareFaceSelection resolves a face-detection session into a temp JSON file
+// that the runtime script ingests via --selection-json. Returning empty string
+// (no error, no cleanup) signals the caller to run the legacy "detect + blur
+// all faces" path. We validate the SHA256 of the *current* input against the
+// SHA recorded at detect time so users can't apply box coordinates from a
+// different image.
+func (c *Converter) prepareFaceSelection(ai *models.AIImageOptions, inputPath string) (string, func(), error) {
+	if ai == nil || ai.FaceSelection == nil {
+		return "", nil, nil
+	}
+	sel := ai.FaceSelection
+	mode := strings.ToLower(strings.TrimSpace(sel.SelectionMode))
+	if mode == "" {
+		mode = string(models.FaceSelectionAll)
+	}
+	sessionID := strings.TrimSpace(sel.SessionID)
+
+	// No session attached → run the legacy default (all faces redetected by
+	// the script). Caller-supplied selectedFaceIds without a session are
+	// rejected by the validator, so we only need to handle mode here.
+	if sessionID == "" {
+		if mode != string(models.FaceSelectionAll) {
+			return "", nil, fmt.Errorf("faceSelection.sessionId is required for selection mode %q", mode)
+		}
+		return "", nil, nil
+	}
+
+	if c.faceDetectionStore == nil {
+		return "", nil, fmt.Errorf("face detection store not configured")
+	}
+	session, ok := c.faceDetectionStore.Get(sessionID)
+	if !ok {
+		return "", nil, fmt.Errorf("Face selection session expired. Please detect faces again.")
+	}
+
+	sha, err := computeFileSHA256(inputPath)
+	if err != nil {
+		return "", nil, fmt.Errorf("hash input for face selection: %w", err)
+	}
+	if !strings.EqualFold(sha, session.ImageSHA256) {
+		return "", nil, fmt.Errorf("Face selection session does not match this uploaded image. Please detect faces again.")
+	}
+
+	if mode == string(models.FaceSelectionOnlySelected) || mode == string(models.FaceSelectionAllExceptSelected) {
+		known := make(map[string]struct{}, len(session.Faces))
+		for _, f := range session.Faces {
+			known[f.ID] = struct{}{}
+		}
+		for _, id := range sel.SelectedFaceIDs {
+			if _, ok := known[id]; !ok {
+				return "", nil, fmt.Errorf("selected face ID %q is not part of detection session", id)
+			}
+		}
+	}
+
+	payload := map[string]interface{}{
+		"selectionMode":   mode,
+		"selectedFaceIds": sel.SelectedFaceIDs,
+		"faces":           session.Faces,
+	}
+	if payload["selectedFaceIds"] == nil {
+		payload["selectedFaceIds"] = []string{}
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return "", nil, fmt.Errorf("marshal face selection: %w", err)
+	}
+
+	tempDir := c.cfg.TempDir
+	if tempDir == "" {
+		tempDir = os.TempDir()
+	}
+	if err := os.MkdirAll(tempDir, 0o755); err != nil {
+		return "", nil, fmt.Errorf("create temp dir for face selection: %w", err)
+	}
+	f, err := os.CreateTemp(tempDir, "face_selection_*.json")
+	if err != nil {
+		return "", nil, fmt.Errorf("create face selection file: %w", err)
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+		return "", nil, fmt.Errorf("write face selection file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(f.Name())
+		return "", nil, fmt.Errorf("close face selection file: %w", err)
+	}
+	cleanup := func() { _ = os.Remove(f.Name()) }
+	return f.Name(), cleanup, nil
+}
+
+// computeFileSHA256 returns the hex-encoded SHA256 of inputPath. Used to bind
+// a face-detection session to a specific uploaded file.
+func computeFileSHA256(inputPath string) (string, error) {
+	f, err := os.Open(inputPath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func validateAIAudioOptions(ai *models.AIAudioOptions) error {

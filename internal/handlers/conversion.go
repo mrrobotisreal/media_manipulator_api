@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,31 +22,44 @@ import (
 )
 
 type ConversionHandler struct {
-	jobManager    *services.JobManager
-	converter     *services.Converter
-	cfg           *config.Config
-	inspector     *services.MediaInspector
-	analysisJobs  *services.AnalysisQueue
-	transcription *services.TranscriptionService
-	s3Client      *s3.Client
-	s3Presign     *s3.PresignClient
+	jobManager         *services.JobManager
+	converter          *services.Converter
+	cfg                *config.Config
+	inspector          *services.MediaInspector
+	analysisJobs       *services.AnalysisQueue
+	transcription      *services.TranscriptionService
+	s3Client           *s3.Client
+	s3Presign          *s3.PresignClient
+	faceDetectionStore *services.FaceDetectionStore
+	aiService          *services.AIService
 }
 
-func NewConversionHandler(jobManager *services.JobManager, converter *services.Converter, cfg *config.Config, inspector *services.MediaInspector, analysisJobs *services.AnalysisQueue, transcription *services.TranscriptionService, s3Client *s3.Client) *ConversionHandler {
+func NewConversionHandler(jobManager *services.JobManager, converter *services.Converter, cfg *config.Config, inspector *services.MediaInspector, analysisJobs *services.AnalysisQueue, transcription *services.TranscriptionService, s3Client *s3.Client, faceDetectionStore *services.FaceDetectionStore) *ConversionHandler {
 	converter.SetJobManager(jobManager)
+	converter.SetFaceDetectionStore(faceDetectionStore)
 	var presign *s3.PresignClient
 	if s3Client != nil {
 		presign = s3.NewPresignClient(s3Client)
 	}
+	// Build a standalone AIService instance for the lightweight detect-only
+	// preview endpoint. The converter has its own AI service for the final
+	// conversion job; we keep this one separate so detect doesn't depend on a
+	// job's lifecycle.
+	var ai *services.AIService
+	if cfg != nil && cfg.AIEnabled {
+		ai = services.NewAIService(cfg)
+	}
 	return &ConversionHandler{
-		jobManager:    jobManager,
-		converter:     converter,
-		cfg:           cfg,
-		inspector:     inspector,
-		analysisJobs:  analysisJobs,
-		transcription: transcription,
-		s3Client:      s3Client,
-		s3Presign:     presign,
+		jobManager:         jobManager,
+		converter:          converter,
+		cfg:                cfg,
+		inspector:          inspector,
+		analysisJobs:       analysisJobs,
+		transcription:      transcription,
+		s3Client:           s3Client,
+		s3Presign:          presign,
+		faceDetectionStore: faceDetectionStore,
+		aiService:          ai,
 	}
 }
 
@@ -57,6 +72,10 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.GET("/download/:jobId", h.DownloadFile)
 	r.GET("/transcript/:jobId", h.GetTranscriptResult)
 	r.GET("/analysis/:jobId", h.GetAnalysisResult)
+
+	// Lightweight preview/helper endpoint that detects faces and stashes the
+	// boxes server-side. The final conversion still goes through /upload.
+	r.POST("/ai/faces/detect", h.DetectFaces)
 }
 
 func (h *ConversionHandler) IdentifyFile(c *gin.Context) {
@@ -463,4 +482,82 @@ func stringOrErr(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// DetectFaces runs the face-privacy script in --detect-only mode against the
+// uploaded image, stores the resulting boxes in the in-memory session cache,
+// and returns the session ID + normalized boxes to the UI. The uploaded bytes
+// are removed before returning — we only keep the SHA256 hash + metadata so
+// the eventual /api/upload job can validate the user didn't swap images.
+func (h *ConversionHandler) DetectFaces(c *gin.Context) {
+	if h.aiService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI service is not enabled"})
+		return
+	}
+	if h.faceDetectionStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Face detection store is not configured"})
+		return
+	}
+
+	file, fileHeader, err := h.multipartFile(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	defer file.Close()
+
+	tempPath := filepath.Join(h.cfg.TempDir, fmt.Sprintf("detect_faces_%d_%s", time.Now().UnixNano(), safeFilename(fileHeader.Filename)))
+	if err := h.saveUploadedFile(file, tempPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save temporary file"})
+		return
+	}
+	defer func() { _ = os.Remove(tempPath) }()
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), h.cfg.CommandTimeout)
+	defer cancel()
+
+	fileType, _ := h.inspector.DetectFile(ctx, tempPath, fileHeader.GetHeader("Content-Type"))
+	if fileType != models.FileTypeImage {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Face detection only supports image files"})
+		return
+	}
+
+	sha, err := hashFile(tempPath)
+	if err != nil {
+		log.Printf("face detect hash failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash uploaded image"})
+		return
+	}
+
+	resp, err := h.aiService.DetectFaces(ctx, tempPath)
+	if err != nil {
+		log.Printf("face detect failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Face detection failed"})
+		return
+	}
+
+	session := h.faceDetectionStore.NewSession()
+	session.ImageSHA256 = sha
+	session.OriginalFileName = fileHeader.Filename
+	session.ImageWidth = resp.ImageWidth
+	session.ImageHeight = resp.ImageHeight
+	session.Faces = resp.Faces
+	h.faceDetectionStore.Store(session)
+
+	resp.FaceDetectionSessionID = session.ID
+	resp.ExpiresAt = session.ExpiresAt
+	c.JSON(http.StatusOK, resp)
+}
+
+func hashFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
