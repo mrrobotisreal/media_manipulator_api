@@ -306,15 +306,33 @@ type ImageConversionOptions struct {
 // per job. When Enabled is true and Operation is not empty/"none", the normal
 // ImageMagick pipeline is skipped.
 type AIImageOptions struct {
-	Enabled         bool                  `json:"enabled,omitempty"`
-	Operation       string                `json:"operation,omitempty"`
-	FaceMode        string                `json:"faceMode,omitempty"`
-	FaceSelection   *FaceSelectionOptions `json:"faceSelection,omitempty"`
-	BackgroundModel string                `json:"backgroundModel,omitempty"`
-	UpscaleScale    int                   `json:"upscaleScale,omitempty"`
-	UpscaleModel    string                `json:"upscaleModel,omitempty"`
-	TextDetect      string                `json:"textDetect,omitempty"`
-	TextRedaction   string                `json:"textRedaction,omitempty"`
+	Enabled          bool                       `json:"enabled,omitempty"`
+	Operation        string                     `json:"operation,omitempty"`
+	FaceMode         string                     `json:"faceMode,omitempty"`
+	FaceSelection    *FaceSelectionOptions      `json:"faceSelection,omitempty"`
+	BackgroundModel  string                     `json:"backgroundModel,omitempty"`
+	UpscaleScale     int                        `json:"upscaleScale,omitempty"`
+	UpscaleModel     string                     `json:"upscaleModel,omitempty"`
+	TextDetect       string                     `json:"textDetect,omitempty"`
+	TextRedaction    string                     `json:"textRedaction,omitempty"`
+	RemoveObjectMask *RemoveObjectMaskOptions   `json:"removeObjectMask,omitempty"`
+}
+
+// RemoveObjectMaskOptions carries the user-drawn rectangles for the
+// remove_object AI op. Rectangle fields are normalized to [0,1] relative to
+// the original image dimensions so we don't depend on the rendered preview
+// size in the UI. The Go side rasterizes a same-sized PNG mask (white inside
+// rectangles, black elsewhere) and hands it to remove_object_lama.py.
+type RemoveObjectMaskOptions struct {
+	Rectangles []NormalizedRect `json:"rectangles,omitempty"`
+}
+
+// NormalizedRect is a rectangle in [0,1] normalized image coordinates.
+type NormalizedRect struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
 }
 
 // FaceSelectionMode selects how the stored face boxes are applied during the

@@ -5,6 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,6 +42,7 @@ const (
 	AIImageOpRemoveBackground = "remove_background"
 	AIImageOpUpscale          = "ai_upscale"
 	AIImageOpRedactText       = "redact_text"
+	AIImageOpRemoveObject     = "remove_object"
 
 	AIAudioOpCleanVoice      = "clean_voice"
 	AIAudioOpRemoveNoise     = "remove_background_noise"
@@ -543,4 +548,154 @@ func (a *AIService) RedactText(ctx context.Context, jobID, inputPath, outputPath
 	}
 	a.sendProgress(jobID, 95)
 	return nil
+}
+
+// RemoveObject runs LaMa inpainting via the remove_object_lama.py script. The
+// caller supplies normalized rectangles ([0,1]) that the user drew over the
+// preview; we rasterize those into a same-size grayscale PNG mask (white inside
+// rectangles, black elsewhere) and hand input + mask to the script. The script
+// itself only does Image.open + SimpleLama(image, mask) + save, so it does not
+// need to know anything about rectangles.
+func (a *AIService) RemoveObject(ctx context.Context, jobID, inputPath, outputPath string, rectangles []models.NormalizedRect) error {
+	if len(rectangles) == 0 {
+		return fmt.Errorf("remove_object requires at least one rectangle covering the object to remove")
+	}
+	a.sendProgress(jobID, 10)
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
+	}
+
+	width, height, err := imageDimensions(ctx, inputPath)
+	if err != nil {
+		return fmt.Errorf("inspect image for mask: %w", err)
+	}
+
+	a.sendProgress(jobID, 25)
+	tempDir := a.cfg.TempDir
+	if tempDir == "" {
+		tempDir = os.TempDir()
+	}
+	if err := os.MkdirAll(tempDir, 0o755); err != nil {
+		return fmt.Errorf("create temp dir: %w", err)
+	}
+	maskFile, err := os.CreateTemp(tempDir, "remove_object_mask_*.png")
+	if err != nil {
+		return fmt.Errorf("create mask file: %w", err)
+	}
+	maskPath := maskFile.Name()
+	_ = maskFile.Close()
+	defer os.Remove(maskPath)
+
+	if err := writeRectangleMask(maskPath, width, height, rectangles); err != nil {
+		return fmt.Errorf("write mask: %w", err)
+	}
+
+	a.sendProgress(jobID, 50)
+	python := strings.TrimSpace(a.cfg.LamaPython)
+	if python == "" {
+		python = a.cfg.VisionPython
+	}
+	script := strings.TrimSpace(a.cfg.RemoveObjectScript)
+	if script == "" {
+		return fmt.Errorf("remove_object script path is not configured")
+	}
+	if err := a.runAI(ctx, "remove_object_lama", a.cudaEnv(), python,
+		script,
+		"--input", inputPath,
+		"--mask", maskPath,
+		"--output", outputPath,
+	); err != nil {
+		return err
+	}
+	a.sendProgress(jobID, 95)
+	return nil
+}
+
+// imageDimensions returns the pixel dimensions of inputPath via ImageMagick's
+// identify. We use identify rather than decoding in Go because the broader
+// pipeline already depends on ImageMagick and it covers WebP/HEIC/TIFF without
+// pulling in extra Go image codecs.
+func imageDimensions(ctx context.Context, inputPath string) (int, int, error) {
+	cmd := exec.CommandContext(ctx, "identify", "-format", "%w %h", inputPath+"[0]")
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		if magick, mErr := exec.LookPath("magick"); mErr == nil {
+			cmd = exec.CommandContext(ctx, magick, "identify", "-format", "%w %h", inputPath+"[0]")
+			out.Reset()
+			errBuf.Reset()
+			cmd.Stdout = &out
+			cmd.Stderr = &errBuf
+			if err2 := cmd.Run(); err2 != nil {
+				return 0, 0, fmt.Errorf("identify failed: %v\n%s", err2, errBuf.String())
+			}
+		} else {
+			return 0, 0, fmt.Errorf("identify failed: %v\n%s", err, errBuf.String())
+		}
+	}
+	parts := strings.Fields(strings.TrimSpace(out.String()))
+	if len(parts) < 2 {
+		return 0, 0, fmt.Errorf("identify returned unexpected output: %q", out.String())
+	}
+	w, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse width: %w", err)
+	}
+	h, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse height: %w", err)
+	}
+	if w <= 0 || h <= 0 {
+		return 0, 0, fmt.Errorf("identify returned non-positive dimensions: %dx%d", w, h)
+	}
+	return w, h, nil
+}
+
+// writeRectangleMask rasterizes the user's normalized rectangles into a grayscale
+// PNG. White (255) marks pixels for inpainting; black (0) marks pixels to keep.
+// Rectangles are clamped to image bounds so a slightly-out-of-range value from
+// the UI does not crash the encoder.
+func writeRectangleMask(path string, width, height int, rectangles []models.NormalizedRect) error {
+	mask := image.NewGray(image.Rect(0, 0, width, height))
+	white := color.Gray{Y: 255}
+	for _, r := range rectangles {
+		x1 := int(math.Round(r.X * float64(width)))
+		y1 := int(math.Round(r.Y * float64(height)))
+		x2 := int(math.Round((r.X + r.Width) * float64(width)))
+		y2 := int(math.Round((r.Y + r.Height) * float64(height)))
+		if x1 > x2 {
+			x1, x2 = x2, x1
+		}
+		if y1 > y2 {
+			y1, y2 = y2, y1
+		}
+		if x1 < 0 {
+			x1 = 0
+		}
+		if y1 < 0 {
+			y1 = 0
+		}
+		if x2 > width {
+			x2 = width
+		}
+		if y2 > height {
+			y2 = height
+		}
+		if x2-x1 < 1 || y2-y1 < 1 {
+			continue
+		}
+		for y := y1; y < y2; y++ {
+			for x := x1; x < x2; x++ {
+				mask.SetGray(x, y, white)
+			}
+		}
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return png.Encode(f, mask)
 }

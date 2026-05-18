@@ -45,6 +45,13 @@ type Config struct {
 	RembgModelDir     string
 	RealESRGANBin     string
 	VulkanEnvScript   string
+	// LamaPython is the python interpreter for the simple_lama_inpainting
+	// environment (separate venv to avoid clashing with rembg/realesrgan deps).
+	// RemoveObjectScript is the runtime path to scripts/server/remove_object_lama.py;
+	// override AI_REMOVE_OBJECT_SCRIPT in deployment. The mask itself is generated
+	// on the Go side and passed via --mask.
+	LamaPython         string
+	RemoveObjectScript string
 }
 
 func Load() *Config {
@@ -77,6 +84,9 @@ func Load() *Config {
 		RembgModelDir:     getEnv("AI_REMBG_MODEL_DIR", "/opt/media-manipulator-ai/models/rembg"),
 		RealESRGANBin:     getEnv("AI_REALESRGAN_BIN", "/opt/media-manipulator-ai/bin/realesrgan-ncnn-vulkan/realesrgan-ncnn-vulkan"),
 		VulkanEnvScript:   getEnv("AI_VULKAN_ENV_SCRIPT", "/opt/media-manipulator-ai/env/vulkan-nvidia.sh"),
+
+		LamaPython:         getEnv("AI_LAMA_PYTHON", "/opt/media-manipulator-ai/venvs/lama/bin/python"),
+		RemoveObjectScript: getEnv("AI_REMOVE_OBJECT_SCRIPT", "/opt/media-manipulator-ai/scripts/remove_object_lama.py"),
 	}
 }
 

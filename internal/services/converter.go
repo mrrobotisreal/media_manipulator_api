@@ -2006,6 +2006,12 @@ func (c *Converter) runImageAI(ctx context.Context, job *models.ConversionJob, o
 		return c.ai.UpscaleImage(ctx, job.ID, inputPath, outputPath, options.AI.UpscaleScale, options.AI.UpscaleModel)
 	case AIImageOpRedactText:
 		return c.ai.RedactText(ctx, job.ID, inputPath, outputPath, options.AI.TextDetect, options.AI.TextRedaction)
+	case AIImageOpRemoveObject:
+		var rects []models.NormalizedRect
+		if options.AI.RemoveObjectMask != nil {
+			rects = options.AI.RemoveObjectMask.Rectangles
+		}
+		return c.ai.RemoveObject(ctx, job.ID, inputPath, outputPath, rects)
 	default:
 		return fmt.Errorf("unsupported AI image operation: %s", op)
 	}
@@ -2062,6 +2068,18 @@ func validateAIImageOptions(ai *models.AIImageOptions) error {
 		}
 		if redaction := strings.TrimSpace(ai.TextRedaction); redaction != "" && !validTextRedaction[redaction] {
 			return fmt.Errorf("unsupported text redaction style: %s", ai.TextRedaction)
+		}
+	case AIImageOpRemoveObject:
+		if ai.RemoveObjectMask == nil || len(ai.RemoveObjectMask.Rectangles) == 0 {
+			return fmt.Errorf("remove_object requires at least one rectangle covering the object to remove")
+		}
+		for i, r := range ai.RemoveObjectMask.Rectangles {
+			if r.Width <= 0 || r.Height <= 0 {
+				return fmt.Errorf("remove_object rectangle %d must have positive width and height", i)
+			}
+			if r.X < 0 || r.Y < 0 || r.X+r.Width > 1.000001 || r.Y+r.Height > 1.000001 {
+				return fmt.Errorf("remove_object rectangle %d is out of bounds (must be normalized to [0,1])", i)
+			}
 		}
 	default:
 		return fmt.Errorf("unsupported AI image operation: %s", ai.Operation)
