@@ -429,7 +429,7 @@ type ImageGPSOptions struct {
 
 // Video conversion options
 type VideoConversionOptions struct {
-	Format              string              `json:"format" binding:"required,oneof=mp4 webm avi mov mkv flv wmv prores dnxhd"`
+	Format              string              `json:"format" binding:"required,oneof=mp4 webm avi mov mkv flv wmv prores dnxhd gif"`
 	Width               *int                `json:"width,omitempty"`
 	Height              *int                `json:"height,omitempty"`
 	PreserveAspectRatio bool                `json:"preserveAspectRatio"`
@@ -440,6 +440,19 @@ type VideoConversionOptions struct {
 	Transform           *Transform          `json:"transform,omitempty"`
 	Temporal            *TemporalEffects    `json:"temporal,omitempty"`
 	Advanced            *AdvancedProcessing `json:"advanced,omitempty"`
+	GIF                 *GIFOptions         `json:"gif,omitempty"`
+}
+
+// GIFOptions tunes the animated-GIF pipeline (ffmpeg -> gifsicle). Mirrors the
+// quick-gif2.sh script: scale to a width, sample at a frame rate, quantize via
+// gifsicle. All fields are optional — sensible defaults are applied server-side
+// when Format is "gif".
+type GIFOptions struct {
+	Width    *int `json:"width,omitempty"`    // output width in px (height auto, multiple of 4). Default 900.
+	FPS      *int `json:"fps,omitempty"`      // ffmpeg sampling rate before gifsicle. Default 12.
+	Colors   *int `json:"colors,omitempty"`   // gifsicle palette size, 2-256. Default 128.
+	Delay    *int `json:"delay,omitempty"`    // gifsicle inter-frame delay in 1/100s. Default 3.
+	Optimize *int `json:"optimize,omitempty"` // gifsicle --optimize level 1-3. Default 3.
 }
 
 // Audio conversion options

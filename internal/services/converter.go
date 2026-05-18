@@ -714,6 +714,12 @@ func (c *Converter) convertVideo(job *models.ConversionJob, inputPath, outputPat
 	fmt.Printf("[DEBUG] Input: %s, Output: %s\n", inputPath, outputPath)
 	fmt.Printf("[DEBUG] Parsed options: %+v\n", options)
 
+	// Animated GIF is a two-stage pipeline (ffmpeg + gifsicle) that does not
+	// share the standard video codec/filter chain, so it gets its own handler.
+	if strings.EqualFold(options.Format, "gif") {
+		return c.convertVideoToGIF(job, &options, inputPath, outputPath)
+	}
+
 	// Update progress
 	if c.jobManager != nil {
 		c.jobManager.SendProgressUpdate(job.ID, 10)
@@ -1044,7 +1050,7 @@ func (c *Converter) validateVideoOptions(options *models.VideoConversionOptions)
 	}
 
 	// Validate format
-	validFormats := map[string]bool{"mp4": true, "webm": true, "avi": true, "mov": true, "mkv": true, "flv": true, "wmv": true, "prores": true, "dnxhd": true}
+	validFormats := map[string]bool{"mp4": true, "webm": true, "avi": true, "mov": true, "mkv": true, "flv": true, "wmv": true, "prores": true, "dnxhd": true, "gif": true}
 	if !validFormats[options.Format] {
 		return fmt.Errorf("unsupported format: %s", options.Format)
 	}
@@ -1151,6 +1157,113 @@ func (c *Converter) validateVideoOptions(options *models.VideoConversionOptions)
 		}
 	}
 
+	// Validate GIF tuning options if specified
+	if options.GIF != nil {
+		g := options.GIF
+		if g.Width != nil && (*g.Width < 16 || *g.Width > 2000) {
+			return fmt.Errorf("gif width must be between 16 and 2000, got %d", *g.Width)
+		}
+		if g.FPS != nil && (*g.FPS < 1 || *g.FPS > 50) {
+			return fmt.Errorf("gif fps must be between 1 and 50, got %d", *g.FPS)
+		}
+		if g.Colors != nil && (*g.Colors < 2 || *g.Colors > 256) {
+			return fmt.Errorf("gif colors must be between 2 and 256, got %d", *g.Colors)
+		}
+		if g.Delay != nil && (*g.Delay < 1 || *g.Delay > 100) {
+			return fmt.Errorf("gif delay must be between 1 and 100 (centiseconds), got %d", *g.Delay)
+		}
+		if g.Optimize != nil && (*g.Optimize < 1 || *g.Optimize > 3) {
+			return fmt.Errorf("gif optimize level must be between 1 and 3, got %d", *g.Optimize)
+		}
+	}
+
+	return nil
+}
+
+// convertVideoToGIF mirrors quick-gif2.sh: ffmpeg downscales the source and
+// emits an intermediate gif, then gifsicle re-quantizes and optimizes it.
+// gifsicle is required and must be on PATH (brew install gifsicle).
+func (c *Converter) convertVideoToGIF(job *models.ConversionJob, options *models.VideoConversionOptions, inputPath, outputPath string) error {
+	if _, err := exec.LookPath("gifsicle"); err != nil {
+		return fmt.Errorf("gifsicle is required for GIF conversion but was not found on PATH (install with: brew install gifsicle / apt install gifsicle)")
+	}
+
+	gifWidth, gifFPS, gifColors, gifDelay, gifOptimize := 900, 12, 128, 3, 3
+	if options.GIF != nil {
+		g := options.GIF
+		if g.Width != nil {
+			gifWidth = *g.Width
+		}
+		if g.FPS != nil {
+			gifFPS = *g.FPS
+		}
+		if g.Colors != nil {
+			gifColors = *g.Colors
+		}
+		if g.Delay != nil {
+			gifDelay = *g.Delay
+		}
+		if g.Optimize != nil {
+			gifOptimize = *g.Optimize
+		}
+	}
+	// The standard Width control on the video form takes precedence over the
+	// GIF-specific width when the user explicitly set it. Keeps the GIF panel
+	// useful as a one-stop "make it this wide" knob without breaking power users
+	// who already typed a width above.
+	if options.Width != nil && *options.Width > 0 {
+		gifWidth = *options.Width
+	}
+
+	outputDir := filepath.Dir(outputPath)
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %v", err)
+	}
+	rawGIFPath := filepath.Join(outputDir, fmt.Sprintf("raw_%d.gif", time.Now().UnixNano()))
+	defer func() { _ = os.Remove(rawGIFPath) }()
+
+	if c.jobManager != nil {
+		c.jobManager.SendProgressUpdate(job.ID, 5)
+	}
+
+	ffArgs := []string{"-y", "-i", inputPath}
+	if options.Trim != nil {
+		ffArgs = append(ffArgs, "-ss", fmt.Sprintf("%.2f", options.Trim.StartTime))
+		ffArgs = append(ffArgs, "-t", fmt.Sprintf("%.2f", options.Trim.EndTime-options.Trim.StartTime))
+	}
+	// scale=W:-4 keeps aspect ratio with height rounded to a multiple of 4 (gif
+	// codecs prefer even dimensions); pix_fmt rgb8 + low fps keep the file
+	// small before gifsicle quantizes the palette.
+	vf := fmt.Sprintf("scale=%d:-4", gifWidth)
+	ffArgs = append(ffArgs, "-vf", vf, "-pix_fmt", "rgb8", "-r", strconv.Itoa(gifFPS), "-f", "gif", rawGIFPath)
+	fmt.Printf("[DEBUG] GIF stage 1 (ffmpeg): ffmpeg %s\n", strings.Join(ffArgs, " "))
+	if err := c.runFFmpegWithProgress(job.ID, "ffmpeg", ffArgs...); err != nil {
+		return fmt.Errorf("ffmpeg gif stage failed: %v", err)
+	}
+
+	if c.jobManager != nil {
+		c.jobManager.SendProgressUpdate(job.ID, 75)
+	}
+
+	gifsicleArgs := []string{
+		fmt.Sprintf("--optimize=%d", gifOptimize),
+		fmt.Sprintf("--delay=%d", gifDelay),
+		"--colors", strconv.Itoa(gifColors),
+		"--interlace",
+		rawGIFPath,
+		"-o", outputPath,
+	}
+	fmt.Printf("[DEBUG] GIF stage 2 (gifsicle): gifsicle %s\n", strings.Join(gifsicleArgs, " "))
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Hour)
+	defer cancel()
+	_, stderr, err := runCommand(ctx, "gifsicle", gifsicleArgs...)
+	if err != nil {
+		return fmt.Errorf("gifsicle failed: %v: %s", err, strings.TrimSpace(stderr))
+	}
+
+	if c.jobManager != nil {
+		c.jobManager.SendProgressUpdate(job.ID, 100)
+	}
 	return nil
 }
 
