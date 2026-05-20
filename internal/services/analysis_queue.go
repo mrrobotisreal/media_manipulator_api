@@ -385,7 +385,7 @@ func (q *AnalysisQueue) describeSilentMedia(ctx context.Context, job AnalysisJob
 		}, nil
 	case models.FileTypeAudio:
 		return map[string]any{
-			"audio_description": job.AudioDescription,
+			"audio_description":   job.AudioDescription,
 			"likely_content_type": "music_or_ambient_or_silent",
 		}, nil
 	default:

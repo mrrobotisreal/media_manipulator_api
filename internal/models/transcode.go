@@ -16,6 +16,16 @@ const (
 	DashCodecVP9 DashCodec = "vp9"
 )
 
+// BundleFormat picks the archive wrapping for the final download. We default
+// to tar.gz (cross-platform, smaller for the same payload on text-heavy
+// playlists) but Windows users without 7-Zip handy often prefer plain zip.
+type BundleFormat string
+
+const (
+	BundleFormatTarGz BundleFormat = "targz"
+	BundleFormatZip   BundleFormat = "zip"
+)
+
 // TranscodeStageStatus tracks per-stage lifecycle inside a transcode job.
 type TranscodeStageStatus string
 
@@ -93,6 +103,11 @@ type VideoProbeResponse struct {
 }
 
 // TranscodeStartRequest kicks off a new transcode job. Validated server-side.
+//
+// CaptionLanguages lists *additional* target languages (BCP-47 codes) the user
+// wants translated subtitle tracks for. Whisper produces the primary track in
+// the auto-detected source language; each entry here adds a separate translated
+// VTT, an HLS subtitle wrapper playlist, and a DASH text AdaptationSet. Max 3.
 type TranscodeStartRequest struct {
 	S3Key               string            `json:"s3Key"`
 	FileName            string            `json:"fileName,omitempty"`
@@ -102,7 +117,9 @@ type TranscodeStartRequest struct {
 	DashCodec           DashCodec         `json:"dashCodec,omitempty"`
 	QualityRungs        []string          `json:"qualityRungs"`
 	GenerateCaptions    bool              `json:"generateCaptions,omitempty"`
+	CaptionLanguages    []string          `json:"captionLanguages,omitempty"`
 	GenerateStoryboards bool              `json:"generateStoryboards,omitempty"`
+	BundleFormat        BundleFormat      `json:"bundleFormat,omitempty"`
 	SessionID           string            `json:"sessionId,omitempty"`
 	Options             map[string]any    `json:"options,omitempty"`
 }

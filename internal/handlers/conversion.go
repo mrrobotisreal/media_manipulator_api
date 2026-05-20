@@ -75,6 +75,7 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.POST("/video-upload/presign", h.PresignVideoUpload)
 	r.POST("/video-upload/complete", h.CompleteVideoUpload)
 	r.GET("/job/:jobId", h.GetJobStatus)
+	r.GET("/job/:jobId/events", h.StreamJobEvents)
 	r.GET("/download/:jobId", h.DownloadFile)
 	r.GET("/transcript/:jobId", h.GetTranscriptResult)
 	r.GET("/analysis/:jobId", h.GetAnalysisResult)

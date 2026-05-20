@@ -2,6 +2,7 @@ package services
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -66,6 +67,76 @@ func createTarGz(sourceDir, dest string) (int64, error) {
 		return 0, err
 	}
 	if err := gz.Close(); err != nil {
+		return 0, err
+	}
+	st, err := os.Stat(dest)
+	if err != nil {
+		return 0, err
+	}
+	return st.Size(), nil
+}
+
+// createZip writes a regular ZIP archive of every file rooted at sourceDir to
+// dest. Paths inside the archive are stored relative to sourceDir using
+// forward slashes (the Info-ZIP convention) so the archive extracts cleanly
+// on Windows, macOS, and Linux. Compression is deflate; .ts/.m4s/.jpg payloads
+// are already compressed and benefit little from extra deflate, but the cost
+// is minimal and it keeps the playlists + manifest.mpd + report.json small.
+func createZip(sourceDir, dest string) (int64, error) {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return 0, err
+	}
+	out, err := os.Create(dest)
+	if err != nil {
+		return 0, err
+	}
+	defer out.Close()
+
+	zw := zip.NewWriter(out)
+	defer zw.Close()
+
+	err = filepath.Walk(sourceDir, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(sourceDir, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		// zip requires the name to use forward slashes; directories end with "/".
+		name := filepath.ToSlash(rel)
+		if info.IsDir() {
+			name += "/"
+			if _, err := zw.Create(name); err != nil {
+				return err
+			}
+			return nil
+		}
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+		header.Name = name
+		header.Method = zip.Deflate
+		w, err := zw.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = io.Copy(w, f)
+		return err
+	})
+	if err != nil {
+		return 0, err
+	}
+	if err := zw.Close(); err != nil {
 		return 0, err
 	}
 	st, err := os.Stat(dest)

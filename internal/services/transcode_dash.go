@@ -251,10 +251,25 @@ func transcodeToDASH(ctx context.Context, inputPath string, profiles []QualityPr
 	}
 
 	manifestPath := filepath.Join(dashRoot, "manifest.mpd")
-	if err := writeDashManifest(manifestPath, results, audio, dashSegmentSeconds); err != nil {
+	if err := writeDashManifest(manifestPath, results, audio, nil, dashSegmentSeconds, dashSignature{}); err != nil {
 		return nil, nil, "", fmt.Errorf("write dash manifest: %w", err)
 	}
 	return results, audio, manifestPath, nil
+}
+
+// rewriteDashManifest re-emits manifest.mpd with the late-binding extras
+// (captions + signature ProgramInformation).
+func rewriteDashManifest(outputDir string, results []dashVariantResult, audio *dashAudioResult, captions []CaptionTrack, signature dashSignature) error {
+	manifestPath := filepath.Join(outputDir, "dash", "manifest.mpd")
+	return writeDashManifest(manifestPath, results, audio, captions, dashSegmentSeconds, signature)
+}
+
+// dashSignature populates a <ProgramInformation> block in the manifest.
+type dashSignature struct {
+	Title       string
+	Source      string
+	Copyright   string
+	MoreInfoURL string
 }
 
 // availableFFmpegEncoders parses `ffmpeg -hide_banner -encoders` and returns a
@@ -292,7 +307,13 @@ func dashVideoCodecID(codec string) string {
 
 // writeDashManifest emits a static VOD MPD that references each variant by
 // the local path inside the package (the same relative path we'll embed in the tarball).
-func writeDashManifest(dest string, videoEntries []dashVariantResult, audio *dashAudioResult, segmentSeconds int) error {
+//
+// captions is one entry per language; the manifest renders each as a separate
+// AdaptationSet with contentType="text" mimeType="text/vtt" and a Role of
+// "main" for the primary, "subtitle" for the others.
+//
+// signature populates a <ProgramInformation> attribution block.
+func writeDashManifest(dest string, videoEntries []dashVariantResult, audio *dashAudioResult, captions []CaptionTrack, segmentSeconds int, signature dashSignature) error {
 	if len(videoEntries) == 0 {
 		return fmt.Errorf("no DASH video entries")
 	}
@@ -303,6 +324,26 @@ func writeDashManifest(dest string, videoEntries []dashVariantResult, audio *das
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	b.WriteString(fmt.Sprintf(`<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="%s" minBufferTime="PT4S" profiles="urn:mpeg:dash:profile:isoff-main:2011">`+"\n", durationISO))
+
+	// Optional attribution block.
+	if signature.Title != "" || signature.Source != "" || signature.Copyright != "" {
+		moreAttr := ""
+		if signature.MoreInfoURL != "" {
+			moreAttr = fmt.Sprintf(` moreInformationURL="%s"`, xmlAttrEscape(signature.MoreInfoURL))
+		}
+		b.WriteString(fmt.Sprintf("<ProgramInformation%s>\n", moreAttr))
+		if signature.Title != "" {
+			b.WriteString(fmt.Sprintf("  <Title>%s</Title>\n", xmlBodyEscape(signature.Title)))
+		}
+		if signature.Source != "" {
+			b.WriteString(fmt.Sprintf("  <Source>%s</Source>\n", xmlBodyEscape(signature.Source)))
+		}
+		if signature.Copyright != "" {
+			b.WriteString(fmt.Sprintf("  <Copyright>%s</Copyright>\n", xmlBodyEscape(signature.Copyright)))
+		}
+		b.WriteString("</ProgramInformation>\n")
+	}
+
 	b.WriteString(fmt.Sprintf(`<Period duration="%s">`+"\n", durationISO))
 	b.WriteString(`<AdaptationSet id="0" contentType="video" mimeType="video/mp4" segmentAlignment="true" bitstreamSwitching="true">` + "\n")
 	sort.SliceStable(videoEntries, func(i, j int) bool { return videoEntries[i].Height < videoEntries[j].Height })
@@ -355,8 +396,52 @@ func writeDashManifest(dest string, videoEntries []dashVariantResult, audio *das
 		b.WriteString("  </Representation>\n")
 		b.WriteString("</AdaptationSet>\n")
 	}
+
+	// Subtitle AdaptationSets — one per language, each side-loading a single VTT.
+	// captions/<lang>/auto.vtt lives outside the dash/ directory in the package,
+	// so we use a relative BaseURL with "../" to reach it.
+	for i, track := range captions {
+		role := "subtitle"
+		if track.IsPrimary {
+			role = "main"
+		}
+		b.WriteString(fmt.Sprintf(
+			`<AdaptationSet id="%d" contentType="text" mimeType="text/vtt" lang="%s">`+"\n",
+			2+i, xmlAttrEscape(track.Language),
+		))
+		b.WriteString(fmt.Sprintf(
+			`  <Role schemeIdUri="urn:mpeg:dash:role:2011" value="%s"/>`+"\n", role,
+		))
+		b.WriteString(fmt.Sprintf(
+			`  <Representation id="captions-%s" bandwidth="256">`+"\n",
+			xmlAttrEscape(track.Language),
+		))
+		b.WriteString(fmt.Sprintf(
+			`    <BaseURL>../%s</BaseURL>`+"\n", track.VTTRelPath,
+		))
+		b.WriteString("  </Representation>\n")
+		b.WriteString("</AdaptationSet>\n")
+	}
+
 	b.WriteString("</Period>\n</MPD>\n")
 	return os.WriteFile(dest, []byte(b.String()), 0o644)
+}
+
+// xmlAttrEscape escapes characters that would break an XML attribute value.
+func xmlAttrEscape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "\"", "&quot;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
+}
+
+// xmlBodyEscape escapes characters that would break XML text content.
+func xmlBodyEscape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
 }
 
 // segmentGlobFromPattern converts FFmpeg's `seg-$Number%05d$.m4s` template

@@ -28,6 +28,23 @@ type hlsVariantResult struct {
 	SegmentCount int
 }
 
+// hlsExtras carries the optional extras the master playlist needs to wire up
+// (caption renditions, I-frame playlist, signature). It is built outside the
+// HLS encoder and passed in so the encoder stays focused on FFmpeg work.
+type hlsExtras struct {
+	Captions        []CaptionTrack // captions/<lang>/subs.m3u8 already written
+	IFramePlaylist  string         // relative path of iframes/iframes.m3u8 or ""
+	IFrameBandwidth int
+	IFrameWidth     int
+	IFrameHeight    int
+	SignatureKVs    []hlsSessionData
+}
+
+type hlsSessionData struct {
+	DataID string
+	Value  string
+}
+
 // transcodeToHLS produces an H.264/AAC HLS VOD package at outputDir/hls/ and
 // returns one entry per variant. It is safe to call with hasAudio=false — the
 // FFmpeg invocation skips audio mapping in that case.
@@ -122,15 +139,33 @@ func transcodeToHLS(ctx context.Context, inputPath string, profiles []QualityPro
 	}
 
 	masterPath := filepath.Join(hlsRoot, "master.m3u8")
-	if err := writeHLSMaster(masterPath, results, hasAudio); err != nil {
+	if err := writeHLSMaster(masterPath, results, hasAudio, hlsExtras{}); err != nil {
 		return nil, "", fmt.Errorf("write master playlist: %w", err)
 	}
 	return results, masterPath, nil
 }
 
+// rewriteHLSMaster overwrites the master.m3u8 we wrote during transcodeToHLS
+// once the late-binding extras (captions / I-frames / signature) are known.
+// This is what the orchestrator calls after generating all the auxiliary files.
+func rewriteHLSMaster(outputDir string, entries []hlsVariantResult, hasAudio bool, extras hlsExtras) error {
+	masterPath := filepath.Join(outputDir, "hls", "master.m3u8")
+	return writeHLSMaster(masterPath, entries, hasAudio, extras)
+}
+
 // writeHLSMaster composes master.m3u8. CODECS attribute defaults to H.264 High
 // + AAC LC; if hasAudio is false we omit the AAC codec hint.
-func writeHLSMaster(dest string, entries []hlsVariantResult, hasAudio bool) error {
+//
+// extras carry caption renditions (EXT-X-MEDIA TYPE=SUBTITLES), the optional
+// I-frame playlist (EXT-X-I-FRAME-STREAM-INF), and free-form signature blobs
+// (EXT-X-SESSION-DATA). Pass an empty hlsExtras{} to emit a bare master.
+//
+// HLS path notes: all variant paths in this master are relative to the
+// master.m3u8 location at <pkg>/hls/master.m3u8. Captions live at
+// <pkg>/captions/<lang>/subs.m3u8 — outside hls/ — so we prefix "../" to
+// reach them. I-frame playlists live at <pkg>/hls/iframes/iframes.m3u8 so
+// they don't need the "../" prefix.
+func writeHLSMaster(dest string, entries []hlsVariantResult, hasAudio bool, extras hlsExtras) error {
 	if len(entries) == 0 {
 		return fmt.Errorf("no entries for master playlist")
 	}
@@ -140,7 +175,42 @@ func writeHLSMaster(dest string, entries []hlsVariantResult, hasAudio bool) erro
 	})
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n")
-	b.WriteString("#EXT-X-VERSION:3\n")
+	b.WriteString("#EXT-X-VERSION:6\n")
+	b.WriteString("#EXT-X-INDEPENDENT-SEGMENTS\n")
+
+	// Signature comments + EXT-X-SESSION-DATA so any HLS parser keeps the
+	// attribution intact.
+	if len(extras.SignatureKVs) > 0 {
+		for _, kv := range extras.SignatureKVs {
+			b.WriteString(fmt.Sprintf("# %s: %s\n", kv.DataID, kv.Value))
+		}
+		for _, kv := range extras.SignatureKVs {
+			b.WriteString(fmt.Sprintf("#EXT-X-SESSION-DATA:DATA-ID=\"%s\",VALUE=\"%s\"\n",
+				escapeM3UAttr(kv.DataID), escapeM3UAttr(kv.Value)))
+		}
+	}
+
+	// Caption renditions. The captions/ folder lives one level above hls/, so
+	// every URI gets a "../" prefix.
+	hasCaptions := len(extras.Captions) > 0
+	if hasCaptions {
+		for _, track := range extras.Captions {
+			defaultFlag := "NO"
+			autoselectFlag := "NO"
+			if track.IsPrimary {
+				defaultFlag = "YES"
+				autoselectFlag = "YES"
+			}
+			b.WriteString(fmt.Sprintf(
+				"#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"%s\",LANGUAGE=\"%s\",DEFAULT=%s,AUTOSELECT=%s,FORCED=NO,URI=\"../%s\"\n",
+				escapeM3UAttr(track.DisplayName),
+				escapeM3UAttr(track.Language),
+				defaultFlag, autoselectFlag,
+				track.HLSWrapper,
+			))
+		}
+	}
+
 	for _, entry := range sorted {
 		bandwidth := entry.Profile.VideoBitrateKbps * 1000
 		if hasAudio {
@@ -166,11 +236,42 @@ func writeHLSMaster(dest string, entries []hlsVariantResult, hasAudio bool) erro
 		if entry.FPS > 0 {
 			frameRate = fmt.Sprintf(",FRAME-RATE=%s", formatFrameRate(entry.FPS))
 		}
-		b.WriteString(fmt.Sprintf("#EXT-X-STREAM-INF:BANDWIDTH=%d%s,CODECS=\"%s\"%s,NAME=\"%s\"\n",
-			bandwidth, resolution, codecs, frameRate, entry.Profile.Label,
+		captionsAttr := ""
+		if hasCaptions {
+			captionsAttr = ",SUBTITLES=\"subs\""
+		}
+		b.WriteString(fmt.Sprintf("#EXT-X-STREAM-INF:BANDWIDTH=%d%s,CODECS=\"%s\"%s%s,NAME=\"%s\"\n",
+			bandwidth, resolution, codecs, frameRate, captionsAttr, entry.Profile.Label,
 		))
 		b.WriteString(entry.PlaylistRel)
 		b.WriteString("\n")
 	}
+
+	// I-frame playlist for scrubbing — single entry referencing a separate
+	// I-frame-only stream so players can seek without downloading full segments.
+	if extras.IFramePlaylist != "" {
+		bandwidth := extras.IFrameBandwidth
+		if bandwidth <= 0 {
+			bandwidth = 200_000
+		}
+		resolution := ""
+		if extras.IFrameWidth > 0 && extras.IFrameHeight > 0 {
+			resolution = fmt.Sprintf(",RESOLUTION=%dx%d", extras.IFrameWidth, extras.IFrameHeight)
+		}
+		b.WriteString(fmt.Sprintf("#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=%d%s,CODECS=\"avc1.640028\",URI=\"%s\"\n",
+			bandwidth, resolution, extras.IFramePlaylist,
+		))
+	}
+
 	return os.WriteFile(dest, []byte(b.String()), 0o644)
+}
+
+// escapeM3UAttr escapes characters that would break a quoted-string attribute
+// in an M3U tag. The HLS spec disallows raw " and newlines inside quoted
+// attribute values, so we strip them aggressively.
+func escapeM3UAttr(s string) string {
+	s = strings.ReplaceAll(s, "\"", "'")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	return s
 }

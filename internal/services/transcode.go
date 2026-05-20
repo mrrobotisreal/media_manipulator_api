@@ -53,11 +53,25 @@ type TranscodeRequest struct {
 	DashCodec           models.DashCodec
 	Profiles            []QualityProfile
 	GenerateCaptions    bool
+	CaptionLanguages    []string // BCP-47 codes for additional translation tracks (max 3)
 	GenerateStoryboards bool
+	BundleFormat        models.BundleFormat // "targz" (default) or "zip"
 	SessionID           string
 	FileName            string
 	Probe               *models.VideoProbeResponse
 	ResultBucket        string
+}
+
+// CaptionTrack describes one generated subtitle rendition that the HLS master
+// playlist and DASH manifest reference. The primary track is the source-
+// language whisper output; additional tracks are LLM-translated copies.
+type CaptionTrack struct {
+	Language     string // BCP-47 code ("en", "es", "pt-BR", ...)
+	DisplayName  string // "English", "Español", ...
+	IsPrimary    bool
+	VTTRelPath   string // captions/<lang>/auto.vtt, relative to package root
+	HLSWrapper   string // captions/<lang>/subs.m3u8, relative to package root
+	SegmentCount int    // for HLS the wrapper is always 1 segment (VOD)
 }
 
 // reportJSON is what we drop into the tarball as report.json.
@@ -128,28 +142,36 @@ func (s *TranscodeService) Process(ctx context.Context, req TranscodeRequest) {
 	advance("preparing_workspace", models.StageStatusCompleted, 18, "")
 
 	captionsIncluded := false
+	captionTracks := []CaptionTrack{}
+	packageDir := filepath.Join(req.OutputDir, "package")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		s.fail(req.JobID, stages, fmt.Errorf("workspace: %w", err))
+		return
+	}
 	if req.GenerateCaptions {
-		if !probe.HasAudio {
+		switch {
+		case !probe.HasAudio:
 			advance("generating_captions", models.StageStatusSkipped, 25, captionsNoAudioTip)
 			warnings = append(warnings, captionsNoAudioTip)
-		} else if s.transcription == nil {
+		case s.transcription == nil:
 			advance("generating_captions", models.StageStatusSkipped, 25, "Transcription service is not configured")
 			warnings = append(warnings, "captions skipped: transcription service unavailable")
-		} else {
-			advance("generating_captions", models.StageStatusProcessing, 22, "")
-			capDir := filepath.Join(req.OutputDir, "package", "captions")
-			_ = os.MkdirAll(capDir, 0o755)
-			capPath := filepath.Join(capDir, "auto.vtt")
-			placeholderJob := &models.ConversionJob{
-				ID:           req.JobID,
-				OriginalFile: models.OriginalFileInfo{Name: req.FileName, Type: probe.ContentType},
-			}
-			if _, err := s.transcription.Transcribe(ctx, placeholderJob, req.InputPath, capPath, TranscribeOptions{Format: "vtt"}); err != nil {
+		default:
+			advance("generating_captions", models.StageStatusProcessing, 22, "transcribing source")
+			tracks, primaryLang, segments, captionWarnings, err := s.generateCaptionTracks(ctx, req, probe, packageDir)
+			warnings = append(warnings, captionWarnings...)
+			if err != nil {
 				warnings = append(warnings, fmt.Sprintf("captions failed: %v", err))
 				advance("generating_captions", models.StageStatusSkipped, 30, err.Error())
 			} else {
-				captionsIncluded = true
-				advance("generating_captions", models.StageStatusCompleted, 30, "")
+				captionTracks = tracks
+				captionsIncluded = len(tracks) > 0
+				msg := fmt.Sprintf("primary %s", primaryLang)
+				if len(tracks) > 1 {
+					msg = fmt.Sprintf("%s + %d translation(s)", msg, len(tracks)-1)
+				}
+				_ = segments // currently unused beyond translation step; kept for future hooks
+				advance("generating_captions", models.StageStatusCompleted, 30, msg)
 			}
 		}
 	} else {
@@ -175,12 +197,6 @@ func (s *TranscodeService) Process(ctx context.Context, req TranscodeRequest) {
 	transcodeEnd := 85
 	span := transcodeEnd - transcodeStart
 	perRung := span / max(1, len(req.Profiles))
-
-	packageDir := filepath.Join(req.OutputDir, "package")
-	if err := os.MkdirAll(packageDir, 0o755); err != nil {
-		s.fail(req.JobID, stages, fmt.Errorf("workspace: %w", err))
-		return
-	}
 
 	variants := make([]models.TranscodeVariant, 0, len(req.Profiles))
 	var manifestPath string
@@ -210,6 +226,22 @@ func (s *TranscodeService) Process(ctx context.Context, req TranscodeRequest) {
 				SegmentSeconds: hlsSegmentSeconds,
 				OutputBytes:    r.OutputBytes,
 			})
+		}
+		// Generate the I-frame playlist for scrubbing (best-effort).
+		extras := hlsExtras{
+			Captions:     captionTracks,
+			SignatureKVs: hlsSignatureFor(req),
+		}
+		if iframes, ferr := generateHLSIFramePlaylist(ctx, req.InputPath, probe.Height, packageDir); ferr != nil {
+			warnings = append(warnings, fmt.Sprintf("iframe playlist failed: %v", ferr))
+		} else if iframes != nil {
+			extras.IFramePlaylist = iframes.RelativePath
+			extras.IFrameBandwidth = iframes.BandwidthBps
+			extras.IFrameWidth = iframes.Width
+			extras.IFrameHeight = iframes.Height
+		}
+		if err := rewriteHLSMaster(packageDir, results, probe.HasAudio, extras); err != nil {
+			warnings = append(warnings, fmt.Sprintf("rewrite master playlist: %v", err))
 		}
 		manifestPath = strings.TrimPrefix(master, packageDir+string(os.PathSeparator))
 		manifestPath = filepath.ToSlash(manifestPath)
@@ -241,6 +273,9 @@ func (s *TranscodeService) Process(ctx context.Context, req TranscodeRequest) {
 				variant.AudioCodec = "aac"
 			}
 			variants = append(variants, variant)
+		}
+		if err := rewriteDashManifest(packageDir, results, audio, captionTracks, dashSignatureFor(req)); err != nil {
+			warnings = append(warnings, fmt.Sprintf("rewrite dash manifest: %v", err))
 		}
 		manifestPath = strings.TrimPrefix(manifest, packageDir+string(os.PathSeparator))
 		manifestPath = filepath.ToSlash(manifestPath)
@@ -276,18 +311,27 @@ func (s *TranscodeService) Process(ctx context.Context, req TranscodeRequest) {
 	}
 
 	pkgName := packageBaseName(req)
-	tarPath := filepath.Join(req.OutputDir, pkgName+".tar.gz")
-	packageBytes, err := createTarGz(packageDir, tarPath)
+	format := normalizeBundleFormat(req.BundleFormat)
+	pkgExt := bundleExtension(format)
+	pkgPath := filepath.Join(req.OutputDir, pkgName+pkgExt)
+
+	var packageBytes int64
+	switch format {
+	case models.BundleFormatZip:
+		packageBytes, err = createZip(packageDir, pkgPath)
+	default:
+		packageBytes, err = createTarGz(packageDir, pkgPath)
+	}
 	if err != nil {
-		s.fail(req.JobID, stages, fmt.Errorf("tar.gz: %w", err))
+		s.fail(req.JobID, stages, fmt.Errorf("%s bundle: %w", string(format), err))
 		return
 	}
 	report.PackageBytes = packageBytes
 	_ = writeJSON(filepath.Join(req.OutputDir, "report.json"), report)
-	advance("packaging_tarball", models.StageStatusCompleted, 92, "")
+	advance("packaging_tarball", models.StageStatusCompleted, 92, fmt.Sprintf("wrote %s", pkgName+pkgExt))
 
 	advance("uploading_result", models.StageStatusProcessing, 94, "")
-	resultKey, presignedURL, expiresAt, uploadErr := s.uploadAndPresign(ctx, req, tarPath, pkgName)
+	resultKey, presignedURL, expiresAt, uploadErr := s.uploadAndPresign(ctx, req, pkgPath, pkgName, format)
 	if uploadErr != nil {
 		s.fail(req.JobID, stages, uploadErr)
 		return
@@ -295,13 +339,47 @@ func (s *TranscodeService) Process(ctx context.Context, req TranscodeRequest) {
 	advance("uploading_result", models.StageStatusCompleted, 97, "")
 	advance("creating_download_url", models.StageStatusCompleted, 99, "")
 
-	_ = s.jobManager.SetResultMetadata(req.JobID, resultKey, pkgName+".tar.gz", expiresAt)
+	_ = s.jobManager.SetResultMetadata(req.JobID, resultKey, pkgName+pkgExt, expiresAt)
 	_ = s.jobManager.UpdateJobResult(req.JobID, presignedURL)
 	advance("completed", models.StageStatusCompleted, 100, "")
 	_ = s.jobManager.UpdateJobStatus(req.JobID, models.StatusCompleted)
 }
 
-func (s *TranscodeService) uploadAndPresign(ctx context.Context, req TranscodeRequest, localPath, pkgBaseName string) (string, string, time.Time, error) {
+// normalizeBundleFormat returns the canonical BundleFormat for a (potentially
+// empty or unknown) value, defaulting to tar.gz.
+func normalizeBundleFormat(raw models.BundleFormat) models.BundleFormat {
+	switch strings.ToLower(strings.TrimSpace(string(raw))) {
+	case string(models.BundleFormatZip):
+		return models.BundleFormatZip
+	default:
+		return models.BundleFormatTarGz
+	}
+}
+
+// bundleExtension is the filename suffix (including dot) used for a given
+// bundle format. Centralized so the result filename, S3 key, presign
+// Content-Disposition, and content-type all stay in sync.
+func bundleExtension(format models.BundleFormat) string {
+	switch format {
+	case models.BundleFormatZip:
+		return ".zip"
+	default:
+		return ".tar.gz"
+	}
+}
+
+// bundleContentType returns the MIME type that should be set on the S3 object
+// and echoed in the presigned URL's Content-Type.
+func bundleContentType(format models.BundleFormat) string {
+	switch format {
+	case models.BundleFormatZip:
+		return "application/zip"
+	default:
+		return "application/gzip"
+	}
+}
+
+func (s *TranscodeService) uploadAndPresign(ctx context.Context, req TranscodeRequest, localPath, pkgBaseName string, format models.BundleFormat) (string, string, time.Time, error) {
 	if s.s3Client == nil || s.s3Presign == nil {
 		return "", "", time.Time{}, fmt.Errorf("S3 client not configured")
 	}
@@ -318,7 +396,8 @@ func (s *TranscodeService) uploadAndPresign(ctx context.Context, req TranscodeRe
 	if sessionPart == "" {
 		sessionPart = "anon"
 	}
-	resultKey := fmt.Sprintf("%s/%s/%s/%s/%s.tar.gz", prefix, day, sessionPart, req.JobID, pkgBaseName)
+	ext := bundleExtension(format)
+	resultKey := fmt.Sprintf("%s/%s/%s/%s/%s%s", prefix, day, sessionPart, req.JobID, pkgBaseName, ext)
 
 	f, err := os.Open(localPath)
 	if err != nil {
@@ -329,7 +408,7 @@ func (s *TranscodeService) uploadAndPresign(ctx context.Context, req TranscodeRe
 		Bucket:      aws.String(bucket),
 		Key:         aws.String(resultKey),
 		Body:        f,
-		ContentType: aws.String("application/gzip"),
+		ContentType: aws.String(bundleContentType(format)),
 	})
 	if putErr != nil {
 		return "", "", time.Time{}, fmt.Errorf("s3 upload: %w", putErr)
@@ -338,7 +417,7 @@ func (s *TranscodeService) uploadAndPresign(ctx context.Context, req TranscodeRe
 	if ttl <= 0 {
 		ttl = 30 * time.Minute
 	}
-	disposition := fmt.Sprintf(`attachment; filename="%s.tar.gz"`, pkgBaseName)
+	disposition := fmt.Sprintf(`attachment; filename="%s%s"`, pkgBaseName, ext)
 	presigned, err := s.s3Presign.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket:                     aws.String(bucket),
 		Key:                        aws.String(resultKey),
@@ -475,6 +554,178 @@ func countFiles(root string) int {
 		return nil
 	})
 	return count
+}
+
+// generateCaptionTracks runs whisper once to get the primary VTT, then loops
+// through req.CaptionLanguages and translates the same segments via Ollama
+// into each requested target. The returned tracks are already on disk under
+// packageDir/captions/<lang>/{auto.vtt,subs.m3u8}; callers wire the URIs into
+// the HLS master and DASH manifest.
+//
+// Translation failures are recorded as warnings but never abort the job; the
+// primary VTT is always present as long as whisper succeeded.
+func (s *TranscodeService) generateCaptionTracks(ctx context.Context, req TranscodeRequest, probe *models.VideoProbeResponse, packageDir string) ([]CaptionTrack, string, []TranslateCaptionsSegment, []string, error) {
+	warnings := []string{}
+	// 1. Whisper transcription of the source.
+	primaryDir := filepath.Join(packageDir, "captions", "primary")
+	if err := os.MkdirAll(primaryDir, 0o755); err != nil {
+		return nil, "", nil, warnings, err
+	}
+	primaryVTTPath := filepath.Join(primaryDir, "auto.vtt")
+	placeholderJob := &models.ConversionJob{
+		ID:           req.JobID,
+		OriginalFile: models.OriginalFileInfo{Name: req.FileName, Type: probe.ContentType},
+	}
+	result, err := s.transcription.Transcribe(ctx, placeholderJob, req.InputPath, primaryVTTPath, TranscribeOptions{Format: "vtt"})
+	if err != nil {
+		return nil, "", nil, warnings, fmt.Errorf("whisper: %w", err)
+	}
+	primaryLang := strings.ToLower(strings.TrimSpace(result.Language))
+	if primaryLang == "" {
+		primaryLang = "auto"
+	}
+	primaryDisplay := displayNameForCode(primaryLang)
+	if primaryDisplay == "" {
+		primaryDisplay = strings.ToUpper(primaryLang)
+	}
+	// Rename the primary track folder from "primary" → "<lang>" so the
+	// filesystem layout is self-describing.
+	primaryFinalDir := filepath.Join(packageDir, "captions", sanitizeLangDirName(primaryLang))
+	if primaryFinalDir != primaryDir {
+		_ = os.RemoveAll(primaryFinalDir) // in case we crash-restarted
+		if err := os.Rename(primaryDir, primaryFinalDir); err != nil {
+			return nil, "", nil, warnings, fmt.Errorf("rename primary captions dir: %w", err)
+		}
+	}
+	primaryVTTPath = filepath.Join(primaryFinalDir, "auto.vtt")
+
+	// 2. Build the segment array we hand to the translator.
+	segments := segmentsFromTranscribeResult(result.Segments)
+
+	tracks := []CaptionTrack{}
+	// 3. Write the HLS wrapper for the primary track and record it.
+	durationSeconds := int(probe.DurationSeconds)
+	if durationSeconds <= 0 {
+		durationSeconds = int(result.DurationSeconds)
+	}
+	primaryVTTRel, primaryWrapperRel, _ := captionsRelativePaths(sanitizeLangDirName(primaryLang))
+	if err := writeHLSSubtitleWrapper(filepath.Join(packageDir, primaryWrapperRel), filepath.Base(primaryVTTPath), durationSeconds); err != nil {
+		warnings = append(warnings, fmt.Sprintf("primary HLS wrapper: %v", err))
+	}
+	tracks = append(tracks, CaptionTrack{
+		Language:    primaryLang,
+		DisplayName: primaryDisplay,
+		IsPrimary:   true,
+		VTTRelPath:  primaryVTTRel,
+		HLSWrapper:  primaryWrapperRel,
+	})
+
+	// 4. Translate into each additional language. Each is best-effort — failures
+	// warn but don't fail the job (the primary track is already on disk).
+	if len(req.CaptionLanguages) > 0 {
+		if !OllamaReachable(ctx) {
+			warnings = append(warnings, "translation backend (Ollama) is not reachable; additional caption languages were skipped")
+		} else if len(segments) == 0 {
+			warnings = append(warnings, "no transcript segments to translate; additional caption languages were skipped")
+		} else {
+			for _, raw := range req.CaptionLanguages {
+				targetCode := strings.ToLower(strings.TrimSpace(raw))
+				if targetCode == "" || targetCode == primaryLang {
+					continue
+				}
+				translated, terr := translateSegmentsBatch(ctx, segments, primaryLang, targetCode, 30)
+				if terr != nil {
+					warnings = append(warnings, fmt.Sprintf("translation to %s failed: %v", targetCode, terr))
+					continue
+				}
+				targetDir := filepath.Join(packageDir, "captions", sanitizeLangDirName(targetCode))
+				if err := os.MkdirAll(targetDir, 0o755); err != nil {
+					warnings = append(warnings, fmt.Sprintf("create %s dir: %v", targetCode, err))
+					continue
+				}
+				targetVTT := filepath.Join(targetDir, "auto.vtt")
+				if err := writeVTTFromSegments(targetVTT, translated); err != nil {
+					warnings = append(warnings, fmt.Sprintf("write %s VTT: %v", targetCode, err))
+					continue
+				}
+				targetVTTRel, targetWrapperRel, _ := captionsRelativePaths(sanitizeLangDirName(targetCode))
+				if err := writeHLSSubtitleWrapper(filepath.Join(packageDir, targetWrapperRel), filepath.Base(targetVTT), durationSeconds); err != nil {
+					warnings = append(warnings, fmt.Sprintf("%s HLS wrapper: %v", targetCode, err))
+				}
+				display := displayNameForCode(targetCode)
+				if display == "" {
+					display = strings.ToUpper(targetCode)
+				}
+				tracks = append(tracks, CaptionTrack{
+					Language:    targetCode,
+					DisplayName: display,
+					IsPrimary:   false,
+					VTTRelPath:  targetVTTRel,
+					HLSWrapper:  targetWrapperRel,
+				})
+			}
+		}
+	}
+
+	return tracks, primaryLang, segments, warnings, nil
+}
+
+// sanitizeLangDirName converts a BCP-47 code into a safe directory name.
+// We only need to swap any reserved characters; the codes we accept are
+// already simple ASCII like "en", "pt-BR", "zh-Hans".
+func sanitizeLangDirName(code string) string {
+	out := strings.ToLower(strings.TrimSpace(code))
+	out = strings.ReplaceAll(out, "/", "_")
+	out = strings.ReplaceAll(out, "..", "_")
+	if out == "" {
+		out = "auto"
+	}
+	return out
+}
+
+// displayNameForCode looks up a supported caption language's display name.
+// Returns "" for whisper-detected codes we don't have a catalog entry for
+// (e.g. "auto"); callers fall back to the upper-cased code.
+func displayNameForCode(code string) string {
+	for _, l := range SupportedCaptionLanguages() {
+		if strings.EqualFold(l.Code, code) {
+			return l.DisplayName
+		}
+	}
+	return ""
+}
+
+// Signature copy embedded into every generated HLS master.m3u8 and DASH
+// manifest.mpd. This is purely attribution metadata — players and parsers
+// preserve it but it does not affect playback in any way.
+const (
+	signatureProducer  = "Media Manipulator"
+	signatureSiteURL   = "https://www.media-manipulator.com"
+	signatureCopyright = "Owned and operated by CreaTV Ltd., Colorado, USA"
+)
+
+// hlsSignatureFor returns the EXT-X-SESSION-DATA entries to embed in the
+// master.m3u8 attribution block.
+func hlsSignatureFor(req TranscodeRequest) []hlsSessionData {
+	return []hlsSessionData{
+		{DataID: "com.media-manipulator.producer", Value: signatureProducer},
+		{DataID: "com.media-manipulator.source", Value: signatureSiteURL},
+		{DataID: "com.media-manipulator.copyright", Value: signatureCopyright},
+		{DataID: "com.media-manipulator.jobId", Value: req.JobID},
+		{DataID: "com.media-manipulator.generatedAt", Value: time.Now().UTC().Format(time.RFC3339)},
+	}
+}
+
+// dashSignatureFor returns the ProgramInformation values to embed in
+// manifest.mpd. moreInformationURL is the canonical attribute for the
+// producer's site.
+func dashSignatureFor(req TranscodeRequest) dashSignature {
+	return dashSignature{
+		Title:       fmt.Sprintf("%s — transcode job %s", signatureProducer, req.JobID),
+		Source:      signatureSiteURL,
+		Copyright:   signatureCopyright,
+		MoreInfoURL: signatureSiteURL,
+	}
 }
 
 // _ keeps json import alive if some helper is gated behind a build tag later.

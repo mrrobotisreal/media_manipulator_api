@@ -158,6 +158,34 @@ func (h *ConversionHandler) StartVideoTranscode(c *gin.Context) {
 	options["qualityRungs"] = req.QualityRungs
 	options["generateCaptions"] = req.GenerateCaptions
 	options["generateStoryboards"] = req.GenerateStoryboards
+	// Normalize bundle format here so the handler rejects bad values before
+	// we kick off a goroutine. Default → tar.gz when unset.
+	bundleFormat := models.BundleFormat(strings.ToLower(strings.TrimSpace(string(req.BundleFormat))))
+	switch bundleFormat {
+	case "", models.BundleFormatTarGz:
+		bundleFormat = models.BundleFormatTarGz
+	case models.BundleFormatZip:
+		// ok
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bundleFormat must be 'targz' or 'zip'"})
+		return
+	}
+	options["bundleFormat"] = string(bundleFormat)
+	// Caption language allow-list. We validate here so the UI can show a helpful
+	// error rather than the job silently dropping unrecognized codes mid-run.
+	var captionLangCodes []string
+	if req.GenerateCaptions && len(req.CaptionLanguages) > 0 {
+		langs, err := services.ValidateCaptionLanguages(req.CaptionLanguages)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		captionLangCodes = make([]string, 0, len(langs))
+		for _, l := range langs {
+			captionLangCodes = append(captionLangCodes, l.Code)
+		}
+		options["captionLanguages"] = captionLangCodes
+	}
 
 	originalFile := models.OriginalFileInfo{Name: fileName, Size: size, Type: contentType}
 	job := h.jobManager.CreateJob(originalFile, options)
@@ -221,7 +249,9 @@ func (h *ConversionHandler) StartVideoTranscode(c *gin.Context) {
 		DashCodec:           dashCodec,
 		Profiles:            profiles,
 		GenerateCaptions:    req.GenerateCaptions,
+		CaptionLanguages:    captionLangCodes,
 		GenerateStoryboards: req.GenerateStoryboards,
+		BundleFormat:        bundleFormat,
 		SessionID:           sessionID,
 		FileName:            fileName,
 		Probe:               probe,
@@ -243,15 +273,27 @@ func (h *ConversionHandler) GetTranscodeCapabilities(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 	defer cancel()
 	av1Encs, selectedAV1 := services.ListAV1Encoders(ctx)
+	langs := services.SupportedCaptionLanguages()
+	langPayload := make([]gin.H, 0, len(langs))
+	for _, l := range langs {
+		langPayload = append(langPayload, gin.H{
+			"code":             l.Code,
+			"displayName":      l.DisplayName,
+			"localDisplayName": l.LocalDisplayName,
+		})
+	}
 	resp := gin.H{
-		"hls":                true,
-		"dash":               true,
-		"av1Encoders":        av1Encs,
-		"selectedAv1Encoder": selectedAV1,
-		"vp9":                services.HasVP9Encoder(ctx),
-		"captions":           h.transcription != nil,
-		"storyboards":        true,
-		"premiumComingSoon":  true,
+		"hls":                       true,
+		"dash":                      true,
+		"av1Encoders":               av1Encs,
+		"selectedAv1Encoder":        selectedAV1,
+		"vp9":                       services.HasVP9Encoder(ctx),
+		"captions":                  h.transcription != nil,
+		"captionTranslation":        services.OllamaReachable(ctx),
+		"captionLanguages":          langPayload,
+		"maxAdditionalCaptionLangs": 3,
+		"storyboards":               true,
+		"premiumComingSoon":         true,
 	}
 	c.JSON(http.StatusOK, resp)
 }
