@@ -202,9 +202,12 @@ func (q *AnalysisQueue) transcribeVideo(ctx context.Context, job AnalysisJob) (s
 	}
 	args = append(args, audioPath)
 
-	stdout, stderr, err := runCommand(ctx, bin, args...)
+	// Use the shared whisper runner so HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE
+	// apply here too and we capture both stdout and stderr for diagnostics.
+	stdout, stderr, err := runWhisperCommand(ctx, bin, args...)
 	if err != nil {
-		return "", fmt.Errorf("whisper-ct2: %w: %s", err, tail(stderr, 2000))
+		return "", fmt.Errorf("whisper-ct2: %w\nstderr_tail: %s\nstdout_tail: %s",
+			err, tail(stderr, 4000), tail(stdout, 2000))
 	}
 	matches, _ := filepath.Glob(filepath.Join(transcriptDir, "*.json"))
 	if len(matches) > 0 {

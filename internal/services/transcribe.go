@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -448,6 +449,89 @@ func normalizeLanguageCode(raw string) string {
 	return raw
 }
 
+// whisperEnvLogOnce ensures we only print the resolved env summary once per
+// process lifetime, no matter how many transcription / caption jobs run.
+var whisperEnvLogOnce sync.Once
+
+// whisperSubprocessEnv returns the environment slice we hand the
+// whisper-ctranslate2 subprocess.
+//
+// Two responsibilities:
+//
+//  1. Make sure HF_HOME points at the operator's actual model cache. The
+//     whisper subprocess needs to know where Systran/faster-whisper-<model>/
+//     lives on disk. Resolution order:
+//
+//     a) WHISPER_HF_CACHE_DIR (explicit, takes precedence over everything
+//     — set this in the API env when you can't easily change HF_HOME
+//     via your launcher),
+//     b) HF_HOME inherited from the API process env (works automatically
+//     when launched from a shell that has it set, or via systemd
+//     Environment=HF_HOME=...),
+//     c) nothing — we log a loud warning at first use because the
+//     subprocess will fall back to ~/.cache/huggingface, which is
+//     almost never where a system daemon's models live.
+//
+//  2. Disable HuggingFace network calls so the subprocess uses ONLY the
+//     local cache. Set HF_HUB_OFFLINE=1 + TRANSFORMERS_OFFLINE=1. Escape
+//     hatch: WHISPER_ALLOW_HF_NETWORK=1 in the API env disables the offline
+//     flags, useful for the rare case of pulling a new model onto a fresh
+//     host.
+//
+// Duplicate keys in cmd.Env follow last-wins semantics, so appending our
+// overrides at the end of os.Environ() correctly supersedes any inherited
+// values.
+func whisperSubprocessEnv() []string {
+	env := os.Environ()
+
+	// HF_HOME resolution.
+	inheritedHFHome := strings.TrimSpace(os.Getenv("HF_HOME"))
+	overrideHFHome := strings.TrimSpace(os.Getenv("WHISPER_HF_CACHE_DIR"))
+	resolvedHFHome := inheritedHFHome
+	if overrideHFHome != "" {
+		resolvedHFHome = overrideHFHome
+		env = append(env, "HF_HOME="+overrideHFHome)
+	}
+
+	whisperEnvLogOnce.Do(func() {
+		switch {
+		case resolvedHFHome == "":
+			log.Printf("whisper-ct2: WARNING — neither HF_HOME nor WHISPER_HF_CACHE_DIR is set in the API process environment. The whisper subprocess will fall back to ~/.cache/huggingface, which usually does NOT contain your downloaded models when the API runs as a system daemon. Set HF_HOME (or WHISPER_HF_CACHE_DIR) to the parent of your `hub/` cache directory — e.g. HF_HOME=/var/lib/creatv/hf when models live at /var/lib/creatv/hf/hub/models--Systran--faster-whisper-medium.")
+		case overrideHFHome != "" && inheritedHFHome != "" && overrideHFHome != inheritedHFHome:
+			log.Printf("whisper-ct2: WHISPER_HF_CACHE_DIR=%q overrides inherited HF_HOME=%q for the subprocess", overrideHFHome, inheritedHFHome)
+		default:
+			log.Printf("whisper-ct2: model cache HF_HOME=%q", resolvedHFHome)
+		}
+	})
+
+	if envBool("WHISPER_ALLOW_HF_NETWORK", false) {
+		return env
+	}
+	return append(env,
+		"HF_HUB_OFFLINE=1",
+		"TRANSFORMERS_OFFLINE=1",
+		"HF_HUB_DISABLE_TELEMETRY=1",
+	)
+}
+
+// runWhisperCommand executes the whisper-ctranslate2 binary with the offline
+// HF env applied and captures both stdout and stderr separately so callers
+// can include both tails in error messages. The previous implementation
+// discarded stdout entirely and truncated stderr to 2000 bytes, which made
+// real failures invisible when huggingface_hub emitted a long preamble.
+func runWhisperCommand(ctx context.Context, bin string, args ...string) (stdout, stderr string, err error) {
+	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Env = whisperSubprocessEnv()
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	runErr := cmd.Run()
+	if ctx.Err() != nil {
+		return outBuf.String(), errBuf.String(), ctx.Err()
+	}
+	return outBuf.String(), errBuf.String(), runErr
+}
+
 // ResolveWhisperCT2Bin returns a usable path to the whisper-ctranslate2
 // binary. It tries (in order):
 //
@@ -587,9 +671,16 @@ func callWhisperCT2(ctx context.Context, cfg WhisperCT2Config, audioPath, parent
 	}
 	args = append(args, "--output_format", "json", "--output_dir", runOutputDir)
 
-	_, stderr, err := runCommand(ctx, cfg.Bin, args...)
+	stdout, stderr, err := runWhisperCommand(ctx, cfg.Bin, args...)
 	if err != nil {
-		return whisperResponse{}, fmt.Errorf("whisper-ctranslate2 failed: %w: %s", err, tail(stderr, 2000))
+		hfHome := strings.TrimSpace(os.Getenv("WHISPER_HF_CACHE_DIR"))
+		if hfHome == "" {
+			hfHome = strings.TrimSpace(os.Getenv("HF_HOME"))
+		}
+		return whisperResponse{}, fmt.Errorf(
+			"whisper-ctranslate2 failed: %w\nHF_HOME(resolved)=%q model=%q\nstderr_tail: %s\nstdout_tail: %s",
+			err, hfHome, cfg.Model, tail(stderr, 4000), tail(stdout, 2000),
+		)
 	}
 
 	jsonPath, err := locateWhisperCT2JSON(runOutputDir, audioPath)
