@@ -175,7 +175,12 @@ func (q *AnalysisQueue) transcribeVideo(ctx context.Context, job AnalysisJob) (s
 	if err := os.MkdirAll(transcriptDir, 0755); err != nil {
 		return "", err
 	}
-	bin := envOrDefault("WHISPER_CT2_BIN", "/opt/creatv/whisper-ct2/bin/whisper-ctranslate2")
+	// Resolve through the shared fallback chain so stale WHISPER_CT2_BIN env
+	// vars don't silently break this codepath either.
+	bin, resolveErr := ResolveWhisperCT2Bin(strings.TrimSpace(os.Getenv("WHISPER_CT2_BIN")))
+	if resolveErr != nil {
+		return "", resolveErr
+	}
 	args := []string{
 		"--model", envOrDefault("WHISPER_CT2_MODEL", "large-v3"),
 		"--device", envOrDefault("WHISPER_CT2_DEVICE", "cuda"),

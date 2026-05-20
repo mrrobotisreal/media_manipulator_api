@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"os"
 	"os/exec"
@@ -447,6 +448,60 @@ func normalizeLanguageCode(raw string) string {
 	return raw
 }
 
+// ResolveWhisperCT2Bin returns a usable path to the whisper-ctranslate2
+// binary. It tries (in order):
+//
+//  1. `preferred` (typically `cfg.Bin` derived from WHISPER_CT2_BIN env)
+//  2. defaultWhisperCT2Bin compiled in at /opt/creatv/whisper-ct2/bin/whisper-ctranslate2
+//  3. exec.LookPath("whisper-ctranslate2") — pure $PATH search
+//
+// The resolver was added after an incident where a stale WHISPER_CT2_BIN
+// pointing at /usr/local/bin/whisper-ctranslate2 (left over from a previous
+// deployment) silently killed every transcription / caption job even though
+// the binary was still installed at the default location. Now the API
+// transparently falls back AND prints a one-line warning identifying the
+// stale env var so the operator can find and remove it.
+//
+// Returns an error only when none of the three candidates resolves — at that
+// point there is genuinely no whisper binary on the host.
+func ResolveWhisperCT2Bin(preferred string) (string, error) {
+	preferred = strings.TrimSpace(preferred)
+	candidates := []string{}
+	if preferred != "" {
+		if isExecutableFile(preferred) {
+			return preferred, nil
+		}
+		candidates = append(candidates, preferred)
+	}
+	if preferred != defaultWhisperCT2Bin {
+		if isExecutableFile(defaultWhisperCT2Bin) {
+			if preferred != "" {
+				log.Printf("whisper-ct2: WHISPER_CT2_BIN=%q is not an executable file; falling back to %q. Fix or unset the env var to silence this warning.",
+					preferred, defaultWhisperCT2Bin)
+			}
+			return defaultWhisperCT2Bin, nil
+		}
+		candidates = append(candidates, defaultWhisperCT2Bin)
+	}
+	if path, err := exec.LookPath("whisper-ctranslate2"); err == nil {
+		log.Printf("whisper-ct2: configured paths (%s) not present; resolved via $PATH at %q", strings.Join(candidates, ", "), path)
+		return path, nil
+	}
+	return "", fmt.Errorf("whisper-ctranslate2 binary not found (tried: %s; also not on $PATH). Set WHISPER_CT2_BIN to a valid path or install the binary at %s.",
+		strings.Join(candidates, ", "), defaultWhisperCT2Bin)
+}
+
+// isExecutableFile reports whether the given path refers to a regular file
+// (not a directory or device) that has at least one execute bit set. On
+// Windows the execute-bit check is moot but a stat hit is still useful.
+func isExecutableFile(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return false
+	}
+	return info.Mode()&0o111 != 0
+}
+
 // loadWhisperCT2ConfigFromEnv mirrors the transcoding project's config loader so
 // that the same environment variables continue to control the GPU pipeline.
 func loadWhisperCT2ConfigFromEnv() WhisperCT2Config {
@@ -496,9 +551,11 @@ func callWhisperCT2(ctx context.Context, cfg WhisperCT2Config, audioPath, parent
 	if strings.TrimSpace(audioPath) == "" {
 		return whisperResponse{}, errors.New("audio path is required")
 	}
-	if _, err := exec.LookPath(cfg.Bin); err != nil {
-		return whisperResponse{}, fmt.Errorf("whisper-ctranslate2 binary not found (%s): %w", cfg.Bin, err)
+	resolvedBin, err := ResolveWhisperCT2Bin(cfg.Bin)
+	if err != nil {
+		return whisperResponse{}, err
 	}
+	cfg.Bin = resolvedBin
 	if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
 		return whisperResponse{}, fmt.Errorf("create whisper output dir %s: %w", cfg.OutputDir, err)
 	}
