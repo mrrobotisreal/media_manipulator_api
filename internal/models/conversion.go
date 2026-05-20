@@ -24,15 +24,22 @@ const (
 )
 
 type ConversionJob struct {
-	ID           string                 `json:"id"`
-	Status       JobStatus              `json:"status"`
-	Progress     int                    `json:"progress,omitempty"`
-	ResultURL    string                 `json:"resultUrl,omitempty"`
-	Error        string                 `json:"error,omitempty"`
-	OriginalFile OriginalFileInfo       `json:"originalFile"`
-	Options      map[string]interface{} `json:"options"`
-	CreatedAt    time.Time              `json:"createdAt"`
-	CompletedAt  *time.Time             `json:"completedAt,omitempty"`
+	ID              string                 `json:"id"`
+	Status          JobStatus              `json:"status"`
+	Progress        int                    `json:"progress,omitempty"`
+	ResultURL       string                 `json:"resultUrl,omitempty"`
+	Error           string                 `json:"error,omitempty"`
+	OriginalFile    OriginalFileInfo       `json:"originalFile"`
+	Options         map[string]interface{} `json:"options"`
+	CreatedAt       time.Time              `json:"createdAt"`
+	CompletedAt     *time.Time             `json:"completedAt,omitempty"`
+	Mode            string                 `json:"mode,omitempty"`
+	CurrentStage    string                 `json:"currentStage,omitempty"`
+	Stages          []TranscodeJobStage    `json:"stages,omitempty"`
+	ResultS3Key     string                 `json:"resultS3Key,omitempty"`
+	ResultFileName  string                 `json:"resultFileName,omitempty"`
+	ExpiresAt       *time.Time             `json:"expiresAt,omitempty"`
+	TranscodeReport *VideoProbeResponse    `json:"transcodeReport,omitempty"`
 }
 
 type OriginalFileInfo struct {
@@ -306,16 +313,16 @@ type ImageConversionOptions struct {
 // per job. When Enabled is true and Operation is not empty/"none", the normal
 // ImageMagick pipeline is skipped.
 type AIImageOptions struct {
-	Enabled          bool                       `json:"enabled,omitempty"`
-	Operation        string                     `json:"operation,omitempty"`
-	FaceMode         string                     `json:"faceMode,omitempty"`
-	FaceSelection    *FaceSelectionOptions      `json:"faceSelection,omitempty"`
-	BackgroundModel  string                     `json:"backgroundModel,omitempty"`
-	UpscaleScale     int                        `json:"upscaleScale,omitempty"`
-	UpscaleModel     string                     `json:"upscaleModel,omitempty"`
-	TextDetect       string                     `json:"textDetect,omitempty"`
-	TextRedaction    string                     `json:"textRedaction,omitempty"`
-	RemoveObjectMask *RemoveObjectMaskOptions   `json:"removeObjectMask,omitempty"`
+	Enabled          bool                     `json:"enabled,omitempty"`
+	Operation        string                   `json:"operation,omitempty"`
+	FaceMode         string                   `json:"faceMode,omitempty"`
+	FaceSelection    *FaceSelectionOptions    `json:"faceSelection,omitempty"`
+	BackgroundModel  string                   `json:"backgroundModel,omitempty"`
+	UpscaleScale     int                      `json:"upscaleScale,omitempty"`
+	UpscaleModel     string                   `json:"upscaleModel,omitempty"`
+	TextDetect       string                   `json:"textDetect,omitempty"`
+	TextRedaction    string                   `json:"textRedaction,omitempty"`
+	RemoveObjectMask *RemoveObjectMaskOptions `json:"removeObjectMask,omitempty"`
 }
 
 // RemoveObjectMaskOptions carries the user-drawn rectangles for the

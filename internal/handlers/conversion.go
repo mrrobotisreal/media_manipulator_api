@@ -28,6 +28,7 @@ type ConversionHandler struct {
 	inspector          *services.MediaInspector
 	analysisJobs       *services.AnalysisQueue
 	transcription      *services.TranscriptionService
+	transcode          *services.TranscodeService
 	s3Client           *s3.Client
 	s3Presign          *s3.PresignClient
 	faceDetectionStore *services.FaceDetectionStore
@@ -49,6 +50,10 @@ func NewConversionHandler(jobManager *services.JobManager, converter *services.C
 	if cfg != nil && cfg.AIEnabled {
 		ai = services.NewAIService(cfg)
 	}
+	var transcode *services.TranscodeService
+	if s3Client != nil {
+		transcode = services.NewTranscodeService(cfg, jobManager, inspector, transcription, s3Client)
+	}
 	return &ConversionHandler{
 		jobManager:         jobManager,
 		converter:          converter,
@@ -56,6 +61,7 @@ func NewConversionHandler(jobManager *services.JobManager, converter *services.C
 		inspector:          inspector,
 		analysisJobs:       analysisJobs,
 		transcription:      transcription,
+		transcode:          transcode,
 		s3Client:           s3Client,
 		s3Presign:          presign,
 		faceDetectionStore: faceDetectionStore,
@@ -76,6 +82,10 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	// Lightweight preview/helper endpoint that detects faces and stashes the
 	// boxes server-side. The final conversion still goes through /upload.
 	r.POST("/ai/faces/detect", h.DetectFaces)
+
+	r.POST("/video-transcode/probe", h.ProbeVideoForTranscode)
+	r.POST("/video-transcode/start", h.StartVideoTranscode)
+	r.GET("/video-transcode/capabilities", h.GetTranscodeCapabilities)
 }
 
 func (h *ConversionHandler) IdentifyFile(c *gin.Context) {

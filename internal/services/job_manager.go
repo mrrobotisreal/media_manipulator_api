@@ -98,6 +98,64 @@ func (jm *JobManager) UpdateJobResult(jobID string, resultURL string) error {
 	return nil
 }
 
+// SetMode marks the job's high-level workflow (e.g. "transcode") so the UI
+// can branch on job.mode when polling /api/job/:jobId.
+func (jm *JobManager) SetMode(jobID, mode string) error {
+	jm.mu.Lock()
+	defer jm.mu.Unlock()
+	job, ok := jm.jobs[jobID]
+	if !ok {
+		return fmt.Errorf("job not found")
+	}
+	job.Mode = mode
+	return nil
+}
+
+// ReplaceStages overwrites the entire stages list and updates currentStage.
+// Used by the transcode pipeline once a final stage transitions.
+func (jm *JobManager) ReplaceStages(jobID string, stages []models.TranscodeJobStage, current string) error {
+	jm.mu.Lock()
+	defer jm.mu.Unlock()
+	job, ok := jm.jobs[jobID]
+	if !ok {
+		return fmt.Errorf("job not found")
+	}
+	job.Stages = stages
+	job.CurrentStage = current
+	return nil
+}
+
+// SetTranscodeReport attaches the source probe report to the job so the UI can
+// render the probe panel even before the package is ready.
+func (jm *JobManager) SetTranscodeReport(jobID string, report *models.VideoProbeResponse) error {
+	jm.mu.Lock()
+	defer jm.mu.Unlock()
+	job, ok := jm.jobs[jobID]
+	if !ok {
+		return fmt.Errorf("job not found")
+	}
+	job.TranscodeReport = report
+	return nil
+}
+
+// SetResultMetadata records the S3 key + filename + expiry for a transcode
+// result. The download URL itself goes through UpdateJobResult.
+func (jm *JobManager) SetResultMetadata(jobID, s3Key, fileName string, expiresAt time.Time) error {
+	jm.mu.Lock()
+	defer jm.mu.Unlock()
+	job, ok := jm.jobs[jobID]
+	if !ok {
+		return fmt.Errorf("job not found")
+	}
+	job.ResultS3Key = s3Key
+	job.ResultFileName = fileName
+	if !expiresAt.IsZero() {
+		exp := expiresAt
+		job.ExpiresAt = &exp
+	}
+	return nil
+}
+
 func (jm *JobManager) UpdateJobError(jobID string, errorMsg string) error {
 	jm.mu.Lock()
 	defer jm.mu.Unlock()
