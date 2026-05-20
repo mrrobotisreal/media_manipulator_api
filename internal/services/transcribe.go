@@ -453,6 +453,119 @@ func normalizeLanguageCode(raw string) string {
 // process lifetime, no matter how many transcription / caption jobs run.
 var whisperEnvLogOnce sync.Once
 
+// Result of nvidia-smi GPU detection, cached for the process lifetime so we
+// don't shell out on every job. resolveBestCUDAGPUIndex populates these.
+var (
+	whisperGPUResolveOnce sync.Once
+	whisperGPUResolvedIdx = -1
+)
+
+// resolveBestCUDAGPUIndex returns the GPU index with the most total VRAM as
+// reported by `nvidia-smi`. Returns -1 when nvidia-smi is missing or returns
+// no usable rows; callers treat -1 as "do not pass --device_index, let CUDA
+// pick on its own".
+//
+// IMPORTANT: this index is only meaningful when CUDA also enumerates devices
+// in PCI bus order. We force CUDA_DEVICE_ORDER=PCI_BUS_ID on the whisper
+// subprocess env (see whisperSubprocessEnv) to guarantee that — otherwise
+// CUDA's default FASTEST_FIRST ordering can shuffle device numbers and we'd
+// land on the wrong GPU.
+//
+// Cached for the process lifetime: GPU topology doesn't change under us
+// while the API is running, and `nvidia-smi` is comparatively expensive.
+func resolveBestCUDAGPUIndex() int {
+	whisperGPUResolveOnce.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "nvidia-smi",
+			"--query-gpu=index,memory.total,name",
+			"--format=csv,noheader,nounits")
+		out, err := cmd.Output()
+		if err != nil {
+			log.Printf("whisper-ct2: nvidia-smi probe failed (%v); --device_index will be left unset", err)
+			return
+		}
+		type gpuRow struct {
+			idx  int
+			mem  int64
+			name string
+		}
+		rows := []gpuRow{}
+		bestIdx := -1
+		var bestMem int64
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			parts := strings.Split(line, ",")
+			if len(parts) < 2 {
+				continue
+			}
+			idx, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+			mem, err2 := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+			if err1 != nil || err2 != nil {
+				continue
+			}
+			name := ""
+			if len(parts) >= 3 {
+				name = strings.TrimSpace(parts[2])
+			}
+			rows = append(rows, gpuRow{idx: idx, mem: mem, name: name})
+			if mem > bestMem {
+				bestMem = mem
+				bestIdx = idx
+			}
+		}
+		if bestIdx >= 0 {
+			var summary strings.Builder
+			for i, r := range rows {
+				if i > 0 {
+					summary.WriteString(", ")
+				}
+				marker := ""
+				if r.idx == bestIdx {
+					marker = " *"
+				}
+				fmt.Fprintf(&summary, "%d=%s(%dMiB)%s", r.idx, r.name, r.mem, marker)
+			}
+			log.Printf("whisper-ct2: GPU auto-selected by VRAM size: device_index=%d  [%s]", bestIdx, summary.String())
+		}
+		whisperGPUResolvedIdx = bestIdx
+	})
+	return whisperGPUResolvedIdx
+}
+
+// ResolveWhisperDeviceIndex returns the index string to pass to whisper's
+// --device_index argument, or "" if no index should be passed (in which case
+// faster-whisper falls back to its own default, usually CUDA device 0).
+//
+// Resolution order:
+//
+//  1. WHISPER_CT2_DEVICE_INDEX env var (explicit user override — wins)
+//  2. WHISPER_DISABLE_GPU_AUTOSELECT=1 → skip auto-detection, return ""
+//  3. nvidia-smi probe via resolveBestCUDAGPUIndex (largest-VRAM GPU)
+//  4. PROD=true legacy fallback → "0"
+//  5. ""
+//
+// Auto-detection in step 3 is the new default behavior added after a host
+// with mismatched GPUs (RTX 5060 Ti at index 0, RTX 5080 at index 1) tried
+// to load large-v3 onto the smaller card and OOM'd. CUDA's FASTEST_FIRST
+// ordering can pick either card depending on a model-family compute score
+// that doesn't always agree with what the operator actually wants. Picking
+// by VRAM is a robust heuristic for transcription/translation workloads.
+func ResolveWhisperDeviceIndex() string {
+	if v := strings.TrimSpace(os.Getenv("WHISPER_CT2_DEVICE_INDEX")); v != "" {
+		return v
+	}
+	if envBool("WHISPER_DISABLE_GPU_AUTOSELECT", false) {
+		return ""
+	}
+	if best := resolveBestCUDAGPUIndex(); best >= 0 {
+		return strconv.Itoa(best)
+	}
+	if envBool("PROD", false) {
+		return "0"
+	}
+	return ""
+}
+
 // whisperSubprocessEnv returns the environment slice we hand the
 // whisper-ctranslate2 subprocess.
 //
@@ -503,6 +616,13 @@ func whisperSubprocessEnv() []string {
 			log.Printf("whisper-ct2: model cache HF_HOME=%q", resolvedHFHome)
 		}
 	})
+
+	// Lock CUDA to PCI bus order. Without this CUDA defaults to
+	// FASTEST_FIRST, which on multi-GPU hosts can shuffle device numbers
+	// relative to what nvidia-smi shows. We want the device_index we pass
+	// to whisper to map to the same physical card every operator sees in
+	// `nvidia-smi -L`.
+	env = append(env, "CUDA_DEVICE_ORDER=PCI_BUS_ID")
 
 	if envBool("WHISPER_ALLOW_HF_NETWORK", false) {
 		return env
@@ -599,13 +719,13 @@ func loadWhisperCT2ConfigFromEnv() WhisperCT2Config {
 		Language:    strings.TrimSpace(os.Getenv("WHISPER_CT2_LANGUAGE")),
 		OutputDir:   envOrDefault("WHISPER_CT2_OUTPUT_DIR", defaultWhisperCT2OutputDir),
 	}
-	if deviceIndexStr := strings.TrimSpace(os.Getenv("WHISPER_CT2_DEVICE_INDEX")); deviceIndexStr != "" {
-		if parsed, err := strconv.Atoi(deviceIndexStr); err == nil {
+	// Device index resolution goes through ResolveWhisperDeviceIndex so the
+	// auto-select-by-VRAM behavior is shared with analysis_queue.go and the
+	// PROD=true legacy fallback stays intact.
+	if resolved := ResolveWhisperDeviceIndex(); resolved != "" {
+		if parsed, err := strconv.Atoi(resolved); err == nil {
 			cfg.DeviceIndex = &parsed
 		}
-	} else if envBool("PROD", false) {
-		defaultIndex := 0
-		cfg.DeviceIndex = &defaultIndex
 	}
 	if bs := strings.TrimSpace(os.Getenv("WHISPER_CT2_BATCH_SIZE")); bs != "" {
 		if parsed, err := strconv.Atoi(bs); err == nil && parsed > 0 {
@@ -677,9 +797,13 @@ func callWhisperCT2(ctx context.Context, cfg WhisperCT2Config, audioPath, parent
 		if hfHome == "" {
 			hfHome = strings.TrimSpace(os.Getenv("HF_HOME"))
 		}
+		deviceIdx := "(unset)"
+		if cfg.DeviceIndex != nil {
+			deviceIdx = strconv.Itoa(*cfg.DeviceIndex)
+		}
 		return whisperResponse{}, fmt.Errorf(
-			"whisper-ctranslate2 failed: %w\nHF_HOME(resolved)=%q model=%q\nstderr_tail: %s\nstdout_tail: %s",
-			err, hfHome, cfg.Model, tail(stderr, 4000), tail(stdout, 2000),
+			"whisper-ctranslate2 failed: %w\nHF_HOME(resolved)=%q model=%q device=%s device_index=%s\nstderr_tail: %s\nstdout_tail: %s",
+			err, hfHome, cfg.Model, cfg.Device, deviceIdx, tail(stderr, 4000), tail(stdout, 2000),
 		)
 	}
 

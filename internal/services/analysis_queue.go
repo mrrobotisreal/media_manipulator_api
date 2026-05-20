@@ -188,7 +188,11 @@ func (q *AnalysisQueue) transcribeVideo(ctx context.Context, job AnalysisJob) (s
 		"--output_format", "json",
 		"--output_dir", transcriptDir,
 	}
-	if deviceIndex := strings.TrimSpace(os.Getenv("WHISPER_CT2_DEVICE_INDEX")); deviceIndex != "" {
+	// Same auto-select-by-VRAM behavior as the captions pipeline (see
+	// ResolveWhisperDeviceIndex in transcribe.go). Falls back to no
+	// --device_index when nvidia-smi isn't available, which preserves the
+	// pre-existing "let CUDA pick" behavior.
+	if deviceIndex := ResolveWhisperDeviceIndex(); deviceIndex != "" {
 		args = append(args, "--device_index", deviceIndex)
 	}
 	if language := strings.TrimSpace(os.Getenv("WHISPER_CT2_LANGUAGE")); language != "" {
