@@ -200,6 +200,27 @@ func (s *TranscriptionService) Transcribe(ctx context.Context, job *models.Conve
 		whisperCfg.Language = strings.TrimSpace(opts.Language)
 	}
 
+	// Pre-flight GPU selection through the shared scheduler. The scheduler
+	// queries nvidia-smi for current free VRAM on every card, picks one that
+	// fits this model's estimated need (with safety margin), and parks the
+	// goroutine on a condvar if every card is saturated. The chosen index is
+	// what we pass to whisper-ctranslate2 via --device_index. Falls through
+	// to (-1, no-op release, nil) on CPU-only hosts so the rest of the flow
+	// is unchanged there.
+	gpuReq := ResolveWhisperGPURequest(whisperCfg)
+	gpuIdx, releaseGPU, err := SharedGPUScheduler().Acquire(ctx, gpuReq)
+	if err != nil {
+		return nil, fmt.Errorf("acquire GPU for whisper: %w", err)
+	}
+	defer releaseGPU()
+	if gpuIdx >= 0 {
+		whisperCfg.DeviceIndex = &gpuIdx
+	}
+
+	// We also keep the existing global concurrency permit as a belt-and-
+	// suspenders cap. With GPU_SCHED_MAX_JOBS_PER_GPU=1 the scheduler already
+	// serializes per-card; the permit pool's WHISPER_GPU_CONCURRENCY default
+	// of 1 caps total concurrent whisper procs across all GPUs.
 	release, err := acquireWhisperPermit(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("acquire whisper permit: %w", err)
@@ -453,119 +474,6 @@ func normalizeLanguageCode(raw string) string {
 // process lifetime, no matter how many transcription / caption jobs run.
 var whisperEnvLogOnce sync.Once
 
-// Result of nvidia-smi GPU detection, cached for the process lifetime so we
-// don't shell out on every job. resolveBestCUDAGPUIndex populates these.
-var (
-	whisperGPUResolveOnce sync.Once
-	whisperGPUResolvedIdx = -1
-)
-
-// resolveBestCUDAGPUIndex returns the GPU index with the most total VRAM as
-// reported by `nvidia-smi`. Returns -1 when nvidia-smi is missing or returns
-// no usable rows; callers treat -1 as "do not pass --device_index, let CUDA
-// pick on its own".
-//
-// IMPORTANT: this index is only meaningful when CUDA also enumerates devices
-// in PCI bus order. We force CUDA_DEVICE_ORDER=PCI_BUS_ID on the whisper
-// subprocess env (see whisperSubprocessEnv) to guarantee that — otherwise
-// CUDA's default FASTEST_FIRST ordering can shuffle device numbers and we'd
-// land on the wrong GPU.
-//
-// Cached for the process lifetime: GPU topology doesn't change under us
-// while the API is running, and `nvidia-smi` is comparatively expensive.
-func resolveBestCUDAGPUIndex() int {
-	whisperGPUResolveOnce.Do(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, "nvidia-smi",
-			"--query-gpu=index,memory.total,name",
-			"--format=csv,noheader,nounits")
-		out, err := cmd.Output()
-		if err != nil {
-			log.Printf("whisper-ct2: nvidia-smi probe failed (%v); --device_index will be left unset", err)
-			return
-		}
-		type gpuRow struct {
-			idx  int
-			mem  int64
-			name string
-		}
-		rows := []gpuRow{}
-		bestIdx := -1
-		var bestMem int64
-		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			parts := strings.Split(line, ",")
-			if len(parts) < 2 {
-				continue
-			}
-			idx, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
-			mem, err2 := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
-			if err1 != nil || err2 != nil {
-				continue
-			}
-			name := ""
-			if len(parts) >= 3 {
-				name = strings.TrimSpace(parts[2])
-			}
-			rows = append(rows, gpuRow{idx: idx, mem: mem, name: name})
-			if mem > bestMem {
-				bestMem = mem
-				bestIdx = idx
-			}
-		}
-		if bestIdx >= 0 {
-			var summary strings.Builder
-			for i, r := range rows {
-				if i > 0 {
-					summary.WriteString(", ")
-				}
-				marker := ""
-				if r.idx == bestIdx {
-					marker = " *"
-				}
-				fmt.Fprintf(&summary, "%d=%s(%dMiB)%s", r.idx, r.name, r.mem, marker)
-			}
-			log.Printf("whisper-ct2: GPU auto-selected by VRAM size: device_index=%d  [%s]", bestIdx, summary.String())
-		}
-		whisperGPUResolvedIdx = bestIdx
-	})
-	return whisperGPUResolvedIdx
-}
-
-// ResolveWhisperDeviceIndex returns the index string to pass to whisper's
-// --device_index argument, or "" if no index should be passed (in which case
-// faster-whisper falls back to its own default, usually CUDA device 0).
-//
-// Resolution order:
-//
-//  1. WHISPER_CT2_DEVICE_INDEX env var (explicit user override — wins)
-//  2. WHISPER_DISABLE_GPU_AUTOSELECT=1 → skip auto-detection, return ""
-//  3. nvidia-smi probe via resolveBestCUDAGPUIndex (largest-VRAM GPU)
-//  4. PROD=true legacy fallback → "0"
-//  5. ""
-//
-// Auto-detection in step 3 is the new default behavior added after a host
-// with mismatched GPUs (RTX 5060 Ti at index 0, RTX 5080 at index 1) tried
-// to load large-v3 onto the smaller card and OOM'd. CUDA's FASTEST_FIRST
-// ordering can pick either card depending on a model-family compute score
-// that doesn't always agree with what the operator actually wants. Picking
-// by VRAM is a robust heuristic for transcription/translation workloads.
-func ResolveWhisperDeviceIndex() string {
-	if v := strings.TrimSpace(os.Getenv("WHISPER_CT2_DEVICE_INDEX")); v != "" {
-		return v
-	}
-	if envBool("WHISPER_DISABLE_GPU_AUTOSELECT", false) {
-		return ""
-	}
-	if best := resolveBestCUDAGPUIndex(); best >= 0 {
-		return strconv.Itoa(best)
-	}
-	if envBool("PROD", false) {
-		return "0"
-	}
-	return ""
-}
-
 // whisperSubprocessEnv returns the environment slice we hand the
 // whisper-ctranslate2 subprocess.
 //
@@ -719,14 +627,11 @@ func loadWhisperCT2ConfigFromEnv() WhisperCT2Config {
 		Language:    strings.TrimSpace(os.Getenv("WHISPER_CT2_LANGUAGE")),
 		OutputDir:   envOrDefault("WHISPER_CT2_OUTPUT_DIR", defaultWhisperCT2OutputDir),
 	}
-	// Device index resolution goes through ResolveWhisperDeviceIndex so the
-	// auto-select-by-VRAM behavior is shared with analysis_queue.go and the
-	// PROD=true legacy fallback stays intact.
-	if resolved := ResolveWhisperDeviceIndex(); resolved != "" {
-		if parsed, err := strconv.Atoi(resolved); err == nil {
-			cfg.DeviceIndex = &parsed
-		}
-	}
+	// NOTE: cfg.DeviceIndex is intentionally NOT set here. The shared GPU
+	// scheduler does pre-flight nvidia-smi probing + queueing at job-start
+	// time and sets the index based on live free-VRAM, the operator's
+	// WHISPER_CT2_DEVICE_INDEX preference list, and queue depth. See
+	// SharedGPUScheduler().Acquire in Transcribe (transcribe.go).
 	if bs := strings.TrimSpace(os.Getenv("WHISPER_CT2_BATCH_SIZE")); bs != "" {
 		if parsed, err := strconv.Atoi(bs); err == nil && parsed > 0 {
 			cfg.BatchSize = &parsed

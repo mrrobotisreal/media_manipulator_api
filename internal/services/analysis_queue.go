@@ -188,12 +188,23 @@ func (q *AnalysisQueue) transcribeVideo(ctx context.Context, job AnalysisJob) (s
 		"--output_format", "json",
 		"--output_dir", transcriptDir,
 	}
-	// Same auto-select-by-VRAM behavior as the captions pipeline (see
-	// ResolveWhisperDeviceIndex in transcribe.go). Falls back to no
-	// --device_index when nvidia-smi isn't available, which preserves the
-	// pre-existing "let CUDA pick" behavior.
-	if deviceIndex := ResolveWhisperDeviceIndex(); deviceIndex != "" {
-		args = append(args, "--device_index", deviceIndex)
+	// GPU selection runs through the shared scheduler — same pre-flight
+	// nvidia-smi probe + queueing semantics as the captions pipeline. The
+	// scheduler may park us briefly if every GPU is saturated; the release
+	// function is deferred below so the slot frees the moment we return.
+	cfg := WhisperCT2Config{
+		Model:       envOrDefault("WHISPER_CT2_MODEL", "large-v3"),
+		ComputeType: envOrDefault("WHISPER_CT2_COMPUTE_TYPE", "float16"),
+	}
+	gpuReq := ResolveWhisperGPURequest(cfg)
+	gpuReq.Kind = "whisper-ct2[analysis]"
+	gpuIdx, releaseGPU, gpuErr := SharedGPUScheduler().Acquire(ctx, gpuReq)
+	if gpuErr != nil {
+		return "", fmt.Errorf("acquire GPU for whisper: %w", gpuErr)
+	}
+	defer releaseGPU()
+	if gpuIdx >= 0 {
+		args = append(args, "--device_index", strconv.Itoa(gpuIdx))
 	}
 	if language := strings.TrimSpace(os.Getenv("WHISPER_CT2_LANGUAGE")); language != "" {
 		args = append(args, "--language", language)
