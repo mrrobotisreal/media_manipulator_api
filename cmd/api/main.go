@@ -240,6 +240,10 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// Conversion routes — register first so per-route rate limits can
 		// be layered onto specific groups.
 		handlers.RegisterConversionRoutes(api, conversionHandler)
+		// Specialized tool endpoints that don't fit cleanly into the
+		// single-file /upload contract (caption translator takes .srt/.vtt
+		// text files; stitch-audio-to-video takes multi-file multipart).
+		handlers.RegisterToolRoutes(api, conversionHandler)
 
 		// Tighter limits for upload/transcode/analysis paths.
 		api.Use() // marker; per-route limiters below
@@ -288,6 +292,11 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 		{path: "/api/video-transcode/start", routeKey: "video_transcode_start", tool: "video_transcode", sessionLimit: cfg.RateLimitTranscodesPerSessionPerHour, ipLimit: cfg.RateLimitTranscodesPerIPPerHour},
 		{path: "/api/video-transcode/probe", routeKey: "video_transcode_probe", tool: "video_transcode", sessionLimit: cfg.RateLimitTranscodesPerSessionPerHour, ipLimit: cfg.RateLimitTranscodesPerIPPerHour},
 		{path: "/api/ai/faces/detect", routeKey: "ai_faces_detect", tool: "ai_faces", sessionLimit: cfg.RateLimitAnalysisPerSessionPerHour, ipLimit: cfg.RateLimitAnalysisPerIPPerHour},
+		// Caption translator runs the local Ollama LLM — treat it like analysis
+		// usage (the model competes for GPU time with whisper).
+		{path: "/api/tools/caption-translator", routeKey: "tools_caption_translator", tool: "caption_translator", sessionLimit: cfg.RateLimitAnalysisPerSessionPerHour, ipLimit: cfg.RateLimitAnalysisPerIPPerHour},
+		// Stitch-audio-to-video uploads + transcodes — share the upload bucket.
+		{path: "/api/tools/stitch-audio-to-video", routeKey: "tools_stitch_audio_to_video", tool: "stitch_audio_to_video", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
 	}
 	return func(c *gin.Context) {
 		if c.Request.Method != http.MethodPost {

@@ -25,6 +25,10 @@ const (
 	transcribeFormatVTT  = "vtt"
 	transcribeFormatTXT  = "txt"
 	transcribeFormatJSON = "json"
+	// SRT (SubRip) is the most widely-supported subtitle format outside of
+	// streaming-spec WebVTT. We reuse the same whisper-ctranslate2 segment
+	// stream and only swap the writer so the GPU path is unchanged.
+	transcribeFormatSRT = "srt"
 
 	defaultWhisperCT2Bin         = "/opt/creatv/whisper-ct2/bin/whisper-ctranslate2"
 	defaultWhisperCT2Model       = "medium"
@@ -302,6 +306,8 @@ func normalizeTranscribeFormat(raw string) string {
 		return transcribeFormatTXT
 	case transcribeFormatJSON:
 		return transcribeFormatJSON
+	case transcribeFormatSRT, "subrip":
+		return transcribeFormatSRT
 	default:
 		return ""
 	}
@@ -335,6 +341,8 @@ func writeTranscriptOutput(outputPath, format string, result *TranscribeResult, 
 	switch format {
 	case transcribeFormatVTT:
 		return os.WriteFile(outputPath, []byte(buildVTT(result, segments)), 0o644)
+	case transcribeFormatSRT:
+		return os.WriteFile(outputPath, []byte(buildSRT(result, segments)), 0o644)
 	case transcribeFormatTXT:
 		text := strings.TrimSpace(result.TranscriptText)
 		if text == "" {
@@ -438,6 +446,69 @@ func buildVTT(result *TranscribeResult, segments []whisperSegment) string {
 		cueIndex++
 	}
 	return b.String()
+}
+
+// buildSRT mirrors buildVTT but emits SubRip (.srt) syntax: 1-indexed cue
+// numbers, comma-millisecond timestamps, and a blank line between cues. We
+// deliberately keep the same fallback-message behavior so a transcript with
+// no recognized speech still produces a valid single-cue file.
+func buildSRT(result *TranscribeResult, segments []whisperSegment) string {
+	var b strings.Builder
+	if len(segments) == 0 {
+		message := strings.TrimSpace(result.TranscriptText)
+		if message == "" {
+			message = strings.TrimSpace(result.Message)
+		}
+		if message == "" {
+			message = strings.TrimSpace(result.AudioDescription)
+		}
+		if message == "" {
+			return ""
+		}
+		end := result.DurationSeconds
+		if end <= 0 {
+			end = math.Max(5, float64(len(message))/15)
+		}
+		b.WriteString("1\n")
+		b.WriteString(fmt.Sprintf("%s --> %s\n", formatSRTStamp(0), formatSRTStamp(end)))
+		b.WriteString(message)
+		b.WriteString("\n\n")
+		return b.String()
+	}
+	sortable := append([]whisperSegment{}, segments...)
+	sort.SliceStable(sortable, func(i, j int) bool { return sortable[i].Start < sortable[j].Start })
+	cueIndex := 1
+	for _, seg := range sortable {
+		text := strings.TrimSpace(seg.Text)
+		if text == "" {
+			continue
+		}
+		end := seg.End
+		if end <= seg.Start {
+			end = seg.Start + 0.5
+		}
+		b.WriteString(strconv.Itoa(cueIndex))
+		b.WriteString("\n")
+		b.WriteString(fmt.Sprintf("%s --> %s\n", formatSRTStamp(seg.Start), formatSRTStamp(end)))
+		b.WriteString(text)
+		b.WriteString("\n\n")
+		cueIndex++
+	}
+	return b.String()
+}
+
+// formatSRTStamp emits HH:MM:SS,mmm — the SubRip variant of the VTT
+// HH:MM:SS.mmm pattern (comma vs. period for the millisecond separator).
+func formatSRTStamp(seconds float64) string {
+	if seconds < 0 || math.IsNaN(seconds) {
+		seconds = 0
+	}
+	totalMS := int64(math.Round(seconds * 1000))
+	hours := totalMS / 3600000
+	minutes := (totalMS % 3600000) / 60000
+	secs := (totalMS % 60000) / 1000
+	millis := totalMS % 1000
+	return fmt.Sprintf("%02d:%02d:%02d,%03d", hours, minutes, secs, millis)
 }
 
 func formatVTTStamp(seconds float64) string {

@@ -29,6 +29,9 @@ type ConversionHandler struct {
 	analysisJobs       *services.AnalysisQueue
 	transcription      *services.TranscriptionService
 	transcode          *services.TranscodeService
+	specializedTools   *services.SpecializedToolsService
+	captionTranslator  *services.CaptionTranslatorService
+	stitchAudioTool    *services.StitchAudioToVideoService
 	s3Client           *s3.Client
 	s3Presign          *s3.PresignClient
 	faceDetectionStore *services.FaceDetectionStore
@@ -54,6 +57,9 @@ func NewConversionHandler(jobManager *services.JobManager, converter *services.C
 	if s3Client != nil {
 		transcode = services.NewTranscodeService(cfg, jobManager, inspector, transcription, s3Client)
 	}
+	specializedTools := services.NewSpecializedToolsService(cfg, jobManager)
+	captionTranslator := services.NewCaptionTranslatorService(cfg, jobManager)
+	stitchAudioTool := services.NewStitchAudioToVideoService(cfg, jobManager)
 	return &ConversionHandler{
 		jobManager:         jobManager,
 		converter:          converter,
@@ -62,6 +68,9 @@ func NewConversionHandler(jobManager *services.JobManager, converter *services.C
 		analysisJobs:       analysisJobs,
 		transcription:      transcription,
 		transcode:          transcode,
+		specializedTools:   specializedTools,
+		captionTranslator:  captionTranslator,
+		stitchAudioTool:    stitchAudioTool,
 		s3Client:           s3Client,
 		s3Presign:          presign,
 		faceDetectionStore: faceDetectionStore,
@@ -196,7 +205,7 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 		log.Printf("failed to write metadata for job %s: %v", job.ID, err)
 	}
 
-	if !isTranscribeMode(job) {
+	if !isTranscribeMode(job) && specializedMode(job) == "" {
 		h.analysisJobs.Enqueue(services.AnalysisJob{JobID: job.ID, InputPath: uploadPath, OutputDir: jobOutputDir, FileType: fileType, MimeType: mimeType})
 	}
 	go h.processConversion(job, uploadPath, jobOutputDir)
@@ -281,6 +290,10 @@ func (h *ConversionHandler) processConversion(job *models.ConversionJob, inputPa
 		h.processTranscription(job, inputPath, outputDir)
 		return
 	}
+	if mode := specializedMode(job); mode != "" {
+		h.processSpecializedTool(job, mode, inputPath, outputDir)
+		return
+	}
 	outputPath := h.outputPath(job, outputDir)
 	if err := h.converter.ConvertFile(job, inputPath, outputPath); err != nil {
 		log.Printf("conversion failed for job %s: %v", job.ID, err)
@@ -329,12 +342,53 @@ func (h *ConversionHandler) processTranscription(job *models.ConversionJob, inpu
 	}
 }
 
+func (h *ConversionHandler) processSpecializedTool(job *models.ConversionJob, mode, inputPath, outputDir string) {
+	if h.specializedTools == nil {
+		_ = h.jobManager.UpdateJobError(job.ID, "Specialized tools service is not available")
+		return
+	}
+	outputPath := h.outputPath(job, outputDir)
+	ctx, cancel := context.WithTimeout(context.Background(), h.cfg.CommandTimeout)
+	defer cancel()
+	if err := h.specializedTools.Run(ctx, job, mode, inputPath, outputPath); err != nil {
+		log.Printf("specialized tool %s failed for job %s: %v", mode, job.ID, err)
+		_ = h.jobManager.UpdateJobError(job.ID, err.Error())
+		return
+	}
+	if err := h.jobManager.UpdateJobResult(job.ID, "/api/download/"+job.ID); err != nil {
+		log.Printf("failed to update job %s result: %v", job.ID, err)
+		_ = h.jobManager.UpdateJobError(job.ID, "Failed to update job result")
+		return
+	}
+	if err := h.jobManager.UpdateJobStatus(job.ID, models.StatusCompleted); err != nil {
+		log.Printf("failed to mark job %s completed: %v", job.ID, err)
+	}
+}
+
 func isTranscribeMode(job *models.ConversionJob) bool {
 	if job == nil || job.Options == nil {
 		return false
 	}
 	mode, _ := job.Options["mode"].(string)
 	return strings.EqualFold(strings.TrimSpace(mode), "transcribe")
+}
+
+// specializedMode returns the specialized-tool mode for a job, if any, in its
+// canonical lowercase form. Returns "" for non-specialized jobs.
+func specializedMode(job *models.ConversionJob) string {
+	if job == nil || job.Options == nil {
+		return ""
+	}
+	mode, _ := job.Options["mode"].(string)
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	switch mode {
+	case services.SpecializedModeAudioWaveform,
+		services.SpecializedModeExtractAudio,
+		services.SpecializedModeExtractVideoOnly,
+		services.SpecializedModeExtractFrames:
+		return mode
+	}
+	return ""
 }
 
 func (h *ConversionHandler) multipartFile(c *gin.Context) (io.ReadCloser, *multipartFileHeader, error) {
@@ -377,6 +431,18 @@ func (h *ConversionHandler) getOutputExtension(job *models.ConversionJob) string
 		}
 		return ".txt"
 	}
+	if mode := specializedMode(job); mode != "" {
+		return specializedExtension(job, mode)
+	}
+	if mode, _ := job.Options["mode"].(string); strings.EqualFold(strings.TrimSpace(mode), "caption_translator") {
+		if fmtStr, _ := job.Options["format"].(string); strings.TrimSpace(fmtStr) != "" {
+			return "." + strings.TrimPrefix(strings.ToLower(strings.TrimSpace(fmtStr)), ".")
+		}
+		return ".srt"
+	}
+	if mode, _ := job.Options["mode"].(string); strings.EqualFold(strings.TrimSpace(mode), "stitch_audio_to_video") {
+		return ".mp4"
+	}
 	switch models.GetFileType(job.OriginalFile.Type) {
 	case models.FileTypeImage:
 		if ext := aiImageExtension(job); ext != "" {
@@ -402,6 +468,47 @@ func (h *ConversionHandler) getOutputExtension(job *models.ConversionJob) string
 	default:
 		return ".bin"
 	}
+}
+
+// specializedExtension returns the output extension for the specialized
+// tool modes. We branch by mode so each output type uses the user-selected
+// container — and so "both" / "frames" jobs cleanly produce a single .zip
+// that the existing /api/download handler can serve.
+func specializedExtension(job *models.ConversionJob, mode string) string {
+	switch mode {
+	case services.SpecializedModeAudioWaveform:
+		if nested, ok := job.Options["waveform"].(map[string]any); ok {
+			sel, _ := nested["outputSelection"].(string)
+			switch strings.ToLower(strings.TrimSpace(sel)) {
+			case "both":
+				return ".zip"
+			case "image":
+				if fmtStr, _ := nested["imageFormat"].(string); strings.TrimSpace(fmtStr) != "" {
+					return "." + strings.TrimPrefix(strings.ToLower(strings.TrimSpace(fmtStr)), ".")
+				}
+				return ".png"
+			default: // video
+				if fmtStr, _ := nested["videoFormat"].(string); strings.TrimSpace(fmtStr) != "" {
+					return "." + strings.TrimPrefix(strings.ToLower(strings.TrimSpace(fmtStr)), ".")
+				}
+				return ".mp4"
+			}
+		}
+		return ".mp4"
+	case services.SpecializedModeExtractAudio:
+		if fmtStr, _ := job.Options["format"].(string); strings.TrimSpace(fmtStr) != "" {
+			return "." + strings.TrimPrefix(strings.ToLower(strings.TrimSpace(fmtStr)), ".")
+		}
+		return ".mp3"
+	case services.SpecializedModeExtractVideoOnly:
+		if fmtStr, _ := job.Options["format"].(string); strings.TrimSpace(fmtStr) != "" {
+			return "." + strings.TrimPrefix(strings.ToLower(strings.TrimSpace(fmtStr)), ".")
+		}
+		return ".mp4"
+	case services.SpecializedModeExtractFrames:
+		return ".zip"
+	}
+	return ".bin"
 }
 
 // aiImageExtension forces AI ops that need a specific container to use it.
@@ -458,12 +565,42 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 	if isTranscribeMode(job) {
 		return fmt.Sprintf("%s_transcript%s", name, h.getOutputExtension(job))
 	}
+	if mode := specializedMode(job); mode != "" {
+		suffix := map[string]string{
+			services.SpecializedModeAudioWaveform:    "_waveform",
+			services.SpecializedModeExtractAudio:     "_audio",
+			services.SpecializedModeExtractVideoOnly: "_silent",
+			services.SpecializedModeExtractFrames:    "_frames",
+		}[mode]
+		return fmt.Sprintf("%s%s%s", name, suffix, h.getOutputExtension(job))
+	}
+	if mode, _ := job.Options["mode"].(string); strings.EqualFold(strings.TrimSpace(mode), "caption_translator") {
+		return fmt.Sprintf("%s_translated%s", name, h.getOutputExtension(job))
+	}
+	if mode, _ := job.Options["mode"].(string); strings.EqualFold(strings.TrimSpace(mode), "stitch_audio_to_video") {
+		return fmt.Sprintf("%s_stitched%s", name, h.getOutputExtension(job))
+	}
 	return fmt.Sprintf("%s_converted%s", name, h.getOutputExtension(job))
 }
 
 func (h *ConversionHandler) outputPath(job *models.ConversionJob, outputDir string) string {
 	if isTranscribeMode(job) {
 		return filepath.Join(outputDir, "transcript"+h.getOutputExtension(job))
+	}
+	if mode := specializedMode(job); mode != "" {
+		prefix := map[string]string{
+			services.SpecializedModeAudioWaveform:    "waveform",
+			services.SpecializedModeExtractAudio:     "audio",
+			services.SpecializedModeExtractVideoOnly: "silent",
+			services.SpecializedModeExtractFrames:    "frames",
+		}[mode]
+		return filepath.Join(outputDir, prefix+h.getOutputExtension(job))
+	}
+	if mode, _ := job.Options["mode"].(string); strings.EqualFold(strings.TrimSpace(mode), "caption_translator") {
+		return filepath.Join(outputDir, "translated"+h.getOutputExtension(job))
+	}
+	if mode, _ := job.Options["mode"].(string); strings.EqualFold(strings.TrimSpace(mode), "stitch_audio_to_video") {
+		return filepath.Join(outputDir, "stitched"+h.getOutputExtension(job))
 	}
 	return filepath.Join(outputDir, "converted"+h.getOutputExtension(job))
 }
