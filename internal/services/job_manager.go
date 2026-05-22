@@ -279,6 +279,33 @@ func (jm *JobManager) handleProgressUpdates() {
 	}
 }
 
+// ActiveJobIDs returns the set of jobs currently in flight so external
+// sweepers (cleanup worker) can avoid deleting their files.
+func (jm *JobManager) ActiveJobIDs() map[string]struct{} {
+	jm.mu.RLock()
+	defer jm.mu.RUnlock()
+	out := make(map[string]struct{}, len(jm.jobs))
+	for id, job := range jm.jobs {
+		if job.Status != models.StatusCompleted && job.Status != models.StatusFailed {
+			out[id] = struct{}{}
+		}
+	}
+	return out
+}
+
+// ActiveCount returns the number of in-flight jobs (helper for metrics).
+func (jm *JobManager) ActiveCount() int {
+	jm.mu.RLock()
+	defer jm.mu.RUnlock()
+	n := 0
+	for _, job := range jm.jobs {
+		if job.Status != models.StatusCompleted && job.Status != models.StatusFailed {
+			n++
+		}
+	}
+	return n
+}
+
 func (jm *JobManager) CleanupOldJobs(maxAge time.Duration) {
 	jm.mu.Lock()
 	defer jm.mu.Unlock()

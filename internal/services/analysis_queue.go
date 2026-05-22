@@ -25,6 +25,10 @@ type AnalysisQueue struct {
 	cfg       *config.Config
 	inspector *MediaInspector
 	jobs      chan AnalysisJob
+
+	// telemetry is set via SetTelemetry at startup. When nil, persistence
+	// hooks become no-ops so unit tests don't need a DB.
+	telemetry *analysisTelemetry
 }
 
 type AnalysisJob struct {
@@ -94,6 +98,8 @@ func (q *AnalysisQueue) run(ctx context.Context, job AnalysisJob) error {
 	defer func() {
 		result.CompletedAt = time.Now().UTC()
 		_ = writeJSON(filepath.Join(job.OutputDir, "analysis.json"), result)
+		// Persist operational telemetry. Safe with nil hooks.
+		q.persistAnalysis(ctx, job, result)
 	}()
 
 	switch job.Mode {
