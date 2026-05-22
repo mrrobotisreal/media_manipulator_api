@@ -111,6 +111,12 @@ type AudioWaveformOptions struct {
 	Scale string `json:"scale"`
 	// Draw: scale / full. Default: scale.
 	Draw string `json:"draw"`
+	// IncludeAudio mixes the original audio track into the generated
+	// waveform video so the video plays in sync with the source. Only
+	// applies to "video" and "both" output selections — silent waveform
+	// images don't carry audio. Defaults to true (set explicitly client-side
+	// so the silent variant is opt-out, not opt-in).
+	IncludeAudio bool `json:"includeAudio"`
 }
 
 const (
@@ -357,6 +363,9 @@ func parseAudioWaveformOptions(raw map[string]any) (*AudioWaveformOptions, error
 	if v, ok := raw["draw"].(string); ok {
 		out.Draw = v
 	}
+	if v, ok := raw["includeAudio"].(bool); ok {
+		out.IncludeAudio = v
+	}
 	return out, nil
 }
 
@@ -393,17 +402,45 @@ func renderWaveformVideo(ctx context.Context, inputPath, outputPath string, opts
 	} else {
 		rateOrN = fmt.Sprintf("r=%d", waveformDefaultRate)
 	}
-	// showwaves builds the animated waveform; format=yuv420p ensures broad
-	// MP4 compatibility (some players reject yuv444).
-	filter := fmt.Sprintf(
-		"showwaves=s=%dx%d:mode=%s:%s:split_channels=%s:colors=%s:scale=%s:draw=%s,format=yuv420p",
-		opts.Width, opts.Height, opts.Mode, rateOrN, splitChannels, colorList, opts.Scale, opts.Draw,
-	)
-	args := []string{"-y", "-i", inputPath, "-filter_complex", filter}
-	if opts.VideoFormat == "webm" {
-		args = append(args, "-c:v", "libvpx-vp9", "-b:v", "1M", "-an")
+
+	// When IncludeAudio is on we asplit the input audio into two streams: one
+	// feeds showwaves (consumed to draw the waveform), the other is muxed
+	// straight to the output so the video plays in sync with the source
+	// audio. Without the asplit the filter_complex would consume `[0:a]` and
+	// FFmpeg would refuse a separate `-map 0:a` against an already-used input
+	// stream, so the asplit is what makes this safe regardless of FFmpeg
+	// version.
+	var filter string
+	args := []string{"-y", "-i", inputPath}
+	if opts.IncludeAudio {
+		filter = fmt.Sprintf(
+			"[0:a]asplit=2[wavein][audioout];[wavein]showwaves=s=%dx%d:mode=%s:%s:split_channels=%s:colors=%s:scale=%s:draw=%s,format=yuv420p[v]",
+			opts.Width, opts.Height, opts.Mode, rateOrN, splitChannels, colorList, opts.Scale, opts.Draw,
+		)
+		args = append(args, "-filter_complex", filter, "-map", "[v]", "-map", "[audioout]")
 	} else {
-		args = append(args, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "20", "-an")
+		filter = fmt.Sprintf(
+			"showwaves=s=%dx%d:mode=%s:%s:split_channels=%s:colors=%s:scale=%s:draw=%s,format=yuv420p",
+			opts.Width, opts.Height, opts.Mode, rateOrN, splitChannels, colorList, opts.Scale, opts.Draw,
+		)
+		args = append(args, "-filter_complex", filter)
+	}
+
+	if opts.VideoFormat == "webm" {
+		args = append(args, "-c:v", "libvpx-vp9", "-b:v", "1M")
+		if opts.IncludeAudio {
+			// libopus is the standard audio codec for VP9-in-WebM.
+			args = append(args, "-c:a", "libopus", "-b:a", "192k", "-shortest")
+		} else {
+			args = append(args, "-an")
+		}
+	} else {
+		args = append(args, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "20")
+		if opts.IncludeAudio {
+			args = append(args, "-c:a", "aac", "-b:a", "192k", "-shortest")
+		} else {
+			args = append(args, "-an")
+		}
 	}
 	args = append(args, outputPath)
 	if _, stderr, err := runCommand(ctx, "ffmpeg", args...); err != nil {
