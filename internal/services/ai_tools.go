@@ -50,7 +50,30 @@ const (
 	AIAudioOpRemoveVocals    = "remove_vocals"
 	AIAudioDemucsTrackVocals = "vocals.wav"
 	AIAudioDemucsTrackNoVox  = "no_vocals.wav"
+
+	AIVideoOpFrameInterpolation = "frame_interpolation"
 )
+
+// AIRIFEModels enumerates the rife-ncnn-vulkan model directories we support.
+// The first entry is the default when the caller doesn't specify a model.
+var validRIFEModels = map[string]bool{
+	"rife-v4.6": true,
+	"rife-v4":   true,
+	"rife-v2.3": true,
+}
+
+// validFrameInterpolationQuality enumerates accepted encode quality presets
+// the runtime script can pass through to ffmpeg.
+var validFrameInterpolationQuality = map[string]bool{
+	"low": true, "medium": true, "high": true,
+}
+
+// validFrameInterpolationTargetFPS enumerates the FPS targets the v1 UI
+// exposes. Other targets would still work in the script but the API rejects
+// them so the UI and API stay aligned.
+var validFrameInterpolationTargetFPS = map[int]bool{
+	48: true, 60: true, 120: true,
+}
 
 var validFaceModes = map[string]bool{
 	"blur": true, "pixelate": true, "blackbox": true,
@@ -698,4 +721,123 @@ func writeRectangleMask(path string, width, height int, rectangles []models.Norm
 	}
 	defer f.Close()
 	return png.Encode(f, mask)
+}
+
+// resolveRIFEModelPath returns the directory path that rife-ncnn-vulkan should
+// load model weights from, given a UI-side model identifier. Empty input maps
+// to the configured default (typically rife-v4.6).
+func (a *AIService) resolveRIFEModelPath(requested string) (string, error) {
+	requested = strings.TrimSpace(requested)
+	if requested == "" || requested == "rife-v4.6" {
+		return a.cfg.AIRIFEModel, nil
+	}
+	if !validRIFEModels[requested] {
+		return "", fmt.Errorf("unsupported RIFE model: %s", requested)
+	}
+	// For non-default models, derive the path from the configured default by
+	// swapping the trailing model directory name. This keeps a single env var
+	// (AI_RIFE_MODEL) as the source of truth for the install location.
+	base := filepath.Dir(a.cfg.AIRIFEModel)
+	if base == "" {
+		return "", fmt.Errorf("AI_RIFE_MODEL is not configured")
+	}
+	return filepath.Join(base, requested), nil
+}
+
+// InterpolateFrames runs rife-ncnn-vulkan via the frame_interpolate_rife.py
+// helper script. The script does frame extract → RIFE interpolate → encode in
+// one process so the Go side just shells out, streams progress, and returns
+// any helper errors verbatim.
+func (a *AIService) InterpolateFrames(ctx context.Context, jobID, inputPath, outputPath string, opts models.AIFrameInterpolationOptions) error {
+	if !a.cfg.AIFrameInterpolationEnabled {
+		return fmt.Errorf("AI frame interpolation is disabled on this server")
+	}
+	script := strings.TrimSpace(a.cfg.AIFrameInterpolationScript)
+	if script == "" {
+		return fmt.Errorf("AI_FRAME_INTERPOLATION_SCRIPT is not configured")
+	}
+	if _, err := os.Stat(script); err != nil {
+		return fmt.Errorf("frame interpolation script not found at %s (set AI_FRAME_INTERPOLATION_SCRIPT): %v", script, err)
+	}
+	rifeBin := strings.TrimSpace(a.cfg.AIRIFEBin)
+	if rifeBin == "" {
+		return fmt.Errorf("AI_RIFE_BIN is not configured")
+	}
+	if _, err := os.Stat(rifeBin); err != nil {
+		return fmt.Errorf("rife-ncnn-vulkan binary not found at %s (set AI_RIFE_BIN): %v", rifeBin, err)
+	}
+
+	targetFPS := opts.TargetFPS
+	if targetFPS == 0 {
+		targetFPS = 60
+	}
+	if !validFrameInterpolationTargetFPS[targetFPS] {
+		return fmt.Errorf("unsupported target FPS for AI frame interpolation: %d (allowed: 48, 60, 120)", targetFPS)
+	}
+
+	quality := strings.ToLower(strings.TrimSpace(opts.Quality))
+	if quality == "" {
+		quality = "medium"
+	}
+	if !validFrameInterpolationQuality[quality] {
+		return fmt.Errorf("unsupported quality for AI frame interpolation: %s", opts.Quality)
+	}
+
+	maxHeight := opts.MaxHeight
+	if maxHeight == 0 {
+		maxHeight = a.cfg.AIFrameInterpolationMaxHeight
+	}
+	if maxHeight != 0 && (maxHeight < 144 || maxHeight > 1080) {
+		return fmt.Errorf("max height must be 0 or between 144 and 1080, got %d", maxHeight)
+	}
+
+	modelPath, err := a.resolveRIFEModelPath(opts.Model)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(modelPath); err != nil {
+		return fmt.Errorf("RIFE model directory not found at %s (set AI_RIFE_MODEL): %v", modelPath, err)
+	}
+
+	a.sendProgress(jobID, 10)
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
+	}
+
+	env := []string{
+		"VK_ICD_FILENAMES=/opt/media-manipulator-ai/vulkan/nvidia_icd_egl.json",
+		"VK_DRIVER_FILES=/opt/media-manipulator-ai/vulkan/nvidia_icd_egl.json",
+		"VK_LOADER_LAYERS_DISABLE=*",
+		"CUDA_DEVICE_ORDER=PCI_BUS_ID",
+	}
+
+	threads := strings.TrimSpace(a.cfg.AIRIFEThreads)
+	if threads == "" {
+		threads = "1:2:2"
+	}
+
+	args := []string{
+		"--input", inputPath,
+		"--output", outputPath,
+		"--target-fps", strconv.Itoa(targetFPS),
+		"--rife-bin", rifeBin,
+		"--rife-model", modelPath,
+		"--gpu", strconv.Itoa(a.cfg.AIRIFEGPU),
+		"--threads", threads,
+		"--quality", quality,
+		"--max-height", strconv.Itoa(maxHeight),
+		"--max-duration-seconds", strconv.Itoa(a.cfg.AIFrameInterpolationMaxDurationSeconds),
+		"--temp-root", a.cfg.AIFrameInterpolationTempRoot,
+	}
+
+	a.sendProgress(jobID, 20)
+	// Invoke the script directly — it has a shebang and is marked executable
+	// by the deployment script. This avoids depending on a specific system
+	// python interpreter path.
+	if err := a.runAI(ctx, "frame_interpolate_rife", env, script, args...); err != nil {
+		a.sendProgress(jobID, 0)
+		return err
+	}
+	a.sendProgress(jobID, 95)
+	return nil
 }

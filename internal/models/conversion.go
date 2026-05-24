@@ -448,6 +448,27 @@ type VideoConversionOptions struct {
 	Temporal            *TemporalEffects    `json:"temporal,omitempty"`
 	Advanced            *AdvancedProcessing `json:"advanced,omitempty"`
 	GIF                 *GIFOptions         `json:"gif,omitempty"`
+	AI                  *AIVideoOptions     `json:"ai,omitempty"`
+}
+
+// AIVideoOptions selects a Phase 1 AI video operation. Only one operation runs
+// per job. When Enabled is true and Operation is not empty/"none", the normal
+// FFmpeg filter chain is skipped and the AI helper script owns the output.
+type AIVideoOptions struct {
+	Enabled            bool                         `json:"enabled,omitempty"`
+	Operation          string                       `json:"operation,omitempty"`
+	FrameInterpolation *AIFrameInterpolationOptions `json:"frameInterpolation,omitempty"`
+}
+
+// AIFrameInterpolationOptions tunes rife-ncnn-vulkan invocation via the
+// frame_interpolate_rife.py runtime script. Defaults are applied server-side
+// when fields are empty/zero.
+type AIFrameInterpolationOptions struct {
+	TargetFPS     int    `json:"targetFps,omitempty"`
+	Model         string `json:"model,omitempty"`
+	Quality       string `json:"quality,omitempty"`
+	MaxHeight     int    `json:"maxHeight,omitempty"`
+	PreserveAudio bool   `json:"preserveAudio,omitempty"`
 }
 
 // GIFOptions tunes the animated-GIF pipeline (ffmpeg -> gifsicle). Mirrors the

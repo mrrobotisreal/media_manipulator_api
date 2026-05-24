@@ -4,3 +4,21 @@ main
 outputs/
 uploads/
 !cmd/api/main.go
+
+# macOS / system junk
+.DS_Store
+**/.DS_Store
+._*
+**/._*
+
+# Python cache from helper scripts
+__pycache__/
+**/__pycache__/
+
+# Don't commit downloaded RIFE binaries, models, or temp outputs that may
+# accidentally end up under scripts/server/ during local manual testing.
+scripts/server/bin/
+scripts/server/models/
+scripts/server/tmp/
+scripts/server/*.zip
+scripts/server/*.tar.gz

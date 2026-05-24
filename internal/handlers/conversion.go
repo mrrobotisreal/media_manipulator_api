@@ -453,6 +453,9 @@ func (h *ConversionHandler) getOutputExtension(job *models.ConversionJob) string
 		}
 		return ".jpg"
 	case models.FileTypeVideo:
+		if ext := aiVideoExtension(job); ext != "" {
+			return ext
+		}
 		if format, ok := job.Options["format"].(string); ok && format != "" {
 			return "." + strings.TrimPrefix(format, ".")
 		}
@@ -522,6 +525,21 @@ func aiImageExtension(job *models.ConversionJob) string {
 	switch op {
 	case "remove_background", "ai_upscale":
 		return ".png"
+	}
+	return ""
+}
+
+// aiVideoExtension forces AI video ops that need a specific container to use
+// it. Frame interpolation outputs MP4 in v1 because libx264+AAC is the safest
+// everywhere-default for stitched RIFE output.
+func aiVideoExtension(job *models.ConversionJob) string {
+	op, enabled := aiOperation(job)
+	if !enabled {
+		return ""
+	}
+	switch op {
+	case "frame_interpolation":
+		return ".mp4"
 	}
 	return ""
 }

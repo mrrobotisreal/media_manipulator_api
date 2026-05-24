@@ -55,6 +55,21 @@ type Config struct {
 	LamaPython         string
 	RemoveObjectScript string
 
+	// AIFrameInterpolationScript is the runtime path on the GPU host to the
+	// helper script that drives rife-ncnn-vulkan plus ffmpeg I/O. The Go API
+	// shells out to this path; a reference copy lives in
+	// scripts/server/frame_interpolate_rife.py. Override via
+	// AI_FRAME_INTERPOLATION_SCRIPT.
+	AIFrameInterpolationEnabled            bool
+	AIFrameInterpolationScript             string
+	AIRIFEBin                              string
+	AIRIFEModel                            string
+	AIRIFEGPU                              int
+	AIRIFEThreads                          string
+	AIFrameInterpolationMaxDurationSeconds int
+	AIFrameInterpolationMaxHeight          int
+	AIFrameInterpolationTempRoot           string
+
 	// --- Operational telemetry / observability ----------------------------
 
 	DatabaseURL            string
@@ -161,6 +176,16 @@ func Load() *Config {
 
 		LamaPython:         getEnv("AI_LAMA_PYTHON", "/opt/media-manipulator-ai/venvs/inpaint/bin/python"),
 		RemoveObjectScript: getEnv("AI_REMOVE_OBJECT_SCRIPT", "/opt/media-manipulator-ai/scripts/remove_object_lama.py"),
+
+		AIFrameInterpolationEnabled:            getEnvBool("AI_FRAME_INTERPOLATION_ENABLED", true),
+		AIFrameInterpolationScript:             getEnv("AI_FRAME_INTERPOLATION_SCRIPT", "/opt/media-manipulator-ai/scripts/frame_interpolate_rife.py"),
+		AIRIFEBin:                              getEnv("AI_RIFE_BIN", "/opt/media-manipulator-ai/bin/rife-ncnn-vulkan/rife-ncnn-vulkan"),
+		AIRIFEModel:                            getEnv("AI_RIFE_MODEL", "/opt/media-manipulator-ai/bin/rife-ncnn-vulkan/models/rife-v4.6"),
+		AIRIFEGPU:                              getEnvIntDefault("AI_RIFE_GPU", 1),
+		AIRIFEThreads:                          getEnv("AI_RIFE_THREADS", "1:2:2"),
+		AIFrameInterpolationMaxDurationSeconds: getEnvInt("AI_FRAME_INTERPOLATION_MAX_DURATION_SECONDS", 120),
+		AIFrameInterpolationMaxHeight:          getEnvInt("AI_FRAME_INTERPOLATION_MAX_HEIGHT", 720),
+		AIFrameInterpolationTempRoot:           getEnv("AI_FRAME_INTERPOLATION_TEMP_ROOT", "/opt/media-manipulator-ai/tmp"),
 
 		// Operational DB
 		DatabaseURL:            getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/media_manipulator?sslmode=disable"),

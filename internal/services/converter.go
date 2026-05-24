@@ -714,6 +714,15 @@ func (c *Converter) convertVideo(job *models.ConversionJob, inputPath, outputPat
 	fmt.Printf("[DEBUG] Input: %s, Output: %s\n", inputPath, outputPath)
 	fmt.Printf("[DEBUG] Parsed options: %+v\n", options)
 
+	// AI video operations (e.g. AI frame interpolation) own the entire output
+	// pipeline. The helper script handles frame extract → RIFE → encode, so we
+	// skip both the GIF branch and the normal ffmpeg filter chain.
+	if c.ai != nil && options.AI != nil && options.AI.Enabled && isActiveAIOp(options.AI.Operation) {
+		ctx, cancel := context.WithTimeout(context.Background(), c.cfg.CommandTimeout)
+		defer cancel()
+		return c.runVideoAI(ctx, job, &options, inputPath, outputPath)
+	}
+
 	// Animated GIF is a two-stage pipeline (ffmpeg + gifsicle) that does not
 	// share the standard video codec/filter chain, so it gets its own handler.
 	if strings.EqualFold(options.Format, "gif") {
@@ -1155,6 +1164,13 @@ func (c *Converter) validateVideoOptions(options *models.VideoConversionOptions)
 				return fmt.Errorf("unsupported output color space: %s", adv.ColorSpace.Output)
 			}
 		}
+	}
+
+	// Validate AI video options if specified. This runs before the GIF check
+	// because AI frame interpolation is incompatible with GIF output and we
+	// want a clear error rather than a silent fallback to the FFmpeg chain.
+	if err := validateAIVideoOptions(options); err != nil {
+		return err
 	}
 
 	// Validate GIF tuning options if specified
@@ -2328,6 +2344,84 @@ func computeFileSHA256(inputPath string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// runVideoAI dispatches a video AI operation. v1 only supports
+// frame_interpolation; the helper script handles all heavy lifting and writes
+// the final MP4 directly to outputPath.
+func (c *Converter) runVideoAI(ctx context.Context, job *models.ConversionJob, options *models.VideoConversionOptions, inputPath, outputPath string) error {
+	if c.ai == nil {
+		return fmt.Errorf("AI service not available")
+	}
+	op := strings.ToLower(strings.TrimSpace(options.AI.Operation))
+	fmt.Printf("[DEBUG] Routing video job %s to AI op %s\n", job.ID, op)
+	switch op {
+	case AIVideoOpFrameInterpolation:
+		fi := models.AIFrameInterpolationOptions{}
+		if options.AI.FrameInterpolation != nil {
+			fi = *options.AI.FrameInterpolation
+		}
+		return c.ai.InterpolateFrames(ctx, job.ID, inputPath, outputPath, fi)
+	default:
+		return fmt.Errorf("unsupported AI video operation: %s", op)
+	}
+}
+
+// validateAIVideoOptions enforces v1 invariants for AI video ops:
+//   - Frame interpolation is incompatible with GIF output.
+//   - target FPS must be one of the documented presets.
+//   - quality / model / max-height must be inside the supported ranges.
+//   - temporal.frameRate.target is not allowed alongside frame interpolation —
+//     AI interpolation owns the output FPS.
+//   - trim is disallowed in v1 to keep the script straightforward; the UI
+//     surfaces this as a note next to the panel.
+func validateAIVideoOptions(options *models.VideoConversionOptions) error {
+	if options == nil || options.AI == nil {
+		return nil
+	}
+	ai := options.AI
+	op := strings.ToLower(strings.TrimSpace(ai.Operation))
+	if op == "" || op == "none" {
+		return nil
+	}
+	if !ai.Enabled {
+		// Operation set but enabled=false: treat as inactive.
+		return nil
+	}
+	switch op {
+	case AIVideoOpFrameInterpolation:
+		if strings.EqualFold(options.Format, "gif") {
+			return fmt.Errorf("AI frame interpolation currently outputs MP4 and cannot be combined with GIF output")
+		}
+		fi := ai.FrameInterpolation
+		if fi == nil {
+			fi = &models.AIFrameInterpolationOptions{}
+		}
+		if fi.TargetFPS != 0 && !validFrameInterpolationTargetFPS[fi.TargetFPS] {
+			return fmt.Errorf("target FPS must be 48, 60, or 120, got %d", fi.TargetFPS)
+		}
+		if strings.TrimSpace(fi.Quality) != "" {
+			q := strings.ToLower(strings.TrimSpace(fi.Quality))
+			if !validFrameInterpolationQuality[q] {
+				return fmt.Errorf("frame interpolation quality must be low, medium, or high, got %s", fi.Quality)
+			}
+		}
+		if strings.TrimSpace(fi.Model) != "" && !validRIFEModels[strings.TrimSpace(fi.Model)] {
+			return fmt.Errorf("unsupported RIFE model: %s", fi.Model)
+		}
+		if fi.MaxHeight != 0 && (fi.MaxHeight < 144 || fi.MaxHeight > 1080) {
+			return fmt.Errorf("max processing height must be 0 or between 144 and 1080, got %d", fi.MaxHeight)
+		}
+		if options.Temporal != nil && options.Temporal.FrameRate != nil && options.Temporal.FrameRate.Target != nil {
+			return fmt.Errorf("AI frame interpolation owns the output FPS — remove the temporal frame rate override")
+		}
+		if options.Trim != nil {
+			return fmt.Errorf("AI frame interpolation does not support trim in v1 — trim the video first, then run interpolation")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported AI video operation: %s", ai.Operation)
+	}
 }
 
 func validateAIAudioOptions(ai *models.AIAudioOptions) error {
