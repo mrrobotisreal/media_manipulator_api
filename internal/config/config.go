@@ -142,7 +142,7 @@ type Config struct {
 }
 
 func Load() *Config {
-	maxFileSize := getEnvInt64("MAX_FILE_SIZE_BYTES", 1000*1024*1024)
+	maxFileSize := getEnvInt64("MAX_FILE_SIZE_BYTES", 10000*1024*1024)
 	return &Config{
 		Port:               DefaultPort,
 		UploadDir:          getEnv("UPLOAD_DIR", "uploads"),
