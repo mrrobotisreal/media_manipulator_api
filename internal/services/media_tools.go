@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -97,6 +98,41 @@ func (m *MediaInspector) ProbeFile(ctx context.Context, path string, fileType mo
 			return metadata, fmt.Errorf("parse ffprobe json: %w", err)
 		}
 		metadata.Details = details
+	case models.FileTypeDocument:
+		// PDFs are inspected with pdfinfo (poppler-utils) when available. We
+		// never feed PDFs to ImageMagick's identify probe — the deployment's
+		// ImageMagick policy commonly blocks the PDF coder, and treating
+		// untrusted PDFs as images via Ghostscript is a needless risk. If
+		// pdfinfo is missing we fall back to the `file` command, which only
+		// reads the header.
+		if _, lookErr := exec.LookPath("pdfinfo"); lookErr == nil {
+			stdout, stderr, err := runCommand(ctx, "pdfinfo", path)
+			metadata.Tool = "pdfinfo"
+			metadata.Raw = stdout
+			if err != nil {
+				metadata.Error = strings.TrimSpace(stderr)
+				// Non-fatal: fall through to file-based detection below.
+			} else {
+				metadata.Details = parsePdfInfo(stdout)
+			}
+		}
+		if metadata.Tool == "" || metadata.Error != "" {
+			stdout, stderr, err := runCommand(ctx, "file", "-b", "--mime-all", path)
+			if err == nil {
+				if metadata.Tool == "" {
+					metadata.Tool = "file"
+				} else {
+					metadata.Tool += " + file"
+				}
+				if strings.TrimSpace(metadata.Raw) == "" {
+					metadata.Raw = stdout
+				}
+				metadata.Details["file_command_output"] = strings.TrimSpace(stdout)
+				metadata.Error = ""
+			} else if metadata.Error == "" {
+				metadata.Error = strings.TrimSpace(stderr)
+			}
+		}
 	default:
 		stdout, stderr, err := runCommand(ctx, "file", "-b", "--mime-all", path)
 		metadata.Tool = "file"
@@ -294,9 +330,36 @@ func detectTypeByExtension(path string) models.FileType {
 		return models.FileTypeVideo
 	case "mp3", "wav", "aac", "ogg", "flac", "m4a", "opus", "ac3", "dts", "alac":
 		return models.FileTypeAudio
+	case "pdf":
+		return models.FileTypeDocument
 	default:
 		return models.FileTypeUnknown
 	}
+}
+
+// parsePdfInfo turns `pdfinfo` key:value output into a details map. pdfinfo
+// prints lines like "Pages:          3" and "Page size:      612 x 792 pts".
+func parsePdfInfo(raw string) map[string]any {
+	details := make(map[string]any)
+	for _, line := range strings.Split(raw, "\n") {
+		if !strings.Contains(line, ":") {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" {
+			continue
+		}
+		if key == "Pages" {
+			if n, err := strconv.Atoi(value); err == nil {
+				details["pages"] = n
+				continue
+			}
+		}
+		details[key] = value
+	}
+	return details
 }
 
 func readFilePrefix(path string, n int) []byte {

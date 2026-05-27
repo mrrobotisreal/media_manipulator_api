@@ -17,10 +17,11 @@ const (
 type FileType string
 
 const (
-	FileTypeImage   FileType = "image"
-	FileTypeVideo   FileType = "video"
-	FileTypeAudio   FileType = "audio"
-	FileTypeUnknown FileType = "unknown"
+	FileTypeImage    FileType = "image"
+	FileTypeVideo    FileType = "video"
+	FileTypeAudio    FileType = "audio"
+	FileTypeDocument FileType = "document"
+	FileTypeUnknown  FileType = "unknown"
 )
 
 type ConversionJob struct {
@@ -293,7 +294,9 @@ type Spectral struct {
 
 // Image conversion options
 type ImageConversionOptions struct {
-	Format         string               `json:"format" binding:"required,oneof=jpg png webp gif"`
+	// "pdf" routes the image through the document pathway (image -> single-page
+	// PDF) instead of the ImageMagick raster pipeline.
+	Format         string               `json:"format" binding:"required,oneof=jpg png webp gif pdf"`
 	Width          *int                 `json:"width,omitempty"`
 	Height         *int                 `json:"height,omitempty"`
 	Quality        int                  `json:"quality" binding:"min=1,max=100"`
@@ -307,6 +310,25 @@ type ImageConversionOptions struct {
 	GPSOptions     *ImageGPSOptions     `json:"gpsOptions,omitempty"`
 	AdvancedTags   map[string]string    `json:"advancedTags,omitempty"`
 	AI             *AIImageOptions      `json:"ai,omitempty"`
+}
+
+// PDFConversionOptions drives the document/PDF pathway. It covers two
+// directions:
+//   - PDF -> image: Format is "jpg" or "png"; PageSelection picks "first"
+//     (single image output) or "all" (one image per page, packaged as a .zip);
+//     DPI controls the render resolution.
+//   - image -> PDF: Format is "pdf" (handled on the image options struct via
+//     Format=="pdf"); the fields here are unused in that direction.
+//
+// Width/Height are optional caps for the rendered image's longest edge; they
+// never upscale beyond the source.
+type PDFConversionOptions struct {
+	Format        string `json:"format,omitempty"`        // jpg, png (PDF->image) or pdf (image->PDF)
+	PageSelection string `json:"pageSelection,omitempty"` // "first" or "all" (default "all")
+	DPI           int    `json:"dpi,omitempty"`           // render DPI for PDF->image (default 150)
+	Quality       int    `json:"quality,omitempty"`       // JPEG quality 1-100 (default 90)
+	Width         *int   `json:"width,omitempty"`
+	Height        *int   `json:"height,omitempty"`
 }
 
 // AIImageOptions selects a Phase 1 AI image operation. Only one operation runs
@@ -574,6 +596,8 @@ func GetFileType(mimeType string) FileType {
 		return FileTypeVideo
 	case strings.HasPrefix(mimeType, "audio/"):
 		return FileTypeAudio
+	case mimeType == "application/pdf" || mimeType == "application/x-pdf":
+		return FileTypeDocument
 	default:
 		return FileTypeUnknown
 	}

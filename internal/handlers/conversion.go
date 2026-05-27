@@ -205,7 +205,9 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 		log.Printf("failed to write metadata for job %s: %v", job.ID, err)
 	}
 
-	if !isTranscribeMode(job) && specializedMode(job) == "" {
+	// Skip background analysis for PDFs — the analysis queue targets image,
+	// video, and audio media and has nothing to do with documents.
+	if !isTranscribeMode(job) && specializedMode(job) == "" && fileType != models.FileTypeDocument {
 		h.analysisJobs.Enqueue(services.AnalysisJob{JobID: job.ID, InputPath: uploadPath, OutputDir: jobOutputDir, FileType: fileType, MimeType: mimeType})
 	}
 	go h.processConversion(job, uploadPath, jobOutputDir)
@@ -468,9 +470,36 @@ func (h *ConversionHandler) getOutputExtension(job *models.ConversionJob) string
 			return "." + strings.TrimPrefix(format, ".")
 		}
 		return ".mp3"
+	case models.FileTypeDocument:
+		return pdfOutputExtension(job)
 	default:
 		return ".bin"
 	}
+}
+
+// pdfOutputExtension is the deterministic output extension for the PDF -> image
+// pathway. It must mirror parsePDFRenderOptions in the services package: an
+// "all" page selection produces a .zip of per-page images, while "first"
+// produces a single .jpg/.png. Because it depends only on the options (not on
+// the actual page count), the frontend can predict the download name too.
+func pdfOutputExtension(job *models.ConversionJob) string {
+	format := "jpg"
+	if f, ok := job.Options["format"].(string); ok {
+		switch strings.ToLower(strings.TrimSpace(f)) {
+		case "png":
+			format = "png"
+		case "jpg", "jpeg":
+			format = "jpg"
+		}
+	}
+	sel := "all"
+	if s, ok := job.Options["pageSelection"].(string); ok && strings.EqualFold(strings.TrimSpace(s), "first") {
+		sel = "first"
+	}
+	if sel == "all" {
+		return ".zip"
+	}
+	return "." + format
 }
 
 // specializedExtension returns the output extension for the specialized
@@ -597,6 +626,13 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 	}
 	if mode, _ := job.Options["mode"].(string); strings.EqualFold(strings.TrimSpace(mode), "stitch_audio_to_video") {
 		return fmt.Sprintf("%s_stitched%s", name, h.getOutputExtension(job))
+	}
+	if models.GetFileType(job.OriginalFile.Type) == models.FileTypeDocument {
+		ext := h.getOutputExtension(job)
+		if ext == ".zip" {
+			return fmt.Sprintf("%s_pages.zip", name)
+		}
+		return fmt.Sprintf("%s_converted%s", name, ext)
 	}
 	return fmt.Sprintf("%s_converted%s", name, h.getOutputExtension(job))
 }

@@ -874,6 +874,8 @@ added on top before deciding a card "fits".
 | `exiftool` | `media_tools.go` | Image metadata extraction. | Metadata block missing from identify; rest of the response still works. |
 | `gifsicle` | `converter.go` | GIF compression after ffmpeg. | GIF jobs fail. |
 | `file` | `media_tools.go` | Unknown-type identify fallback. | Unknown files report `file_command_output_error`. |
+| `pdftoppm` (poppler-utils) | `pdf_tools.go` | PDF → JPG/PNG rendering. | PDF→image jobs fail with "PDF conversion is unavailable". Install `poppler-utils`. |
+| `pdfinfo` (poppler-utils) | `pdf_tools.go`, `media_tools.go` | PDF page-count probe (page-cap enforcement) + PDF identify. | PDF→image refuses to run (cannot enforce page cap); identify falls back to `file`. |
 | `nvidia-smi` | `gpu_scheduler.go` | GPU pre-flight and queueing. | Scheduler disabled; whisper still works but without VRAM-aware selection. |
 | `whisper-ctranslate2` | `transcribe.go`, `analysis_queue.go` | Transcription + caption ASR. | Transcribe / captions jobs fail. |
 | `python` (multiple venvs) | `ai_tools.go` | AI image and audio ops. | Specific AI op fails; rest of the converter continues. |

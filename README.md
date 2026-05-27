@@ -21,6 +21,21 @@ A Go backend service for converting images, videos, and audio files. Built to wo
 - **Settings**: Bitrate control (128-320 kbps)
 - **Effects**: Speed and volume adjustment
 
+### PDF / Document Conversion
+- **Image → PDF**: JPG, PNG (and other common images) are wrapped into a
+  single-page PDF. JPGs are embedded losslessly via `/DCTDecode`; other formats
+  are embedded losslessly via `/FlateDecode`. This path is **pure Go** — it does
+  not use ImageMagick's PDF coder or Ghostscript, so it is unaffected by
+  ImageMagick PDF policy restrictions.
+- **PDF → Image**: each page is rendered to JPG or PNG using Poppler
+  (`pdftoppm`). `pageSelection: "first"` produces a single image; `"all"`
+  produces one image per page packaged into a `.zip` (`page-001.jpg`, …).
+- **Safety**: PDFs are treated as untrusted input — page count is read with
+  `pdfinfo` and capped (500 pages) before any rendering, commands run via
+  `exec.CommandContext` with the configured timeout, and no shell interpolation
+  is used. WebP/exotic image inputs to image→PDF fall back to an ImageMagick
+  rasterization to PNG.
+
 ## Architecture
 
 ```
@@ -46,7 +61,25 @@ media_manipulator_api/
 ### System Requirements
 - Go 1.21 or later
 - FFmpeg (for video/audio conversion)
-- ImageMagick (optional, for advanced image processing)
+- ImageMagick (for advanced image processing and as the WebP→PDF rasterization fallback)
+- **poppler-utils** (for PDF conversion — provides `pdftoppm` and `pdfinfo`)
+- **zip** is not required: ZIP archives are produced by Go's standard library
+
+Install the PDF tooling on Ubuntu/Debian:
+
+```bash
+sudo apt update && sudo apt install poppler-utils
+```
+
+On macOS:
+
+```bash
+brew install poppler
+```
+
+> Without `poppler-utils`, PDF → image conversions return a clear "PDF
+> conversion is unavailable" error. Image → PDF works without poppler (it is
+> pure Go).
 
 ### Installing FFmpeg
 
@@ -159,6 +192,40 @@ Upload a file and start conversion process.
   "filter": "none"
 }
 ```
+
+**Example options — image → PDF** (upload a JPG/PNG image as `file`):
+```json
+{
+  "format": "pdf"
+}
+```
+Returns a single-page PDF. Download filename: `<name>_converted.pdf`.
+
+**Example options — PDF → JPG, all pages** (upload a `.pdf` as `file`):
+```json
+{
+  "format": "jpg",
+  "pageSelection": "all",
+  "dpi": 150,
+  "quality": 90
+}
+```
+Returns a `.zip` of `page-001.jpg`, `page-002.jpg`, … Download filename:
+`<name>_pages.zip`.
+
+**Example options — PDF → PNG, first page only:**
+```json
+{
+  "format": "png",
+  "pageSelection": "first",
+  "dpi": 200
+}
+```
+Returns a single `.png`. Download filename: `<name>_converted.png`.
+
+> Notes: `pageSelection` defaults to `"all"`, `dpi` defaults to `150`
+> (clamped 50–400), `quality` defaults to `90` and only affects JPG output.
+> PDFs over 500 pages are rejected with a clear error.
 
 ### GET /api/job/:jobId
 Check the status of a conversion job.

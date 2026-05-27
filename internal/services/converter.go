@@ -67,6 +67,8 @@ func (c *Converter) ConvertFile(job *models.ConversionJob, inputPath, outputPath
 		return c.convertVideo(job, inputPath, outputPath)
 	case models.FileTypeAudio:
 		return c.convertAudio(job, inputPath, outputPath)
+	case models.FileTypeDocument:
+		return c.convertPDFToImages(job, inputPath, outputPath)
 	default:
 		return fmt.Errorf("unsupported file type: %s", fileType)
 	}
@@ -119,6 +121,14 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 	}
 
 	fmt.Printf("[DEBUG] Parsed options: %+v\n", options)
+
+	// Image -> PDF takes a dedicated, deterministic pure-Go path (no
+	// ImageMagick PDF coder, no Ghostscript) so it works regardless of the
+	// deployment's ImageMagick PDF policy. Crop/resize/filter/AI do not apply
+	// to this direction.
+	if strings.EqualFold(strings.TrimSpace(options.Format), "pdf") {
+		return c.convertImageToPDF(job, &options, inputPath, outputPath)
+	}
 
 	// If an AI image operation is selected, route to the AI service and skip
 	// the normal ImageMagick pipeline. AI ops are mutually exclusive with the
@@ -290,7 +300,7 @@ func (c *Converter) validateImageOptions(options *models.ImageConversionOptions)
 	}
 
 	// Validate format
-	validFormats := map[string]bool{"jpg": true, "jpeg": true, "png": true, "webp": true, "gif": true}
+	validFormats := map[string]bool{"jpg": true, "jpeg": true, "png": true, "webp": true, "gif": true, "pdf": true}
 	if !validFormats[options.Format] {
 		return fmt.Errorf("unsupported format: %s", options.Format)
 	}
