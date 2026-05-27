@@ -324,7 +324,7 @@ func gpsLocationTags() map[string]bool {
 
 func detectTypeByExtension(path string) models.FileType {
 	switch strings.ToLower(strings.TrimPrefix(filepath.Ext(path), ".")) {
-	case "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "heic", "avif":
+	case "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "heic", "heif", "avif", "svg", "ico":
 		return models.FileTypeImage
 	case "mp4", "mov", "m4v", "webm", "mkv", "avi", "flv", "wmv", "mpeg", "mpg":
 		return models.FileTypeVideo

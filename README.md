@@ -1,11 +1,14 @@
 # Media Manipulator API
 
-A Go backend service for converting images, videos, and audio files. Built to work seamlessly with the frontend UI counterpart. Uses powerful CLI conversion tools such as `ffmpeg` and `magick` (ImageMagick) to perform async conversions, and then the API stores the finished file and tracks job progress.
+A Go backend service for converting images, videos, and audio files. Built to work seamlessly with the frontend UI counterpart. Uses powerful CLI conversion tools such as `ffmpeg` and ImageMagick (`magick` on ImageMagick 7, or `convert`/`identify` on ImageMagick 6 — the API auto-detects which is installed) to perform async conversions, and then the API stores the finished file and tracks job progress.
 
 ## Features
 
 ### Image Conversion
-- **Formats**: JPG, PNG, WebP, GIF
+- **Raster formats**: JPG, PNG, WebP, GIF, AVIF (in/out, delegate-dependent)
+- **Modern inputs**: HEIC/HEIF (iPhone) and AVIF decode via ImageMagick delegates
+- **Vector**: SVG → PNG (safe rasterization via rsvg-convert/ImageMagick); PNG → SVG genuine vectorization via `potrace`
+- **Favicons**: PNG → multi-size `.ico` (16/32/48/64/128/256) via ImageMagick
 - **Transformations**: Resize (width/height), quality adjustment
 - **Filters**: Grayscale, sepia, blur, sharpen, swirl, barrel-distortion, oil-painting, vintage, emboss, charcoal, sketch, rotate-45º, rotate-90º, rotate-180º, rotate-270º
 - **Color**: Tint application
@@ -80,6 +83,44 @@ brew install poppler
 > Without `poppler-utils`, PDF → image conversions return a clear "PDF
 > conversion is unavailable" error. Image → PDF works without poppler (it is
 > pure Go).
+
+### Image format / vector tooling (SEO batch 3)
+
+- **ImageMagick with HEIC + AVIF delegates** — required to decode `.heic`/`.heif`
+  (libheif) and `.avif` (libaom/libheif) inputs. The API auto-detects whether the
+  CLI is ImageMagick 7 (`magick`) or ImageMagick 6 (`convert`/`identify`) and
+  uses whichever is present, so either works. Verify supported formats with the
+  command that matches your install:
+
+  ```bash
+  # ImageMagick 6 (Ubuntu 24.04 default — no `magick` binary):
+  convert -list format | grep -E 'HEIC|AVIF|SVG|ICO'
+  # …or check the compiled-in delegates directly:
+  convert -version
+
+  # ImageMagick 7:
+  magick -list format | grep -E 'HEIC|AVIF|SVG|ICO'
+  ```
+
+- **`librsvg2-bin`** (provides `rsvg-convert`) — preferred, safe SVG → PNG
+  rasterizer. ImageMagick is used as a fallback if it's absent.
+
+  ```bash
+  sudo apt install librsvg2-bin   # Ubuntu/Debian
+  brew install librsvg            # macOS
+  ```
+
+- **`potrace`** — required for genuine PNG → SVG vectorization (raster bitmap →
+  vector paths). Without it, PNG → SVG returns a clear "vectorization is
+  unavailable" error.
+
+  ```bash
+  sudo apt install potrace        # Ubuntu/Debian
+  brew install potrace            # macOS
+  ```
+
+- **ICO generation** uses ImageMagick's `-define icon:auto-resize` — no separate
+  dependency beyond ImageMagick.
 
 ### Installing FFmpeg
 
@@ -226,6 +267,48 @@ Returns a single `.png`. Download filename: `<name>_converted.png`.
 > Notes: `pageSelection` defaults to `"all"`, `dpi` defaults to `150`
 > (clamped 50–400), `quality` defaults to `90` and only affects JPG output.
 > PDFs over 500 pages are rejected with a clear error.
+
+**Example options — HEIC/AVIF → JPG** (upload a `.heic`/`.avif` as `file`):
+```json
+{
+  "format": "jpg",
+  "quality": 90
+}
+```
+
+**Example options — AVIF → PNG** (preserves transparency):
+```json
+{
+  "format": "png"
+}
+```
+
+**Example options — SVG → PNG** (upload a `.svg` as `file`):
+```json
+{
+  "format": "png",
+  "width": 512
+}
+```
+Renders with rsvg-convert (or hardened ImageMagick), external fetches disabled.
+
+**Example options — PNG → SVG vectorization** (upload a `.png` as `file`):
+```json
+{
+  "format": "svg",
+  "vectorize": { "threshold": 50, "turdSize": 2 }
+}
+```
+Traced with `potrace`. Best for logos/icons/line art, not photos.
+
+**Example options — PNG → ICO** (multi-size favicon):
+```json
+{
+  "format": "ico",
+  "ico": { "sizes": [16, 32, 48, 64, 128, 256] }
+}
+```
+Omit `ico.sizes` to use the default favicon ladder.
 
 ### GET /api/job/:jobId
 Check the status of a conversion job.
@@ -375,6 +458,28 @@ The backend provides comprehensive error handling:
    export PORT=8081
    go run cmd/api/main.go
    ```
+
+4. **HEIC or AVIF conversion fails / "no decode delegate"**
+   The server's ImageMagick was built without the libheif (HEIC) or AVIF
+   delegate. Check support (use `convert` on ImageMagick 6 / Ubuntu 24.04, or
+   `magick` on ImageMagick 7):
+   ```bash
+   convert -list format | grep -E 'HEIC|AVIF|SVG|ICO'   # ImageMagick 6
+   convert -version                                     # shows compiled Delegates
+   # magick -list format | grep -E 'HEIC|AVIF|SVG|ICO'  # ImageMagick 7
+   ```
+   If `HEIC` / `AVIF` are absent (or lack an `r` read flag), install ImageMagick
+   with the appropriate delegates (e.g. `libheif`, `libaom`). Until then,
+   HEIC/AVIF inputs return a clear conversion error.
+
+5. **PNG → SVG returns "vectorization is unavailable"**
+   `potrace` is not installed on the server. Install it (`apt install potrace`)
+   and retry. Vectorization is intended for logos/icons/line art, not photos.
+
+6. **SVG → PNG looks low-res or fails**
+   Install `librsvg2-bin` for the preferred `rsvg-convert` renderer. Without it,
+   the hardened ImageMagick fallback is used at 150 DPI; pass `width`/`height`
+   to control the output resolution. SVG external resource fetches are disabled.
 
 ### Debug Mode
 Set environment variable for verbose logging:

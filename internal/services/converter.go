@@ -130,6 +130,23 @@ func (c *Converter) convertImage(job *models.ConversionJob, inputPath, outputPat
 		return c.convertImageToPDF(job, &options, inputPath, outputPath)
 	}
 
+	// Output container routing for the vector/icon pathways. These bypass the
+	// raster ImageMagick chain entirely.
+	switch strings.ToLower(strings.TrimSpace(options.Format)) {
+	case "svg":
+		// Real vectorization (potrace), not a raster-wrapped SVG.
+		return c.convertImageToSVG(job, &options, inputPath, outputPath)
+	case "ico":
+		return c.convertImageToICO(job, &options, inputPath, outputPath)
+	}
+
+	// SVG input rendered to a raster format (svg -> png/jpg). Handled by a safe
+	// rasterizer (rsvg-convert preferred) rather than the generic pipeline so we
+	// control resolution and avoid external resource loading.
+	if isSVGInput(inputPath) {
+		return c.convertSVGToRaster(job, &options, inputPath, outputPath)
+	}
+
 	// If an AI image operation is selected, route to the AI service and skip
 	// the normal ImageMagick pipeline. AI ops are mutually exclusive with the
 	// conventional convert chain at execution time.
@@ -300,7 +317,7 @@ func (c *Converter) validateImageOptions(options *models.ImageConversionOptions)
 	}
 
 	// Validate format
-	validFormats := map[string]bool{"jpg": true, "jpeg": true, "png": true, "webp": true, "gif": true, "pdf": true}
+	validFormats := map[string]bool{"jpg": true, "jpeg": true, "png": true, "webp": true, "gif": true, "avif": true, "pdf": true, "svg": true, "ico": true}
 	if !validFormats[options.Format] {
 		return fmt.Errorf("unsupported format: %s", options.Format)
 	}

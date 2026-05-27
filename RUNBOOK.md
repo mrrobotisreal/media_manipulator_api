@@ -357,7 +357,7 @@ size and disk.
 
 | Symptom | Likely cause | Check |
 | --- | --- | --- |
-| `Failed to identify file` (500) | `magick` or `ffprobe` not on PATH; or file is corrupt. | `which magick ffprobe exiftool file` |
+| `Failed to identify file` (500) | ImageMagick or `ffprobe` not on PATH; or file is corrupt. | `which magick convert identify ffprobe exiftool file` (the API uses `magick` if present, else `convert`/`identify`) |
 | Returns `fileType: unknown` | mimetype probe failed and file extension is unrecognized. | Look at `details.file_command_output` in the response. |
 | `probe_error` key present in response | Identify ran but its parser hiccupped; raw output is in `rawOutput`. | Use `rawOutput` to debug what the probe actually printed. |
 
@@ -870,12 +870,15 @@ added on top before deciding a card "fits".
 | --- | --- | --- | --- |
 | `ffmpeg` | `converter.go`, `transcribe.go`, `transcode_*.go`, `analysis_queue.go` | All video/audio conversion, transcoding, captions, storyboards, audio extraction for whisper. | Most features fail at job start. |
 | `ffprobe` | `media_tools.go`, `transcode_probe.go`, `transcribe.go` | File identify, transcode probe, transcription duration probe. | Identify/probe/transcribe fail at job start. |
-| `magick` (or legacy `identify`) | `converter.go`, `media_tools.go` | Image identify + conversion. | Image features fail. |
+| `magick` **or** `convert`/`identify` | `converter.go`, `media_tools.go` | Image identify + conversion. The API prefers `magick` (ImageMagick 7) and falls back to `convert`/`identify` (ImageMagick 6, e.g. Ubuntu 24.04). | Image features fail only if neither is on PATH. |
 | `exiftool` | `media_tools.go` | Image metadata extraction. | Metadata block missing from identify; rest of the response still works. |
 | `gifsicle` | `converter.go` | GIF compression after ffmpeg. | GIF jobs fail. |
 | `file` | `media_tools.go` | Unknown-type identify fallback. | Unknown files report `file_command_output_error`. |
 | `pdftoppm` (poppler-utils) | `pdf_tools.go` | PDF → JPG/PNG rendering. | PDF→image jobs fail with "PDF conversion is unavailable". Install `poppler-utils`. |
 | `pdfinfo` (poppler-utils) | `pdf_tools.go`, `media_tools.go` | PDF page-count probe (page-cap enforcement) + PDF identify. | PDF→image refuses to run (cannot enforce page cap); identify falls back to `file`. |
+| ImageMagick with HEIC/AVIF delegates | `converter.go` | HEIC/HEIF + AVIF decode (heic→jpg, avif→jpg/png). | Those conversions fail with a decode-delegate error. Verify with `convert -list format \| grep -E 'HEIC\|AVIF'` (IM6) or `magick -list format \| ...` (IM7). |
+| `rsvg-convert` (librsvg2-bin) | `image_format_tools.go` | Preferred safe SVG → PNG rasterizer. | Falls back to hardened ImageMagick at 150 DPI. |
+| `potrace` | `image_format_tools.go` | PNG/raster → SVG vectorization. | PNG→SVG fails with "vectorization is unavailable". Install `potrace`. |
 | `nvidia-smi` | `gpu_scheduler.go` | GPU pre-flight and queueing. | Scheduler disabled; whisper still works but without VRAM-aware selection. |
 | `whisper-ctranslate2` | `transcribe.go`, `analysis_queue.go` | Transcription + caption ASR. | Transcribe / captions jobs fail. |
 | `python` (multiple venvs) | `ai_tools.go` | AI image and audio ops. | Specific AI op fails; rest of the converter continues. |

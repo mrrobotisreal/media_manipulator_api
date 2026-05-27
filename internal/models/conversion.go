@@ -294,9 +294,10 @@ type Spectral struct {
 
 // Image conversion options
 type ImageConversionOptions struct {
-	// "pdf" routes the image through the document pathway (image -> single-page
-	// PDF) instead of the ImageMagick raster pipeline.
-	Format         string               `json:"format" binding:"required,oneof=jpg png webp gif pdf"`
+	// Output container. Raster formats (jpg/png/webp/gif/avif) go through the
+	// ImageMagick pipeline; "pdf" routes to the document pathway; "svg" routes
+	// to potrace vectorization; "ico" routes to multi-size ICO generation.
+	Format         string               `json:"format" binding:"required,oneof=jpg png webp gif avif pdf svg ico"`
 	Width          *int                 `json:"width,omitempty"`
 	Height         *int                 `json:"height,omitempty"`
 	Quality        int                  `json:"quality" binding:"min=1,max=100"`
@@ -310,6 +311,25 @@ type ImageConversionOptions struct {
 	GPSOptions     *ImageGPSOptions     `json:"gpsOptions,omitempty"`
 	AdvancedTags   map[string]string    `json:"advancedTags,omitempty"`
 	AI             *AIImageOptions      `json:"ai,omitempty"`
+	// Vectorize controls the PNG/raster -> SVG potrace flow (Format=="svg").
+	Vectorize *VectorizeOptions `json:"vectorize,omitempty"`
+	// ICO controls the multi-size .ico generation flow (Format=="ico").
+	ICO *ICOOptions `json:"ico,omitempty"`
+}
+
+// VectorizeOptions tunes the potrace-based raster -> SVG conversion. Threshold
+// is the black/white cutoff as a percentage (higher keeps more as black);
+// TurdSize drops speckles smaller than N pixels.
+type VectorizeOptions struct {
+	Threshold int    `json:"threshold,omitempty"` // 1-99 percent, default 50
+	TurdSize  int    `json:"turdSize,omitempty"`  // potrace -t, default 2
+	Mode      string `json:"mode,omitempty"`      // reserved; "black" default
+}
+
+// ICOOptions selects which icon sizes to pack into the generated .ico. Empty
+// uses the default favicon ladder (16/32/48/64/128/256).
+type ICOOptions struct {
+	Sizes []int `json:"sizes,omitempty"`
 }
 
 // PDFConversionOptions drives the document/PDF pathway. It covers two
