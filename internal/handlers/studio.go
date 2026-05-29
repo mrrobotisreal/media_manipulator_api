@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -527,7 +528,7 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	for _, a := range assets {
 		assetByID[a.ID] = a
 	}
-	clip, asset, ok := firstExportableClip(project, assetByID)
+	items, ok := collectVideoClips(project, assetByID)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no clip to export"})
 		return
@@ -550,12 +551,12 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	// default video job, so /api/download/:jobId serves it unchanged.
 	outputPath := filepath.Join(jobOutputDir, "converted.mp4")
 
-	go h.runExportJob(job.ID, asset, clip, quality, outputPath)
+	go h.runExportJob(job.ID, items, project.Width, project.Height, project.FPS, quality, outputPath)
 
 	c.JSON(http.StatusOK, models.UploadResponse{JobID: job.ID})
 }
 
-func (h *StudioHandler) runExportJob(jobID string, asset *models.StudioAsset, clip models.StudioClip, quality, outputPath string) {
+func (h *StudioHandler) runExportJob(jobID string, items []studioExportItem, width, height int, fps float64, quality, outputPath string) {
 	if err := h.jobManager.UpdateJobStatus(jobID, models.StatusProcessing); err != nil {
 		log.Printf("studio export: failed to mark job %s processing: %v", jobID, err)
 		return
@@ -563,16 +564,41 @@ func (h *StudioHandler) runExportJob(jobID string, asset *models.StudioAsset, cl
 	ctx, cancel := context.WithTimeout(context.Background(), h.cfg.CommandTimeout)
 	defer cancel()
 
-	srcPath := filepath.Join(h.cfg.UploadDir, "studio_export_src_"+jobID+strings.ToLower(filepath.Ext(asset.S3KeyOriginal)))
-	if err := h.downloadS3Object(ctx, asset.S3KeyOriginal, srcPath); err != nil {
-		log.Printf("studio export: download original failed: %v", err)
-		_ = h.jobManager.UpdateJobError(jobID, "Failed to download source media")
-		return
+	// Download each distinct source once; clips that share an asset reuse the
+	// same local file (referenced as repeated ffmpeg inputs).
+	localByKey := make(map[string]string)
+	var cleanup []string
+	defer func() {
+		for _, p := range cleanup {
+			_ = os.Remove(p)
+		}
+	}()
+	for _, it := range items {
+		key := it.asset.S3KeyOriginal
+		if _, done := localByKey[key]; done {
+			continue
+		}
+		local := filepath.Join(h.cfg.UploadDir, fmt.Sprintf("studio_export_%s_%d%s", jobID, len(localByKey), strings.ToLower(filepath.Ext(key))))
+		if err := h.downloadS3Object(ctx, key, local); err != nil {
+			log.Printf("studio export: download original failed: %v", err)
+			_ = h.jobManager.UpdateJobError(jobID, "Failed to download source media")
+			return
+		}
+		localByKey[key] = local
+		cleanup = append(cleanup, local)
 	}
-	defer func() { _ = os.Remove(srcPath) }()
 
-	exportClip := services.StudioExportClip{InputPath: srcPath, SourceIn: clip.SourceIn, SourceOut: clip.SourceOut}
-	if err := h.export.RunSingleClip(ctx, jobID, exportClip, quality, outputPath); err != nil {
+	segments := make([]services.StudioExportSegment, 0, len(items))
+	for _, it := range items {
+		segments = append(segments, services.StudioExportSegment{
+			InputPath: localByKey[it.asset.S3KeyOriginal],
+			SourceIn:  it.clip.SourceIn,
+			SourceOut: it.clip.SourceOut,
+			HasAudio:  it.asset.HasAudio,
+		})
+	}
+
+	if err := h.export.RunTimeline(ctx, jobID, segments, width, height, fps, quality, outputPath); err != nil {
 		log.Printf("studio export: job %s failed: %v", jobID, err)
 		_ = h.jobManager.UpdateJobError(jobID, err.Error())
 		return
@@ -667,27 +693,48 @@ func studioAudioParams(probe *models.VideoProbeResponse) (sampleRate, channels i
 	return sampleRate, channels
 }
 
-// firstExportableClip returns the first clip on the lowest video track (falling
-// back to any track) whose asset is known. Phase 1 exports a single clip.
-func firstExportableClip(p *models.StudioProject, assets map[string]*models.StudioAsset) (models.StudioClip, *models.StudioAsset, bool) {
-	for _, t := range p.Tracks {
-		if t.Kind != models.StudioTrackKindVideo {
-			continue
+// studioExportItem pairs a clip with its resolved asset, in timeline order.
+type studioExportItem struct {
+	clip  models.StudioClip
+	asset *models.StudioAsset
+}
+
+// collectVideoClips gathers every clip on the first video track (falling back
+// to the first non-empty track), in timeline order, whose asset is known.
+// Phase 2 concatenates these; gaps between clips are collapsed (full
+// timeline-accurate positioning with gaps arrives with the Phase 3 overlay).
+func collectVideoClips(p *models.StudioProject, assets map[string]*models.StudioAsset) ([]studioExportItem, bool) {
+	var track *models.StudioTrack
+	for i := range p.Tracks {
+		if p.Tracks[i].Kind == models.StudioTrackKindVideo && len(p.Tracks[i].Clips) > 0 {
+			track = &p.Tracks[i]
+			break
 		}
-		for _, clip := range t.Clips {
-			if a, ok := assets[clip.AssetID]; ok {
-				return clip, a, true
+	}
+	if track == nil {
+		for i := range p.Tracks {
+			if len(p.Tracks[i].Clips) > 0 {
+				track = &p.Tracks[i]
+				break
 			}
 		}
 	}
-	for _, t := range p.Tracks {
-		for _, clip := range t.Clips {
-			if a, ok := assets[clip.AssetID]; ok {
-				return clip, a, true
-			}
+	if track == nil {
+		return nil, false
+	}
+	ordered := append([]models.StudioClip(nil), track.Clips...)
+	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].TimelineStart < ordered[j].TimelineStart })
+
+	items := make([]studioExportItem, 0, len(ordered))
+	for _, clip := range ordered {
+		if a, ok := assets[clip.AssetID]; ok {
+			items = append(items, studioExportItem{clip: clip, asset: a})
 		}
 	}
-	return models.StudioClip{}, nil, false
+	if len(items) == 0 {
+		return nil, false
+	}
+	return items, true
 }
 
 func normalizeExportQuality(preset string) string {

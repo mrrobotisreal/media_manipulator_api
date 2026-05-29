@@ -82,3 +82,49 @@ func TestBuildSingleClipExportArgs_NegativeDurationClamped(t *testing.T) {
 		t.Fatal("args should not be empty")
 	}
 }
+
+func TestBuildConcatExportArgs(t *testing.T) {
+	segs := []StudioExportSegment{
+		{InputPath: "/tmp/a.mp4", SourceIn: 0, SourceOut: 4, HasAudio: true},
+		{InputPath: "/tmp/b.mp4", SourceIn: 2, SourceOut: 5, HasAudio: false},
+	}
+	args := buildConcatExportArgs(segs, 1920, 1080, 30, "h264_nvenc", "high", "/tmp/out.mp4")
+
+	// One -i per segment.
+	inputs := 0
+	for i, a := range args {
+		if a == "-i" {
+			inputs++
+			_ = i
+		}
+	}
+	if inputs != 2 {
+		t.Fatalf("expected 2 inputs, got %d: %v", inputs, args)
+	}
+
+	fcIdx := argIndex(args, "-filter_complex")
+	if fcIdx == -1 {
+		t.Fatalf("expected -filter_complex, args=%v", args)
+	}
+	fc := args[fcIdx+1]
+
+	for _, want := range []string{
+		"[0:v]trim=start=0.000:end=4.000",
+		"setpts=PTS-STARTPTS",
+		"scale=1920:1080:force_original_aspect_ratio=decrease",
+		"[0:a]atrim=start=0.000:end=4.000",        // segment 0 has audio
+		"anullsrc=r=48000:cl=stereo,atrim=duration=3.000", // segment 1 is silent
+		"[v0][a0][v1][a1]concat=n=2:v=1:a=1[outv][outa]",
+	} {
+		if !strings.Contains(fc, want) {
+			t.Errorf("filter_complex missing %q\ngraph: %s", want, fc)
+		}
+	}
+
+	if mapV := argIndex(args, "[outv]"); mapV == -1 {
+		t.Errorf("expected -map [outv], args=%v", args)
+	}
+	if args[len(args)-1] != "/tmp/out.mp4" {
+		t.Errorf("output must be last, got %q", args[len(args)-1])
+	}
+}
