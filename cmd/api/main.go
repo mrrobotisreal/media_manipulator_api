@@ -209,7 +209,9 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		"https://www.media-manipulator.com",
 		"http://localhost:5175",
 	}
-	corsConfig.AllowMethods = []string{"GET", "POST", "OPTIONS"}
+	// PUT is required by the Content Studio project save (PUT /api/studio/projects/:id);
+	// PATCH/DELETE are allowed too so the editor's CRUD surface doesn't trip CORS.
+	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
 	corsConfig.AllowHeaders = []string{
 		"Origin",
 		"Content-Type",
