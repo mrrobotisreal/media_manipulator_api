@@ -491,6 +491,28 @@ type VideoConversionOptions struct {
 	Advanced            *AdvancedProcessing `json:"advanced,omitempty"`
 	GIF                 *GIFOptions         `json:"gif,omitempty"`
 	AI                  *AIVideoOptions     `json:"ai,omitempty"`
+
+	// --- Compression controls (optional; used by the video-compressor /
+	// compress-mp4 utility pages). When set they refine the codec selection
+	// performed in services.buildVideoCodecArgs. All are optional and backward
+	// compatible — omitting them keeps the legacy quality-preset behavior. ---
+
+	// VideoCodec overrides the container's default video codec. One of
+	// h264, h265, vp9, av1. Empty = container default (H.264 for MP4/MOV/etc).
+	VideoCodec string `json:"videoCodec,omitempty"`
+	// CRF overrides the quality-derived constant rate factor (0–51, lower is
+	// higher quality / larger file). When nil the quality preset chooses it.
+	CRF *int `json:"crf,omitempty"`
+	// VideoBitrateKbps targets an average video bitrate in kbps instead of (or
+	// in addition to) CRF. Optional.
+	VideoBitrateKbps *int `json:"videoBitrateKbps,omitempty"`
+	// AudioBitrateKbps sets the output audio bitrate in kbps. Optional.
+	AudioBitrateKbps *int `json:"audioBitrateKbps,omitempty"`
+	// Preset is the x264/x265 speed/efficiency preset
+	// (ultrafast, veryfast, fast, medium, slow). Empty = encoder default.
+	Preset string `json:"preset,omitempty"`
+	// StripAudio drops the audio track entirely for a smaller file.
+	StripAudio bool `json:"stripAudio,omitempty"`
 }
 
 // AIVideoOptions selects a Phase 1 AI video operation. Only one operation runs

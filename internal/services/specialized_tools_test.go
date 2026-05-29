@@ -90,3 +90,50 @@ func TestHexToFFmpegColor(t *testing.T) {
 		t.Fatalf("hex conversion = %q", got)
 	}
 }
+
+func TestTrimVideoOptions_Defaults(t *testing.T) {
+	o := parseTrimVideoOptions(map[string]any{"startTime": 1.0, "endTime": 5.0})
+	if err := o.applyDefaults(); err != nil {
+		t.Fatalf("applyDefaults: %v", err)
+	}
+	if o.Format != "mp4" {
+		t.Fatalf("default format = %q, want mp4", o.Format)
+	}
+	if o.CopyMode != "auto" {
+		t.Fatalf("default copyMode = %q, want auto", o.CopyMode)
+	}
+}
+
+func TestTrimVideoOptions_ParsesNumbersFromStrings(t *testing.T) {
+	// JSON from the client may arrive as float64 (numbers) or strings.
+	o := parseTrimVideoOptions(map[string]any{"startTime": "2.5", "endTime": "10"})
+	if o.StartTime != 2.5 || o.EndTime != 10 {
+		t.Fatalf("string number parse failed: start=%v end=%v", o.StartTime, o.EndTime)
+	}
+}
+
+func TestTrimVideoOptions_RejectsBadRange(t *testing.T) {
+	cases := []TrimVideoOptions{
+		{StartTime: 5, EndTime: 5},    // equal
+		{StartTime: 5, EndTime: 3},    // end before start
+		{StartTime: 0, EndTime: 0.05}, // too short
+		{StartTime: -1, EndTime: 4},   // negative start
+	}
+	for i, c := range cases {
+		opt := c
+		if err := opt.applyDefaults(); err == nil {
+			t.Errorf("case %d: expected rejection for %+v", i, c)
+		}
+	}
+}
+
+func TestTrimVideoOptions_RejectsBadFormatAndMode(t *testing.T) {
+	o := TrimVideoOptions{Format: "exe", StartTime: 1, EndTime: 5}
+	if err := o.applyDefaults(); err == nil {
+		t.Fatalf("expected rejection of bad format")
+	}
+	o = TrimVideoOptions{CopyMode: "magic", StartTime: 1, EndTime: 5}
+	if err := o.applyDefaults(); err == nil {
+		t.Fatalf("expected rejection of bad copyMode")
+	}
+}

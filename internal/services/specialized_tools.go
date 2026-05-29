@@ -26,10 +26,11 @@ import (
 // presign) flow — no separate endpoint is required for these because they
 // take exactly one media file.
 const (
-	SpecializedModeAudioWaveform   = "audio_waveform"
-	SpecializedModeExtractAudio    = "extract_audio"
+	SpecializedModeAudioWaveform    = "audio_waveform"
+	SpecializedModeExtractAudio     = "extract_audio"
 	SpecializedModeExtractVideoOnly = "extract_video_only"
-	SpecializedModeExtractFrames   = "extract_frames"
+	SpecializedModeExtractFrames    = "extract_frames"
+	SpecializedModeTrimVideo        = "trim_video"
 )
 
 // SpecializedToolsService runs the small set of FFmpeg-driven utilities that
@@ -60,6 +61,8 @@ func (s *SpecializedToolsService) Run(ctx context.Context, job *models.Conversio
 		return s.runExtractVideoOnly(ctx, job, inputPath, outputPath)
 	case SpecializedModeExtractFrames:
 		return s.runExtractFrames(ctx, job, inputPath, outputPath)
+	case SpecializedModeTrimVideo:
+		return s.runTrimVideo(ctx, job, inputPath, outputPath)
 	default:
 		return fmt.Errorf("unsupported specialized tool mode: %s", mode)
 	}
@@ -120,13 +123,13 @@ type AudioWaveformOptions struct {
 }
 
 const (
-	waveformDefaultWidth  = 1600
-	waveformDefaultHeight = 160
-	waveformMinDim        = 64
-	waveformMaxDim        = 7680
-	waveformMaxFPS        = 120
-	waveformMinFPS        = 1
-	waveformDefaultRate   = 25
+	waveformDefaultWidth     = 1600
+	waveformDefaultHeight    = 160
+	waveformMinDim           = 64
+	waveformMaxDim           = 7680
+	waveformMaxFPS           = 120
+	waveformMinFPS           = 1
+	waveformDefaultRate      = 25
 	waveformDefaultPrimary   = "#22D3EE" // cyan-400 — pairs with the sci-fi UI theme
 	waveformDefaultSecondary = "#A855F7" // purple-500 — secondary stereo channel
 )
@@ -566,6 +569,161 @@ func (s *SpecializedToolsService) runExtractVideoOnly(ctx context.Context, job *
 	}
 	s.progress(job.ID, 100)
 	return nil
+}
+
+// ----------------------------------------------------------------------- //
+// TRIM / CUT VIDEO
+// ----------------------------------------------------------------------- //
+
+// TrimVideoOptions captures the validated options for the quality-preserving
+// trim/cut tool. Output is a single clipped segment of the input.
+type TrimVideoOptions struct {
+	// Format: output container/extension. Default mp4.
+	Format string `json:"format"`
+	// StartTime / EndTime in seconds. EndTime must be > StartTime.
+	StartTime float64 `json:"startTime"`
+	EndTime   float64 `json:"endTime"`
+	// CopyMode: auto (default — stream-copy then re-encode fallback),
+	// stream_copy (copy only), or reencode (always re-encode for frame accuracy).
+	CopyMode string `json:"copyMode"`
+}
+
+const trimVideoMaxDurationSec = 6 * 60 * 60 // 6h, matches the command timeout.
+
+func parseTrimVideoOptions(raw map[string]any) TrimVideoOptions {
+	o := TrimVideoOptions{}
+	if raw == nil {
+		return o
+	}
+	if v, ok := raw["format"].(string); ok {
+		o.Format = strings.ToLower(strings.TrimSpace(v))
+	}
+	if v, ok := raw["copyMode"].(string); ok {
+		o.CopyMode = strings.ToLower(strings.TrimSpace(v))
+	}
+	o.StartTime = floatFromAny(raw["startTime"])
+	o.EndTime = floatFromAny(raw["endTime"])
+	return o
+}
+
+func (o *TrimVideoOptions) applyDefaults() error {
+	if o.Format == "" {
+		o.Format = "mp4"
+	}
+	switch o.Format {
+	case "mp4", "webm", "mov", "mkv", "avi":
+	default:
+		return fmt.Errorf("unsupported trim output format: %q (expected mp4|webm|mov|mkv|avi)", o.Format)
+	}
+	if o.CopyMode == "" {
+		o.CopyMode = "auto"
+	}
+	switch o.CopyMode {
+	case "auto", "stream_copy", "reencode":
+	default:
+		return fmt.Errorf("invalid copyMode: %q (expected auto|stream_copy|reencode)", o.CopyMode)
+	}
+	if math.IsNaN(o.StartTime) || math.IsInf(o.StartTime, 0) || o.StartTime < 0 {
+		return fmt.Errorf("invalid start time: %v", o.StartTime)
+	}
+	if math.IsNaN(o.EndTime) || math.IsInf(o.EndTime, 0) || o.EndTime <= 0 {
+		return fmt.Errorf("invalid end time: %v", o.EndTime)
+	}
+	if o.EndTime <= o.StartTime {
+		return fmt.Errorf("end time (%.2f) must be greater than start time (%.2f)", o.EndTime, o.StartTime)
+	}
+	if o.EndTime-o.StartTime < 0.1 {
+		return fmt.Errorf("trim duration must be at least 0.1 seconds, got %.2f", o.EndTime-o.StartTime)
+	}
+	if o.EndTime-o.StartTime > trimVideoMaxDurationSec {
+		return fmt.Errorf("trim duration too long (max %d seconds)", trimVideoMaxDurationSec)
+	}
+	return nil
+}
+
+// runTrimVideo clips [startTime, endTime] out of the input. It prefers a
+// stream-copy (no re-encode, no quality loss, very fast) and falls back to a
+// re-encode when stream-copy is not possible (e.g. the source codec is not
+// valid in the requested container). The MP4 re-encode uses H.264 + AAC +
+// yuv420p + faststart for broad compatibility.
+func (s *SpecializedToolsService) runTrimVideo(ctx context.Context, job *models.ConversionJob, inputPath, outputPath string) error {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		return errors.New("ffmpeg is required for trimming but was not found on PATH — install FFmpeg (apt install ffmpeg / brew install ffmpeg)")
+	}
+	opts := parseTrimVideoOptions(job.Options)
+	if err := opts.applyDefaults(); err != nil {
+		return err
+	}
+	if !ffprobeHasStream(ctx, inputPath, "v") {
+		return errors.New("this file has no video stream — there is nothing to trim")
+	}
+	s.progress(job.ID, 20)
+
+	start := fmt.Sprintf("%.3f", opts.StartTime)
+	duration := fmt.Sprintf("%.3f", opts.EndTime-opts.StartTime)
+
+	// Stream-copy: seek to start (-ss before -i is fast and keyframe-aligned for
+	// copy), keep all streams, copy for `duration` seconds. -avoid_negative_ts
+	// keeps timestamps sane after the seek.
+	copyArgs := []string{"-y", "-ss", start, "-i", inputPath, "-t", duration, "-map", "0", "-c", "copy", "-avoid_negative_ts", "make_zero"}
+	if opts.Format == "mp4" || opts.Format == "mov" {
+		copyArgs = append(copyArgs, "-movflags", "+faststart")
+	}
+	copyArgs = append(copyArgs, outputPath)
+
+	reencode := func() error {
+		os.Remove(outputPath)
+		webmVP9 := false
+		if opts.Format == "webm" {
+			webmVP9 = ffmpegSupportsWebMVP9()
+		}
+		// -ss before -i is decode-accurate for re-encode in modern FFmpeg.
+		args := []string{"-y", "-ss", start, "-i", inputPath, "-t", duration, "-map", "0:v:0", "-map", "0:a?"}
+		args = append(args, buildVideoCodecArgs(videoEncodeSettings{Format: opts.Format, Quality: "high", WebMVP9: webmVP9})...)
+		args = append(args, outputPath)
+		if _, stderr, err := runCommand(ctx, "ffmpeg", args...); err != nil {
+			return fmt.Errorf("ffmpeg trim (re-encode) failed: %w (%s)", err, tail(stderr, 1500))
+		}
+		return nil
+	}
+
+	switch opts.CopyMode {
+	case "reencode":
+		if err := reencode(); err != nil {
+			return err
+		}
+	case "stream_copy":
+		if _, stderr, err := runCommand(ctx, "ffmpeg", copyArgs...); err != nil {
+			return fmt.Errorf("ffmpeg trim (stream-copy) failed: %w (%s)", err, tail(stderr, 1500))
+		}
+	default: // auto — try copy, fall back to re-encode.
+		if _, _, err := runCommand(ctx, "ffmpeg", copyArgs...); err != nil {
+			s.progress(job.ID, 50)
+			if err2 := reencode(); err2 != nil {
+				return err2
+			}
+		}
+	}
+	s.progress(job.ID, 100)
+	return nil
+}
+
+// floatFromAny coerces a JSON-decoded value (float64/int/int64/string) into a
+// float64, returning 0 when it can't.
+func floatFromAny(v any) float64 {
+	switch t := v.(type) {
+	case float64:
+		return t
+	case int:
+		return float64(t)
+	case int64:
+		return float64(t)
+	case string:
+		if n, err := strconv.ParseFloat(strings.TrimSpace(t), 64); err == nil {
+			return n
+		}
+	}
+	return 0
 }
 
 // ----------------------------------------------------------------------- //

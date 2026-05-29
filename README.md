@@ -142,7 +142,7 @@ brew install ffmpeg
 #### Video output codecs
 
 Video conversion picks codecs per target container in a single place
-(`videoOutputCodecArgs` in `internal/services/converter.go`), so the FFmpeg
+(`buildVideoCodecArgs` in `internal/services/converter.go`), so the FFmpeg
 command never carries duplicate `-c:v`/`-c:a` flags:
 
 - **MP4 / MOV** — H.264 + AAC, `-pix_fmt yuv420p`, `-movflags +faststart`
@@ -158,6 +158,37 @@ command never carries duplicate `-c:v`/`-c:a` flags:
   handoffs.
 - **GIF** — handled by a separate FFmpeg → gifsicle pipeline (requires
   gifsicle).
+
+#### Compression controls
+
+The video-compressor / compress-mp4 pages send optional fields on
+`VideoConversionOptions` that refine `buildVideoCodecArgs`:
+
+- `videoCodec` (`h264` | `h265` | `vp9` | `av1`) — overrides the container
+  default. H.265 in MP4/MOV adds `-tag:v hvc1`; AV1 uses `libsvtav1`.
+- `crf` (0–51) — overrides the quality-preset CRF. Friendly UI presets map to
+  CRF: *smallest* ≈ 31, *balanced* ≈ 26, *high quality* ≈ 22.
+- `videoBitrateKbps` / `audioBitrateKbps` — optional explicit bitrates.
+- `preset` (`ultrafast`…`veryslow`) — x264/x265 speed/efficiency trade-off.
+- `stripAudio` — drops the audio track (`-an`) for a smaller file.
+
+MP4 compression keeps H.264 + AAC + `yuv420p` + `+faststart` by default.
+
+#### Trim / cut (`trim_video` specialized mode)
+
+`/tools/video-trimmer`, `/tools/mp4-trimmer`, `/tools/video-cutter`, and
+`/tools/cut-video-online` post `mode: "trim_video"` with `startTime`,
+`endTime`, `format` (default mp4), and `copyMode`:
+
+- `auto` (default) — attempt a quality-preserving **stream-copy**
+  (`-ss START -i input -t DURATION -map 0 -c copy`); fall back to a re-encode
+  when the source codec is incompatible with the chosen container.
+- `stream_copy` — copy only (errors if not possible).
+- `reencode` — always re-encode (frame-accurate). MP4 re-encode uses
+  H.264 + AAC + yuv420p + faststart.
+
+Ranges are validated (start ≥ 0, end > start, duration ≥ 0.1s) and the input is
+checked for a video stream before processing.
 
 **Windows:**
 - Download from [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)

@@ -387,7 +387,8 @@ func specializedMode(job *models.ConversionJob) string {
 	case services.SpecializedModeAudioWaveform,
 		services.SpecializedModeExtractAudio,
 		services.SpecializedModeExtractVideoOnly,
-		services.SpecializedModeExtractFrames:
+		services.SpecializedModeExtractFrames,
+		services.SpecializedModeTrimVideo:
 		return mode
 	}
 	return ""
@@ -539,6 +540,11 @@ func specializedExtension(job *models.ConversionJob, mode string) string {
 		return ".mp4"
 	case services.SpecializedModeExtractFrames:
 		return ".zip"
+	case services.SpecializedModeTrimVideo:
+		if fmtStr, _ := job.Options["format"].(string); strings.TrimSpace(fmtStr) != "" {
+			return "." + strings.TrimPrefix(strings.ToLower(strings.TrimSpace(fmtStr)), ".")
+		}
+		return ".mp4"
 	}
 	return ".bin"
 }
@@ -618,6 +624,7 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 			services.SpecializedModeExtractAudio:     "_audio",
 			services.SpecializedModeExtractVideoOnly: "_silent",
 			services.SpecializedModeExtractFrames:    "_frames",
+			services.SpecializedModeTrimVideo:        "_trimmed",
 		}[mode]
 		return fmt.Sprintf("%s%s%s", name, suffix, h.getOutputExtension(job))
 	}
@@ -647,6 +654,7 @@ func (h *ConversionHandler) outputPath(job *models.ConversionJob, outputDir stri
 			services.SpecializedModeExtractAudio:     "audio",
 			services.SpecializedModeExtractVideoOnly: "silent",
 			services.SpecializedModeExtractFrames:    "frames",
+			services.SpecializedModeTrimVideo:        "trimmed",
 		}[mode]
 		return filepath.Join(outputDir, prefix+h.getOutputExtension(job))
 	}

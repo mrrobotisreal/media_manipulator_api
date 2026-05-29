@@ -148,3 +148,67 @@ func TestVideoOutputCodecArgsProResAndDNxHD(t *testing.T) {
 		t.Errorf("dnxhd profile = %q, want dnxhr_hq", valueAfter(dn, "-profile:v"))
 	}
 }
+
+// --- Compression overrides (video-compressor / compress-mp4) ---
+
+func intPtr(v int) *int { return &v }
+
+func TestBuildVideoCodecArgs_ExplicitCRFOverridesQuality(t *testing.T) {
+	args := buildVideoCodecArgs(videoEncodeSettings{Format: "mp4", Quality: "medium", CRF: intPtr(31)})
+	if valueAfter(args, "-crf") != "31" {
+		t.Errorf("explicit CRF should win, got %q (%v)", valueAfter(args, "-crf"), args)
+	}
+}
+
+func TestBuildVideoCodecArgs_StripAudio(t *testing.T) {
+	args := buildVideoCodecArgs(videoEncodeSettings{Format: "mp4", Quality: "medium", StripAudio: true})
+	if countFlag(args, "-an") != 1 {
+		t.Errorf("strip audio should emit -an, got %v", args)
+	}
+	if countFlag(args, "-c:a") != 0 {
+		t.Errorf("strip audio should not set an audio codec, got %v", args)
+	}
+}
+
+func TestBuildVideoCodecArgs_H265InMP4(t *testing.T) {
+	args := buildVideoCodecArgs(videoEncodeSettings{Format: "mp4", Quality: "medium", Codec: "h265"})
+	if valueAfter(args, "-c:v") != "libx265" {
+		t.Errorf("h265 video codec = %q, want libx265", valueAfter(args, "-c:v"))
+	}
+	if valueAfter(args, "-tag:v") != "hvc1" {
+		t.Errorf("h265 in mp4 should add -tag:v hvc1, got %v", args)
+	}
+}
+
+func TestBuildVideoCodecArgs_AV1(t *testing.T) {
+	args := buildVideoCodecArgs(videoEncodeSettings{Format: "mp4", Quality: "medium", Codec: "av1"})
+	if valueAfter(args, "-c:v") != "libsvtav1" {
+		t.Errorf("av1 video codec = %q, want libsvtav1", valueAfter(args, "-c:v"))
+	}
+}
+
+func TestBuildVideoCodecArgs_Bitrates(t *testing.T) {
+	args := buildVideoCodecArgs(videoEncodeSettings{Format: "mp4", Quality: "medium", VideoBitrate: intPtr(2500), AudioBitrate: intPtr(128)})
+	if valueAfter(args, "-b:v") != "2500k" {
+		t.Errorf("video bitrate = %q, want 2500k", valueAfter(args, "-b:v"))
+	}
+	if valueAfter(args, "-b:a") != "128k" {
+		t.Errorf("audio bitrate = %q, want 128k", valueAfter(args, "-b:a"))
+	}
+}
+
+func TestBuildVideoCodecArgs_NoDuplicateFlagsWithOverrides(t *testing.T) {
+	args := buildVideoCodecArgs(videoEncodeSettings{
+		Format: "mp4", Quality: "high", Codec: "h265", CRF: intPtr(22),
+		Preset: "slow", AudioBitrate: intPtr(160),
+	})
+	if countFlag(args, "-c:v") != 1 {
+		t.Errorf("expected one -c:v, got %d (%v)", countFlag(args, "-c:v"), args)
+	}
+	if countFlag(args, "-c:a") != 1 {
+		t.Errorf("expected one -c:a, got %d (%v)", countFlag(args, "-c:a"), args)
+	}
+	if valueAfter(args, "-preset") != "slow" {
+		t.Errorf("preset = %q, want slow", valueAfter(args, "-preset"))
+	}
+}

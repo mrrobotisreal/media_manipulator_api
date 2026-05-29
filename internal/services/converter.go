@@ -947,13 +947,27 @@ func (c *Converter) convertVideo(job *models.ConversionJob, inputPath, outputPat
 	if options.Transform != nil {
 		t := options.Transform
 
-		// Rotation
+		// Rotation. For the cardinal 90/180/270 angles we use `transpose`
+		// (which correctly swaps width/height for 90/270) instead of `rotate`,
+		// which keeps the original canvas and leaves black corners. Arbitrary
+		// angles still fall back to `rotate`.
 		if t.Rotation != nil && *t.Rotation != 0 {
-			// Convert degrees to radians for FFmpeg
-			radians := (*t.Rotation * 3.14159) / 180
-			rotateFilter := fmt.Sprintf("rotate=%.4f", radians)
-			videoFilters = append(videoFilters, rotateFilter)
-			fmt.Printf("[DEBUG] Added rotation filter: %s\n", rotateFilter)
+			norm := math.Mod(*t.Rotation, 360)
+			if norm < 0 {
+				norm += 360
+			}
+			switch norm {
+			case 90:
+				videoFilters = append(videoFilters, "transpose=1") // 90° clockwise
+			case 180:
+				videoFilters = append(videoFilters, "transpose=1", "transpose=1")
+			case 270:
+				videoFilters = append(videoFilters, "transpose=2") // 90° counter-clockwise
+			default:
+				radians := (norm * 3.14159) / 180
+				videoFilters = append(videoFilters, fmt.Sprintf("rotate=%.4f", radians))
+			}
+			fmt.Printf("[DEBUG] Added rotation filter for %.2f°\n", norm)
 		}
 
 		// Flips
@@ -1034,17 +1048,29 @@ func (c *Converter) convertVideo(job *models.ConversionJob, inputPath, outputPat
 
 	// Output container + codec selection.
 	//
-	// Centralized in videoOutputCodecArgs so each format sets its video codec,
+	// Centralized in buildVideoCodecArgs so each format sets its video codec,
 	// audio codec, and any container-specific muxer flags exactly once. The old
 	// code appended a default "-c:v libx264 -c:a aac" and then appended a second
 	// "-c:v"/"-c:a" for special formats, leaving FFmpeg to silently honor the
 	// last flag — correct in practice but confusing and easy to break. WebM
 	// falls back from VP9+Opus to VP8+Vorbis when this FFmpeg build lacks them.
+	// Optional compression overrides (codec, CRF, bitrate, preset, strip-audio)
+	// from the video-compressor / compress-mp4 pages are threaded through here.
 	webmVP9 := false
 	if options.Format == "webm" {
 		webmVP9 = ffmpegSupportsWebMVP9()
 	}
-	args = append(args, videoOutputCodecArgs(options.Format, options.Quality, webmVP9)...)
+	args = append(args, buildVideoCodecArgs(videoEncodeSettings{
+		Format:       options.Format,
+		Quality:      options.Quality,
+		Codec:        options.VideoCodec,
+		CRF:          options.CRF,
+		VideoBitrate: options.VideoBitrateKbps,
+		AudioBitrate: options.AudioBitrateKbps,
+		Preset:       options.Preset,
+		StripAudio:   options.StripAudio,
+		WebMVP9:      webmVP9,
+	})...)
 
 	args = append(args, "-y", outputPath)
 
@@ -1079,44 +1105,130 @@ func wmvQScale(quality string) string {
 	}
 }
 
-// videoOutputCodecArgs returns the container/codec/muxer flags for a target
+// videoEncodeSettings carries the resolved encode parameters for
+// buildVideoCodecArgs. Quality is the legacy preset fallback; the optional
+// fields (Codec/CRF/VideoBitrate/AudioBitrate/Preset/StripAudio) come from the
+// compression utility pages and refine the defaults when present.
+type videoEncodeSettings struct {
+	Format       string
+	Quality      string // low/medium/high — fallback CRF source
+	Codec        string // "", h264, h265, vp9, av1
+	CRF          *int
+	VideoBitrate *int // kbps
+	AudioBitrate *int // kbps
+	Preset       string
+	StripAudio   bool
+	WebMVP9      bool
+}
+
+// videoOutputCodecArgs is the legacy quality-only entry point (kept so existing
+// callers/tests stay stable). It delegates to buildVideoCodecArgs.
+func videoOutputCodecArgs(format, quality string, webmVP9 bool) []string {
+	return buildVideoCodecArgs(videoEncodeSettings{Format: format, Quality: quality, WebMVP9: webmVP9})
+}
+
+// buildVideoCodecArgs returns the container/codec/muxer flags for a target
 // video format. It is the single source of truth for codec selection so the
 // FFmpeg command never carries duplicate or conflicting -c:v / -c:a flags.
 //
 //   - MP4 / MOV  -> H.264 + AAC, yuv420p, +faststart (universal playback)
-//   - WebM       -> VP9 + Opus, or VP8 + Vorbis when webmVP9 is false
+//   - WebM       -> VP9 + Opus, or VP8 + Vorbis when WebMVP9 is false
 //   - MKV / FLV  -> H.264 + AAC (flexible / Flash-9 containers)
 //   - AVI        -> H.264 + MP3 (AVI predates AAC; MP3 stays broadly playable)
 //   - WMV        -> wmv2 + wmav2 (native Windows Media codecs, quantizer-based)
 //   - ProRes     -> prores_ks profile 2 + PCM (editing intermediate)
 //   - DNxHD      -> DNxHR HQ + PCM (resolution-independent editing intermediate)
 //
-// gif is handled by convertVideoToGIF and never reaches this function.
-func videoOutputCodecArgs(format, quality string, webmVP9 bool) []string {
-	crf := videoCRF(quality)
-	switch format {
-	case "webm":
-		if webmVP9 {
-			return []string{"-c:v", "libvpx-vp9", "-b:v", "0", "-crf", crf, "-c:a", "libopus"}
+// Codec/CRF/bitrate/preset/strip-audio overrides apply to the H.26x and WebM
+// paths; the intra/editing codecs (prores/dnxhd/wmv) ignore them. gif is
+// handled by convertVideoToGIF and never reaches this function.
+func buildVideoCodecArgs(s videoEncodeSettings) []string {
+	crf := videoCRF(s.Quality)
+	if s.CRF != nil {
+		crf = strconv.Itoa(*s.CRF)
+	}
+
+	// audioArgs picks the audio codec for the container, honoring strip-audio
+	// and an optional bitrate override.
+	audioArgs := func(defaultCodec string) []string {
+		if s.StripAudio {
+			return []string{"-an"}
 		}
-		// VP8 + Vorbis fallback for FFmpeg builds without VP9/Opus.
-		return []string{"-c:v", "libvpx", "-crf", crf, "-b:v", "1M", "-c:a", "libvorbis"}
+		a := []string{"-c:a", defaultCodec}
+		if s.AudioBitrate != nil {
+			a = append(a, "-b:a", fmt.Sprintf("%dk", *s.AudioBitrate))
+		}
+		return a
+	}
+	bitrateArgs := func() []string {
+		if s.VideoBitrate != nil {
+			return []string{"-b:v", fmt.Sprintf("%dk", *s.VideoBitrate)}
+		}
+		return nil
+	}
+
+	switch s.Format {
+	case "webm":
+		// VP9 + Opus is the modern default; VP8 + Vorbis is the fallback when
+		// the FFmpeg build lacks VP9/Opus and the caller did not force a codec.
+		if !s.WebMVP9 && s.Codec == "" {
+			args := []string{"-c:v", "libvpx", "-crf", crf, "-b:v", "1M"}
+			return append(args, audioArgs("libvorbis")...)
+		}
+		vcodec := "libvpx-vp9"
+		if s.Codec == "av1" {
+			vcodec = "libsvtav1"
+		}
+		var args []string
+		if vcodec == "libsvtav1" {
+			args = []string{"-c:v", vcodec, "-crf", crf}
+		} else {
+			args = []string{"-c:v", vcodec, "-b:v", "0", "-crf", crf}
+		}
+		args = append(args, bitrateArgs()...)
+		return append(args, audioArgs("libopus")...)
 	case "prores":
 		return []string{"-c:v", "prores_ks", "-profile:v", "2", "-pix_fmt", "yuv422p10le", "-c:a", "pcm_s16le"}
 	case "dnxhd":
 		return []string{"-c:v", "dnxhd", "-profile:v", "dnxhr_hq", "-pix_fmt", "yuv422p", "-c:a", "pcm_s16le"}
-	case "avi":
-		return []string{"-c:v", "libx264", "-crf", crf, "-pix_fmt", "yuv420p", "-c:a", "libmp3lame"}
 	case "wmv":
-		return []string{"-c:v", "wmv2", "-qscale:v", wmvQScale(quality), "-c:a", "wmav2"}
-	case "flv":
-		return []string{"-c:v", "libx264", "-crf", crf, "-pix_fmt", "yuv420p", "-c:a", "aac"}
-	case "mkv":
-		return []string{"-c:v", "libx264", "-crf", crf, "-pix_fmt", "yuv420p", "-c:a", "aac"}
-	case "mov":
-		return []string{"-c:v", "libx264", "-crf", crf, "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-c:a", "aac"}
-	default: // "mp4"
-		return []string{"-c:v", "libx264", "-crf", crf, "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-c:a", "aac"}
+		return []string{"-c:v", "wmv2", "-qscale:v", wmvQScale(s.Quality), "-c:a", "wmav2"}
+	case "avi":
+		args := []string{"-c:v", "libx264", "-crf", crf, "-pix_fmt", "yuv420p"}
+		if s.Preset != "" {
+			args = append(args, "-preset", s.Preset)
+		}
+		args = append(args, bitrateArgs()...)
+		// AVI predates AAC; MP3 keeps the container broadly playable.
+		return append(args, audioArgs("libmp3lame")...)
+	default:
+		// mp4 / mov / mkv / flv -> H.26x family. H.264 is the default; an
+		// explicit codec override can select H.265/AV1 (or VP9 in MKV).
+		vcodec := "libx264"
+		var extra []string
+		switch s.Codec {
+		case "h265":
+			vcodec = "libx265"
+			if s.Format == "mp4" || s.Format == "mov" {
+				extra = append(extra, "-tag:v", "hvc1") // Apple/QuickTime HEVC hint
+			}
+		case "av1":
+			vcodec = "libsvtav1"
+		case "vp9":
+			if s.Format == "mkv" {
+				vcodec = "libvpx-vp9"
+			}
+		}
+		args := []string{"-c:v", vcodec, "-crf", crf, "-pix_fmt", "yuv420p"}
+		args = append(args, extra...)
+		if s.Preset != "" && vcodec != "libsvtav1" {
+			args = append(args, "-preset", s.Preset)
+		}
+		args = append(args, bitrateArgs()...)
+		if s.Format == "mp4" || s.Format == "mov" {
+			args = append(args, "-movflags", "+faststart")
+		}
+		return append(args, audioArgs("aac")...)
 	}
 }
 
@@ -1173,6 +1285,32 @@ func (c *Converter) validateVideoOptions(options *models.VideoConversionOptions)
 	validFormats := map[string]bool{"mp4": true, "webm": true, "avi": true, "mov": true, "mkv": true, "flv": true, "wmv": true, "prores": true, "dnxhd": true, "gif": true}
 	if !validFormats[options.Format] {
 		return fmt.Errorf("unsupported format: %s", options.Format)
+	}
+
+	// Validate optional compression controls (video-compressor / compress-mp4).
+	if options.VideoCodec != "" {
+		validCodecs := map[string]bool{"h264": true, "h265": true, "vp9": true, "av1": true}
+		if !validCodecs[options.VideoCodec] {
+			return fmt.Errorf("unsupported video codec: %s (expected h264, h265, vp9, or av1)", options.VideoCodec)
+		}
+	}
+	if options.CRF != nil && (*options.CRF < 0 || *options.CRF > 51) {
+		return fmt.Errorf("crf must be between 0 and 51, got %d", *options.CRF)
+	}
+	if options.VideoBitrateKbps != nil && (*options.VideoBitrateKbps < 50 || *options.VideoBitrateKbps > 200000) {
+		return fmt.Errorf("video bitrate must be between 50 and 200000 kbps, got %d", *options.VideoBitrateKbps)
+	}
+	if options.AudioBitrateKbps != nil && (*options.AudioBitrateKbps < 8 || *options.AudioBitrateKbps > 1024) {
+		return fmt.Errorf("audio bitrate must be between 8 and 1024 kbps, got %d", *options.AudioBitrateKbps)
+	}
+	if options.Preset != "" {
+		validPresets := map[string]bool{
+			"ultrafast": true, "superfast": true, "veryfast": true, "faster": true,
+			"fast": true, "medium": true, "slow": true, "slower": true, "veryslow": true,
+		}
+		if !validPresets[options.Preset] {
+			return fmt.Errorf("unsupported encoder preset: %s", options.Preset)
+		}
 	}
 
 	// Validate trim range if specified
