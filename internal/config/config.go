@@ -139,6 +139,14 @@ type Config struct {
 
 	// Safety / compliance
 	SafetyIncidentRetentionDays int
+
+	// Content Studio (browser-based multi-track NLE). All Content Studio
+	// ffmpeg work (proxy, filmstrip, export) is pinned to a dedicated GPU so
+	// it doesn't contend with whisper/RIFE on the shared host. We default to
+	// GPU 1 (the 16GB RTX 5080) to mirror AI_CUDA_GPU=1.
+	ContentStudioGPUIndex    int
+	ContentStudioProxyHeight int
+	ContentStudioS3Prefix    string
 }
 
 func Load() *Config {
@@ -257,6 +265,12 @@ func Load() *Config {
 
 		// Safety / compliance
 		SafetyIncidentRetentionDays: getEnvInt("SAFETY_INCIDENT_RETENTION_DAYS", 365),
+
+		// Content Studio — getEnvIntDefault for the GPU index so device 0 is a
+		// valid override (getEnvInt rejects <= 0).
+		ContentStudioGPUIndex:    getEnvIntDefault("CONTENT_STUDIO_GPU_INDEX", 1),
+		ContentStudioProxyHeight: getEnvInt("CONTENT_STUDIO_PROXY_HEIGHT", 720),
+		ContentStudioS3Prefix:    getEnv("CONTENT_STUDIO_S3_PREFIX", "studio"),
 	}
 }
 

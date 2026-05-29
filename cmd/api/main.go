@@ -135,6 +135,10 @@ func main() {
 	s3Client := newS3Client(cfg)
 	faceDetectionStore := services.NewFaceDetectionStore(30 * time.Minute)
 	conversionHandler := handlers.NewConversionHandler(jobManager, converter, cfg, inspector, analysisQueue, transcription, s3Client, faceDetectionStore)
+	// Content Studio gets its own handler because it persists projects/assets in
+	// Postgres (the conversion handler is stateless). It shares the jobManager so
+	// ingest/export progress flows through the same /api/job/:jobId machinery.
+	studioHandler := handlers.NewStudioHandler(jobManager, cfg, inspector, s3Client, pool)
 
 	// Cleanup worker
 	if cfg.CleanupEnabled {
@@ -145,7 +149,7 @@ func main() {
 	// Periodic active-jobs gauge update.
 	go pollActiveJobs(ctx, jobManager, metricsReg)
 
-	router := setupRouter(cfg, conversionHandler, store, enricher, limiter, metricsReg)
+	router := setupRouter(cfg, conversionHandler, studioHandler, store, enricher, limiter, metricsReg)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -193,7 +197,7 @@ func newS3Client(cfg *config.Config) *s3.Client {
 	})
 }
 
-func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
+func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.Default()
@@ -214,9 +218,14 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		"X-Requested-With",
 		"X-MM-Visitor-ID",
 		"X-MM-Session-ID",
+		// Range lets the Content Studio preview proxy be scrubbed cross-origin
+		// from a <video crossorigin="anonymous"> element (needed for Web Audio).
+		"Range",
 	}
 	corsConfig.AllowCredentials = false
-	corsConfig.ExposeHeaders = []string{"Content-Length", "Content-Disposition", "X-MM-Request-ID"}
+	// Expose the byte-range response headers so cross-origin <video> seeking and
+	// the Content Studio proxy passthrough work.
+	corsConfig.ExposeHeaders = []string{"Content-Length", "Content-Disposition", "Content-Range", "Accept-Ranges", "X-MM-Request-ID"}
 	router.Use(cors.New(corsConfig))
 	router.Use(middleware.RequestContext())
 	router.Use(middleware.AccessLog(store, enricher))
@@ -244,6 +253,8 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// single-file /upload contract (caption translator takes .srt/.vtt
 		// text files; stitch-audio-to-video takes multi-file multipart).
 		handlers.RegisterToolRoutes(api, conversionHandler)
+		// Content Studio (browser NLE) endpoints — projects/assets/export.
+		handlers.RegisterStudioRoutes(api, studioHandler)
 
 		// Tighter limits for upload/transcode/analysis paths.
 		api.Use() // marker; per-route limiters below
@@ -284,6 +295,10 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 		tool         string
 		sessionLimit int
 		ipLimit      int
+		// matches optionally overrides the default exact-path comparison. Used
+		// for parameterized routes (e.g. /studio/projects/:id/export) where the
+		// concrete path varies per request.
+		matches func(path string) bool
 	}
 	rules := []rule{
 		{path: "/api/upload", routeKey: "upload", tool: "upload", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
@@ -297,14 +312,32 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 		{path: "/api/tools/caption-translator", routeKey: "tools_caption_translator", tool: "caption_translator", sessionLimit: cfg.RateLimitAnalysisPerSessionPerHour, ipLimit: cfg.RateLimitAnalysisPerIPPerHour},
 		// Stitch-audio-to-video uploads + transcodes — share the upload bucket.
 		{path: "/api/tools/stitch-audio-to-video", routeKey: "tools_stitch_audio_to_video", tool: "stitch_audio_to_video", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
+		// Content Studio: source ingest shares the upload bucket; the EDL export
+		// (NVENC transcode) shares the transcode bucket.
+		{path: "/api/studio/assets/presign", routeKey: "studio_assets_presign", tool: "studio_upload", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
+		{path: "/api/studio/assets/complete", routeKey: "studio_assets_complete", tool: "studio_upload", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
+		{
+			routeKey:     "studio_project_export",
+			tool:         "studio_export",
+			sessionLimit: cfg.RateLimitTranscodesPerSessionPerHour,
+			ipLimit:      cfg.RateLimitTranscodesPerIPPerHour,
+			matches: func(path string) bool {
+				return strings.HasPrefix(path, "/api/studio/projects/") && strings.HasSuffix(path, "/export")
+			},
+		},
 	}
 	return func(c *gin.Context) {
 		if c.Request.Method != http.MethodPost {
 			c.Next()
 			return
 		}
+		path := c.Request.URL.Path
 		for _, r := range rules {
-			if c.Request.URL.Path == r.path {
+			matched := r.path != "" && path == r.path
+			if r.matches != nil {
+				matched = r.matches(path)
+			}
+			if matched {
 				guard(r.routeKey, r.tool, r.sessionLimit, r.ipLimit)(c)
 				return
 			}
