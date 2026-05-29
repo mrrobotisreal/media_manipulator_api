@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -528,7 +527,7 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	for _, a := range assets {
 		assetByID[a.ID] = a
 	}
-	items, ok := collectVideoClips(project, assetByID)
+	refs, duration, ok := collectExportRefs(project, assetByID)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no clip to export"})
 		return
@@ -551,12 +550,12 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	// default video job, so /api/download/:jobId serves it unchanged.
 	outputPath := filepath.Join(jobOutputDir, "converted.mp4")
 
-	go h.runExportJob(job.ID, items, project.Width, project.Height, project.FPS, quality, outputPath)
+	go h.runExportJob(job.ID, refs, project.Width, project.Height, project.FPS, duration, quality, outputPath)
 
 	c.JSON(http.StatusOK, models.UploadResponse{JobID: job.ID})
 }
 
-func (h *StudioHandler) runExportJob(jobID string, items []studioExportItem, width, height int, fps float64, quality, outputPath string) {
+func (h *StudioHandler) runExportJob(jobID string, refs []studioClipRef, width, height int, fps, duration float64, quality, outputPath string) {
 	if err := h.jobManager.UpdateJobStatus(jobID, models.StatusProcessing); err != nil {
 		log.Printf("studio export: failed to mark job %s processing: %v", jobID, err)
 		return
@@ -573,8 +572,8 @@ func (h *StudioHandler) runExportJob(jobID string, items []studioExportItem, wid
 			_ = os.Remove(p)
 		}
 	}()
-	for _, it := range items {
-		key := it.asset.S3KeyOriginal
+	for _, r := range refs {
+		key := r.asset.S3KeyOriginal
 		if _, done := localByKey[key]; done {
 			continue
 		}
@@ -588,17 +587,36 @@ func (h *StudioHandler) runExportJob(jobID string, items []studioExportItem, wid
 		cleanup = append(cleanup, local)
 	}
 
-	segments := make([]services.StudioExportSegment, 0, len(items))
-	for _, it := range items {
-		segments = append(segments, services.StudioExportSegment{
-			InputPath: localByKey[it.asset.S3KeyOriginal],
-			SourceIn:  it.clip.SourceIn,
-			SourceOut: it.clip.SourceOut,
-			HasAudio:  it.asset.HasAudio,
-		})
+	// Build the render plan: one ffmpeg input per ref (shared assets repeat the
+	// same local path). Video clips composite; audio-bearing clips on non-muted
+	// tracks mix in.
+	plan := services.StudioExportPlan{Width: width, Height: height, FPS: fps, Duration: duration}
+	for _, r := range refs {
+		idx := len(plan.Inputs)
+		plan.Inputs = append(plan.Inputs, localByKey[r.asset.S3KeyOriginal])
+		opacity := 1.0
+		if r.clip.Opacity != nil {
+			opacity = *r.clip.Opacity
+		}
+		volume := 1.0
+		if r.clip.Volume != nil {
+			volume = *r.clip.Volume
+		}
+		if r.trackKind == models.StudioTrackKindVideo {
+			plan.Video = append(plan.Video, services.StudioExportVideoSeg{
+				InputIndex: idx, SourceIn: r.clip.SourceIn, SourceOut: r.clip.SourceOut,
+				TimelineStart: r.clip.TimelineStart, Opacity: opacity, TrackIndex: r.trackIndex,
+			})
+		}
+		if !r.trackMuted && r.asset.HasAudio && volume > 0 {
+			plan.Audio = append(plan.Audio, services.StudioExportAudioSeg{
+				InputIndex: idx, SourceIn: r.clip.SourceIn, SourceOut: r.clip.SourceOut,
+				TimelineStart: r.clip.TimelineStart, Volume: volume,
+			})
+		}
 	}
 
-	if err := h.export.RunTimeline(ctx, jobID, segments, width, height, fps, quality, outputPath); err != nil {
+	if err := h.export.RunExport(ctx, jobID, plan, quality, outputPath); err != nil {
 		log.Printf("studio export: job %s failed: %v", jobID, err)
 		_ = h.jobManager.UpdateJobError(jobID, err.Error())
 		return
@@ -693,48 +711,61 @@ func studioAudioParams(probe *models.VideoProbeResponse) (sampleRate, channels i
 	return sampleRate, channels
 }
 
-// studioExportItem pairs a clip with its resolved asset, in timeline order.
-type studioExportItem struct {
-	clip  models.StudioClip
-	asset *models.StudioAsset
+// studioClipRef pairs a clip with its resolved asset and the track context the
+// exporter needs (kind for video-vs-audio routing, index for overlay order,
+// muted to drop a track's audio).
+type studioClipRef struct {
+	clip       models.StudioClip
+	asset      *models.StudioAsset
+	trackKind  models.StudioTrackKind
+	trackIndex int
+	trackMuted bool
 }
 
-// collectVideoClips gathers every clip on the first video track (falling back
-// to the first non-empty track), in timeline order, whose asset is known.
-// Phase 2 concatenates these; gaps between clips are collapsed (full
-// timeline-accurate positioning with gaps arrives with the Phase 3 overlay).
-func collectVideoClips(p *models.StudioProject, assets map[string]*models.StudioAsset) ([]studioExportItem, bool) {
-	var track *models.StudioTrack
-	for i := range p.Tracks {
-		if p.Tracks[i].Kind == models.StudioTrackKindVideo && len(p.Tracks[i].Clips) > 0 {
-			track = &p.Tracks[i]
-			break
-		}
-	}
-	if track == nil {
-		for i := range p.Tracks {
-			if len(p.Tracks[i].Clips) > 0 {
-				track = &p.Tracks[i]
-				break
+// collectExportRefs flattens the EDL into render refs and the timeline length.
+// A ref is kept only if it produces output: every video clip (mute affects only
+// audio), plus audio-bearing clips on non-muted tracks with volume > 0.
+// Duration spans all clips so the export length matches the timeline.
+func collectExportRefs(p *models.StudioProject, assets map[string]*models.StudioAsset) ([]studioClipRef, float64, bool) {
+	refs := make([]studioClipRef, 0)
+	var duration float64
+	for _, track := range p.Tracks {
+		for _, clip := range track.Clips {
+			asset, ok := assets[clip.AssetID]
+			if !ok {
+				continue
 			}
+			if end := clip.TimelineStart + clipEffectiveDur(clip); end > duration {
+				duration = end
+			}
+			volume := 1.0
+			if clip.Volume != nil {
+				volume = *clip.Volume
+			}
+			contributesAudio := !track.Muted && asset.HasAudio && volume > 0
+			if track.Kind != models.StudioTrackKindVideo && !contributesAudio {
+				continue // muted/silent audio clip — nothing to render
+			}
+			refs = append(refs, studioClipRef{
+				clip:       clip,
+				asset:      asset,
+				trackKind:  track.Kind,
+				trackIndex: track.Index,
+				trackMuted: track.Muted,
+			})
 		}
 	}
-	if track == nil {
-		return nil, false
+	if len(refs) == 0 || duration <= 0 {
+		return nil, 0, false
 	}
-	ordered := append([]models.StudioClip(nil), track.Clips...)
-	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].TimelineStart < ordered[j].TimelineStart })
+	return refs, duration, true
+}
 
-	items := make([]studioExportItem, 0, len(ordered))
-	for _, clip := range ordered {
-		if a, ok := assets[clip.AssetID]; ok {
-			items = append(items, studioExportItem{clip: clip, asset: a})
-		}
+func clipEffectiveDur(c models.StudioClip) float64 {
+	if d := c.SourceOut - c.SourceIn; d > 0 {
+		return d
 	}
-	if len(items) == 0 {
-		return nil, false
-	}
-	return items, true
+	return 0
 }
 
 func normalizeExportQuality(preset string) string {

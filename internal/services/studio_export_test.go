@@ -15,116 +15,110 @@ func argIndex(args []string, want string) int {
 	return -1
 }
 
-func TestBuildSingleClipExportArgs_NVENC(t *testing.T) {
-	args := buildSingleClipExportArgs("/tmp/in.mp4", 5.5, 12.25, "h264_nvenc", "high", "/tmp/out.mp4")
-
-	// Fast input seek before -i, then duration after.
-	ssIdx := argIndex(args, "-ss")
-	iIdx := argIndex(args, "-i")
-	tIdx := argIndex(args, "-t")
-	if ssIdx == -1 || iIdx == -1 || tIdx == -1 {
-		t.Fatalf("expected -ss, -i, -t in args: %v", args)
+func filterComplex(t *testing.T, args []string) string {
+	t.Helper()
+	idx := argIndex(args, "-filter_complex")
+	if idx == -1 || idx+1 >= len(args) {
+		t.Fatalf("no -filter_complex in args: %v", args)
 	}
-	if !(ssIdx < iIdx && iIdx < tIdx) {
-		t.Fatalf("expected order -ss < -i < -t, got ss=%d i=%d t=%d", ssIdx, iIdx, tIdx)
-	}
-	if args[ssIdx+1] != "5.500" {
-		t.Errorf("sourceIn: got %q want 5.500", args[ssIdx+1])
-	}
-	// duration = sourceOut - sourceIn = 12.25 - 5.5 = 6.75
-	if args[tIdx+1] != "6.750" {
-		t.Errorf("duration: got %q want 6.750", args[tIdx+1])
-	}
-	if args[iIdx+1] != "/tmp/in.mp4" {
-		t.Errorf("input: got %q", args[iIdx+1])
-	}
-	if cv := argIndex(args, "-c:v"); cv == -1 || args[cv+1] != "h264_nvenc" {
-		t.Errorf("expected -c:v h264_nvenc, args=%v", args)
-	}
-	if argIndex(args, "-cq") == -1 {
-		t.Errorf("nvenc should use -cq, args=%v", args)
-	}
-	if args[len(args)-1] != "/tmp/out.mp4" {
-		t.Errorf("output must be last arg, got %q", args[len(args)-1])
-	}
-	if argIndex(args, "+faststart") == -1 {
-		t.Errorf("expected +faststart for web playback, args=%v", args)
-	}
+	return args[idx+1]
 }
 
-func TestBuildSingleClipExportArgs_Libx264AndZeroIn(t *testing.T) {
-	// sourceIn == 0 should omit -ss (no leading seek).
-	args := buildSingleClipExportArgs("/tmp/in.mov", 0, 10, "libx264", "medium", "/tmp/out.mp4")
-	if argIndex(args, "-ss") != -1 {
-		t.Errorf("sourceIn=0 should omit -ss, args=%v", args)
+func TestBuildMultiTrackExportArgs_OverlayAndMix(t *testing.T) {
+	plan := StudioExportPlan{
+		Inputs: []string{"/a.mp4", "/b.mp4", "/music.mp3"},
+		Video: []StudioExportVideoSeg{
+			{InputIndex: 0, SourceIn: 0, SourceOut: 5, TimelineStart: 0, Opacity: 1, TrackIndex: 0},
+			{InputIndex: 1, SourceIn: 1, SourceOut: 3, TimelineStart: 2, Opacity: 0.5, TrackIndex: 1},
+		},
+		Audio: []StudioExportAudioSeg{
+			{InputIndex: 0, SourceIn: 0, SourceOut: 5, TimelineStart: 0, Volume: 1},
+			{InputIndex: 2, SourceIn: 0, SourceOut: 10, TimelineStart: 0, Volume: 0.3},
+		},
+		Width: 1920, Height: 1080, FPS: 30, Duration: 10,
 	}
-	if tIdx := argIndex(args, "-t"); tIdx == -1 || args[tIdx+1] != "10.000" {
-		t.Errorf("expected -t 10.000, args=%v", args)
-	}
-	if cv := argIndex(args, "-c:v"); cv == -1 || args[cv+1] != "libx264" {
-		t.Errorf("expected libx264, args=%v", args)
-	}
-	if argIndex(args, "-crf") == -1 {
-		t.Errorf("libx264 should use -crf, args=%v", args)
-	}
-	if pix := argIndex(args, "-pix_fmt"); pix == -1 || args[pix+1] != "yuv420p" {
-		t.Errorf("expected -pix_fmt yuv420p, args=%v", args)
-	}
-}
+	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/out.mp4")
 
-func TestBuildSingleClipExportArgs_NegativeDurationClamped(t *testing.T) {
-	// Defensive: sourceOut < sourceIn must not emit a negative -t.
-	args := buildSingleClipExportArgs("/tmp/in.mp4", 8, 3, "libx264", "low", "/tmp/out.mp4")
-	if tIdx := argIndex(args, "-t"); tIdx != -1 {
-		t.Errorf("non-positive duration should omit -t, args=%v", args)
-	}
-	if strings.Join(args, " ") == "" {
-		t.Fatal("args should not be empty")
-	}
-}
-
-func TestBuildConcatExportArgs(t *testing.T) {
-	segs := []StudioExportSegment{
-		{InputPath: "/tmp/a.mp4", SourceIn: 0, SourceOut: 4, HasAudio: true},
-		{InputPath: "/tmp/b.mp4", SourceIn: 2, SourceOut: 5, HasAudio: false},
-	}
-	args := buildConcatExportArgs(segs, 1920, 1080, 30, "h264_nvenc", "high", "/tmp/out.mp4")
-
-	// One -i per segment.
+	// One -i per input.
 	inputs := 0
-	for i, a := range args {
+	for _, a := range args {
 		if a == "-i" {
 			inputs++
-			_ = i
 		}
 	}
-	if inputs != 2 {
-		t.Fatalf("expected 2 inputs, got %d: %v", inputs, args)
+	if inputs != 3 {
+		t.Fatalf("expected 3 inputs, got %d: %v", inputs, args)
 	}
 
-	fcIdx := argIndex(args, "-filter_complex")
-	if fcIdx == -1 {
-		t.Fatalf("expected -filter_complex, args=%v", args)
-	}
-	fc := args[fcIdx+1]
-
+	fc := filterComplex(t, args)
 	for _, want := range []string{
-		"[0:v]trim=start=0.000:end=4.000",
-		"setpts=PTS-STARTPTS",
-		"scale=1920:1080:force_original_aspect_ratio=decrease",
-		"[0:a]atrim=start=0.000:end=4.000",        // segment 0 has audio
-		"anullsrc=r=48000:cl=stereo,atrim=duration=3.000", // segment 1 is silent
-		"[v0][a0][v1][a1]concat=n=2:v=1:a=1[outv][outa]",
+		"color=c=black:s=1920x1080:r=30:d=10.000,format=yuv420p[vbase]",
+		"[0:v]trim=start=0.000:end=5.000",
+		"setpts=PTS-STARTPTS+0.000/TB",
+		"setpts=PTS-STARTPTS+2.000/TB",       // second clip offset to its timeline start
+		"colorchannelmixer=aa=0.500",          // opacity on the top clip
+		"overlay=x=(W-w)/2:y=(H-h)/2:enable='between(t,2.000,4.000)':eof_action=pass[vout]",
+		"volume=0.300",                        // music gain
+		"amix=inputs=2:normalize=0:dropout_transition=0[aout]",
 	} {
 		if !strings.Contains(fc, want) {
 			t.Errorf("filter_complex missing %q\ngraph: %s", want, fc)
 		}
 	}
 
-	if mapV := argIndex(args, "[outv]"); mapV == -1 {
-		t.Errorf("expected -map [outv], args=%v", args)
+	if argIndex(args, "[vout]") == -1 || argIndex(args, "[aout]") == -1 {
+		t.Errorf("expected -map [vout] and -map [aout], args=%v", args)
 	}
-	if args[len(args)-1] != "/tmp/out.mp4" {
+	if tIdx := argIndex(args, "-t"); tIdx == -1 || args[tIdx+1] != "10.000" {
+		t.Errorf("expected -t 10.000, args=%v", args)
+	}
+	if args[len(args)-1] != "/out.mp4" {
 		t.Errorf("output must be last, got %q", args[len(args)-1])
+	}
+}
+
+func TestBuildMultiTrackExportArgs_SingleVideoClipNoExtraAudio(t *testing.T) {
+	// One video clip with its embedded audio: single overlay, single audio
+	// source (no amix), both mapped.
+	plan := StudioExportPlan{
+		Inputs: []string{"/a.mp4"},
+		Video:  []StudioExportVideoSeg{{InputIndex: 0, SourceIn: 2, SourceOut: 8, TimelineStart: 0, Opacity: 1, TrackIndex: 0}},
+		Audio:  []StudioExportAudioSeg{{InputIndex: 0, SourceIn: 2, SourceOut: 8, TimelineStart: 0, Volume: 1}},
+		Width:  1280, Height: 720, FPS: 24, Duration: 6,
+	}
+	args := buildMultiTrackExportArgs(plan, "libx264", "medium", "/out.mp4")
+	fc := filterComplex(t, args)
+
+	if strings.Contains(fc, "amix") {
+		t.Errorf("single audio source should not use amix: %s", fc)
+	}
+	if !strings.Contains(fc, "volume=1.000,adelay=0|0[aout]") {
+		t.Errorf("single audio should be labeled [aout]: %s", fc)
+	}
+	if !strings.Contains(fc, "eof_action=pass[vout]") {
+		t.Errorf("single video should produce [vout]: %s", fc)
+	}
+	if cv := argIndex(args, "-c:v"); cv == -1 || args[cv+1] != "libx264" {
+		t.Errorf("expected libx264, args=%v", args)
+	}
+}
+
+func TestBuildMultiTrackExportArgs_AudioOnly(t *testing.T) {
+	// No video segments → audio-only output (no video map, no -c:v).
+	plan := StudioExportPlan{
+		Inputs: []string{"/voice.mp3"},
+		Audio:  []StudioExportAudioSeg{{InputIndex: 0, SourceIn: 0, SourceOut: 4, TimelineStart: 1, Volume: 0.8}},
+		Width:  1920, Height: 1080, FPS: 30, Duration: 5,
+	}
+	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/out.mp4")
+	if argIndex(args, "-c:v") != -1 {
+		t.Errorf("audio-only export should not set -c:v: %v", args)
+	}
+	if argIndex(args, "[aout]") == -1 {
+		t.Errorf("expected audio map, args=%v", args)
+	}
+	fc := filterComplex(t, args)
+	if !strings.Contains(fc, "adelay=1000|1000") {
+		t.Errorf("expected 1000ms delay for timelineStart=1: %s", fc)
 	}
 }
