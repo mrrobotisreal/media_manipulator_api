@@ -147,6 +147,9 @@ type Config struct {
 	ContentStudioGPUIndex    int
 	ContentStudioProxyHeight int
 	ContentStudioS3Prefix    string
+	// ContentStudioFontFile is the TTF used by ffmpeg drawtext for text/location
+	// overlays. drawtext needs a real font file on the GPU host.
+	ContentStudioFontFile string
 }
 
 func Load() *Config {
@@ -271,6 +274,7 @@ func Load() *Config {
 		ContentStudioGPUIndex:    getEnvIntDefault("CONTENT_STUDIO_GPU_INDEX", 1),
 		ContentStudioProxyHeight: getEnvInt("CONTENT_STUDIO_PROXY_HEIGHT", 720),
 		ContentStudioS3Prefix:    getEnv("CONTENT_STUDIO_S3_PREFIX", "studio"),
+		ContentStudioFontFile:    getEnv("CONTENT_STUDIO_FONT_FILE", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
 	}
 }
 

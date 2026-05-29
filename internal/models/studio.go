@@ -61,7 +61,35 @@ type StudioClip struct {
 	SourceIn      float64  `json:"sourceIn"`          // in-point within the source media (seconds)
 	SourceOut     float64  `json:"sourceOut"`         // out-point within the source media (seconds)
 	Volume        *float64 `json:"volume,omitempty"`  // 0..1 for audio (default 1)
-	Opacity       *float64 `json:"opacity,omitempty"` // 0..1 for video (default 1) — reserved for V2 visual use
+	Opacity       *float64 `json:"opacity,omitempty"` // 0..1 for video (default 1)
+
+	// Phase 5 effects.
+	// TransitionInSeconds is a cross-dissolve from the previous clip on the same
+	// track into this one; the clip overlaps its predecessor by this duration.
+	TransitionInSeconds *float64            `json:"transitionInSeconds,omitempty"`
+	Adjustments         *StudioAdjustments  `json:"adjustments,omitempty"`
+	TextOverlays        []StudioTextOverlay `json:"textOverlays,omitempty"`
+}
+
+// StudioAdjustments are per-clip color tweaks mapped onto ffmpeg's eq filter
+// (and CSS filters in preview). brightness -1..1 (0 = none), contrast 0..2
+// (1 = none), saturation 0..2 (1 = none).
+type StudioAdjustments struct {
+	Brightness float64 `json:"brightness"`
+	Contrast   float64 `json:"contrast"`
+	Saturation float64 `json:"saturation"`
+}
+
+// StudioTextOverlay is a text/location label drawn over a clip (e.g. on drone
+// footage). X/Y are normalized 0..1 positions within the frame; FontSize is in
+// project-resolution pixels; Color is a #RRGGBB hex.
+type StudioTextOverlay struct {
+	ID       string  `json:"id"`
+	Text     string  `json:"text"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+	FontSize float64 `json:"fontSize"`
+	Color    string  `json:"color"`
 }
 
 // StudioAsset is an ingested source file plus its derived proxy + filmstrip and

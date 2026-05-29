@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -606,12 +607,14 @@ func (h *StudioHandler) runExportJob(jobID string, refs []studioClipRef, width, 
 			plan.Video = append(plan.Video, services.StudioExportVideoSeg{
 				InputIndex: idx, SourceIn: r.clip.SourceIn, SourceOut: r.clip.SourceOut,
 				TimelineStart: r.clip.TimelineStart, Opacity: opacity, TrackIndex: r.trackIndex,
+				FadeIn: r.fadeIn, Adjustments: r.clip.Adjustments, TextOverlays: r.clip.TextOverlays,
 			})
 		}
 		if !r.trackMuted && r.asset.HasAudio && volume > 0 {
 			plan.Audio = append(plan.Audio, services.StudioExportAudioSeg{
 				InputIndex: idx, SourceIn: r.clip.SourceIn, SourceOut: r.clip.SourceOut,
 				TimelineStart: r.clip.TimelineStart, Volume: volume,
+				FadeIn: r.fadeIn, FadeOut: r.fadeOut,
 			})
 		}
 	}
@@ -713,30 +716,39 @@ func studioAudioParams(probe *models.VideoProbeResponse) (sampleRate, channels i
 
 // studioClipRef pairs a clip with its resolved asset and the track context the
 // exporter needs (kind for video-vs-audio routing, index for overlay order,
-// muted to drop a track's audio).
+// muted to drop a track's audio). fadeIn is the clip's own cross-dissolve;
+// fadeOut is the next clip-on-track's dissolve into it (for audio crossfade).
 type studioClipRef struct {
 	clip       models.StudioClip
 	asset      *models.StudioAsset
 	trackKind  models.StudioTrackKind
 	trackIndex int
 	trackMuted bool
+	fadeIn     float64
+	fadeOut    float64
 }
 
 // collectExportRefs flattens the EDL into render refs and the timeline length.
 // A ref is kept only if it produces output: every video clip (mute affects only
 // audio), plus audio-bearing clips on non-muted tracks with volume > 0.
-// Duration spans all clips so the export length matches the timeline.
+// Per-track clips are walked in timeline order so transition fades can be paired
+// with their neighbours. Duration spans all clips so the export length matches
+// the timeline.
 func collectExportRefs(p *models.StudioProject, assets map[string]*models.StudioAsset) ([]studioClipRef, float64, bool) {
 	refs := make([]studioClipRef, 0)
 	var duration float64
 	for _, track := range p.Tracks {
-		for _, clip := range track.Clips {
+		ordered := append([]models.StudioClip(nil), track.Clips...)
+		sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].TimelineStart < ordered[j].TimelineStart })
+
+		for i, clip := range ordered {
+			dur := clipEffectiveDur(clip)
+			if end := clip.TimelineStart + dur; end > duration {
+				duration = end
+			}
 			asset, ok := assets[clip.AssetID]
 			if !ok {
 				continue
-			}
-			if end := clip.TimelineStart + clipEffectiveDur(clip); end > duration {
-				duration = end
 			}
 			volume := 1.0
 			if clip.Volume != nil {
@@ -746,12 +758,21 @@ func collectExportRefs(p *models.StudioProject, assets map[string]*models.Studio
 			if track.Kind != models.StudioTrackKindVideo && !contributesAudio {
 				continue // muted/silent audio clip — nothing to render
 			}
+
+			fadeIn := clampFade(transitionOf(clip), dur)
+			fadeOut := 0.0
+			if i+1 < len(ordered) {
+				fadeOut = clampFade(transitionOf(ordered[i+1]), dur)
+			}
+
 			refs = append(refs, studioClipRef{
 				clip:       clip,
 				asset:      asset,
 				trackKind:  track.Kind,
 				trackIndex: track.Index,
 				trackMuted: track.Muted,
+				fadeIn:     fadeIn,
+				fadeOut:    fadeOut,
 			})
 		}
 	}
@@ -759,6 +780,24 @@ func collectExportRefs(p *models.StudioProject, assets map[string]*models.Studio
 		return nil, 0, false
 	}
 	return refs, duration, true
+}
+
+func transitionOf(c models.StudioClip) float64 {
+	if c.TransitionInSeconds != nil && *c.TransitionInSeconds > 0 {
+		return *c.TransitionInSeconds
+	}
+	return 0
+}
+
+// clampFade keeps a transition no longer than the clip it applies to.
+func clampFade(d, clipDur float64) float64 {
+	if d <= 0 {
+		return 0
+	}
+	if d > clipDur {
+		return clipDur
+	}
+	return d
 }
 
 func clipEffectiveDur(c models.StudioClip) float64 {

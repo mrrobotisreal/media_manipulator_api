@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 )
 
 // StudioExportService renders an EDL to a single MP4 via NVENC on the Content
@@ -35,6 +36,10 @@ type StudioExportVideoSeg struct {
 	TimelineStart float64
 	Opacity       float64 // 0..1
 	TrackIndex    int
+	// Phase 5 effects.
+	FadeIn       float64 // cross-dissolve in: alpha ramps 0→1 over this many seconds
+	Adjustments  *models.StudioAdjustments
+	TextOverlays []models.StudioTextOverlay
 }
 
 // StudioExportAudioSeg is one audio-contributing clip (a video clip's embedded
@@ -45,6 +50,10 @@ type StudioExportAudioSeg struct {
 	SourceOut     float64
 	TimelineStart float64
 	Volume        float64 // 0..1
+	// Phase 5: audio crossfade. FadeIn pairs with this clip's own transition;
+	// FadeOut pairs with the next clip's transition into it.
+	FadeIn  float64
+	FadeOut float64
 }
 
 // StudioExportPlan is the resolved, render-ready EDL: the deduped-but-repeated
@@ -62,7 +71,7 @@ type StudioExportPlan struct {
 // RunExport renders the plan to outputPath, reporting progress on jobID.
 func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan StudioExportPlan, quality, outputPath string) error {
 	encoder := studioH264Encoder(s.cfg)
-	args := buildMultiTrackExportArgs(plan, encoder, quality, outputPath)
+	args := buildMultiTrackExportArgs(plan, encoder, quality, s.cfg.ContentStudioFontFile, outputPath)
 	return runStudioFFmpeg(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, plan.Duration, args...)
 }
 
@@ -78,7 +87,7 @@ func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan 
 // volume is authoritative). Result label: aout.
 //
 // Pure + deterministic so the graph is unit-testable without invoking ffmpeg.
-func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, outputPath string) []string {
+func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile, outputPath string) []string {
 	width, height := plan.Width, plan.Height
 	if width <= 0 {
 		width = 1920
@@ -109,15 +118,34 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, outputPa
 			clipL := fmt.Sprintf("vc%d", k)
 			tsStr := formatSeconds(vc.TimelineStart)
 			teStr := formatSeconds(vc.TimelineStart + clampDurExport(vc.SourceIn, vc.SourceOut))
-			chain := fmt.Sprintf(
-				"[%d:v]trim=start=%s:end=%s,setpts=PTS-STARTPTS+%s/TB,scale=%d:%d:force_original_aspect_ratio=decrease,setsar=1,fps=%s,format=yuva420p",
-				vc.InputIndex, formatSeconds(vc.SourceIn), formatSeconds(vc.SourceOut), tsStr, width, height, fpsStr,
-			)
-			if vc.Opacity > 0 && vc.Opacity < 1 {
-				chain += fmt.Sprintf(",colorchannelmixer=aa=%s", formatGain(vc.Opacity))
+
+			// Build the clip's filter chain piece by piece: trim → reset PTS to
+			// its timeline position → fit to frame → fps → [color eq] → alpha →
+			// [opacity] → [text overlays] → [dissolve-in].
+			parts := []string{
+				fmt.Sprintf("[%d:v]trim=start=%s:end=%s", vc.InputIndex, formatSeconds(vc.SourceIn), formatSeconds(vc.SourceOut)),
+				fmt.Sprintf("setpts=PTS-STARTPTS+%s/TB", tsStr),
+				fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", width, height),
+				"setsar=1",
+				fmt.Sprintf("fps=%s", fpsStr),
 			}
-			chain += fmt.Sprintf("[%s]", clipL)
-			stmts = append(stmts, chain)
+			if vc.Adjustments != nil {
+				parts = append(parts, eqArg(vc.Adjustments))
+			}
+			parts = append(parts, "format=yuva420p")
+			if vc.Opacity > 0 && vc.Opacity < 1 {
+				parts = append(parts, fmt.Sprintf("colorchannelmixer=aa=%s", formatGain(vc.Opacity)))
+			}
+			for _, ov := range vc.TextOverlays {
+				if strings.TrimSpace(ov.Text) == "" {
+					continue
+				}
+				parts = append(parts, drawtextArg(ov, fontFile))
+			}
+			if vc.FadeIn > 0 {
+				parts = append(parts, fmt.Sprintf("fade=t=in:st=%s:d=%s:alpha=1", tsStr, formatSeconds(vc.FadeIn)))
+			}
+			stmts = append(stmts, strings.Join(parts, ",")+fmt.Sprintf("[%s]", clipL))
 
 			outL := "vout"
 			if k < len(segs)-1 {
@@ -145,10 +173,23 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, outputPa
 			if delayMs < 0 {
 				delayMs = 0
 			}
-			stmts = append(stmts, fmt.Sprintf(
-				"[%d:a]atrim=start=%s:end=%s,asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,volume=%s,adelay=%d|%d[%s]",
-				ac.InputIndex, formatSeconds(ac.SourceIn), formatSeconds(ac.SourceOut), formatGain(ac.Volume), delayMs, delayMs, label,
-			))
+			dur := clampDurExport(ac.SourceIn, ac.SourceOut)
+			parts := []string{
+				fmt.Sprintf("[%d:a]atrim=start=%s:end=%s", ac.InputIndex, formatSeconds(ac.SourceIn), formatSeconds(ac.SourceOut)),
+				"asetpts=PTS-STARTPTS",
+				"aformat=sample_rates=48000:channel_layouts=stereo",
+				fmt.Sprintf("volume=%s", formatGain(ac.Volume)),
+			}
+			// Crossfade: fade this clip in (its own transition) and out (the next
+			// clip's transition into it) so overlapping audio sums cleanly.
+			if ac.FadeIn > 0 {
+				parts = append(parts, fmt.Sprintf("afade=t=in:st=0:d=%s", formatSeconds(ac.FadeIn)))
+			}
+			if ac.FadeOut > 0 && dur > ac.FadeOut {
+				parts = append(parts, fmt.Sprintf("afade=t=out:st=%s:d=%s", formatSeconds(dur-ac.FadeOut), formatSeconds(ac.FadeOut)))
+			}
+			parts = append(parts, fmt.Sprintf("adelay=%d|%d", delayMs, delayMs))
+			stmts = append(stmts, strings.Join(parts, ",")+fmt.Sprintf("[%s]", label))
 			mixIn.WriteString("[" + label + "]")
 		}
 		if len(plan.Audio) > 1 {
@@ -198,6 +239,61 @@ func clampDurExport(in, out float64) float64 {
 		return 0
 	}
 	return d
+}
+
+// eqArg maps per-clip adjustments onto ffmpeg's eq filter.
+func eqArg(a *models.StudioAdjustments) string {
+	return fmt.Sprintf("eq=brightness=%s:contrast=%s:saturation=%s",
+		formatGain(a.Brightness), formatGain(a.Contrast), formatGain(a.Saturation))
+}
+
+// drawtextArg renders a text overlay onto the clip. X/Y are normalized: the
+// (w-text_w)*X form keeps the text fully inside the frame. A translucent box
+// keeps labels legible over busy footage (e.g. drone shots).
+func drawtextArg(ov models.StudioTextOverlay, fontFile string) string {
+	size := int(math.Round(ov.FontSize))
+	if size <= 0 {
+		size = 32
+	}
+	return fmt.Sprintf(
+		"drawtext=fontfile='%s':text='%s':x=(w-text_w)*%s:y=(h-text_h)*%s:fontsize=%d:fontcolor=%s:box=1:boxcolor=black@0.4:boxborderw=8",
+		drawtextEscape(fontFile), drawtextEscape(ov.Text), formatGain(clamp01(ov.X)), formatGain(clamp01(ov.Y)), size, hexToFFColor(ov.Color),
+	)
+}
+
+// drawtextEscape escapes a value for use inside a single-quoted drawtext field.
+func drawtextEscape(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "'", "\\'")
+	s = strings.ReplaceAll(s, "%", "\\%")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	return s
+}
+
+// hexToFFColor converts "#RRGGBB" to ffmpeg's "0xRRGGBB" form, defaulting to
+// white for anything unparseable.
+func hexToFFColor(hex string) string {
+	h := strings.TrimPrefix(strings.TrimSpace(hex), "#")
+	if len(h) != 6 {
+		return "white"
+	}
+	for _, r := range h {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+			return "white"
+		}
+	}
+	return "0x" + strings.ToUpper(h)
+}
+
+func clamp01(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }
 
 func formatSeconds(s float64) string {

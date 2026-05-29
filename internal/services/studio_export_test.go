@@ -3,6 +3,8 @@ package services
 import (
 	"strings"
 	"testing"
+
+	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 )
 
 // argIndex returns the index of want in args, or -1.
@@ -37,7 +39,7 @@ func TestBuildMultiTrackExportArgs_OverlayAndMix(t *testing.T) {
 		},
 		Width: 1920, Height: 1080, FPS: 30, Duration: 10,
 	}
-	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/out.mp4")
+	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/font.ttf", "/out.mp4")
 
 	// One -i per input.
 	inputs := 0
@@ -86,7 +88,7 @@ func TestBuildMultiTrackExportArgs_SingleVideoClipNoExtraAudio(t *testing.T) {
 		Audio:  []StudioExportAudioSeg{{InputIndex: 0, SourceIn: 2, SourceOut: 8, TimelineStart: 0, Volume: 1}},
 		Width:  1280, Height: 720, FPS: 24, Duration: 6,
 	}
-	args := buildMultiTrackExportArgs(plan, "libx264", "medium", "/out.mp4")
+	args := buildMultiTrackExportArgs(plan, "libx264", "medium", "/font.ttf", "/out.mp4")
 	fc := filterComplex(t, args)
 
 	if strings.Contains(fc, "amix") {
@@ -103,6 +105,47 @@ func TestBuildMultiTrackExportArgs_SingleVideoClipNoExtraAudio(t *testing.T) {
 	}
 }
 
+func TestBuildMultiTrackExportArgs_Effects(t *testing.T) {
+	plan := StudioExportPlan{
+		Inputs: []string{"/a.mp4", "/b.mp4"},
+		Video: []StudioExportVideoSeg{
+			{InputIndex: 0, SourceIn: 0, SourceOut: 6, TimelineStart: 0, Opacity: 1, TrackIndex: 0,
+				Adjustments:  &models.StudioAdjustments{Brightness: 0.1, Contrast: 1.2, Saturation: 0.8},
+				TextOverlays: []models.StudioTextOverlay{{Text: "Reykjavík", X: 0.05, Y: 0.9, FontSize: 48, Color: "#FFCC00"}}},
+			{InputIndex: 1, SourceIn: 0, SourceOut: 6, TimelineStart: 4, Opacity: 1, TrackIndex: 0, FadeIn: 1.5},
+		},
+		Audio: []StudioExportAudioSeg{
+			{InputIndex: 0, SourceIn: 0, SourceOut: 6, TimelineStart: 0, Volume: 1, FadeOut: 1.5},
+			{InputIndex: 1, SourceIn: 0, SourceOut: 6, TimelineStart: 4, Volume: 1, FadeIn: 1.5},
+		},
+		Width: 1920, Height: 1080, FPS: 30, Duration: 10,
+	}
+	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/usr/share/fonts/x.ttf", "/out.mp4")
+	fc := filterComplex(t, args)
+
+	for _, want := range []string{
+		"eq=brightness=0.100:contrast=1.200:saturation=0.800",
+		"drawtext=fontfile='/usr/share/fonts/x.ttf':text='Reykjavík'",
+		"fontcolor=0xFFCC00",
+		"fade=t=in:st=4.000:d=1.500:alpha=1", // dissolve-in on the second clip
+		"afade=t=out:st=4.500:d=1.500",        // outgoing audio fades over the overlap (6 - 1.5)
+		"afade=t=in:st=0:d=1.500",             // incoming audio fades in
+	} {
+		if !strings.Contains(fc, want) {
+			t.Errorf("filter_complex missing %q\ngraph: %s", want, fc)
+		}
+	}
+}
+
+func TestHexToFFColor(t *testing.T) {
+	cases := map[string]string{"#FFCC00": "0xFFCC00", "00ff00": "0x00FF00", "bad": "white", "#12345": "white"}
+	for in, want := range cases {
+		if got := hexToFFColor(in); got != want {
+			t.Errorf("hexToFFColor(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestBuildMultiTrackExportArgs_AudioOnly(t *testing.T) {
 	// No video segments → audio-only output (no video map, no -c:v).
 	plan := StudioExportPlan{
@@ -110,7 +153,7 @@ func TestBuildMultiTrackExportArgs_AudioOnly(t *testing.T) {
 		Audio:  []StudioExportAudioSeg{{InputIndex: 0, SourceIn: 0, SourceOut: 4, TimelineStart: 1, Volume: 0.8}},
 		Width:  1920, Height: 1080, FPS: 30, Duration: 5,
 	}
-	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/out.mp4")
+	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/font.ttf", "/out.mp4")
 	if argIndex(args, "-c:v") != -1 {
 		t.Errorf("audio-only export should not set -c:v: %v", args)
 	}
