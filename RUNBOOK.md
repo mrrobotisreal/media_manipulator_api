@@ -459,6 +459,13 @@ opus, ac3, dts}`. AI audio operations (in `ai_tools.go`):
 `options.format` ∈ `{mp4, webm, avi, mov, mkv, flv, wmv, prores, dnxhd,
 gif}`.
 
+Output codecs are chosen per container by `videoOutputCodecArgs` (single source
+of truth — no duplicate `-c:v`/`-c:a` flags): **MP4/MOV** → H.264 + AAC with
+`-pix_fmt yuv420p` and `-movflags +faststart`; **WebM** → VP9 + Opus, falling
+back to VP8 + Vorbis when the FFmpeg build lacks them (probed once via
+`ffmpegSupportsWebMVP9`); **MKV/FLV** → H.264 + AAC; **AVI** → H.264 + MP3;
+**WMV** → wmv2 + wmav2; **ProRes/DNxHD** → prores_ks / DNxHR HQ + PCM.
+
 Special cases inside `Converter.convertVideo`:
 
 - `format=gif` runs an FFmpeg → gifsicle pipeline (`options.gif`).

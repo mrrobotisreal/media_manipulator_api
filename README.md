@@ -63,10 +63,15 @@ media_manipulator_api/
 
 ### System Requirements
 - Go 1.21 or later
-- FFmpeg (for video/audio conversion)
+- FFmpeg (required for all video conversion and audio extraction)
+- **gifsicle** (required for optimized animated-GIF output — the video → GIF pipeline)
 - ImageMagick (for advanced image processing and as the WebP→PDF rasterization fallback)
 - **poppler-utils** (for PDF conversion — provides `pdftoppm` and `pdfinfo`)
 - **zip** is not required: ZIP archives are produced by Go's standard library
+
+> If FFmpeg is missing, conversions return an actionable "install FFmpeg" error;
+> if gifsicle is missing, GIF conversions return an actionable "install gifsicle"
+> error. Install gifsicle with `apt install gifsicle` / `brew install gifsicle`.
 
 Install the PDF tooling on Ubuntu/Debian:
 
@@ -133,6 +138,26 @@ sudo apt update && sudo apt install ffmpeg
 ```bash
 brew install ffmpeg
 ```
+
+#### Video output codecs
+
+Video conversion picks codecs per target container in a single place
+(`videoOutputCodecArgs` in `internal/services/converter.go`), so the FFmpeg
+command never carries duplicate `-c:v`/`-c:a` flags:
+
+- **MP4 / MOV** — H.264 + AAC, `-pix_fmt yuv420p`, `-movflags +faststart`
+  (universal playback; faststart lets playback begin before the file finishes
+  downloading).
+- **WebM** — VP9 + Opus where the FFmpeg build supports them, otherwise an
+  automatic fallback to VP8 + Vorbis (capability is probed once and cached).
+- **MKV / FLV** — H.264 + AAC.
+- **AVI** — H.264 + MP3 (AVI predates AAC; MP3 keeps the container broadly
+  playable).
+- **WMV** — `wmv2` + `wmav2`.
+- **ProRes / DNxHD** — `prores_ks` / DNxHR HQ with PCM audio for editing
+  handoffs.
+- **GIF** — handled by a separate FFmpeg → gifsicle pipeline (requires
+  gifsicle).
 
 **Windows:**
 - Download from [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)

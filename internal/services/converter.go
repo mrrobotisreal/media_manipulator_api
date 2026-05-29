@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
@@ -1031,32 +1032,115 @@ func (c *Converter) convertVideo(job *models.ConversionJob, inputPath, outputPat
 		fmt.Printf("[DEBUG] Added audio tempo filter: %s\n", audioFilter)
 	}
 
-	// Video codec and quality settings
-	switch options.Quality {
-	case "low":
-		args = append(args, "-crf", "30")
-	case "medium":
-		args = append(args, "-crf", "23")
-	case "high":
-		args = append(args, "-crf", "18")
+	// Output container + codec selection.
+	//
+	// Centralized in videoOutputCodecArgs so each format sets its video codec,
+	// audio codec, and any container-specific muxer flags exactly once. The old
+	// code appended a default "-c:v libx264 -c:a aac" and then appended a second
+	// "-c:v"/"-c:a" for special formats, leaving FFmpeg to silently honor the
+	// last flag — correct in practice but confusing and easy to break. WebM
+	// falls back from VP9+Opus to VP8+Vorbis when this FFmpeg build lacks them.
+	webmVP9 := false
+	if options.Format == "webm" {
+		webmVP9 = ffmpegSupportsWebMVP9()
 	}
-
-	// Output format and codecs
-	args = append(args, "-c:v", "libx264", "-c:a", "aac")
-
-	// Handle special formats
-	switch options.Format {
-	case "webm":
-		args = append(args, "-c:v", "libvpx-vp9", "-c:a", "libopus")
-	case "prores":
-		args = append(args, "-c:v", "prores_ks", "-profile:v", "2")
-	}
+	args = append(args, videoOutputCodecArgs(options.Format, options.Quality, webmVP9)...)
 
 	args = append(args, "-y", outputPath)
 
 	fmt.Printf("[DEBUG] Complete FFmpeg command: ffmpeg %s\n", strings.Join(args, " "))
 
 	return c.runFFmpegWithProgress(job.ID, "ffmpeg", args...)
+}
+
+// videoCRF maps the quality preset to an x264 / VPx CRF value (lower = higher
+// quality, bigger file). Used by every codec that honors CRF.
+func videoCRF(quality string) string {
+	switch quality {
+	case "low":
+		return "30"
+	case "high":
+		return "18"
+	default: // "medium" and anything unexpected
+		return "23"
+	}
+}
+
+// wmvQScale maps the quality preset to a wmv2 -qscale:v value (2 = best,
+// 31 = worst). wmv2 does not support CRF, so it uses a quantizer instead.
+func wmvQScale(quality string) string {
+	switch quality {
+	case "low":
+		return "6"
+	case "high":
+		return "2"
+	default:
+		return "4"
+	}
+}
+
+// videoOutputCodecArgs returns the container/codec/muxer flags for a target
+// video format. It is the single source of truth for codec selection so the
+// FFmpeg command never carries duplicate or conflicting -c:v / -c:a flags.
+//
+//   - MP4 / MOV  -> H.264 + AAC, yuv420p, +faststart (universal playback)
+//   - WebM       -> VP9 + Opus, or VP8 + Vorbis when webmVP9 is false
+//   - MKV / FLV  -> H.264 + AAC (flexible / Flash-9 containers)
+//   - AVI        -> H.264 + MP3 (AVI predates AAC; MP3 stays broadly playable)
+//   - WMV        -> wmv2 + wmav2 (native Windows Media codecs, quantizer-based)
+//   - ProRes     -> prores_ks profile 2 + PCM (editing intermediate)
+//   - DNxHD      -> DNxHR HQ + PCM (resolution-independent editing intermediate)
+//
+// gif is handled by convertVideoToGIF and never reaches this function.
+func videoOutputCodecArgs(format, quality string, webmVP9 bool) []string {
+	crf := videoCRF(quality)
+	switch format {
+	case "webm":
+		if webmVP9 {
+			return []string{"-c:v", "libvpx-vp9", "-b:v", "0", "-crf", crf, "-c:a", "libopus"}
+		}
+		// VP8 + Vorbis fallback for FFmpeg builds without VP9/Opus.
+		return []string{"-c:v", "libvpx", "-crf", crf, "-b:v", "1M", "-c:a", "libvorbis"}
+	case "prores":
+		return []string{"-c:v", "prores_ks", "-profile:v", "2", "-pix_fmt", "yuv422p10le", "-c:a", "pcm_s16le"}
+	case "dnxhd":
+		return []string{"-c:v", "dnxhd", "-profile:v", "dnxhr_hq", "-pix_fmt", "yuv422p", "-c:a", "pcm_s16le"}
+	case "avi":
+		return []string{"-c:v", "libx264", "-crf", crf, "-pix_fmt", "yuv420p", "-c:a", "libmp3lame"}
+	case "wmv":
+		return []string{"-c:v", "wmv2", "-qscale:v", wmvQScale(quality), "-c:a", "wmav2"}
+	case "flv":
+		return []string{"-c:v", "libx264", "-crf", crf, "-pix_fmt", "yuv420p", "-c:a", "aac"}
+	case "mkv":
+		return []string{"-c:v", "libx264", "-crf", crf, "-pix_fmt", "yuv420p", "-c:a", "aac"}
+	case "mov":
+		return []string{"-c:v", "libx264", "-crf", crf, "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-c:a", "aac"}
+	default: // "mp4"
+		return []string{"-c:v", "libx264", "-crf", crf, "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-c:a", "aac"}
+	}
+}
+
+var (
+	webmVP9Once   sync.Once
+	webmVP9Cached bool
+)
+
+// ffmpegSupportsWebMVP9 reports whether the local FFmpeg build can encode VP9
+// video and Opus audio (the modern WebM defaults). It probes `ffmpeg -encoders`
+// once per process and caches the result so per-conversion overhead is zero
+// after the first WebM job.
+func ffmpegSupportsWebMVP9() bool {
+	webmVP9Once.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		stdout, _, err := runCommand(ctx, "ffmpeg", "-hide_banner", "-encoders")
+		if err != nil {
+			webmVP9Cached = false
+			return
+		}
+		webmVP9Cached = strings.Contains(stdout, "libvpx-vp9") && strings.Contains(stdout, "libopus")
+	})
+	return webmVP9Cached
 }
 
 func (c *Converter) validateVideoOptions(options *models.VideoConversionOptions) error {
@@ -1997,7 +2081,7 @@ func (c *Converter) runFFmpegWithProgress(jobID string, name string, args ...str
 	defer cancel()
 
 	if _, err := exec.LookPath(name); err != nil {
-		return fmt.Errorf("%s not found in PATH", name)
+		return fmt.Errorf("%s is required for video and audio processing but was not found on PATH — install FFmpeg (apt install ffmpeg / brew install ffmpeg) or see https://ffmpeg.org/download.html", name)
 	}
 
 	cmd := exec.CommandContext(ctx, name, args...)
