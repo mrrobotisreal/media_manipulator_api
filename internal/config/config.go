@@ -24,6 +24,13 @@ type Config struct {
 	S3PresignTTL       time.Duration
 	S3ResultPresignTTL time.Duration
 	S3ResultPrefix     string
+	// AWSCLIBin is the AWS CLI executable used for multipart uploads of
+	// artifacts that exceed S3's 5GB single-PUT limit (notably the AI Video
+	// Restoration results tarball). `aws s3 cp` does a multipart upload
+	// transparently; PutObject cannot. Default "aws" (resolved on PATH).
+	// Credentials, region and endpoint are inherited from the same process
+	// environment the SDK client already reads.
+	AWSCLIBin string
 
 	// Local AI toolchain (Phase 1: audio + image AI tools)
 	AIEnabled     bool
@@ -147,15 +154,19 @@ type Config struct {
 	// at 1 unless the host has headroom. Python scripts follow the same
 	// repo-source-of-truth / deployed-copy convention as frame interpolation
 	// (see AIFrameInterpolationScript above).
-	RestoreEnabled                    bool
-	RestoreBasicVSRPPEnabled          bool
-	RestoreMaxClipSeconds             float64
-	RestoreRecommendedClipSeconds     float64
-	RestoreMaxFrames                  int
-	RestoreMaxSourceWidth             int
-	RestoreMaxSourceHeight            int
-	RestoreMaxConcurrentJobs          int
-	RestoreModelTimeout               time.Duration
+	RestoreEnabled                bool
+	RestoreBasicVSRPPEnabled      bool
+	RestoreMaxClipSeconds         float64
+	RestoreRecommendedClipSeconds float64
+	RestoreMaxFrames              int
+	RestoreMaxSourceWidth         int
+	RestoreMaxSourceHeight        int
+	RestoreMaxConcurrentJobs      int
+	RestoreModelTimeout           time.Duration
+	// RestoreUploadTimeout bounds the multipart upload of the (multi-GB)
+	// results tarball on its own. It is detached from the whole-job deadline so
+	// a slow client link isn't starved by time already spent in the GPU stages.
+	RestoreUploadTimeout              time.Duration
 	RestoreResultPresignTTL           time.Duration
 	RestoreRateLimitPerSessionPerHour int
 	RestoreRateLimitPerIPPerHour      int
@@ -217,6 +228,7 @@ func Load() *Config {
 		S3PresignTTL:       time.Duration(getEnvInt("S3_PRESIGN_TTL_SECONDS", 15*60)) * time.Second,
 		S3ResultPresignTTL: time.Duration(getEnvInt("S3_RESULT_PRESIGN_TTL_SECONDS", 30*60)) * time.Second,
 		S3ResultPrefix:     getEnv("S3_RESULT_PREFIX", "results"),
+		AWSCLIBin:          getEnv("AWS_CLI_BIN", "aws"),
 
 		AIEnabled:         getEnvBool("AI_ENABLED", true),
 		AIRootDir:         getEnv("AI_ROOT_DIR", "/opt/media-manipulator-ai"),
@@ -327,6 +339,7 @@ func Load() *Config {
 		RestoreMaxSourceHeight:            getEnvInt("RESTORE_MAX_SOURCE_HEIGHT", 1080),
 		RestoreMaxConcurrentJobs:          getEnvInt("RESTORE_MAX_CONCURRENT_JOBS", 1),
 		RestoreModelTimeout:               time.Duration(getEnvInt("RESTORE_MODEL_TIMEOUT_SECONDS", 4500)) * time.Second,
+		RestoreUploadTimeout:              time.Duration(getEnvInt("RESTORE_UPLOAD_TIMEOUT_SECONDS", 3*60*60)) * time.Second,
 		RestoreResultPresignTTL:           time.Duration(getEnvInt("RESTORE_RESULT_PRESIGN_TTL_SECONDS", 21600)) * time.Second,
 		RestoreRateLimitPerSessionPerHour: getEnvInt("RESTORE_RATE_LIMIT_PER_SESSION_PER_HOUR", 2),
 		RestoreRateLimitPerIPPerHour:      getEnvInt("RESTORE_RATE_LIMIT_PER_IP_PER_HOUR", 4),

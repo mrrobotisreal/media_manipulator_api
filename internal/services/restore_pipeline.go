@@ -725,9 +725,12 @@ func writeRestoreReadme(path string, m restoreManifest) error {
 	return os.WriteFile(path, []byte(b.String()), 0o644)
 }
 
-// uploadRestoreResult uploads the tarball and presigns a download URL with
-// the (long) restore TTL — the archives are huge, so the default 30-minute
-// result TTL would be hostile.
+// uploadRestoreResult uploads the (multi-GB) tarball via a multipart upload
+// and presigns a download URL with the long restore TTL — the archives are
+// huge, so the default 30-minute result TTL would be hostile. The presigned
+// GET URL itself has no size ceiling: S3 GET serves objects up to 5TB, and the
+// signature is only checked when the download STARTS, so a long transfer that
+// outlives the TTL still completes.
 func (s *RestoreService) uploadRestoreResult(ctx context.Context, req RestoreRequest, localPath string) (string, string, time.Time, error) {
 	if s.s3Client == nil || s.s3Presign == nil {
 		return "", "", time.Time{}, fmt.Errorf("S3 client not configured")
@@ -743,18 +746,11 @@ func (s *RestoreService) uploadRestoreResult(ctx context.Context, req RestoreReq
 	}
 	resultKey := fmt.Sprintf("%s/%s/%s/%s/%s.tar.gz", prefix, day, sessionPart, req.JobID, restoreResultBaseName)
 
-	f, err := os.Open(localPath)
-	if err != nil {
+	// The results tarball routinely exceeds S3's 5GB single-PUT ceiling, so
+	// PutObject can't be used — `aws s3 cp` does a multipart upload
+	// transparently (parts sized automatically, up to 5TB total).
+	if err := s.uploadLargeFileToS3(ctx, req, localPath, resultKey, "application/gzip"); err != nil {
 		return "", "", time.Time{}, err
-	}
-	defer f.Close()
-	if _, err := s.s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(s.cfg.S3Bucket),
-		Key:         aws.String(resultKey),
-		Body:        f,
-		ContentType: aws.String("application/gzip"),
-	}); err != nil {
-		return "", "", time.Time{}, fmt.Errorf("s3 upload: %w", err)
 	}
 	ttl := s.cfg.RestoreResultPresignTTL
 	if ttl <= 0 {
@@ -772,6 +768,62 @@ func (s *RestoreService) uploadRestoreResult(ctx context.Context, req RestoreReq
 		return "", "", time.Time{}, fmt.Errorf("presign: %w", err)
 	}
 	return resultKey, presigned.URL, time.Now().UTC().Add(ttl), nil
+}
+
+// uploadLargeFileToS3 uploads localPath to s3://bucket/key with `aws s3 cp`,
+// which does a multipart upload automatically — required because the
+// restoration tarball routinely exceeds S3's 5GB single-PUT limit that
+// PutObject is bound by. Credentials, region and (optional) endpoint come from
+// the same process environment the SDK client already reads, so there is no
+// separate credential wiring. The upload is given its own generous timeout,
+// detached from the whole-job deadline, so a slow client link is never starved
+// by time already spent in the GPU stages.
+func (s *RestoreService) uploadLargeFileToS3(ctx context.Context, req RestoreRequest, localPath, key, contentType string) error {
+	bin := strings.TrimSpace(s.cfg.AWSCLIBin)
+	if bin == "" {
+		bin = "aws"
+	}
+	dst := fmt.Sprintf("s3://%s/%s", s.cfg.S3Bucket, key)
+	// Passing --content-type explicitly stops the CLI from guessing
+	// "application/x-tar" + "Content-Encoding: gzip" for a .tar.gz, which would
+	// make browsers silently gunzip the download and corrupt the archive.
+	args := []string{
+		"s3", "cp", localPath, dst,
+		"--only-show-errors",
+		"--content-type", contentType,
+	}
+	if region := strings.TrimSpace(s.cfg.AWSRegion); region != "" {
+		args = append(args, "--region", region)
+	}
+	if endpoint := strings.TrimSpace(s.cfg.S3Endpoint); endpoint != "" {
+		args = append(args, "--endpoint-url", endpoint)
+	}
+
+	timeout := s.cfg.RestoreUploadTimeout
+	if timeout <= 0 {
+		timeout = 3 * time.Hour
+	}
+	// WithoutCancel detaches from the (possibly nearly-exhausted) job deadline
+	// while keeping the value chain; the dedicated timeout then bounds the
+	// transfer on its own terms.
+	uploadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+	defer cancel()
+
+	res, err := s.runner.Run(uploadCtx, cmdaudit.Spec{
+		Tool:       "video_restore",
+		Stage:      "upload_result",
+		Executable: bin,
+		Args:       args,
+		RequestID:  req.RequestID,
+		JobID:      req.JobID,
+	})
+	if err != nil {
+		if res.TimedOut || uploadCtx.Err() != nil {
+			return fmt.Errorf("s3 upload timed out after %s", timeout)
+		}
+		return fmt.Errorf("s3 upload failed (exit %d): %s", res.ExitCode, commandTail(res.Stderr, 1000))
+	}
+	return nil
 }
 
 // recordModelEvent writes one per-model timing/status row (privacy-safe:
@@ -805,13 +857,13 @@ func (s *RestoreService) recordToolUsage(req RestoreRequest, ordered []models.Re
 	}
 	ok := success
 	s.telemetry.InsertToolUsage(context.Background(), telemetry.ToolUsage{
-		SessionID:  req.SessionID,
-		RequestID:  req.RequestID,
-		JobID:      req.JobID,
-		Tool:       "video_restore",
-		MediaKind:  "video",
-		Action:     "restore",
-		Success:    &ok,
+		SessionID:   req.SessionID,
+		RequestID:   req.RequestID,
+		JobID:       req.JobID,
+		Tool:        "video_restore",
+		MediaKind:   "video",
+		Action:      "restore",
+		Success:     &ok,
 		DurationMS:  int(time.Since(startedAt) / time.Millisecond),
 		InputBytes:  req.FileSizeBytes,
 		OutputBytes: outputBytes,

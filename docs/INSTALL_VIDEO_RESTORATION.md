@@ -37,6 +37,16 @@ paths) and reports availability through `GET /api/video-restore/capabilities`.
 Disk: keep ≥ 100GB free on the volume holding the API's `OUTPUT_DIR` — one
 restoration job peaks at 10–30GB of PNGs before its work tree is reclaimed.
 
+> **AWS CLI prerequisite:** the finished results tarball is uploaded to S3 with
+> `aws s3 cp`, not the SDK `PutObject` call — the archive routinely exceeds
+> S3's 5GB single-PUT ceiling and `aws s3 cp` does a multipart upload
+> transparently (up to 5TB). Install the AWS CLI v2 on the host
+> (`sudo apt install awscli`, or the official bundle) and make sure `aws` is on
+> the API service's `PATH` (or set `AWS_CLI_BIN` to its absolute path). It reads
+> the same `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` from the
+> environment that the API already uses — no extra credential wiring. Verify
+> with `aws --version` as the service user.
+
 ## 1. venv `restore-sr` (SwinIR, HAT, RVRT, VRT)
 
 ```bash
@@ -160,6 +170,15 @@ RESTORE_MAX_SOURCE_WIDTH=1920
 RESTORE_MAX_SOURCE_HEIGHT=1080
 RESTORE_MAX_CONCURRENT_JOBS=1
 RESTORE_MODEL_TIMEOUT_SECONDS=4500
+# The results tarball is uploaded to S3 with `aws s3 cp` (multipart — the
+# archive routinely exceeds S3's 5GB single-PUT limit). RESTORE_UPLOAD_TIMEOUT
+# bounds that transfer on its own, detached from the whole-job deadline so a
+# slow link is never starved by time already spent on the GPU. Requires the AWS
+# CLI v2 on PATH (see the prerequisite note below); it reads the same
+# AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION the API already uses.
+RESTORE_UPLOAD_TIMEOUT_SECONDS=10800
+# Override only if the AWS CLI lives somewhere off PATH:
+#AWS_CLI_BIN=/usr/local/bin/aws
 RESTORE_RESULT_PRESIGN_TTL_SECONDS=21600
 RESTORE_RATE_LIMIT_PER_SESSION_PER_HOUR=2
 RESTORE_RATE_LIMIT_PER_IP_PER_HOUR=4
