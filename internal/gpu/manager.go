@@ -32,7 +32,10 @@ const (
 	TaskRembg      TaskType = "rembg"
 	TaskDemucs     TaskType = "demucs"
 	TaskDeepFilter TaskType = "deepfilter"
-	TaskOther      TaskType = "other"
+	// TaskRestoreSR covers the PyTorch video-restoration models (SwinIR, HAT,
+	// BasicVSR++, RVRT, VRT); realesrgan-ncnn runs keep using TaskRealESRGAN.
+	TaskRestoreSR TaskType = "restore_sr"
+	TaskOther     TaskType = "other"
 )
 
 // Device represents a single GPU known to the scheduler.
@@ -251,6 +254,9 @@ func (m *Manager) pickDevice(task TaskType) Device {
 		}
 	case TaskVLM, TaskOllama:
 		pref = m.Cfg.GPUSchedulerDefaultVLMDevice
+	case TaskRestoreSR:
+		// PyTorch restoration models are pinned to the big-VRAM card.
+		pref = fmt.Sprintf("cuda:%d", m.Cfg.AIRestoreCUDAGPU)
 	}
 	if pref != "" {
 		if d, ok := m.devices[pref]; ok {

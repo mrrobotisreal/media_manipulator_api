@@ -140,6 +140,54 @@ type Config struct {
 	// Safety / compliance
 	SafetyIncidentRetentionDays int
 
+	// AI Video Restoration (multi-model comparison pipeline). A short clip is
+	// trimmed from the upload, fanned out across up to six restoration /
+	// super-resolution models, and every result is packaged into one tarball.
+	// Heavy on GPU and disk (10–30GB per job) — keep RESTORE_MAX_CONCURRENT_JOBS
+	// at 1 unless the host has headroom. Python scripts follow the same
+	// repo-source-of-truth / deployed-copy convention as frame interpolation
+	// (see AIFrameInterpolationScript above).
+	RestoreEnabled                    bool
+	RestoreBasicVSRPPEnabled          bool
+	RestoreMaxClipSeconds             float64
+	RestoreRecommendedClipSeconds     float64
+	RestoreMaxFrames                  int
+	RestoreMaxSourceWidth             int
+	RestoreMaxSourceHeight            int
+	RestoreMaxConcurrentJobs          int
+	RestoreModelTimeout               time.Duration
+	RestoreResultPresignTTL           time.Duration
+	RestoreRateLimitPerSessionPerHour int
+	RestoreRateLimitPerIPPerHour      int
+	// AIRestoreCUDAGPU is the CUDA index of the big-VRAM card (RTX 5080 16GB);
+	// AIRestoreVulkanGPU is the Vulkan index realesrgan-ncnn-vulkan should
+	// prefer. getEnvIntDefault so device 0 is a valid value.
+	AIRestoreCUDAGPU      int
+	AIRestoreVulkanGPU    int
+	AIRestorePython       string
+	AIRestoreMMPython     string
+	AIRestoreFramesScript string
+	AIRestoreVideoScript  string
+	AIRestoreModelsDir    string
+	AIRestoreReposDir     string
+	// Per-model tuning knobs, keyed by restore model id ("realesrgan",
+	// "swinir", "hat", "basicvsrpp", "rvrt", "vrt"). Estimated seconds per
+	// frame feeds the UI time estimates; VRAM MiB drives GPU scheduler
+	// requests. Both are env-overridable so the operator can tune after
+	// real runs.
+	RestoreEstSecondsPerFrame map[string]float64
+	RestoreVRAMMiB            map[string]int64
+	// Future auth seam for the restricted deployment at
+	// dr.media-manipulator.com: when RESTORE_REQUIRE_FIREBASE_AUTH is true,
+	// /api/video-restore/* requires a Firebase ID token (Authorization:
+	// Bearer). Default OFF — current public behavior is unchanged. The Admin
+	// SDK reads GOOGLE_APPLICATION_CREDENTIALS itself; the field exists so
+	// deployments can see/validate what's configured. Firebase only — this
+	// project never uses Supabase.
+	RestoreRequireFirebaseAuth   bool
+	FirebaseProjectID            string
+	GoogleApplicationCredentials string
+
 	// Content Studio (browser-based multi-track NLE). All Content Studio
 	// ffmpeg work (proxy, filmstrip, export) is pinned to a dedicated GPU so
 	// it doesn't contend with whisper/RIFE on the shared host. We default to
@@ -268,6 +316,47 @@ func Load() *Config {
 
 		// Safety / compliance
 		SafetyIncidentRetentionDays: getEnvInt("SAFETY_INCIDENT_RETENTION_DAYS", 365),
+
+		// AI Video Restoration
+		RestoreEnabled:                    getEnvBool("RESTORE_ENABLED", true),
+		RestoreBasicVSRPPEnabled:          getEnvBool("RESTORE_BASICVSRPP_ENABLED", true),
+		RestoreMaxClipSeconds:             getEnvFloat("RESTORE_MAX_CLIP_SECONDS", 15),
+		RestoreRecommendedClipSeconds:     getEnvFloat("RESTORE_RECOMMENDED_CLIP_SECONDS", 10),
+		RestoreMaxFrames:                  getEnvInt("RESTORE_MAX_FRAMES", 450),
+		RestoreMaxSourceWidth:             getEnvInt("RESTORE_MAX_SOURCE_WIDTH", 1920),
+		RestoreMaxSourceHeight:            getEnvInt("RESTORE_MAX_SOURCE_HEIGHT", 1080),
+		RestoreMaxConcurrentJobs:          getEnvInt("RESTORE_MAX_CONCURRENT_JOBS", 1),
+		RestoreModelTimeout:               time.Duration(getEnvInt("RESTORE_MODEL_TIMEOUT_SECONDS", 4500)) * time.Second,
+		RestoreResultPresignTTL:           time.Duration(getEnvInt("RESTORE_RESULT_PRESIGN_TTL_SECONDS", 21600)) * time.Second,
+		RestoreRateLimitPerSessionPerHour: getEnvInt("RESTORE_RATE_LIMIT_PER_SESSION_PER_HOUR", 2),
+		RestoreRateLimitPerIPPerHour:      getEnvInt("RESTORE_RATE_LIMIT_PER_IP_PER_HOUR", 4),
+		AIRestoreCUDAGPU:                  getEnvIntDefault("AI_RESTORE_CUDA_GPU", 0),
+		AIRestoreVulkanGPU:                getEnvIntDefault("AI_RESTORE_VULKAN_GPU", 1),
+		AIRestorePython:                   getEnv("AI_RESTORE_PYTHON", "/opt/media-manipulator-ai/venvs/restore-sr/bin/python"),
+		AIRestoreMMPython:                 getEnv("AI_RESTORE_MM_PYTHON", "/opt/media-manipulator-ai/venvs/restore-vsr-mm/bin/python"),
+		AIRestoreFramesScript:             getEnv("AI_RESTORE_FRAMES_SCRIPT", "/opt/media-manipulator-ai/scripts/restore_frames.py"),
+		AIRestoreVideoScript:              getEnv("AI_RESTORE_VIDEO_SCRIPT", "/opt/media-manipulator-ai/scripts/restore_video.py"),
+		AIRestoreModelsDir:                getEnv("AI_RESTORE_MODELS_DIR", "/opt/media-manipulator-ai/models/restore"),
+		AIRestoreReposDir:                 getEnv("AI_RESTORE_REPOS_DIR", "/opt/media-manipulator-ai/repos"),
+		RestoreEstSecondsPerFrame: map[string]float64{
+			"realesrgan": getEnvFloat("RESTORE_EST_SPF_REALESRGAN", 0.8),
+			"swinir":     getEnvFloat("RESTORE_EST_SPF_SWINIR", 3.5),
+			"hat":        getEnvFloat("RESTORE_EST_SPF_HAT", 5.0),
+			"basicvsrpp": getEnvFloat("RESTORE_EST_SPF_BASICVSRPP", 1.0),
+			"rvrt":       getEnvFloat("RESTORE_EST_SPF_RVRT", 3.0),
+			"vrt":        getEnvFloat("RESTORE_EST_SPF_VRT", 7.0),
+		},
+		RestoreVRAMMiB: map[string]int64{
+			"realesrgan": getEnvInt64("RESTORE_VRAM_MIB_REALESRGAN", 3000),
+			"swinir":     getEnvInt64("RESTORE_VRAM_MIB_SWINIR", 9000),
+			"hat":        getEnvInt64("RESTORE_VRAM_MIB_HAT", 10000),
+			"basicvsrpp": getEnvInt64("RESTORE_VRAM_MIB_BASICVSRPP", 11000),
+			"rvrt":       getEnvInt64("RESTORE_VRAM_MIB_RVRT", 12000),
+			"vrt":        getEnvInt64("RESTORE_VRAM_MIB_VRT", 14000),
+		},
+		RestoreRequireFirebaseAuth:   getEnvBool("RESTORE_REQUIRE_FIREBASE_AUTH", false),
+		FirebaseProjectID:            getEnv("FIREBASE_PROJECT_ID", ""),
+		GoogleApplicationCredentials: getEnv("GOOGLE_APPLICATION_CREDENTIALS", ""),
 
 		// Content Studio — getEnvIntDefault for the GPU index so device 0 is a
 		// valid override (getEnvInt rejects <= 0).

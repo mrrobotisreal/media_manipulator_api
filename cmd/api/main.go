@@ -111,13 +111,11 @@ func main() {
 		auditSink = store
 	}
 	cmdRunner := cmdaudit.NewRunner(sanitizer, auditSink)
-	_ = cmdRunner // exposed via services in a follow-up wiring pass; keeps init paired
 
 	// Metrics + GPU + rate limiter
 	metricsReg := metrics.New()
 	limiter := limits.New(redisClient, cfg, store, metricsReg)
 	gpuMgr := gpu.NewManager(cfg, store, metricsReg, logging)
-	_ = gpuMgr // available to services that opt in; existing scheduler stays the source of truth for capacity.
 
 	// Existing services
 	jobManager := services.NewJobManager()
@@ -139,6 +137,22 @@ func main() {
 	// Postgres (the conversion handler is stateless). It shares the jobManager so
 	// ingest/export progress flows through the same /api/job/:jobId machinery.
 	studioHandler := handlers.NewStudioHandler(jobManager, cfg, inspector, s3Client, pool)
+	// AI Video Restoration gets a dedicated handler too: its pipeline is the
+	// first consumer of the GPU lease manager and the command-audit runner.
+	videoRestoreHandler := handlers.NewVideoRestoreHandler(jobManager, cfg, s3Client, gpuMgr, store, cmdRunner)
+
+	// Future auth seam (default OFF): when RESTORE_REQUIRE_FIREBASE_AUTH is
+	// set, /api/video-restore/* verifies Firebase ID tokens. Init failure
+	// leaves the verifier nil and the middleware fails CLOSED on that group.
+	var restoreAuthVerifier middleware.TokenVerifier
+	if cfg.RestoreRequireFirebaseAuth {
+		verifier, err := middleware.NewFirebaseVerifier(ctx, cfg.FirebaseProjectID)
+		if err != nil {
+			logging.Error("firebase auth init failed; /api/video-restore/* will reject all requests", "error", err.Error())
+		} else {
+			restoreAuthVerifier = verifier
+		}
+	}
 
 	// Cleanup worker
 	if cfg.CleanupEnabled {
@@ -149,7 +163,7 @@ func main() {
 	// Periodic active-jobs gauge update.
 	go pollActiveJobs(ctx, jobManager, metricsReg)
 
-	router := setupRouter(cfg, conversionHandler, studioHandler, store, enricher, limiter, metricsReg)
+	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, restoreAuthVerifier, store, enricher, limiter, metricsReg)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -197,7 +211,7 @@ func newS3Client(cfg *config.Config) *s3.Client {
 	})
 }
 
-func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
+func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, restoreAuthVerifier middleware.TokenVerifier, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.Default()
@@ -207,6 +221,9 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 	corsConfig.AllowOrigins = []string{
 		"https://media-manipulator.com",
 		"https://www.media-manipulator.com",
+		// Restricted AI Video Restoration deployment (Firebase-gated when
+		// RESTORE_REQUIRE_FIREBASE_AUTH is enabled).
+		"https://dr.media-manipulator.com",
 		"http://localhost:5175",
 	}
 	// PUT is required by the Content Studio project save (PUT /api/studio/projects/:id);
@@ -257,6 +274,12 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		handlers.RegisterToolRoutes(api, conversionHandler)
 		// Content Studio (browser NLE) endpoints — projects/assets/export.
 		handlers.RegisterStudioRoutes(api, studioHandler)
+		// AI Video Restoration (multi-model comparison pipeline). The group
+		// carries the Firebase auth seam — a pass-through no-op while
+		// RESTORE_REQUIRE_FIREBASE_AUTH is off (the default).
+		restoreGroup := api.Group("")
+		restoreGroup.Use(middleware.RequireFirebaseAuth(cfg.RestoreRequireFirebaseAuth, restoreAuthVerifier))
+		handlers.RegisterVideoRestoreRoutes(restoreGroup, videoRestoreHandler)
 
 		// Tighter limits for upload/transcode/analysis paths.
 		api.Use() // marker; per-route limiters below
@@ -307,6 +330,9 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 		{path: "/api/video-upload/presign", routeKey: "video_upload_presign", tool: "video_upload", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
 		{path: "/api/video-upload/complete", routeKey: "video_upload_complete", tool: "video_upload", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
 		{path: "/api/video-transcode/start", routeKey: "video_transcode_start", tool: "video_transcode", sessionLimit: cfg.RateLimitTranscodesPerSessionPerHour, ipLimit: cfg.RateLimitTranscodesPerIPPerHour},
+		// AI Video Restoration is GPU- and disk-hungry (up to six models per
+		// job) — it gets its own, much tighter bucket.
+		{path: "/api/video-restore/start", routeKey: "video_restore_start", tool: "video_restore", sessionLimit: cfg.RestoreRateLimitPerSessionPerHour, ipLimit: cfg.RestoreRateLimitPerIPPerHour},
 		{path: "/api/video-transcode/probe", routeKey: "video_transcode_probe", tool: "video_transcode", sessionLimit: cfg.RateLimitTranscodesPerSessionPerHour, ipLimit: cfg.RateLimitTranscodesPerIPPerHour},
 		{path: "/api/ai/faces/detect", routeKey: "ai_faces_detect", tool: "ai_faces", sessionLimit: cfg.RateLimitAnalysisPerSessionPerHour, ipLimit: cfg.RateLimitAnalysisPerIPPerHour},
 		// Caption translator runs the local Ollama LLM — treat it like analysis

@@ -250,6 +250,20 @@ func (jm *JobManager) SetResultMetadata(jobID, s3Key, fileName string, expiresAt
 	return nil
 }
 
+// SetResultSize records the byte size of the packaged result artifact.
+func (jm *JobManager) SetResultSize(jobID string, sizeBytes int64) error {
+	jm.mu.Lock()
+	job, ok := jm.jobs[jobID]
+	if !ok {
+		jm.mu.Unlock()
+		return fmt.Errorf("job not found")
+	}
+	job.ResultSizeBytes = sizeBytes
+	jm.mu.Unlock()
+	jm.notifySubscribers(jobID)
+	return nil
+}
+
 func (jm *JobManager) UpdateJobError(jobID string, errorMsg string) error {
 	jm.mu.Lock()
 	job, exists := jm.jobs[jobID]

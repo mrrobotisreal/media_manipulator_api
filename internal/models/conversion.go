@@ -39,8 +39,11 @@ type ConversionJob struct {
 	Stages          []TranscodeJobStage    `json:"stages,omitempty"`
 	ResultS3Key     string                 `json:"resultS3Key,omitempty"`
 	ResultFileName  string                 `json:"resultFileName,omitempty"`
-	ExpiresAt       *time.Time             `json:"expiresAt,omitempty"`
-	TranscodeReport *VideoProbeResponse    `json:"transcodeReport,omitempty"`
+	// ResultSizeBytes is the size of the packaged result artifact (e.g. the
+	// restoration tarball). Optional — only pipelines that know the size set it.
+	ResultSizeBytes int64               `json:"resultSizeBytes,omitempty"`
+	ExpiresAt       *time.Time          `json:"expiresAt,omitempty"`
+	TranscodeReport *VideoProbeResponse `json:"transcodeReport,omitempty"`
 }
 
 type OriginalFileInfo struct {

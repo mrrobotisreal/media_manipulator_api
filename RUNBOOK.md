@@ -248,6 +248,41 @@ after changing them.
 > conventionally `/opt/media-manipulator-ai/scripts/*.py`. Deploy with
 > `sudo cp scripts/server/<script>.py /opt/media-manipulator-ai/scripts/`.
 
+> **AI Video Restoration install:** the six-model restoration pipeline
+> (Real-ESRGAN, SwinIR, HAT, BasicVSR++, RVRT, VRT) needs two extra venvs
+> (`restore-sr`, `restore-vsr-mm`), five repo clones, model weights, and the
+> `restore_frames.py` / `restore_video.py` scripts deployed. The full
+> operator procedure — including the Blackwell (sm_120) torch cu128 and
+> mmcv-from-source requirements — lives in
+> [`docs/INSTALL_VIDEO_RESTORATION.md`](docs/INSTALL_VIDEO_RESTORATION.md).
+
+### 4.6 AI Video Restoration
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `RESTORE_ENABLED` | `true` | Master switch for `/api/video-restore/*` (off → 503 on start, `enabled:false` in capabilities). |
+| `RESTORE_BASICVSRPP_ENABLED` | `true` | Independent flag for BasicVSR++ (its mmcv/mmagic venv is the most fragile install). |
+| `RESTORE_MAX_CLIP_SECONDS` | `15` | Hard cap on the selected snippet window. |
+| `RESTORE_RECOMMENDED_CLIP_SECONDS` | `10` | Soft cap surfaced in capabilities; the UI warns above it. |
+| `RESTORE_MAX_FRAMES` | `450` | Frame cap — enforced fps-aware at probe time and re-checked after extraction. |
+| `RESTORE_MAX_SOURCE_WIDTH` / `_HEIGHT` | `1920` / `1080` | Source resolution caps (restoration targets low-res footage). |
+| `RESTORE_MAX_CONCURRENT_JOBS` | `1` | Process-wide restore job semaphore; queued jobs stay `pending` with stage `queued`. |
+| `RESTORE_MODEL_TIMEOUT_SECONDS` | `4500` | Per-model subprocess timeout. |
+| `RESTORE_RESULT_PRESIGN_TTL_SECONDS` | `21600` | Result tarball download-link TTL (6h — the archives are huge). |
+| `RESTORE_RATE_LIMIT_PER_SESSION_PER_HOUR` / `_PER_IP_PER_HOUR` | `2` / `4` | Dedicated rate bucket for `/api/video-restore/start`. |
+| `AI_RESTORE_CUDA_GPU` | `0` | CUDA index of the 16GB RTX 5080 (PyTorch models pin to it). |
+| `AI_RESTORE_VULKAN_GPU` | `1` | Vulkan index for realesrgan-ncnn. |
+| `AI_RESTORE_PYTHON` | `${AI_ROOT_DIR}/venvs/restore-sr/bin/python` | venv python for SwinIR/HAT/RVRT/VRT. |
+| `AI_RESTORE_MM_PYTHON` | `${AI_ROOT_DIR}/venvs/restore-vsr-mm/bin/python` | venv python for BasicVSR++ (mmcv/mmagic). |
+| `AI_RESTORE_FRAMES_SCRIPT` | `${AI_ROOT_DIR}/scripts/restore_frames.py` | Per-frame SR wrapper (repo source: `scripts/server/restore_frames.py`). |
+| `AI_RESTORE_VIDEO_SCRIPT` | `${AI_ROOT_DIR}/scripts/restore_video.py` | Video-restoration wrapper (repo source: `scripts/server/restore_video.py`). |
+| `AI_RESTORE_MODELS_DIR` | `${AI_ROOT_DIR}/models/restore` | Weight files, one subdir per model. |
+| `AI_RESTORE_REPOS_DIR` | `${AI_ROOT_DIR}/repos` | SwinIR/HAT/RVRT/VRT/mmagic clones. |
+| `RESTORE_EST_SPF_<MODEL>` | `0.8/3.5/5.0/1.0/3.0/7.0` | Estimated seconds-per-frame (REALESRGAN/SWINIR/HAT/BASICVSRPP/RVRT/VRT) — feeds UI estimates; tune after real runs. |
+| `RESTORE_VRAM_MIB_<MODEL>` | `3000/9000/10000/11000/12000/14000` | Per-model VRAM budgets for the GPU scheduler. |
+| `RESTORE_REQUIRE_FIREBASE_AUTH` | `false` | Future seam: when on, `/api/video-restore/*` requires a Firebase ID token (`Authorization: Bearer`). |
+| `FIREBASE_PROJECT_ID` | _(empty)_ | Firebase project for token verification (with `GOOGLE_APPLICATION_CREDENTIALS`). |
+
 ---
 
 ## 5. HTTP API surface
@@ -266,6 +301,8 @@ All routes live under `/api/` except `/healthz`.
 | POST | `/api/video-transcode/probe` | ffprobe an uploaded S3 video and return the rung selector data. | No |
 | POST | `/api/video-transcode/start` | Kick off an HLS or DASH transcode job against an S3 key. Returns `{jobId, probe, selectedRungs}`. | Yes |
 | GET | `/api/video-transcode/capabilities` | Report ffmpeg encoder availability + Ollama reachability + caption language catalog. | No |
+| GET | `/api/video-restore/capabilities` | AI Video Restoration limits + per-model availability (stat checks on configured paths). | No |
+| POST | `/api/video-restore/start` | Kick off a multi-model restoration job against an uploaded S3 key. Returns 202 `{jobId}`. | Yes (goroutine, queued behind `RESTORE_MAX_CONCURRENT_JOBS`) |
 | GET | `/api/job/:jobId` | Poll a job's full JSON state. | No |
 | GET | `/api/job/:jobId/events` | SSE event stream of job state changes. Closes on completed/failed. | Yes (open connection) |
 | GET | `/api/download/:jobId` | Stream the converted output file for jobs that produced one locally (image/audio/video convert + transcribe). | No |
@@ -273,7 +310,8 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/analysis/:jobId` | Serve the `analysis.json` (transcript summary + safety review) for a transcribe job. | No |
 
 **CORS** allow-list (in `cmd/api/main.go`): `https://media-manipulator.com`,
-`https://www.media-manipulator.com`, `http://localhost:5175`. Add origins
+`https://www.media-manipulator.com`, `https://dr.media-manipulator.com`
+(restricted restoration deployment), `http://localhost:5175`. Add origins
 there if you ever serve a staging UI from elsewhere.
 
 ---
