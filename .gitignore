@@ -22,3 +22,4 @@ scripts/server/models/
 scripts/server/tmp/
 scripts/server/*.zip
 scripts/server/*.tar.gz
+gfpgan/

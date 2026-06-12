@@ -147,7 +147,7 @@ def run_codeformer(input_path: Path, out_dir: Path, models_dir: Path, repos_dir:
             restored = tensor2img(t, rgb2bgr=True, min_max=(-1, 1))
             print(f"codeformer: face {idx} fell back to input ({exc})", flush=True)
         restored = restored.astype("uint8")
-        face_helper.add_restored_face(restored, cropped_face)
+        face_helper.add_restored_face(restored)
         emit_progress(idx + 1, num)
 
     face_helper.get_inverse_affine(None)
