@@ -634,6 +634,9 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 	if mode, _ := job.Options["mode"].(string); strings.EqualFold(strings.TrimSpace(mode), "stitch_audio_to_video") {
 		return fmt.Sprintf("%s_stitched%s", name, h.getOutputExtension(job))
 	}
+	if isImageRestoreMode(job) {
+		return fmt.Sprintf("%s_restoration_results.tar.gz", name)
+	}
 	if models.GetFileType(job.OriginalFile.Type) == models.FileTypeDocument {
 		ext := h.getOutputExtension(job)
 		if ext == ".zip" {
@@ -664,7 +667,25 @@ func (h *ConversionHandler) outputPath(job *models.ConversionJob, outputDir stri
 	if mode, _ := job.Options["mode"].(string); strings.EqualFold(strings.TrimSpace(mode), "stitch_audio_to_video") {
 		return filepath.Join(outputDir, "stitched"+h.getOutputExtension(job))
 	}
+	// AI Image Restoration packages a single results tarball that the
+	// image-restore pipeline leaves in the job output dir; the shared
+	// /api/download/:jobId endpoint serves it.
+	if isImageRestoreMode(job) {
+		return filepath.Join(outputDir, "image_restoration_results.tar.gz")
+	}
 	return filepath.Join(outputDir, "converted"+h.getOutputExtension(job))
+}
+
+// isImageRestoreMode reports whether a job is an AI Image Restoration job.
+func isImageRestoreMode(job *models.ConversionJob) bool {
+	if job == nil {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(job.Mode), "image_restore") {
+		return true
+	}
+	mode, _ := job.Options["mode"].(string)
+	return strings.EqualFold(strings.TrimSpace(mode), "image_restore")
 }
 
 func parseOptions(optionsStr string) (map[string]interface{}, error) {

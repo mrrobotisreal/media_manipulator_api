@@ -283,6 +283,46 @@ after changing them.
 | `RESTORE_REQUIRE_FIREBASE_AUTH` | `false` | Future seam: when on, `/api/video-restore/*` requires a Firebase ID token (`Authorization: Bearer`). |
 | `FIREBASE_PROJECT_ID` | _(empty)_ | Firebase project for token verification (with `GOOGLE_APPLICATION_CREDENTIALS`). |
 
+> **AI Image Restoration install:** the still-image sibling of video
+> restoration. General models (Real-ESRGAN/SwinIR/HAT) reuse the existing
+> `AI_RESTORE_*` paths/venvs/scripts — **zero new installs**. Two new venvs are
+> only needed for the optional stages: `face-restore` (GFPGAN/CodeFormer) and
+> `preclean` (FBCNN/SCUNet/NAFNet), plus their repo clones, weights, and the
+> `restore_image_faces.py` / `preclean_image.py` scripts. Operator procedures:
+> [`docs/INSTALL_FACE_RESTORATION.md`](docs/INSTALL_FACE_RESTORATION.md) and
+> [`docs/INSTALL_PRECLEAN_MODELS.md`](docs/INSTALL_PRECLEAN_MODELS.md). API
+> contract: [`docs/IMAGE_RESTORATION.md`](docs/IMAGE_RESTORATION.md).
+
+### 4.7 AI Image Restoration & Upscaling
+
+Shares the Firebase-gated `restoreGroup` (so `RESTORE_REQUIRE_FIREBASE_AUTH`
+gates it identically) and reuses `AI_RESTORE_*` (general-model paths, models
+dir, repos dir, GPU indices). General models run via the existing
+`restore_frames.py` against a one-image frames dir; pre-clean/face scripts run
+in their own venvs and address the physical card via `--gpu <AI_CUDA_GPU>`.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `IMAGE_RESTORE_ENABLED` | `true` | Master switch for `/api/image-restore/*` (off → 503 on start, `enabled:false` in capabilities). |
+| `IMAGE_RESTORE_CODEFORMER_ENABLED` | `false` | License gate (CodeFormer is S-Lab non-commercial). Off → capabilities reports codeformer `available:false`, reason "currently disabled". |
+| `IMAGE_RESTORE_MAX_SOURCE_WIDTH` / `_HEIGHT` | `12000` / `12000` | Source resolution caps. |
+| `IMAGE_RESTORE_MAX_OUTPUT_PIXELS` | `67108864` | Output pixel budget (~64MP, past 8K). Re-checked at prepare against the actual crop×scale. |
+| `IMAGE_RESTORE_MAX_OUTPUTS` | `12` | Cap on total output units `p + g + f + chain·f·g`. |
+| `IMAGE_RESTORE_MAX_CONCURRENT_JOBS` | `1` | Process-wide job semaphore; queued jobs stay `pending` with stage `queued`. |
+| `IMAGE_RESTORE_MODEL_TIMEOUT_SECONDS` | `1800` | Per-unit subprocess timeout. |
+| `IMAGE_RESTORE_RATE_LIMIT_PER_SESSION_PER_HOUR` / `_PER_IP_PER_HOUR` | `6` / `12` | Dedicated rate bucket for `/api/image-restore/start` (image jobs are far cheaper than video). |
+| `AI_FACE_RESTORE_PYTHON` | `${AI_ROOT_DIR}/venvs/face-restore/bin/python` | venv python for GFPGAN/CodeFormer. |
+| `AI_FACE_RESTORE_SCRIPT` | `${AI_ROOT_DIR}/scripts/restore_image_faces.py` | Face wrapper (repo source: `scripts/server/restore_image_faces.py`). |
+| `AI_PRECLEAN_PYTHON` | `${AI_ROOT_DIR}/venvs/preclean/bin/python` | venv python for FBCNN/SCUNet/NAFNet. |
+| `AI_PRECLEAN_SCRIPT` | `${AI_ROOT_DIR}/scripts/preclean_image.py` | Pre-clean wrapper (repo source: `scripts/server/preclean_image.py`). |
+| `IMAGE_RESTORE_EST_SPM_<MODEL>` | `3/8/6/2/12/18/6/8` | Estimated seconds-per-megapixel (FBCNN/SCUNET/NAFNET/REALESRGAN/SWINIR/HAT/GFPGAN/CODEFORMER) — feeds UI estimates + stage weights. |
+| `IMAGE_RESTORE_VRAM_MIB_<MODEL>` | `3000/4000/4000/—/—/—/5000/6000` | Per-model VRAM budgets for the GPU scheduler (general models reuse `RESTORE_VRAM_MIB_*`). |
+
+Results are **not** uploaded to S3 (the archives are tens–hundreds of MB, not
+multi-GB): the tarball stays in the job output dir and is served by the shared
+`/api/download/:jobId`; result PNGs stay alongside it for the results/preview
+endpoints until the 24h cleanup sweep. See `docs/IMAGE_RESTORATION.md`.
+
 ---
 
 ## 5. HTTP API surface
@@ -303,6 +343,10 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/video-transcode/capabilities` | Report ffmpeg encoder availability + Ollama reachability + caption language catalog. | No |
 | GET | `/api/video-restore/capabilities` | AI Video Restoration limits + per-model availability (stat checks on configured paths). | No |
 | POST | `/api/video-restore/start` | Kick off a multi-model restoration job against an uploaded S3 key. Returns 202 `{jobId}`. | Yes (goroutine, queued behind `RESTORE_MAX_CONCURRENT_JOBS`) |
+| GET | `/api/image-restore/capabilities` | AI Image Restoration limits + per-model availability (stat checks on configured paths/flags). | No |
+| POST | `/api/image-restore/start` | Multipart (`image` + `options` JSON) → multi-model image restoration job. Returns 202 `{jobId}`. | Yes (goroutine, queued behind `IMAGE_RESTORE_MAX_CONCURRENT_JOBS`) |
+| GET | `/api/image-restore/:jobId/results` | Manifest-derived results listing for a completed image-restore job (no fs paths). | No |
+| GET | `/api/image-restore/:jobId/result/:resultId` | Stream one result PNG inline (id resolved from the manifest only). | No |
 | GET | `/api/job/:jobId` | Poll a job's full JSON state. | No |
 | GET | `/api/job/:jobId/events` | SSE event stream of job state changes. Closes on completed/failed. | Yes (open connection) |
 | GET | `/api/download/:jobId` | Stream the converted output file for jobs that produced one locally (image/audio/video convert + transcribe). | No |

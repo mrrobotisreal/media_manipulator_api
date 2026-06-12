@@ -20,11 +20,22 @@ Progress protocol: "PROGRESS <done>/<total>" lines on stdout — per window for
 BasicVSR++, coarse (output-file count, sampled every 2s) for RVRT/VRT. Fatal
 errors: one-line "ERROR: <safe message>" and a non-zero exit. Honors
 CUDA_VISIBLE_DEVICES (set by the Go caller). Never writes outside --out-dir
-and --temp-root (KAIR scripts run with cwd inside the temp dir; their
-model_zoo is symlinked from the repo clone so weights are shared, results
-land in temp).
+and --temp-root.
+
+KAIR scripts (RVRT/VRT) run with cwd inside a staging dir; their model_zoo is
+symlinked from the repo clone so weights are shared, and they save into a
+`results/` tree relative to cwd. The staging dir defaults to a temp dir UNDER
+--out-dir (so the work is co-located with the job and visible on the same
+volume as the frame-by-frame models, e.g.
+<out-dir>/_kair_stage_XXXX/results/...); pass --temp-root to override. Two
+KAIR gotchas this wrapper handles: (1) the test scripts only WRITE frames when
+their `--save_result` flag is set, so we detect that flag in the installed
+script and pass it in the correct form; (2) the exact results/ subpath varies
+by repo version, so after the run we scan the whole staging tree (minus the
+copied LQ inputs) for produced PNGs rather than assuming one fixed subdir.
 """
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -138,10 +149,46 @@ def run_basicvsrpp(repos_dir: Path, models_dir: Path, frames: List[Path], out_fr
 # results/ tree lands in temp), then move the outputs into place.
 # ---------------------------------------------------------------------------
 
-def watch_results(results_root: Path, total: int, stop: threading.Event) -> None:
+# collect_outputs finds every produced PNG anywhere under the staging tree,
+# excluding the LQ inputs we copied in and the model_zoo symlink (rglob follows
+# symlinks on newer Python). KAIR's results/ subpath varies by repo version
+# (results/<task>/<folder>/..., sometimes an extra level), so scanning the whole
+# tree is more robust than assuming one fixed directory.
+def collect_outputs(work: Path, lq_root: Path) -> List[Path]:
+    model_zoo = work / "model_zoo"
+    excluded = {lq_root, model_zoo}
+    return sorted(
+        p
+        for p in work.rglob("*.png")
+        if p.is_file() and excluded.isdisjoint(p.parents)
+    )
+
+
+def watch_results(work: Path, lq_root: Path, total: int, stop: threading.Event) -> None:
     while not stop.wait(2.0):
-        done = len(list(results_root.rglob("*.png"))) if results_root.exists() else 0
+        done = len(collect_outputs(work, lq_root)) if work.exists() else 0
         emit_progress(min(done, total), total)
+
+
+# kair_save_result_args inspects the installed test script and returns the argv
+# needed to make it actually WRITE frames. KAIR's main_test_{rvrt,vrt}.py only
+# save output when their `--save_result` flag is set; without it the model runs
+# to completion and discards every frame (the "ran for 15 minutes, found 0
+# frames" bug). The flag's form differs by version (store_true vs int), so we
+# match whatever the script defines and never pass an arg it would reject.
+def kair_save_result_args(test_script: Path) -> List[str]:
+    try:
+        text = test_script.read_text(errors="ignore")
+    except OSError:
+        return []
+    match = re.search(r"add_argument\(\s*['\"]--save_result['\"](.*?)\)", text, re.S)
+    if not match:
+        # No such flag — this version always saves. Nothing to add.
+        return []
+    spec = match.group(1)
+    if "store_true" in spec or "store_const" in spec:
+        return ["--save_result"]
+    return ["--save_result", "1"]
 
 
 def run_kair(model: str, repos_dir: Path, frames: List[Path], out_frames: Path, tile: str, tile_overlap: str, task: str, temp_root: Path) -> None:
@@ -159,7 +206,7 @@ def run_kair(model: str, repos_dir: Path, frames: List[Path], out_frames: Path, 
         fail('expected --tile and --tile-overlap as three comma-separated ints (e.g. "12,128,128")')
 
     temp_root.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix=f"mm_{model}_", dir=str(temp_root)))
+    work = Path(tempfile.mkdtemp(prefix=f"_kair_stage_{model}_", dir=str(temp_root)))
     try:
         lq_root = work / "lq"
         clip_dir = lq_root / "clip"
@@ -169,9 +216,8 @@ def run_kair(model: str, repos_dir: Path, frames: List[Path], out_frames: Path, 
         # Relative model_zoo lookups resolve inside cwd — share the repo's.
         (work / "model_zoo").symlink_to(model_zoo, target_is_directory=True)
 
-        results_root = work / "results"
         stop = threading.Event()
-        watcher = threading.Thread(target=watch_results, args=(results_root, len(frames), stop), daemon=True)
+        watcher = threading.Thread(target=watch_results, args=(work, lq_root, len(frames), stop), daemon=True)
         watcher.start()
         try:
             run(
@@ -182,6 +228,7 @@ def run_kair(model: str, repos_dir: Path, frames: List[Path], out_frames: Path, 
                     "--folder_lq", str(lq_root),
                     "--tile", *tile_parts,
                     "--tile_overlap", *overlap_parts,
+                    *kair_save_result_args(test_script),
                 ],
                 cwd=work,
             )
@@ -189,9 +236,13 @@ def run_kair(model: str, repos_dir: Path, frames: List[Path], out_frames: Path, 
             stop.set()
             watcher.join(timeout=5)
 
-        produced = sorted(results_root.rglob("*.png"))
+        produced = collect_outputs(work, lq_root)
         if len(produced) != len(frames):
-            fail(f"{model.upper()} produced {len(produced)} frames, expected {len(frames)}")
+            fail(
+                f"{model.upper()} produced {len(produced)} frames, expected {len(frames)} "
+                f"(searched {work}/**/*.png). If 0, the test script likely did not save — "
+                f"check that it accepts --save_result."
+            )
         # Output names vary by repo version — map sorted outputs onto the
         # sorted input names.
         for src, frame in zip(produced, frames):
@@ -213,7 +264,11 @@ def main() -> None:
     parser.add_argument("--tile", default="")
     parser.add_argument("--tile-overlap", default="")
     parser.add_argument("--task", default="", help="KAIR task name override for rvrt/vrt")
-    parser.add_argument("--temp-root", default="/opt/media-manipulator-ai/tmp")
+    parser.add_argument(
+        "--temp-root",
+        default="",
+        help="staging root for RVRT/VRT (default: a temp dir under --out-dir, co-located with the job)",
+    )
     args = parser.parse_args()
 
     frames_dir = Path(args.frames_dir).resolve()
@@ -234,7 +289,11 @@ def main() -> None:
     task = args.task or KAIR_DEFAULT_TASKS[args.model]
     tile = args.tile or ("30,128,128" if args.model == "rvrt" else "12,128,128")
     overlap = args.tile_overlap or "2,20,20"
-    run_kair(args.model, repos_dir, frames, out_frames, tile, overlap, task, Path(args.temp_root))
+    # Default the KAIR staging dir to UNDER --out-dir so the runtime work is
+    # co-located with the job (same volume as the frame-by-frame models) and
+    # visible while it runs, instead of a global /opt tmp.
+    temp_root = Path(args.temp_root).resolve() if args.temp_root.strip() else out_dir
+    run_kair(args.model, repos_dir, frames, out_frames, tile, overlap, task, temp_root)
 
 
 if __name__ == "__main__":

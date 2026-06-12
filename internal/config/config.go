@@ -199,6 +199,31 @@ type Config struct {
 	FirebaseProjectID            string
 	GoogleApplicationCredentials string
 
+	// AI Image Restoration & Upscaling — the still-image sibling of the video
+	// restoration feature. General models (realesrgan/swinir/hat) reuse the
+	// AIRestore* paths above (same binaries/venvs/scripts, zero new installs);
+	// only the pre-clean and face venvs/scripts are new. CodeFormer is gated
+	// behind ImageRestoreCodeFormerEnabled (S-Lab non-commercial license).
+	ImageRestoreEnabled                    bool
+	ImageRestoreCodeFormerEnabled          bool
+	ImageRestoreMaxSourceWidth             int
+	ImageRestoreMaxSourceHeight            int
+	ImageRestoreMaxOutputPixels            int64
+	ImageRestoreMaxOutputs                 int
+	ImageRestoreMaxConcurrentJobs          int
+	ImageRestoreModelTimeout               time.Duration
+	ImageRestoreRateLimitPerSessionPerHour int
+	ImageRestoreRateLimitPerIPPerHour      int
+	AIFaceRestorePython                    string
+	AIFaceRestoreScript                    string
+	AIPrecleanPython                       string
+	AIPrecleanScript                       string
+	// Per-model tuning knobs, keyed by image-restore model id. Estimated
+	// seconds per megapixel feeds the UI time estimates + stage weights; VRAM
+	// MiB drives GPU scheduler requests. Both are env-overridable.
+	ImageRestoreEstSecondsPerMegapixel map[string]float64
+	ImageRestoreVRAMMiB                map[string]int64
+
 	// Content Studio (browser-based multi-track NLE). All Content Studio
 	// ffmpeg work (proxy, filmstrip, export) is pinned to a dedicated GPU so
 	// it doesn't contend with whisper/RIFE on the shared host. We default to
@@ -370,6 +395,41 @@ func Load() *Config {
 		RestoreRequireFirebaseAuth:   getEnvBool("RESTORE_REQUIRE_FIREBASE_AUTH", false),
 		FirebaseProjectID:            getEnv("FIREBASE_PROJECT_ID", ""),
 		GoogleApplicationCredentials: getEnv("GOOGLE_APPLICATION_CREDENTIALS", ""),
+
+		ImageRestoreEnabled:                    getEnvBool("IMAGE_RESTORE_ENABLED", true),
+		ImageRestoreCodeFormerEnabled:          getEnvBool("IMAGE_RESTORE_CODEFORMER_ENABLED", false),
+		ImageRestoreMaxSourceWidth:             getEnvInt("IMAGE_RESTORE_MAX_SOURCE_WIDTH", 12000),
+		ImageRestoreMaxSourceHeight:            getEnvInt("IMAGE_RESTORE_MAX_SOURCE_HEIGHT", 12000),
+		ImageRestoreMaxOutputPixels:            getEnvInt64("IMAGE_RESTORE_MAX_OUTPUT_PIXELS", 67108864),
+		ImageRestoreMaxOutputs:                 getEnvInt("IMAGE_RESTORE_MAX_OUTPUTS", 12),
+		ImageRestoreMaxConcurrentJobs:          getEnvInt("IMAGE_RESTORE_MAX_CONCURRENT_JOBS", 1),
+		ImageRestoreModelTimeout:               time.Duration(getEnvInt("IMAGE_RESTORE_MODEL_TIMEOUT_SECONDS", 1800)) * time.Second,
+		ImageRestoreRateLimitPerSessionPerHour: getEnvInt("IMAGE_RESTORE_RATE_LIMIT_PER_SESSION_PER_HOUR", 6),
+		ImageRestoreRateLimitPerIPPerHour:      getEnvInt("IMAGE_RESTORE_RATE_LIMIT_PER_IP_PER_HOUR", 12),
+		AIFaceRestorePython:                    getEnv("AI_FACE_RESTORE_PYTHON", "/opt/media-manipulator-ai/venvs/face-restore/bin/python"),
+		AIFaceRestoreScript:                    getEnv("AI_FACE_RESTORE_SCRIPT", "/opt/media-manipulator-ai/scripts/restore_image_faces.py"),
+		AIPrecleanPython:                       getEnv("AI_PRECLEAN_PYTHON", "/opt/media-manipulator-ai/venvs/preclean/bin/python"),
+		AIPrecleanScript:                       getEnv("AI_PRECLEAN_SCRIPT", "/opt/media-manipulator-ai/scripts/preclean_image.py"),
+		ImageRestoreEstSecondsPerMegapixel: map[string]float64{
+			"fbcnn":      getEnvFloat("IMAGE_RESTORE_EST_SPM_FBCNN", 3),
+			"scunet":     getEnvFloat("IMAGE_RESTORE_EST_SPM_SCUNET", 8),
+			"nafnet":     getEnvFloat("IMAGE_RESTORE_EST_SPM_NAFNET", 6),
+			"realesrgan": getEnvFloat("IMAGE_RESTORE_EST_SPM_REALESRGAN", 2),
+			"swinir":     getEnvFloat("IMAGE_RESTORE_EST_SPM_SWINIR", 12),
+			"hat":        getEnvFloat("IMAGE_RESTORE_EST_SPM_HAT", 18),
+			"gfpgan":     getEnvFloat("IMAGE_RESTORE_EST_SPM_GFPGAN", 6),
+			"codeformer": getEnvFloat("IMAGE_RESTORE_EST_SPM_CODEFORMER", 8),
+		},
+		ImageRestoreVRAMMiB: map[string]int64{
+			"fbcnn":      getEnvInt64("IMAGE_RESTORE_VRAM_MIB_FBCNN", 3000),
+			"scunet":     getEnvInt64("IMAGE_RESTORE_VRAM_MIB_SCUNET", 4000),
+			"nafnet":     getEnvInt64("IMAGE_RESTORE_VRAM_MIB_NAFNET", 4000),
+			"realesrgan": getEnvInt64("IMAGE_RESTORE_VRAM_MIB_REALESRGAN", 3000),
+			"swinir":     getEnvInt64("IMAGE_RESTORE_VRAM_MIB_SWINIR", 9000),
+			"hat":        getEnvInt64("IMAGE_RESTORE_VRAM_MIB_HAT", 10000),
+			"gfpgan":     getEnvInt64("IMAGE_RESTORE_VRAM_MIB_GFPGAN", 5000),
+			"codeformer": getEnvInt64("IMAGE_RESTORE_VRAM_MIB_CODEFORMER", 6000),
+		},
 
 		// Content Studio — getEnvIntDefault for the GPU index so device 0 is a
 		// valid override (getEnvInt rejects <= 0).
