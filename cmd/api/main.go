@@ -228,7 +228,7 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// Restricted AI Video Restoration deployment (Firebase-gated when
 		// RESTORE_REQUIRE_FIREBASE_AUTH is enabled).
 		"https://dr.media-manipulator.com",
-		"http://localhost:5175",
+		"http://localhost:3000",
 	}
 	// PUT is required by the Content Studio project save (PUT /api/studio/projects/:id);
 	// PATCH/DELETE are allowed too so the editor's CRUD surface doesn't trip CORS.
