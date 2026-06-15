@@ -136,7 +136,7 @@ func main() {
 	// Content Studio gets its own handler because it persists projects/assets in
 	// Postgres (the conversion handler is stateless). It shares the jobManager so
 	// ingest/export progress flows through the same /api/job/:jobId machinery.
-	studioHandler := handlers.NewStudioHandler(jobManager, cfg, inspector, s3Client, pool)
+	studioHandler := handlers.NewStudioHandler(jobManager, cfg, inspector, s3Client, pool, transcription)
 	// AI Video Restoration gets a dedicated handler too: its pipeline is the
 	// first consumer of the GPU lease manager and the command-audit runner.
 	videoRestoreHandler := handlers.NewVideoRestoreHandler(jobManager, cfg, s3Client, gpuMgr, store, cmdRunner)
@@ -359,6 +359,27 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 			ipLimit:      cfg.RateLimitTranscodesPerIPPerHour,
 			matches: func(path string) bool {
 				return strings.HasPrefix(path, "/api/studio/projects/") && strings.HasSuffix(path, "/export")
+			},
+		},
+		// AI-derived audio (DeepFilter/Demucs) competes with whisper for GPU —
+		// rate-limit it like the analysis routes.
+		{
+			routeKey:     "studio_asset_derive",
+			tool:         "studio_derive",
+			sessionLimit: cfg.RateLimitAnalysisPerSessionPerHour,
+			ipLimit:      cfg.RateLimitAnalysisPerIPPerHour,
+			matches: func(path string) bool {
+				return strings.HasPrefix(path, "/api/studio/assets/") && strings.HasSuffix(path, "/derive")
+			},
+		},
+		// Caption generation runs whisper — share the analysis bucket.
+		{
+			routeKey:     "studio_captions_generate",
+			tool:         "studio_captions",
+			sessionLimit: cfg.RateLimitAnalysisPerSessionPerHour,
+			ipLimit:      cfg.RateLimitAnalysisPerIPPerHour,
+			matches: func(path string) bool {
+				return strings.HasPrefix(path, "/api/studio/projects/") && strings.HasSuffix(path, "/captions/generate")
 			},
 		},
 	}

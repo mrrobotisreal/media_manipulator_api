@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -42,13 +43,14 @@ func NewStudioIngestService(cfg *config.Config, jm *JobManager, s3Client *s3.Cli
 type StudioIngestResult struct {
 	ProxyKey  string
 	SpriteKey string
+	PeaksKey  string // audio waveform peaks JSON; empty when no audio / on failure
 }
 
 // Generate produces a 720p H.264 preview proxy (AAC for audio-only assets) and,
 // for video, a filmstrip sprite, uploads both to S3 colocated with the original
 // under studio/<date>/<session>/, and reports encode progress on jobID. The
 // caller persists the returned keys and completes the job.
-func (s *StudioIngestService) Generate(ctx context.Context, jobID, originalKey, assetID string, mediaKind models.StudioMediaKind, inputPath string, totalSeconds float64) (StudioIngestResult, error) {
+func (s *StudioIngestService) Generate(ctx context.Context, jobID, originalKey, assetID string, mediaKind models.StudioMediaKind, hasAudio bool, inputPath string, totalSeconds float64) (StudioIngestResult, error) {
 	if s.s3Client == nil {
 		return StudioIngestResult{}, fmt.Errorf("S3 client not configured")
 	}
@@ -71,6 +73,7 @@ func (s *StudioIngestService) Generate(ctx context.Context, jobID, originalKey, 
 		if err := s.uploadFile(ctx, proxyLocal, res.ProxyKey, "audio/mp4"); err != nil {
 			return StudioIngestResult{}, fmt.Errorf("upload audio proxy: %w", err)
 		}
+		s.maybePeaks(ctx, jobID, originalKey, assetID, hasAudio, inputPath, totalSeconds, &res)
 		return res, nil
 	}
 
@@ -109,7 +112,30 @@ func (s *StudioIngestService) Generate(ctx context.Context, jobID, originalKey, 
 			}
 		}
 	}
+
+	// Waveform peaks for any video with an audio track (non-fatal).
+	s.maybePeaks(ctx, jobID, originalKey, assetID, hasAudio, inputPath, totalSeconds, &res)
 	return res, nil
+}
+
+// maybePeaks generates + uploads waveform peaks when the asset has audio. A
+// failure is logged and swallowed (a missing waveform must not fail ingest,
+// mirroring the filmstrip's behavior); the route backfills on first request.
+func (s *StudioIngestService) maybePeaks(ctx context.Context, jobID, originalKey, assetID string, hasAudio bool, inputPath string, totalSeconds float64, res *StudioIngestResult) {
+	if !hasAudio {
+		return
+	}
+	data, err := s.GeneratePeaksBytes(ctx, jobID, inputPath, totalSeconds)
+	if err != nil {
+		log.Printf("studio ingest: peaks generation failed for asset %s: %v", assetID, err)
+		return
+	}
+	key, err := s.UploadPeaks(ctx, originalKey, assetID, data)
+	if err != nil {
+		log.Printf("studio ingest: peaks upload failed for asset %s: %v", assetID, err)
+		return
+	}
+	res.PeaksKey = key
 }
 
 func (s *StudioIngestService) uploadFile(ctx context.Context, localPath, key, contentType string) error {

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -168,6 +169,106 @@ func runStudioFFmpeg(ctx context.Context, jm *JobManager, jobID string, gpuIndex
 		return err
 	}
 	return nil
+}
+
+// runStudioFFmpegCapture runs ffmpeg pinned to the Content Studio GPU and returns
+// its stdout bytes (capped at maxStdoutBytes), while still parsing stderr for
+// progress like runStudioFFmpeg. Used for peaks extraction (raw mono PCM piped
+// to stdout). When the cap is hit, ffmpeg is stopped and the truncated buffer is
+// returned without error (a partial waveform is acceptable).
+func runStudioFFmpegCapture(ctx context.Context, jm *JobManager, jobID string, gpuIndex int, knownTotalSeconds float64, maxStdoutBytes int64, args ...string) ([]byte, error) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		return nil, fmt.Errorf("ffmpeg is required for Content Studio but was not found on PATH — install FFmpeg or see https://ffmpeg.org/download.html")
+	}
+	if maxStdoutBytes <= 0 {
+		maxStdoutBytes = 64 * 1024 * 1024
+	}
+
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	cmd := exec.CommandContext(runCtx, "ffmpeg", args...)
+	cmd.Env = studioFFmpegEnv(gpuIndex)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
+	}
+
+	// Capture stdout (capped) off-thread so the stderr progress scan can run.
+	var (
+		buf       bytes.Buffer
+		truncated bool
+		copyErr   error
+		wg        sync.WaitGroup
+	)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		n, e := buf.ReadFrom(io.LimitReader(stdout, maxStdoutBytes+1))
+		if e != nil {
+			copyErr = e
+		}
+		if n > maxStdoutBytes {
+			truncated = true
+			cancel() // we have enough; stop ffmpeg
+		}
+		_, _ = io.Copy(io.Discard, stdout) // drain so the pipe never blocks
+	}()
+
+	var stderrBuf bytes.Buffer
+	scanner := bufio.NewScanner(stderr)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	totalDuration := knownTotalSeconds
+	for scanner.Scan() {
+		line := scanner.Text()
+		stderrBuf.WriteString(line + "\n")
+		if knownTotalSeconds <= 0 {
+			if m := studioDurationRegex.FindStringSubmatch(line); m != nil {
+				totalDuration = hmsToSeconds(m[1], m[2], m[3], m[4])
+			}
+		}
+		if m := studioTimeRegex.FindStringSubmatch(line); m != nil && totalDuration > 0 && jm != nil {
+			current := hmsToSeconds(m[1], m[2], m[3], m[4])
+			progress := int((current / totalDuration) * 100)
+			if progress > 100 {
+				progress = 100
+			}
+			if progress < 0 {
+				progress = 0
+			}
+			jm.SendProgressUpdate(jobID, progress)
+		}
+	}
+	wg.Wait()
+
+	waitErr := cmd.Wait()
+	if truncated {
+		out := buf.Bytes()
+		if int64(len(out)) > maxStdoutBytes {
+			out = out[:maxStdoutBytes]
+		}
+		return out, nil
+	}
+	if waitErr != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("ffmpeg timed out: %w", ctx.Err())
+		}
+		if tail := commandTail(stderrBuf.String(), 8000); tail != "" {
+			return nil, fmt.Errorf("%w. ffmpeg stderr: %s", waitErr, tail)
+		}
+		return nil, waitErr
+	}
+	if copyErr != nil {
+		return nil, fmt.Errorf("capture ffmpeg stdout: %w", copyErr)
+	}
+	return buf.Bytes(), nil
 }
 
 func hmsToSeconds(h, m, s, cs string) float64 {

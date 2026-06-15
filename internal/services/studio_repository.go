@@ -31,19 +31,32 @@ func (r *StudioRepository) Enabled() bool { return r != nil && r.pool != nil }
 // ErrStudioNotFound is returned when a project/asset row doesn't exist.
 var ErrStudioNotFound = errors.New("not found")
 
+// studioProjectSidecar is the JSON envelope persisted in studio_projects.captions
+// (the EDL v2 project sidecar). It bundles the caption set with the project-level
+// extras so the caption-generate job and the autosave PUT write independent
+// columns. `enabled` is a pointer so an absent value means "captions enabled"
+// (the default for pre-v2 rows).
+type studioProjectSidecar struct {
+	SchemaVersion int                        `json:"schemaVersion"`
+	Cues          []models.StudioCaptionCue  `json:"cues"`
+	Style         *models.StudioCaptionStyle `json:"style,omitempty"`
+	Enabled       *bool                      `json:"enabled,omitempty"`
+	Audio         *models.StudioAudioConfig  `json:"audio,omitempty"`
+}
+
 func (r *StudioRepository) CreateProject(ctx context.Context, sessionID string, req models.StudioCreateProjectRequest) (*models.StudioProject, error) {
 	tracks := []byte("[]")
 	row := r.pool.QueryRow(ctx, `
 INSERT INTO studio_projects (session_id, name, fps, width, height, duration_seconds, tracks)
 VALUES ($1, $2, $3, $4, $5, 0, $6)
-RETURNING id, name, fps, width, height, duration_seconds, tracks, created_at, updated_at
+RETURNING id, name, fps, width, height, duration_seconds, tracks, captions, created_at, updated_at
 `, sessionID, req.Name, req.FPS, req.Width, req.Height, tracks)
 	return scanProject(row)
 }
 
 func (r *StudioRepository) GetProject(ctx context.Context, id string) (*models.StudioProject, error) {
 	row := r.pool.QueryRow(ctx, `
-SELECT id, name, fps, width, height, duration_seconds, tracks, created_at, updated_at
+SELECT id, name, fps, width, height, duration_seconds, tracks, captions, created_at, updated_at
 FROM studio_projects WHERE id = $1
 `, id)
 	p, err := scanProject(row)
@@ -58,7 +71,7 @@ func (r *StudioRepository) ListRecentProjects(ctx context.Context, sessionID str
 		limit = 25
 	}
 	rows, err := r.pool.Query(ctx, `
-SELECT id, name, fps, width, height, duration_seconds, tracks, created_at, updated_at
+SELECT id, name, fps, width, height, duration_seconds, tracks, captions, created_at, updated_at
 FROM studio_projects WHERE session_id = $1
 ORDER BY updated_at DESC LIMIT $2
 `, sessionID, limit)
@@ -80,22 +93,67 @@ ORDER BY updated_at DESC LIMIT $2
 // SaveProject overwrites the editor document. durationSeconds is computed from
 // the tracks (end of the last clip) so the field stays authoritative.
 func (r *StudioRepository) SaveProject(ctx context.Context, id string, req models.StudioSaveProjectRequest) (*models.StudioProject, error) {
-	tracks, err := json.Marshal(req.Tracks)
+	// Sanitize before persisting so the stored EDL is always trustworthy (the
+	// export compiler reads it back without re-validating).
+	cleanTracks := models.SanitizeTracks(req.Tracks)
+	tracks, err := json.Marshal(cleanTracks)
 	if err != nil {
 		return nil, fmt.Errorf("marshal tracks: %w", err)
 	}
-	duration := computeProjectDuration(req.Tracks)
+	enabled := true
+	if req.CaptionsEnabled != nil {
+		enabled = *req.CaptionsEnabled
+	}
+	sidecar := studioProjectSidecar{
+		SchemaVersion: models.StudioSchemaVersionCurrent,
+		Cues:          models.SanitizeCaptions(req.Captions),
+		Style:         models.SanitizeCaptionStyle(req.CaptionStyle),
+		Enabled:       &enabled,
+		Audio:         models.SanitizeAudioConfig(req.Audio),
+	}
+	captions, err := json.Marshal(sidecar)
+	if err != nil {
+		return nil, fmt.Errorf("marshal captions: %w", err)
+	}
+	duration := computeProjectDuration(cleanTracks)
+	// tracks + captions written in one statement → atomic; the caption-generate
+	// job touches only the captions column (see SaveCaptions).
 	row := r.pool.QueryRow(ctx, `
 UPDATE studio_projects
-SET name = $2, fps = $3, width = $4, height = $5, duration_seconds = $6, tracks = $7, updated_at = now()
+SET name = $2, fps = $3, width = $4, height = $5, duration_seconds = $6, tracks = $7, captions = $8, updated_at = now()
 WHERE id = $1
-RETURNING id, name, fps, width, height, duration_seconds, tracks, created_at, updated_at
-`, id, req.Name, req.FPS, req.Width, req.Height, duration, tracks)
+RETURNING id, name, fps, width, height, duration_seconds, tracks, captions, created_at, updated_at
+`, id, req.Name, req.FPS, req.Width, req.Height, duration, tracks, captions)
 	p, err := scanProject(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrStudioNotFound
 	}
 	return p, err
+}
+
+// SaveCaptions writes ONLY the cue list into the captions sidecar (via jsonb_set
+// with create_missing), preserving the style/enabled/audio keys. This is used by
+// the caption-generate job so it never clobbers the tracks the autosave PUT owns.
+func (r *StudioRepository) SaveCaptions(ctx context.Context, id string, cues []models.StudioCaptionCue) error {
+	if cues == nil {
+		cues = []models.StudioCaptionCue{}
+	}
+	payload, err := json.Marshal(models.SanitizeCaptions(cues))
+	if err != nil {
+		return fmt.Errorf("marshal cues: %w", err)
+	}
+	tag, err := r.pool.Exec(ctx, `
+UPDATE studio_projects
+SET captions = jsonb_set(coalesce(captions, '{}'::jsonb), '{cues}', $2::jsonb, true), updated_at = now()
+WHERE id = $1
+`, id, payload)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrStudioNotFound
+	}
+	return nil
 }
 
 func (r *StudioRepository) CreateAsset(ctx context.Context, a *models.StudioAsset) (*models.StudioAsset, error) {
@@ -108,7 +166,7 @@ INSERT INTO studio_assets (
   project_id, original_file_name, s3_key_original, media_kind, duration_seconds,
   width, height, fps, video_codec, audio_codec, has_audio, sample_rate, channels, probe_json
 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-RETURNING id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url,
+RETURNING id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks,
           media_kind, duration_seconds, width, height, fps, video_codec, audio_codec,
           has_audio, sample_rate, channels, probe_json, created_at
 `,
@@ -128,9 +186,18 @@ UPDATE studio_assets SET s3_key_proxy = $2, thumbnail_sprite_url = $3 WHERE id =
 	return err
 }
 
+// SetAssetPeaks records the waveform peaks S3 key (from ingest or on-demand
+// backfill). Empty clears it.
+func (r *StudioRepository) SetAssetPeaks(ctx context.Context, assetID, peaksKey string) error {
+	_, err := r.pool.Exec(ctx, `
+UPDATE studio_assets SET s3_key_peaks = $2 WHERE id = $1
+`, assetID, nullableStr(peaksKey))
+	return err
+}
+
 func (r *StudioRepository) GetAsset(ctx context.Context, id string) (*models.StudioAsset, error) {
 	row := r.pool.QueryRow(ctx, `
-SELECT id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url,
+SELECT id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks,
        media_kind, duration_seconds, width, height, fps, video_codec, audio_codec,
        has_audio, sample_rate, channels, probe_json, created_at
 FROM studio_assets WHERE id = $1
@@ -144,7 +211,7 @@ FROM studio_assets WHERE id = $1
 
 func (r *StudioRepository) ListAssets(ctx context.Context, projectID string) ([]*models.StudioAsset, error) {
 	rows, err := r.pool.Query(ctx, `
-SELECT id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url,
+SELECT id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks,
        media_kind, duration_seconds, width, height, fps, video_codec, audio_codec,
        has_audio, sample_rate, channels, probe_json, created_at
 FROM studio_assets WHERE project_id = $1 ORDER BY created_at
@@ -171,8 +238,8 @@ type scannable interface {
 
 func scanProject(row scannable) (*models.StudioProject, error) {
 	var p models.StudioProject
-	var tracks []byte
-	if err := row.Scan(&p.ID, &p.Name, &p.FPS, &p.Width, &p.Height, &p.DurationSeconds, &tracks, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	var tracks, captions []byte
+	if err := row.Scan(&p.ID, &p.Name, &p.FPS, &p.Width, &p.Height, &p.DurationSeconds, &tracks, &captions, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if len(tracks) > 0 {
@@ -183,16 +250,36 @@ func scanProject(row scannable) (*models.StudioProject, error) {
 	if p.Tracks == nil {
 		p.Tracks = []models.StudioTrack{}
 	}
+	// EDL v2 sidecar (captions / style / enabled / audio). The server always
+	// reports the current schema version; pre-v2 rows have an empty '{}' sidecar
+	// and default to captions-enabled.
+	p.SchemaVersion = models.StudioSchemaVersionCurrent
+	p.CaptionsEnabled = true
+	if len(captions) > 0 {
+		var sc studioProjectSidecar
+		if err := json.Unmarshal(captions, &sc); err != nil {
+			return nil, fmt.Errorf("unmarshal captions: %w", err)
+		}
+		p.Captions = sc.Cues
+		p.CaptionStyle = sc.Style
+		p.Audio = sc.Audio
+		if sc.Enabled != nil {
+			p.CaptionsEnabled = *sc.Enabled
+		}
+	}
+	if p.Captions == nil {
+		p.Captions = []models.StudioCaptionCue{}
+	}
 	return &p, nil
 }
 
 func scanAsset(row scannable) (*models.StudioAsset, error) {
 	var a models.StudioAsset
 	var kind string
-	var proxyKey, spriteKey, videoCodec, audioCodec *string
+	var proxyKey, spriteKey, peaksKey, videoCodec, audioCodec *string
 	var probe []byte
 	if err := row.Scan(
-		&a.ID, &a.ProjectID, &a.OriginalFileName, &a.S3KeyOriginal, &proxyKey, &spriteKey,
+		&a.ID, &a.ProjectID, &a.OriginalFileName, &a.S3KeyOriginal, &proxyKey, &spriteKey, &peaksKey,
 		&kind, &a.DurationSeconds, &a.Width, &a.Height, &a.FPS, &videoCodec, &audioCodec,
 		&a.HasAudio, &a.SampleRate, &a.Channels, &probe, &a.CreatedAt,
 	); err != nil {
@@ -204,6 +291,9 @@ func scanAsset(row scannable) (*models.StudioAsset, error) {
 	}
 	if spriteKey != nil {
 		a.ThumbnailSpriteURL = *spriteKey
+	}
+	if peaksKey != nil {
+		a.S3KeyPeaks = *peaksKey
 	}
 	if videoCodec != nil {
 		a.VideoCodec = *videoCodec
