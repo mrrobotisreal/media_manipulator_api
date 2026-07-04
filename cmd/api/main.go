@@ -153,6 +153,10 @@ func main() {
 	// (GET /api/dr/docs[, /:slug]). Shares the same pgx pool as Content Studio;
 	// always Firebase-gated at the /dr group (see the DR verifier + group below).
 	drDocsHandler := handlers.NewDrDocsHandler(pool)
+	// DR document comments (v2): comment/reply/attachment endpoints on the same
+	// /api/dr group. Reuses the shared S3 client + pool for the presign→PUT→
+	// complete attachment handshake and the draft reaper.
+	drCommentsHandler := handlers.NewDrCommentsHandler(pool, cfg, s3Client)
 
 	// Future auth seam (default OFF): when RESTORE_REQUIRE_FIREBASE_AUTH is
 	// set, /api/video-restore/* verifies Firebase ID tokens. Init failure
@@ -187,10 +191,16 @@ func main() {
 		go worker.Run(ctx)
 	}
 
+	// Daily reaper for abandoned DR comment drafts + orphaned pending
+	// attachments (see DrCommentsHandler.ReapStaleDrafts). DB-gated.
+	if pool != nil {
+		go runDrCommentReaper(ctx, drCommentsHandler)
+	}
+
 	// Periodic active-jobs gauge update.
 	go pollActiveJobs(ctx, jobManager, metricsReg)
 
-	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, restoreAuthVerifier, drVerifier, drDocsHandler, store, enricher, limiter, metricsReg)
+	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, restoreAuthVerifier, drVerifier, drDocsHandler, drCommentsHandler, store, enricher, limiter, metricsReg)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -238,7 +248,7 @@ func newS3Client(cfg *config.Config) *s3.Client {
 	})
 }
 
-func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, restoreAuthVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
+func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, restoreAuthVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, drCommentsHandler *handlers.DrCommentsHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.Default()
@@ -323,6 +333,7 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		drGroup := api.Group("/dr")
 		drGroup.Use(middleware.RequireDoubleRavenAuth(drVerifier, cfg.DRAllowedEmails))
 		handlers.RegisterDrDocsRoutes(drGroup, drDocsHandler)
+		handlers.RegisterDrCommentsRoutes(drGroup, drCommentsHandler)
 
 		// Tighter limits for upload/transcode/analysis paths.
 		api.Use() // marker; per-route limiters below
@@ -501,6 +512,23 @@ func pollActiveJobs(ctx context.Context, jm *services.JobManager, m *metrics.Reg
 			return
 		case <-t.C:
 			m.SetActiveJobs(jm.ActiveCount())
+		}
+	}
+}
+
+// runDrCommentReaper runs the DR comment draft reaper shortly after boot and
+// then daily, until ctx is cancelled. Mirrors the ticker pattern of the cleanup
+// worker but is DR-specific (needs the pgx pool + S3 client the handler holds).
+func runDrCommentReaper(ctx context.Context, h *handlers.DrCommentsHandler) {
+	timer := time.NewTimer(time.Minute)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			h.ReapStaleDrafts(ctx)
+			timer.Reset(24 * time.Hour)
 		}
 	}
 }
