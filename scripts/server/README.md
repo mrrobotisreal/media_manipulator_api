@@ -71,3 +71,38 @@ sudo chmod +x /opt/media-manipulator-ai/scripts/frame_interpolate_rife.py
 ```
 
 See `docs/server-ai-frame-interpolation.md` for the full RIFE install flow.
+
+## `document_ocr.py`
+
+Runtime path is configured by `AI_DOCUMENT_OCR_SCRIPT` and defaults to
+`/opt/media-manipulator-ai/scripts/document_ocr.py`. The Go API invokes it via
+`AI_DOCUMENT_OCR_PYTHON` (default
+`/opt/media-manipulator-ai/venvs/document-ocr/bin/python`), once per pipeline
+stage (`--mode {classify,htr,htr-verify,htr-paddle,htr-trocr,structure,build-pdf,build-docx,summary}`).
+
+It powers the **AI Document Scan** tool — scanned printed documents AND
+handwritten field notes → searchable PDF + optional structured/transcribed DOCX.
+The script orchestrates several engines (it imports the heavy ones lazily, only
+in the stage that needs them):
+
+- **OCRmyPDF + Tesseract** (CPU) — faithful searchable text layer for printed pages.
+- **PaddleOCR-VL-1.6** via its vLLM OpenAI-compatible HTTP server on the 5060 Ti —
+  printed→Markdown structure (DOCX) and the preferred handwriting second opinion.
+- **qwen3-vl** via Ollama on the 5080 — handwriting primary read + verification.
+- **Docling** (fallback structured engine) and **TrOCR** (fallback second opinion).
+- **Pandoc** — Markdown → DOCX. **reportlab / img2pdf / pikepdf** — PDF assembly.
+
+The Go side seeds each `work-dir/page-NNN.json` sidecar with `{index, kind}`; the
+script read-modify-writes the read results back (`kind, engine, text, lines,
+confidence, illegibleCount`). Page transcription text never leaves the sidecars /
+artifacts — only `PROGRESS <done>/<total>` lines and `ERROR: <safe msg>` reach
+stdout/stderr. See `internal/services/document_scan_pipeline.go` for the stage
+orchestration and `README-document-scan.md` (repo root) for the full install flow.
+
+To deploy on the server:
+
+```bash
+sudo cp scripts/server/document_ocr.py \
+  /opt/media-manipulator-ai/scripts/document_ocr.py
+sudo chmod +x /opt/media-manipulator-ai/scripts/document_ocr.py
+```

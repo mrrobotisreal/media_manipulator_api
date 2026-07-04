@@ -4,6 +4,7 @@ main
 outputs/
 uploads/
 !cmd/api/main.go
+double-raven-mm-firebase.json
 
 # macOS / system junk
 .DS_Store

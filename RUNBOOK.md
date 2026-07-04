@@ -323,6 +323,24 @@ multi-GB): the tarball stays in the job output dir and is served by the shared
 `/api/download/:jobId`; result PNGs stay alongside it for the results/preview
 endpoints until the 24h cleanup sweep. See `docs/IMAGE_RESTORATION.md`.
 
+### 4.8 Double Raven partner portal
+
+Private, always-Firebase-gated document API (`GET /api/dr/docs`,
+`GET /api/dr/docs/:slug`) serving the `/dr` portal in `media-manipulator-ui`.
+Unlike the restore seam, `/api/dr/*` has **no** pass-through mode: it fails
+**closed** — nil verifier → `503`, missing/invalid token → `401`, authenticated
+but not on the allowlist → `403`. The claims verifier is initialized
+unconditionally at startup from `FIREBASE_PROJECT_ID` (independent of
+`RESTORE_REQUIRE_FIREBASE_AUTH`) and reuses `GOOGLE_APPLICATION_CREDENTIALS`. The
+document store (`dr_documents` + `dr_document_revisions`, seeded by
+`init_double_raven_docs`) requires the pgx pool — no `DATABASE_URL` → `503`.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `DR_ALLOWED_EMAILS` | _(empty)_ | Comma-separated, case-insensitive allowlist of the Firebase accounts permitted into `/api/dr/*`. Empty → any verified project user passes (accounts are console-only) **and the server logs a startup warning** — set it. Your authz backstop. |
+| `FIREBASE_PROJECT_ID` | _(empty)_ | Also used to init the DR claims verifier; if unset the DR group fails closed with `503`. |
+| `GOOGLE_APPLICATION_CREDENTIALS` | _(empty)_ | Firebase Admin service-account JSON path (shared with the restore seam). The one true secret — never commit. |
+
 ---
 
 ## 5. HTTP API surface

@@ -34,16 +34,25 @@ func (v *firebaseVerifier) Verify(ctx context.Context, idToken string) error {
 	return err
 }
 
+// newFirebaseAuthClient constructs the Firebase Admin auth client shared by the
+// restore verifier (NewFirebaseVerifier) and the Double Raven claims verifier
+// (NewFirebaseClaimsVerifier). Credentials come from
+// GOOGLE_APPLICATION_CREDENTIALS (the standard Google env var, read by the SDK
+// itself); projectID comes from FIREBASE_PROJECT_ID.
+func newFirebaseAuthClient(ctx context.Context, projectID string) (*auth.Client, error) {
+	app, err := firebase.NewApp(ctx, &firebase.Config{ProjectID: strings.TrimSpace(projectID)})
+	if err != nil {
+		return nil, err
+	}
+	return app.Auth(ctx)
+}
+
 // NewFirebaseVerifier builds a TokenVerifier backed by the Firebase Admin
 // SDK. Credentials come from GOOGLE_APPLICATION_CREDENTIALS (the standard
 // Google env var, read by the SDK itself); projectID comes from
 // FIREBASE_PROJECT_ID.
 func NewFirebaseVerifier(ctx context.Context, projectID string) (TokenVerifier, error) {
-	app, err := firebase.NewApp(ctx, &firebase.Config{ProjectID: strings.TrimSpace(projectID)})
-	if err != nil {
-		return nil, err
-	}
-	client, err := app.Auth(ctx)
+	client, err := newFirebaseAuthClient(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}

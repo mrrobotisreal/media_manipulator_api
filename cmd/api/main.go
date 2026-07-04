@@ -144,6 +144,15 @@ func main() {
 	// restoration. No S3 dependency (images are small, uploaded directly); it
 	// shares the GPU lease manager + command-audit runner.
 	imageRestoreHandler := handlers.NewImageRestoreHandler(jobManager, cfg, inspector, gpuMgr, store, cmdRunner)
+	// AI Document Scan — scanned printed documents AND handwritten notes →
+	// searchable PDF + optional structured DOCX. PUBLIC (no Firebase), mounted on
+	// the plain /api group like the conversion routes; shares the GPU lease
+	// manager + command-audit runner.
+	documentScanHandler := handlers.NewDocumentScanHandler(jobManager, cfg, inspector, gpuMgr, store, cmdRunner)
+	// Double Raven partner portal — Postgres-backed, read-only document API
+	// (GET /api/dr/docs[, /:slug]). Shares the same pgx pool as Content Studio;
+	// always Firebase-gated at the /dr group (see the DR verifier + group below).
+	drDocsHandler := handlers.NewDrDocsHandler(pool)
 
 	// Future auth seam (default OFF): when RESTORE_REQUIRE_FIREBASE_AUTH is
 	// set, /api/video-restore/* verifies Firebase ID tokens. Init failure
@@ -158,6 +167,20 @@ func main() {
 		}
 	}
 
+	// Double Raven portal auth (ALWAYS on, independent of
+	// RESTORE_REQUIRE_FIREBASE_AUTH): initialize a Firebase claims verifier for
+	// /api/dr/*. On init failure we log and continue with a nil verifier — the
+	// middleware fails CLOSED (503) rather than exposing the document store.
+	var drVerifier middleware.ClaimsVerifier
+	if verifier, err := middleware.NewFirebaseClaimsVerifier(ctx, cfg.FirebaseProjectID); err != nil {
+		logging.Error("double raven auth init failed; /api/dr/* will reject all requests (503)", "error", err.Error())
+	} else {
+		drVerifier = verifier
+	}
+	if len(cfg.DRAllowedEmails) == 0 {
+		logging.Warn("DR_ALLOWED_EMAILS is empty; any verified Firebase user of the project can access /api/dr/* — set DR_ALLOWED_EMAILS to restrict the Double Raven portal")
+	}
+
 	// Cleanup worker
 	if cfg.CleanupEnabled {
 		worker := cleanup.NewWorker(cfg, store, metricsReg, logging, jobManager)
@@ -167,7 +190,7 @@ func main() {
 	// Periodic active-jobs gauge update.
 	go pollActiveJobs(ctx, jobManager, metricsReg)
 
-	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, restoreAuthVerifier, store, enricher, limiter, metricsReg)
+	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, restoreAuthVerifier, drVerifier, drDocsHandler, store, enricher, limiter, metricsReg)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -215,7 +238,7 @@ func newS3Client(cfg *config.Config) *s3.Client {
 	})
 }
 
-func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, restoreAuthVerifier middleware.TokenVerifier, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
+func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, restoreAuthVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.Default()
@@ -287,6 +310,19 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// AI Image Restoration shares the same Firebase-gated group so
 		// RESTORE_REQUIRE_FIREBASE_AUTH gates it identically.
 		handlers.RegisterImageRestoreRoutes(restoreGroup, imageRestoreHandler)
+		// AI Document Scan is PUBLIC (like the conversion/tool routes) — mounted
+		// on the plain /api group, NOT behind the Firebase-gated restoreGroup.
+		handlers.RegisterDocumentScanRoutes(api, documentScanHandler)
+
+		// Double Raven partner portal document API. ALWAYS Firebase-gated and
+		// fail-closed via RequireDoubleRavenAuth (nil verifier -> 503; bad/missing
+		// token -> 401; not on DR_ALLOWED_EMAILS -> 403). Deliberately NOT the
+		// toggleable restoreGroup seam — the DR group has no pass-through mode.
+		// GET-only for two users, so no dedicated rate-limit bucket (the global
+		// per-IP RPS limiter still applies).
+		drGroup := api.Group("/dr")
+		drGroup.Use(middleware.RequireDoubleRavenAuth(drVerifier, cfg.DRAllowedEmails))
+		handlers.RegisterDrDocsRoutes(drGroup, drDocsHandler)
 
 		// Tighter limits for upload/transcode/analysis paths.
 		api.Use() // marker; per-route limiters below
@@ -341,6 +377,7 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 		// job) — it gets its own, much tighter bucket.
 		{path: "/api/video-restore/start", routeKey: "video_restore_start", tool: "video_restore", sessionLimit: cfg.RestoreRateLimitPerSessionPerHour, ipLimit: cfg.RestoreRateLimitPerIPPerHour},
 		{path: "/api/image-restore/start", routeKey: "image_restore_start", tool: "image_restore", sessionLimit: cfg.ImageRestoreRateLimitPerSessionPerHour, ipLimit: cfg.ImageRestoreRateLimitPerIPPerHour},
+		{path: "/api/document-scan/start", routeKey: "document_scan_start", tool: "document_scan", sessionLimit: cfg.DocumentScanRateLimitPerSessionPerHour, ipLimit: cfg.DocumentScanRateLimitPerIPPerHour},
 		{path: "/api/video-transcode/probe", routeKey: "video_transcode_probe", tool: "video_transcode", sessionLimit: cfg.RateLimitTranscodesPerSessionPerHour, ipLimit: cfg.RateLimitTranscodesPerIPPerHour},
 		{path: "/api/ai/faces/detect", routeKey: "ai_faces_detect", tool: "ai_faces", sessionLimit: cfg.RateLimitAnalysisPerSessionPerHour, ipLimit: cfg.RateLimitAnalysisPerIPPerHour},
 		// Caption translator runs the local Ollama LLM — treat it like analysis

@@ -199,6 +199,18 @@ type Config struct {
 	FirebaseProjectID            string
 	GoogleApplicationCredentials string
 
+	// Double Raven partner portal (path-based /dr routes served on the main
+	// site; see app/dr/* in media-manipulator-ui). DRAllowedEmails is the authz
+	// backstop for the always-on /api/dr/* endpoints: a comma-separated,
+	// case-insensitive allowlist of the Firebase accounts permitted into the
+	// portal. Accounts are created manually in the Firebase console (there is no
+	// sign-up), so the list is tiny — exactly the two owners. Empty => any
+	// verified Firebase user of the project passes, but main.go logs a startup
+	// warning recommending it be set. The DR claims verifier reuses the existing
+	// FirebaseProjectID / GOOGLE_APPLICATION_CREDENTIALS above and is always
+	// initialized, independent of RestoreRequireFirebaseAuth.
+	DRAllowedEmails []string
+
 	// AI Image Restoration & Upscaling — the still-image sibling of the video
 	// restoration feature. General models (realesrgan/swinir/hat) reuse the
 	// AIRestore* paths above (same binaries/venvs/scripts, zero new installs);
@@ -234,6 +246,50 @@ type Config struct {
 	// ContentStudioFontFile is the TTF used by ffmpeg drawtext for text/location
 	// overlays. drawtext needs a real font file on the GPU host.
 	ContentStudioFontFile string
+
+	// AI Document Scan — scanned printed documents AND handwritten field notes
+	// → searchable PDF + optional structured/transcribed DOCX. Printed pages use
+	// OCRmyPDF+Tesseract (CPU) for the faithful searchable layer and PaddleOCR-VL
+	// (preferred) / Docling (fallback) for DOCX structure; handwriting uses
+	// qwen3-vl via Ollama (primary read) with an optional PaddleOCR-VL / TrOCR
+	// second opinion. Dual-GPU: Ollama models are pinned to the 5080
+	// (AIDocumentOCRGPU); the served/torch document engines run on the 5060 Ti
+	// (AIDocumentOCRSecondaryGPU). This tool is PUBLIC (no Firebase).
+	DocumentScanEnabled              bool
+	DocumentScanDocxEnabled          bool
+	DocumentScanHandwritingEnabled   bool
+	DocumentScanSecondOpinionEnabled bool
+	DocumentScanSummaryEnabled       bool
+	AIDocumentOCRPython              string
+	AIDocumentOCRScript              string
+	// AIDocumentOCRGPU is the CUDA index of the primary big-VRAM card (RTX 5080)
+	// hosting the Ollama-served VLM/text models; AIDocumentOCRSecondaryGPU is the
+	// 5060 Ti hosting PaddleOCR-VL/TrOCR/Docling. getEnvIntDefault so device 0 is
+	// a valid value.
+	AIDocumentOCRGPU          int
+	AIDocumentOCRSecondaryGPU int
+	PandocBin                 string
+	// DocumentScanOllamaURL is the Ollama endpoint THIS feature talks to. It is
+	// deliberately separate from the global OLLAMA_URL (which other tools such as
+	// the caption translator share) so the operator can point document-scan at a
+	// dedicated second Ollama instance pinned to the 5080 — WITHOUT repinning the
+	// shared daemon. Defaults to OLLAMA_URL when DOCUMENT_SCAN_OLLAMA_URL is unset.
+	DocumentScanOllamaURL                  string
+	OllamaVLMModel                         string
+	OllamaTextModel                        string
+	PaddleOCRVLEndpoint                    string
+	PaddleOCRVLModel                       string
+	DocumentScanStructureEngine            string
+	DocumentScanSecondOpinionEngine        string
+	TrOCRModel                             string
+	DocumentScanLanguages                  []string
+	DocumentScanMaxImages                  int
+	DocumentScanMaxPages                   int
+	DocumentScanMaxImageBytes              int64
+	DocumentScanModelTimeout               time.Duration
+	DocumentScanMaxConcurrentJobs          int
+	DocumentScanRateLimitPerSessionPerHour int
+	DocumentScanRateLimitPerIPPerHour      int
 }
 
 func Load() *Config {
@@ -396,6 +452,10 @@ func Load() *Config {
 		FirebaseProjectID:            getEnv("FIREBASE_PROJECT_ID", ""),
 		GoogleApplicationCredentials: getEnv("GOOGLE_APPLICATION_CREDENTIALS", ""),
 
+		// Double Raven portal authz backstop (see struct doc). Lowercased at load
+		// so the middleware can do a plain case-insensitive membership check.
+		DRAllowedEmails: splitCSVLower(getEnv("DR_ALLOWED_EMAILS", "")),
+
 		ImageRestoreEnabled:                    getEnvBool("IMAGE_RESTORE_ENABLED", true),
 		ImageRestoreCodeFormerEnabled:          getEnvBool("IMAGE_RESTORE_CODEFORMER_ENABLED", false),
 		ImageRestoreMaxSourceWidth:             getEnvInt("IMAGE_RESTORE_MAX_SOURCE_WIDTH", 12000),
@@ -437,6 +497,34 @@ func Load() *Config {
 		ContentStudioProxyHeight: getEnvInt("CONTENT_STUDIO_PROXY_HEIGHT", 720),
 		ContentStudioS3Prefix:    getEnv("CONTENT_STUDIO_S3_PREFIX", "studio"),
 		ContentStudioFontFile:    getEnv("CONTENT_STUDIO_FONT_FILE", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+
+		// AI Document Scan
+		DocumentScanEnabled:                    getEnvBool("DOCUMENT_SCAN_ENABLED", true),
+		DocumentScanDocxEnabled:                getEnvBool("DOCUMENT_SCAN_DOCX_ENABLED", true),
+		DocumentScanHandwritingEnabled:         getEnvBool("DOCUMENT_SCAN_HANDWRITING_ENABLED", true),
+		DocumentScanSecondOpinionEnabled:       getEnvBool("DOCUMENT_SCAN_SECOND_OPINION_ENABLED", false),
+		DocumentScanSummaryEnabled:             getEnvBool("DOCUMENT_SCAN_SUMMARY_ENABLED", false),
+		AIDocumentOCRPython:                    getEnv("AI_DOCUMENT_OCR_PYTHON", "/opt/media-manipulator-ai/venvs/document-ocr/bin/python"),
+		AIDocumentOCRScript:                    getEnv("AI_DOCUMENT_OCR_SCRIPT", "/opt/media-manipulator-ai/scripts/document_ocr.py"),
+		AIDocumentOCRGPU:                       getEnvIntDefault("AI_DOCUMENT_OCR_GPU", 1),
+		AIDocumentOCRSecondaryGPU:              getEnvIntDefault("AI_DOCUMENT_OCR_SECONDARY_GPU", 0),
+		PandocBin:                              getEnv("PANDOC_BIN", "pandoc"),
+		DocumentScanOllamaURL:                  getEnv("DOCUMENT_SCAN_OLLAMA_URL", getEnv("OLLAMA_URL", "http://localhost:11434")),
+		OllamaVLMModel:                         getEnv("OLLAMA_VLM_MODEL", "qwen3-vl:8b-instruct-q8_0"),
+		OllamaTextModel:                        getEnv("OLLAMA_TEXT_MODEL", "qwen3.5:9b-q8_0"),
+		PaddleOCRVLEndpoint:                    getEnv("PADDLEOCR_VL_ENDPOINT", "http://127.0.0.1:8080/v1"),
+		PaddleOCRVLModel:                       getEnv("PADDLEOCR_VL_MODEL", "PaddleOCR-VL-1.6-0.9B"),
+		DocumentScanStructureEngine:            getEnv("DOCUMENT_SCAN_STRUCTURE_ENGINE", "paddleocr-vl"),
+		DocumentScanSecondOpinionEngine:        getEnv("DOCUMENT_SCAN_SECOND_OPINION_ENGINE", "paddleocr-vl"),
+		TrOCRModel:                             getEnv("TROCR_MODEL", "microsoft/trocr-large-handwritten"),
+		DocumentScanLanguages:                  splitCSV(getEnv("DOCUMENT_SCAN_LANGUAGES", "eng")),
+		DocumentScanMaxImages:                  getEnvInt("DOCUMENT_SCAN_MAX_IMAGES", 50),
+		DocumentScanMaxPages:                   getEnvInt("DOCUMENT_SCAN_MAX_PAGES", 100),
+		DocumentScanMaxImageBytes:              getEnvInt64("DOCUMENT_SCAN_MAX_IMAGE_BYTES", 25*1024*1024),
+		DocumentScanModelTimeout:               time.Duration(getEnvInt("DOCUMENT_SCAN_MODEL_TIMEOUT_SECONDS", 2400)) * time.Second,
+		DocumentScanMaxConcurrentJobs:          getEnvInt("DOCUMENT_SCAN_MAX_CONCURRENT_JOBS", 1),
+		DocumentScanRateLimitPerSessionPerHour: getEnvInt("DOCUMENT_SCAN_RATE_LIMIT_PER_SESSION_PER_HOUR", 20),
+		DocumentScanRateLimitPerIPPerHour:      getEnvInt("DOCUMENT_SCAN_RATE_LIMIT_PER_IP_PER_HOUR", 40),
 	}
 }
 
@@ -518,4 +606,14 @@ func splitCSV(raw string) []string {
 		}
 	}
 	return out
+}
+
+// splitCSVLower is splitCSV plus ASCII-lowercasing. Used for case-insensitive
+// allowlists such as DR_ALLOWED_EMAILS so membership checks are a plain compare.
+func splitCSVLower(raw string) []string {
+	parts := splitCSV(raw)
+	for i, p := range parts {
+		parts[i] = strings.ToLower(p)
+	}
+	return parts
 }
