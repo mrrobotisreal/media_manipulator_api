@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -99,6 +100,14 @@ func RequireDoubleRavenAuth(verifier ClaimsVerifier, allowedEmails []string) gin
 		}
 		claims, err := verifier.VerifyWithClaims(c.Request.Context(), token)
 		if err != nil || claims == nil {
+			// Response body stays generic, but the REAL failure reason (audience
+			// mismatch, clock skew, cert-fetch failure, expiry) goes to the logs —
+			// otherwise every failure mode looks identical from the outside.
+			reason := "verifier returned no claims"
+			if err != nil {
+					reason = err.Error()
+			}
+			slog.Warn("double raven token verification failed", "reason", reason, "path", c.Request.URL.Path)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired credentials"})
 			return
 		}
