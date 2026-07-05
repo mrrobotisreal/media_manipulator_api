@@ -170,7 +170,10 @@ func abortAuthzError(c *gin.Context, err error) {
 
 func (h *DrCommentsHandler) documentIDBySlug(ctx context.Context, slug string) (string, error) {
 	var id string
-	err := h.pool.QueryRow(ctx, `SELECT id FROM dr_documents WHERE slug = $1`, slug).Scan(&id)
+	// deleted_at IS NULL: a soft-deleted document 404s from every comment
+	// endpoint naturally (its comment DATA stays intact in the DB for archival).
+	// This is the single permitted touch to the comments handler for soft delete.
+	err := h.pool.QueryRow(ctx, `SELECT id FROM dr_documents WHERE slug = $1 AND deleted_at IS NULL`, slug).Scan(&id)
 	return id, err
 }
 

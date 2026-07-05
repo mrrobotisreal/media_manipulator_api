@@ -315,6 +315,38 @@ func deriveDrSummary(raw []byte) string {
 	return c.summary()
 }
 
+// drCanDelete reports whether callerEmail is the document's creator (creator-only
+// soft delete). Case-insensitive per §4.2; an empty created_by or an empty
+// caller email never grants delete, and the seeded doc's "seed:migration"
+// sentinel matches no real email — so no one ever sees a delete control on it.
+func drCanDelete(createdBy, callerEmail string) bool {
+	if strings.TrimSpace(createdBy) == "" || strings.TrimSpace(callerEmail) == "" {
+		return false
+	}
+	return strings.EqualFold(createdBy, callerEmail)
+}
+
+// startEditDecision is the pure resolution of a StartOrResumeEdit request given
+// whether a session already exists. It encodes the §4.3 table so it can be unit
+// tested without a database.
+type startEditDecision int
+
+const (
+	startEditCreate  startEditDecision = iota // no session (or replace) → create/seed
+	startEditResume                           // session exists, plain open → return it
+	startEditConflict                         // session exists, seed-from-revision without replace → 409
+)
+
+func decideStartEdit(sessionExists bool, fromRevision *int, replace bool) startEditDecision {
+	if !sessionExists || replace {
+		return startEditCreate
+	}
+	if fromRevision != nil {
+		return startEditConflict
+	}
+	return startEditResume
+}
+
 // ----------------------------------------------------------------------- //
 // POST /docs — CreateDoc (draft)
 // ----------------------------------------------------------------------- //
@@ -420,9 +452,9 @@ func (h *DrDocsHandler) UpdateDoc(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	// Draft-only: distinguish 404 (missing) from 409 (published/archived).
+	// Draft-only + live: distinguish 404 (missing/deleted) from 409 (published).
 	var status string
-	err := h.pool.QueryRow(ctx, `SELECT status FROM dr_documents WHERE id = $1`, id).Scan(&status)
+	err := h.pool.QueryRow(ctx, `SELECT status FROM dr_documents WHERE id = $1 AND deleted_at IS NULL`, id).Scan(&status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
 		return
@@ -440,7 +472,7 @@ func (h *DrDocsHandler) UpdateDoc(c *gin.Context) {
 	tag, err := h.pool.Exec(ctx, `
 UPDATE dr_documents
 SET title = $2, summary = $3, content = $4, updated_by = $5, updated_at = now()
-WHERE id = $1 AND status = 'draft'`, id, title, summary, req.Content, claims.Email)
+WHERE id = $1 AND status = 'draft' AND deleted_at IS NULL`, id, title, summary, req.Content, claims.Email)
 	if err != nil {
 		log.Printf("dr docs: update %s: %v", id, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save document"})
@@ -490,19 +522,19 @@ func (h *DrDocsHandler) PresignAsset(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	// Document must exist and be a draft.
-	var status string
-	err := h.pool.QueryRow(ctx, `SELECT status FROM dr_documents WHERE id = $1`, docID).Scan(&status)
-	if errors.Is(err, pgx.ErrNoRows) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
-		return
-	}
+	// Assets may be uploaded to a live draft OR a live doc with an active edit
+	// session (§4.4).
+	allowed, exists, err := h.assetMutationAllowed(ctx, docID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare upload"})
 		return
 	}
-	if status != string(models.DrDocStatusDraft) {
-		c.JSON(http.StatusConflict, gin.H{"error": "Only draft documents can accept uploads"})
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	}
+	if !allowed {
+		c.JSON(http.StatusConflict, gin.H{"error": "Document is not being edited"})
 		return
 	}
 
@@ -567,6 +599,18 @@ func (h *DrDocsHandler) CompleteAsset(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 	defer cancel()
+
+	// Same draft-or-editing guard as presign (§4.4).
+	if allowed, exists, gerr := h.assetMutationAllowed(ctx, docID); gerr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm upload"})
+		return
+	} else if !exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	} else if !allowed {
+		c.JSON(http.StatusConflict, gin.H{"error": "Document is not being edited"})
+		return
+	}
 
 	var (
 		documentID, authorUID, status, key, contentType string
@@ -649,6 +693,18 @@ func (h *DrDocsHandler) DeleteAsset(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	// Same draft-or-editing guard as presign (§4.4).
+	if allowed, exists, gerr := h.assetMutationAllowed(ctx, docID); gerr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete asset"})
+		return
+	} else if !exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	} else if !allowed {
+		c.JSON(http.StatusConflict, gin.H{"error": "Document is not being edited"})
+		return
+	}
+
 	var documentID, authorUID, key string
 	err := h.pool.QueryRow(ctx, `SELECT document_id, author_uid, s3_key FROM dr_document_assets WHERE id = $1`, assetID).
 		Scan(&documentID, &authorUID, &key)
@@ -694,15 +750,15 @@ func (h *DrDocsHandler) PublishDoc(c *gin.Context) {
 	defer cancel()
 
 	var (
-		title, contentFormat, status string
-		summary                      *string
-		content                      []byte
-		createdAt                    models.UTCTime
+		title, contentFormat, status, createdBy string
+		summary                                  *string
+		content                                  []byte
+		createdAt                                models.UTCTime
 	)
 	err := h.pool.QueryRow(ctx, `
-SELECT title, summary, status, content_format, content, created_at
-FROM dr_documents WHERE id = $1`, id).
-		Scan(&title, &summary, &status, &contentFormat, &content, &createdAt)
+SELECT title, summary, status, content_format, content, created_at, COALESCE(created_by, '')
+FROM dr_documents WHERE id = $1 AND deleted_at IS NULL`, id).
+		Scan(&title, &summary, &status, &contentFormat, &content, &createdAt, &createdBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
 		return
@@ -756,7 +812,9 @@ FROM dr_documents WHERE id = $1`, id).
 		}
 	}
 
-	// Final slug: derived from the title, unique across other documents.
+	// Final slug: derived from the title, unique across other documents. This
+	// uniqueness scan is intentionally NOT filtered by deleted_at — a
+	// soft-deleted doc keeps occupying its slug so it is never silently reused.
 	base := slugifyDrTitle(title)
 	var slugErr error
 	taken := func(cand string) bool {
@@ -799,7 +857,7 @@ FROM dr_documents WHERE id = $1`, id).
 	err = tx.QueryRow(ctx, `
 UPDATE dr_documents
 SET slug = $2, summary = $3, status = 'published', updated_by = $4, updated_at = now()
-WHERE id = $1 AND status = 'draft'
+WHERE id = $1 AND status = 'draft' AND deleted_at IS NULL
 RETURNING updated_at`, id, finalSlug, finalSummary, claims.Email).Scan(&updatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Only draft documents can be published"})
@@ -824,21 +882,25 @@ VALUES ($1, (SELECT COALESCE(MAX(revision_number), 0) + 1 FROM dr_document_revis
 		return
 	}
 
-	// Best-effort prune of assets not referenced by the published content. Runs
-	// on a fresh detached context so it isn't cancelled by the request finishing;
-	// never fail the request on prune errors — the document is already published.
+	// Best-effort prune of assets referenced by neither the new content NOR any
+	// revision (so old versions keep their media). Runs on a fresh detached
+	// context so it isn't cancelled by the request finishing; never fails the
+	// request — the document is already published.
 	pruneCtx, pruneCancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer pruneCancel()
-	h.pruneUnreferencedAssets(pruneCtx, id, referenced)
+	h.prunePreservingRevisions(pruneCtx, id)
 
 	c.JSON(http.StatusOK, models.DrDocSummary{
-		ID:        id,
-		Slug:      finalSlug,
-		Title:     title,
-		Summary:   finalSummary,
-		Status:    string(models.DrDocStatusPublished),
-		CreatedAt: createdAt,
-		UpdatedAt: updatedAt,
+		ID:             id,
+		Slug:           finalSlug,
+		Title:          title,
+		Summary:        finalSummary,
+		Status:         string(models.DrDocStatusPublished),
+		CreatedBy:      createdBy,
+		CanDelete:      drCanDelete(createdBy, claims.Email),
+		HasEditSession: false,
+		CreatedAt:      createdAt,
+		UpdatedAt:      updatedAt,
 	})
 }
 

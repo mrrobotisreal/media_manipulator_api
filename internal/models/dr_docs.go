@@ -27,14 +27,23 @@ const (
 // list endpoint selects exactly these columns so a document's body is never
 // shipped in a listing. Summary is a pointer so a NULL column serializes as
 // JSON null rather than an empty string.
+//
+// CanDelete + HasEditSession are SERVER-COMPUTED per request, never trusted from
+// the client: CanDelete is case-insensitive equality of created_by and the
+// caller's verified email (creator-only delete); HasEditSession reflects whether
+// an edit-session row exists (drives the "Resume editing" label + restore
+// confirmation UX).
 type DrDocSummary struct {
-	ID        string  `json:"id"`
-	Slug      string  `json:"slug"`
-	Title     string  `json:"title"`
-	Summary   *string `json:"summary"`
-	Status    string  `json:"status"`
-	CreatedAt UTCTime `json:"createdAt"`
-	UpdatedAt UTCTime `json:"updatedAt"`
+	ID             string  `json:"id"`
+	Slug           string  `json:"slug"`
+	Title          string  `json:"title"`
+	Summary        *string `json:"summary"`
+	Status         string  `json:"status"`
+	CreatedBy      string  `json:"createdBy"`
+	CanDelete      bool    `json:"canDelete"`
+	HasEditSession bool    `json:"hasEditSession"`
+	CreatedAt      UTCTime `json:"createdAt"`
+	UpdatedAt      UTCTime `json:"updatedAt"`
 }
 
 // DrDoc is the full single-document payload: the summary metadata plus the
@@ -94,4 +103,58 @@ type DrPresignAssetRequest struct {
 type DrPresignAssetResponse struct {
 	AssetID   string `json:"assetId"`
 	UploadURL string `json:"uploadUrl"`
+}
+
+// ---------------------------------------------------------------------------
+// Edit sessions, publish-changes, soft delete, and version history contracts
+// (see internal/handlers/dr_docs_editor.go). Same authorship rule as above.
+// ---------------------------------------------------------------------------
+
+// DrEditSession is the staged, in-progress edit of a published document. Content
+// is the canonical dr-blocks/v1 JSON hydrated to presigned URLs at read time
+// (the stored session content stays canonical).
+type DrEditSession struct {
+	DocumentID string          `json:"documentId"`
+	Title      string          `json:"title"`
+	Summary    *string         `json:"summary"`
+	Content    json.RawMessage `json:"content"`
+	CreatedBy  string          `json:"createdBy"`
+	UpdatedBy  string          `json:"updatedBy"`
+	CreatedAt  UTCTime         `json:"createdAt"`
+	UpdatedAt  UTCTime         `json:"updatedAt"`
+}
+
+// DrStartEditRequest opens/resumes/replaces the document's edit session. Both
+// fields optional: no FromRevision + Replace=false → resume-or-create from the
+// current published content; FromRevision set → seed from that revision;
+// Replace=true → discard any existing session first.
+type DrStartEditRequest struct {
+	FromRevision *int `json:"fromRevision"`
+	Replace      bool `json:"replace"`
+}
+
+// DrUpdateEditRequest is the edit-session autosave payload — identical shape to
+// the draft autosave (title/summary/content).
+type DrUpdateEditRequest = DrUpdateDocRequest
+
+// DrRevisionSummary is one version-history row (metadata only, never content).
+// CreatedBy is a pointer so a NULL author column serializes as JSON null.
+type DrRevisionSummary struct {
+	RevisionNumber int     `json:"revisionNumber"`
+	Title          string  `json:"title"`
+	CreatedBy      *string `json:"createdBy"`
+	CreatedAt      UTCTime `json:"createdAt"`
+	IsCurrent      bool    `json:"isCurrent"`
+}
+
+// DrRevision is a full version snapshot: the summary plus the (hydrated) content.
+type DrRevision struct {
+	DrRevisionSummary
+	ContentFormat string          `json:"contentFormat"`
+	Content       json.RawMessage `json:"content"`
+}
+
+// DrRevisionsListResponse is the version-history listing.
+type DrRevisionsListResponse struct {
+	Revisions []DrRevisionSummary `json:"revisions"`
 }

@@ -68,19 +68,34 @@ func NewDrDocsHandler(pool *pgxpool.Pool, cfg *config.Config, s3Client *s3.Clien
 // NOTE on the ":slug" param name: gin keys its route tree per HTTP method, and
 // within a method every wildcard at the same path position must share one name.
 // The comments handler already registers POST /docs/:slug/comments, so the
-// wildcard directly under /docs/ is pinned to ":slug" for the whole group. The
-// editor endpoints address a draft by its UUID, but they must still use the
-// ":slug" param name to avoid a wildcard-name conflict panic — each handler
-// reads c.Param("slug") and validates it as a UUID.
+// wildcard directly under /docs/ is pinned to ":slug" for the whole group. Some
+// endpoints address a document by its UUID rather than its slug, but they must
+// still use the ":slug" param name to avoid a wildcard-name conflict panic. The
+// interpretation per route:
+//
+//   READ (slug, drSlugPattern-validated):  GET /docs/:slug, GET /docs/:slug/revisions,
+//                                           GET /docs/:slug/revisions/:rev
+//   MUTATION (UUID, drDocIDParam):          PUT/DELETE /docs/:slug, POST /docs/:slug/publish,
+//                                           POST|PUT|DELETE /docs/:slug/edit,
+//                                           POST /docs/:slug/edit/publish,
+//                                           POST /docs/:slug/assets[/:assetId/complete],
+//                                           DELETE /docs/:slug/assets/:assetId
 func RegisterDrDocsRoutes(r gin.IRouter, h *DrDocsHandler) {
 	r.GET("/docs", h.ListDocs)
 	r.POST("/docs", h.CreateDoc)
-	r.GET("/docs/:slug", h.GetDoc)
-	r.PUT("/docs/:slug", h.UpdateDoc)
-	r.POST("/docs/:slug/publish", h.PublishDoc)
-	r.POST("/docs/:slug/assets", h.PresignAsset)
-	r.POST("/docs/:slug/assets/:assetId/complete", h.CompleteAsset)
-	r.DELETE("/docs/:slug/assets/:assetId", h.DeleteAsset)
+	r.GET("/docs/:slug", h.GetDoc)                            // slug
+	r.PUT("/docs/:slug", h.UpdateDoc)                         // UUID — draft autosave
+	r.DELETE("/docs/:slug", h.DeleteDoc)                      // UUID — creator-only soft delete
+	r.POST("/docs/:slug/publish", h.PublishDoc)               // UUID — draft publish
+	r.POST("/docs/:slug/edit", h.StartOrResumeEdit)           // UUID — start/resume edit session
+	r.PUT("/docs/:slug/edit", h.UpdateEdit)                   // UUID — edit-session autosave
+	r.POST("/docs/:slug/edit/publish", h.PublishEdit)         // UUID — publish edit changes
+	r.DELETE("/docs/:slug/edit", h.DiscardEdit)               // UUID — discard edit session
+	r.GET("/docs/:slug/revisions", h.ListRevisions)           // slug — version history
+	r.GET("/docs/:slug/revisions/:rev", h.GetRevision)        // slug + positive int
+	r.POST("/docs/:slug/assets", h.PresignAsset)              // UUID
+	r.POST("/docs/:slug/assets/:assetId/complete", h.CompleteAsset) // UUID
+	r.DELETE("/docs/:slug/assets/:assetId", h.DeleteAsset)    // UUID
 }
 
 // drSlugPattern mirrors the kebab-case slug shape the seed + UI use. Validated
@@ -141,22 +156,30 @@ func (h *DrDocsHandler) deleteObject(ctx context.Context, key string) {
 	}
 }
 
-// ListDocs returns published documents ordered most-recently-updated first. It
-// selects METADATA COLUMNS ONLY — the content JSONB is deliberately excluded so
-// a listing never ships document bodies over the wire. Drafts never appear (the
-// WHERE clause filters status = 'published').
+// ListDocs returns published, live (non-soft-deleted) documents ordered
+// most-recently-updated first. It selects METADATA COLUMNS ONLY — the content
+// JSONB is deliberately excluded so a listing never ships document bodies over
+// the wire. Drafts never appear (status = 'published'); soft-deleted docs never
+// appear (deleted_at IS NULL, served by the partial dr_documents_live_idx).
+// CanDelete/HasEditSession are computed per row from the verified caller.
 func (h *DrDocsHandler) ListDocs(c *gin.Context) {
 	if !h.dbReady(c) {
+		return
+	}
+	claims, ok := drCallerClaims(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 		return
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
 	rows, err := h.pool.Query(ctx, `
-SELECT id, slug, title, summary, status, created_at, updated_at
-FROM dr_documents
-WHERE status = 'published'
-ORDER BY updated_at DESC
+SELECT d.id, d.slug, d.title, d.summary, d.status, COALESCE(d.created_by, ''), d.created_at, d.updated_at,
+       EXISTS(SELECT 1 FROM dr_document_edit_sessions s WHERE s.document_id = d.id) AS has_edit_session
+FROM dr_documents d
+WHERE d.status = 'published' AND d.deleted_at IS NULL
+ORDER BY d.updated_at DESC
 `)
 	if err != nil {
 		log.Printf("dr docs: list query failed: %v", err)
@@ -168,11 +191,12 @@ ORDER BY updated_at DESC
 	docs := make([]models.DrDocSummary, 0)
 	for rows.Next() {
 		var d models.DrDocSummary
-		if err := rows.Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedAt, &d.UpdatedAt); err != nil {
+		if err := rows.Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedBy, &d.CreatedAt, &d.UpdatedAt, &d.HasEditSession); err != nil {
 			log.Printf("dr docs: list scan failed: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list documents"})
 			return
 		}
+		d.CanDelete = drCanDelete(d.CreatedBy, claims.Email)
 		docs = append(docs, d)
 	}
 	if err := rows.Err(); err != nil {
@@ -197,6 +221,11 @@ func (h *DrDocsHandler) GetDoc(c *gin.Context) {
 	if !h.dbReady(c) {
 		return
 	}
+	claims, ok := drCallerClaims(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
 	slug := strings.TrimSpace(c.Param("slug"))
 	if !drSlugPattern.MatchString(slug) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid document slug"})
@@ -207,13 +236,15 @@ func (h *DrDocsHandler) GetDoc(c *gin.Context) {
 	defer cancel()
 
 	var d models.DrDoc
-	// jsonb → []byte returns the raw stored JSON.
+	// jsonb → []byte returns the raw stored JSON. Soft-deleted docs (deleted_at
+	// NOT NULL) are excluded → 404 for everyone.
 	var content []byte
 	err := h.pool.QueryRow(ctx, `
-SELECT id, slug, title, summary, status, content_format, content, created_at, updated_at
-FROM dr_documents
-WHERE slug = $1
-`, slug).Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.ContentFormat, &content, &d.CreatedAt, &d.UpdatedAt)
+SELECT d.id, d.slug, d.title, d.summary, d.status, COALESCE(d.created_by, ''), d.content_format, d.content, d.created_at, d.updated_at,
+       EXISTS(SELECT 1 FROM dr_document_edit_sessions s WHERE s.document_id = d.id)
+FROM dr_documents d
+WHERE d.slug = $1 AND d.deleted_at IS NULL
+`, slug).Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedBy, &d.ContentFormat, &content, &d.CreatedAt, &d.UpdatedAt, &d.HasEditSession)
 	if errors.Is(err, pgx.ErrNoRows) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
 		return
@@ -223,6 +254,7 @@ WHERE slug = $1
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load document"})
 		return
 	}
+	d.CanDelete = drCanDelete(d.CreatedBy, claims.Email)
 	// Read-time hydration of dr-asset:// media references → presigned URLs.
 	d.Content = h.hydrateContent(ctx, d.ID, content)
 	c.JSON(http.StatusOK, d)
