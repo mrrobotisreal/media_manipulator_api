@@ -47,3 +47,51 @@ type DrDoc struct {
 	ContentFormat string          `json:"contentFormat"`
 	Content       json.RawMessage `json:"content"`
 }
+
+// ---------------------------------------------------------------------------
+// "Create Doc" editor request/response contracts (see internal/handlers/
+// dr_docs.go). Authorship (created_by/updated_by/author_uid) is always taken
+// from the verified Firebase claims in the gin context — never from these
+// bodies. camelCase JSON keys mirror media-manipulator-ui/schemas/drDocs.ts.
+// ---------------------------------------------------------------------------
+
+// DrCreateDocRequest starts a new draft. Title is optional (defaults to
+// "Untitled"); everything else is filled in by autosave/publish.
+type DrCreateDocRequest struct {
+	Title string `json:"title"`
+}
+
+// DrUpdateDocRequest is the autosave payload. Summary is a pointer so the
+// client can distinguish "leave summary unset" (nil) from "clear it" (""). The
+// content is opaque json.RawMessage validated structurally by
+// validateDrBlocksJSON (full schema validation stays in the UI's Zod layer).
+type DrUpdateDocRequest struct {
+	Title   string          `json:"title"`
+	Summary *string         `json:"summary"`
+	Content json.RawMessage `json:"content"`
+}
+
+// DrUpdateDocResponse is the autosave ack. Kept as an explicit struct (rather
+// than an ad-hoc gin.H) so the client can Zod-model it.
+type DrUpdateDocResponse struct {
+	OK bool `json:"ok"`
+}
+
+// DrPresignAssetRequest requests an S3 upload URL for one document asset. Kind
+// and ContentType are cross-checked by docAssetExt; Width/Height are optional
+// image dimensions captured client-side.
+type DrPresignAssetRequest struct {
+	FileName    string `json:"fileName"`
+	ContentType string `json:"contentType"`
+	SizeBytes   int64  `json:"sizeBytes"`
+	Kind        string `json:"kind"`
+	Width       *int   `json:"width"`
+	Height      *int   `json:"height"`
+}
+
+// DrPresignAssetResponse returns the created asset id and the presigned PUT URL
+// the client uploads to directly.
+type DrPresignAssetResponse struct {
+	AssetID   string `json:"assetId"`
+	UploadURL string `json:"uploadUrl"`
+}

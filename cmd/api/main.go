@@ -153,10 +153,13 @@ func main() {
 	// the plain /api group like the conversion routes; shares the GPU lease
 	// manager + command-audit runner.
 	documentScanHandler := handlers.NewDocumentScanHandler(jobManager, cfg, inspector, gpuMgr, store, cmdRunner)
-	// Double Raven partner portal — Postgres-backed, read-only document API
-	// (GET /api/dr/docs[, /:slug]). Shares the same pgx pool as Content Studio;
-	// always Firebase-gated at the /dr group (see the DR verifier + group below).
-	drDocsHandler := handlers.NewDrDocsHandler(pool)
+	// Double Raven partner portal — Postgres-backed document API (GET /api/dr/docs
+	// [, /:slug]) plus the in-portal "Create Doc" editor (draft create/update/
+	// publish + media asset presign/complete/delete). Shares the same pgx pool as
+	// Content Studio and the same S3 client + config as the DR comments handler
+	// for the presign→PUT→complete asset handshake; always Firebase-gated at the
+	// /dr group (see the DR verifier + group below).
+	drDocsHandler := handlers.NewDrDocsHandler(pool, cfg, s3Client)
 	// DR document comments (v2): comment/reply/attachment endpoints on the same
 	// /api/dr group. Reuses the shared S3 client + pool for the presign→PUT→
 	// complete attachment handshake and the draft reaper.
@@ -199,6 +202,9 @@ func main() {
 	// attachments (see DrCommentsHandler.ReapStaleDrafts). DB-gated.
 	if pool != nil {
 		go runDrCommentReaper(ctx, drCommentsHandler)
+		// Companion reaper for orphaned pending document assets (uploads never
+		// completed). Draft documents themselves are never reaped.
+		go runDrDocAssetReaper(ctx, drDocsHandler)
 	}
 
 	// Periodic active-jobs gauge update.
@@ -559,6 +565,24 @@ func runDrCommentReaper(ctx context.Context, h *handlers.DrCommentsHandler) {
 			return
 		case <-timer.C:
 			h.ReapStaleDrafts(ctx)
+			timer.Reset(24 * time.Hour)
+		}
+	}
+}
+
+// runDrDocAssetReaper runs the DR document-asset reaper shortly after boot and
+// then daily, until ctx is cancelled. Mirrors runDrCommentReaper; it removes
+// only orphaned 'pending' assets (uploads that never completed) — draft
+// documents are intentionally left alone (see ReapStalePendingAssets).
+func runDrDocAssetReaper(ctx context.Context, h *handlers.DrDocsHandler) {
+	timer := time.NewTimer(2 * time.Minute)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			h.ReapStalePendingAssets(ctx)
 			timer.Reset(24 * time.Hour)
 		}
 	}
