@@ -2,7 +2,6 @@ package models
 
 import (
 	"encoding/json"
-	"time"
 )
 
 // Double Raven partner portal documents. Content is an opaque, validated-at-seed
@@ -29,13 +28,13 @@ const (
 // shipped in a listing. Summary is a pointer so a NULL column serializes as
 // JSON null rather than an empty string.
 type DrDocSummary struct {
-	ID        string    `json:"id"`
-	Slug      string    `json:"slug"`
-	Title     string    `json:"title"`
-	Summary   *string   `json:"summary"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID        string  `json:"id"`
+	Slug      string  `json:"slug"`
+	Title     string  `json:"title"`
+	Summary   *string `json:"summary"`
+	Status    string  `json:"status"`
+	CreatedAt UTCTime `json:"createdAt"`
+	UpdatedAt UTCTime `json:"updatedAt"`
 }
 
 // DrDoc is the full single-document payload: the summary metadata plus the

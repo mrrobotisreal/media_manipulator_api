@@ -77,6 +77,10 @@ func main() {
 	}
 	if pool != nil {
 		defer pool.Close()
+		// One-shot clock-skew sentinel: DR timestamps come from Postgres now(),
+		// which inherits the host system clock. If the DB and app clocks disagree,
+		// created_at values (and the UI's relative times) will be wrong.
+		checkDBClockSkew(ctx, pool, logging)
 	}
 
 	// Redis
@@ -513,6 +517,33 @@ func pollActiveJobs(ctx context.Context, jm *services.JobManager, m *metrics.Reg
 		case <-t.C:
 			m.SetActiveJobs(jm.ActiveCount())
 		}
+	}
+}
+
+// checkDBClockSkew compares the database clock (Postgres now()) against the
+// application clock once at startup. On a same-box deployment these are within
+// milliseconds; a delta over 5s means the host system clock is wrong, which
+// would make every created_at/updated_at (and thus the UI's relative
+// timestamps) incorrect. We log a loud WARN rather than failing — it's an
+// operational fix (NTP/RTC), not a code bug — so it's immediately visible in
+// the logs. One query at startup, never per-request.
+func checkDBClockSkew(ctx context.Context, pool *pgxpool.Pool, logging *slog.Logger) {
+	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var dbNow time.Time
+	if err := pool.QueryRow(cctx, "SELECT now()").Scan(&dbNow); err != nil {
+		logging.Warn("clock-skew check failed; could not read database time", "error", err.Error())
+		return
+	}
+	delta := time.Since(dbNow)
+	if delta < 0 {
+		delta = -delta
+	}
+	if delta > 5*time.Second {
+		logging.Warn("database clock and application clock disagree; timestamps (created_at etc.) will be wrong until the system clock is fixed",
+			"db_now", dbNow.UTC().Format(time.RFC3339),
+			"app_now", time.Now().UTC().Format(time.RFC3339),
+			"delta", delta.String())
 	}
 }
 

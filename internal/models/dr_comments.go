@@ -3,7 +3,6 @@ package models
 import (
 	"encoding/json"
 	"errors"
-	"time"
 )
 
 // Double Raven document comments. Request/response contracts for the endpoints
@@ -95,8 +94,8 @@ type DrReplyDTO struct {
 	AuthorUID   string            `json:"authorUid"`
 	AuthorEmail string            `json:"authorEmail"`
 	Body        string            `json:"body"`
-	CreatedAt   time.Time         `json:"createdAt"`
-	UpdatedAt   time.Time         `json:"updatedAt"`
+	CreatedAt   UTCTime           `json:"createdAt"`
+	UpdatedAt   UTCTime           `json:"updatedAt"`
 	Attachments []DrAttachmentDTO `json:"attachments"`
 }
 
@@ -106,8 +105,8 @@ type DrCommentDTO struct {
 	AuthorEmail string            `json:"authorEmail"`
 	Anchor      json.RawMessage   `json:"anchor"`
 	Body        string            `json:"body"`
-	CreatedAt   time.Time         `json:"createdAt"`
-	UpdatedAt   time.Time         `json:"updatedAt"`
+	CreatedAt   UTCTime           `json:"createdAt"`
+	UpdatedAt   UTCTime           `json:"updatedAt"`
 	Attachments []DrAttachmentDTO `json:"attachments"`
 	ReplyCount  int               `json:"replyCount"`
 	Replies     []DrReplyDTO      `json:"replies"`
