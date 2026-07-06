@@ -164,6 +164,12 @@ func main() {
 	// /api/dr group. Reuses the shared S3 client + pool for the presign→PUT→
 	// complete attachment handshake and the draft reaper.
 	drCommentsHandler := handlers.NewDrCommentsHandler(pool, cfg, s3Client)
+	// DR Communication/Feedback (Slack-style messaging at /dr/feedback):
+	// conversations/messages/threads/attachments + an in-memory SSE nudge stream.
+	// Same /api/dr group + shared pool/S3/config. The root ctx is passed so the
+	// SSE stream can exit promptly on graceful shutdown; the in-memory
+	// broadcaster is single-process by design (the API runs as one process).
+	drFeedbackHandler := handlers.NewDrFeedbackHandler(ctx, pool, cfg, s3Client)
 
 	// Future auth seam (default OFF): when RESTORE_REQUIRE_FIREBASE_AUTH is
 	// set, /api/video-restore/* verifies Firebase ID tokens. Init failure
@@ -205,12 +211,16 @@ func main() {
 		// Companion reaper for orphaned pending document assets (uploads never
 		// completed). Draft documents themselves are never reaped.
 		go runDrDocAssetReaper(ctx, drDocsHandler)
+		// Companion reaper for unbound feedback message attachments (uploaded
+		// while composing but never bound to a sent message). Bound attachments
+		// are never reaped.
+		go runDrFeedbackAttachmentReaper(ctx, drFeedbackHandler)
 	}
 
 	// Periodic active-jobs gauge update.
 	go pollActiveJobs(ctx, jobManager, metricsReg)
 
-	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, restoreAuthVerifier, drVerifier, drDocsHandler, drCommentsHandler, store, enricher, limiter, metricsReg)
+	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, restoreAuthVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, store, enricher, limiter, metricsReg)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -258,7 +268,7 @@ func newS3Client(cfg *config.Config) *s3.Client {
 	})
 }
 
-func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, restoreAuthVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, drCommentsHandler *handlers.DrCommentsHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
+func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, restoreAuthVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, drCommentsHandler *handlers.DrCommentsHandler, drFeedbackHandler *handlers.DrFeedbackHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.Default()
@@ -344,6 +354,10 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		drGroup.Use(middleware.RequireDoubleRavenAuth(drVerifier, cfg.DRAllowedEmails))
 		handlers.RegisterDrDocsRoutes(drGroup, drDocsHandler)
 		handlers.RegisterDrCommentsRoutes(drGroup, drCommentsHandler)
+		// DR Communication/Feedback (Slack-style messaging) — conversations,
+		// messages, threads, attachments, and the SSE nudge stream, all on the
+		// same always-Firebase-gated /api/dr group.
+		handlers.RegisterDrFeedbackRoutes(drGroup, drFeedbackHandler)
 
 		// Tighter limits for upload/transcode/analysis paths.
 		api.Use() // marker; per-route limiters below
@@ -583,6 +597,25 @@ func runDrDocAssetReaper(ctx context.Context, h *handlers.DrDocsHandler) {
 			return
 		case <-timer.C:
 			h.ReapStalePendingAssets(ctx)
+			timer.Reset(24 * time.Hour)
+		}
+	}
+}
+
+// runDrFeedbackAttachmentReaper runs the DR feedback unbound-attachment reaper
+// shortly after boot and then daily, until ctx is cancelled. Mirrors the two
+// reapers above; it removes only unbound message attachments (uploaded while
+// composing but never bound to a sent message) older than 24h. Bound
+// attachments are never reaped (see ReapUnboundAttachments).
+func runDrFeedbackAttachmentReaper(ctx context.Context, h *handlers.DrFeedbackHandler) {
+	timer := time.NewTimer(3 * time.Minute)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			h.ReapUnboundAttachments(ctx)
 			timer.Reset(24 * time.Hour)
 		}
 	}
