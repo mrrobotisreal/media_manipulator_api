@@ -290,6 +290,24 @@ type Config struct {
 	DocumentScanMaxConcurrentJobs          int
 	DocumentScanRateLimitPerSessionPerHour int
 	DocumentScanRateLimitPerIPPerHour      int
+
+	// DR AI Chat Test Lab (/dr/demos/chat-lab) — a ChatGPT-style chat backed by
+	// OpenRouter, called from THIS API (never from the Next.js layer) so the key
+	// stays on the home server and every request passes RequireDoubleRavenAuth.
+	// An empty OpenRouterAPIKey fails closed: the chat-lab send/models endpoints
+	// return 503 (same philosophy as the nil DR verifier). DRChatLabModelRules is
+	// a CSV of allow rules against the live OpenRouter catalog — a rule ending in
+	// '/' is a provider prefix match (e.g. "anthropic/"), anything else is an
+	// exact model-id match (e.g. "z-ai/glm-5.2"). Lowercased at load
+	// (splitCSVLower) so matching is a plain case-insensitive compare.
+	// DRChatLabTitleModel optionally names a cheap model for auto-titling new
+	// chats; empty disables LLM titling (fallback: first-message truncation).
+	OpenRouterAPIKey         string
+	OpenRouterBaseURL        string
+	DRChatLabModelRules      []string
+	DRChatLabTitleModel      string
+	DRChatLabMaxOutputTokens int
+	DRChatLabAttributionURL  string
 }
 
 func Load() *Config {
@@ -525,6 +543,15 @@ func Load() *Config {
 		DocumentScanMaxConcurrentJobs:          getEnvInt("DOCUMENT_SCAN_MAX_CONCURRENT_JOBS", 1),
 		DocumentScanRateLimitPerSessionPerHour: getEnvInt("DOCUMENT_SCAN_RATE_LIMIT_PER_SESSION_PER_HOUR", 20),
 		DocumentScanRateLimitPerIPPerHour:      getEnvInt("DOCUMENT_SCAN_RATE_LIMIT_PER_IP_PER_HOUR", 40),
+
+		// DR AI Chat Test Lab (see struct doc). The key is the one true secret
+		// here — never log or echo it.
+		OpenRouterAPIKey:         getEnv("OPENROUTER_API_KEY", ""),
+		OpenRouterBaseURL:        getEnv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+		DRChatLabModelRules:      splitCSVLower(getEnv("DR_CHATLAB_MODEL_RULES", "anthropic/,openai/,z-ai/glm-5.2,moonshotai/kimi-k2.6")),
+		DRChatLabTitleModel:      getEnv("DR_CHATLAB_TITLE_MODEL", ""),
+		DRChatLabMaxOutputTokens: getEnvInt("DR_CHATLAB_MAX_OUTPUT_TOKENS", 8192),
+		DRChatLabAttributionURL:  getEnv("DR_CHATLAB_ATTRIBUTION_URL", "https://media-manipulator.com"),
 	}
 }
 

@@ -341,6 +341,22 @@ document store (`dr_documents` + `dr_document_revisions`, seeded by
 | `FIREBASE_PROJECT_ID` | _(empty)_ | Also used to init the DR claims verifier; if unset the DR group fails closed with `503`. |
 | `GOOGLE_APPLICATION_CREDENTIALS` | _(empty)_ | Firebase Admin service-account JSON path (shared with the restore seam). The one true secret — never commit. |
 
+### 4.9 DR AI Chat Test Lab (OpenRouter)
+
+The `/dr/demos/chat-lab` chat is backed by OpenRouter, called from THIS API
+(never from the Next.js layer) so the key stays on the home server. All routes
+live under `/api/dr/chatlab/*` behind the same always-on DR auth as §4.8.
+Runtime verification: `docs/dr-chatlab-verification.md`.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `OPENROUTER_API_KEY` | _(empty)_ | OpenRouter Bearer key. **Empty → chat-lab send/models endpoints return 503 `{"error": "AI chat is not configured"}`** (fail closed). The other true secret — never commit or log. |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | API root override, for testing only. |
+| `DR_CHATLAB_MODEL_RULES` | `anthropic/,openai/,z-ai/glm-5.2,moonshotai/kimi-k2.6` | CSV of allow rules against the live model catalog. A rule ending in `/` is a provider prefix match; anything else is an exact model-id match. Prefix rules exclude `:free`/`:extended`-style variants; an exact rule naming a variant admits it. Case-insensitive. |
+| `DR_CHATLAB_TITLE_MODEL` | _(empty)_ | Optional cheap model id for auto-titling new chats (e.g. `openai/gpt-5.2-mini`). Empty disables LLM titling — titles fall back to a truncation of the first message. |
+| `DR_CHATLAB_MAX_OUTPUT_TOKENS` | `8192` | `max_tokens` sent upstream per completion. |
+| `DR_CHATLAB_ATTRIBUTION_URL` | `https://media-manipulator.com` | Sent as OpenRouter's `HTTP-Referer` app-attribution header. |
+
 ---
 
 ## 5. HTTP API surface
