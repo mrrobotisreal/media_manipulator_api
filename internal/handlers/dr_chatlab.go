@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -54,6 +55,9 @@ type DrChatLabHandler struct {
 	// catalog is the in-memory filtered model catalog cache (see
 	// dr_chatlab_models.go).
 	catalog chatLabCatalogCache
+	// memoryFlights coalesces concurrent project-memory updates to at most one
+	// in-flight run per project (see dr_chatlab_memory.go).
+	memoryFlights singleflightLatest
 }
 
 // NewDrChatLabHandler wires the handler. Mirrors NewDrFeedbackHandler for the
@@ -91,6 +95,17 @@ func RegisterDrChatLabRoutes(r gin.IRouter, h *DrChatLabHandler) {
 	r.POST("/chatlab/sessions/:id/attachments/:attachmentId/complete", h.CompleteAttachment)
 	r.DELETE("/chatlab/sessions/:id/attachments/:attachmentId", h.DeleteAttachment)
 	r.POST("/chatlab/sessions/:id/messages", h.SendChatMessage)
+	// Projects (dr_chatlab_projects.go): grouped workspaces with shared
+	// description/instructions/assets/memory context.
+	r.GET("/chatlab/projects", h.ListProjects)
+	r.POST("/chatlab/projects", h.CreateProject)
+	r.GET("/chatlab/projects/:projectId", h.GetProject)
+	r.PUT("/chatlab/projects/:projectId", h.UpdateProject)
+	r.DELETE("/chatlab/projects/:projectId", h.DeleteProject)
+	r.POST("/chatlab/projects/:projectId/memory/refresh", h.RefreshProjectMemory)
+	r.POST("/chatlab/projects/:projectId/assets", h.PresignProjectAsset)
+	r.POST("/chatlab/projects/:projectId/assets/:assetId/complete", h.CompleteProjectAsset)
+	r.DELETE("/chatlab/projects/:projectId/assets/:assetId", h.DeleteProjectAsset)
 }
 
 // ----------------------------------------------------------------------- //
@@ -277,11 +292,18 @@ func (h *DrChatLabHandler) deleteObject(ctx context.Context, key string) {
 	}
 }
 
-// scannedChatSession is the raw column set for a session row.
+// scannedChatSession is the raw column set for a session row. projectID is
+// nil for a general chat.
 type scannedChatSession struct {
 	id, title, titleSource, createdByEmail string
+	projectID                              *string
 	lastModel, lastReasoningEffort         *string
 	createdAt, updatedAt                   time.Time
+}
+
+// scanFields returns the scan destinations in chatSessionCols order.
+func (s *scannedChatSession) scanFields() []any {
+	return []any{&s.id, &s.title, &s.titleSource, &s.createdByEmail, &s.projectID, &s.lastModel, &s.lastReasoningEffort, &s.createdAt, &s.updatedAt}
 }
 
 func (s scannedChatSession) toDTO(callerEmail string) models.DrChatSession {
@@ -291,6 +313,7 @@ func (s scannedChatSession) toDTO(callerEmail string) models.DrChatSession {
 		TitleSource:         s.titleSource,
 		CreatedByEmail:      s.createdByEmail,
 		IsMine:              strings.EqualFold(s.createdByEmail, callerEmail),
+		ProjectID:           s.projectID,
 		LastModel:           s.lastModel,
 		LastReasoningEffort: s.lastReasoningEffort,
 		CreatedAt:           models.UTCTime{Time: s.createdAt},
@@ -298,14 +321,14 @@ func (s scannedChatSession) toDTO(callerEmail string) models.DrChatSession {
 	}
 }
 
-const chatSessionCols = `id, title, title_source, created_by_email, last_model, last_reasoning_effort, created_at, updated_at`
+const chatSessionCols = `id, title, title_source, created_by_email, project_id, last_model, last_reasoning_effort, created_at, updated_at`
 
 // loadSession fetches one session row. pgx.ErrNoRows passes through so callers
 // can 404.
 func (h *DrChatLabHandler) loadSession(ctx context.Context, id string) (scannedChatSession, error) {
 	var s scannedChatSession
 	err := h.pool.QueryRow(ctx, `SELECT `+chatSessionCols+` FROM dr_chat_sessions WHERE id = $1`, id).
-		Scan(&s.id, &s.title, &s.titleSource, &s.createdByEmail, &s.lastModel, &s.lastReasoningEffort, &s.createdAt, &s.updatedAt)
+		Scan(s.scanFields()...)
 	return s, err
 }
 
@@ -356,11 +379,25 @@ func (h *DrChatLabHandler) ListSessions(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	// Default (no ?projectId): ONLY general sessions — project chats live in
+	// their project's list, so the sidebar's general list stays clean. With
+	// ?projectId=<uuid>: that project's sessions.
+	where := `project_id IS NULL`
+	args := []any{drChatLabSessionsCap}
+	if projectID := strings.TrimSpace(c.Query("projectId")); projectID != "" {
+		if _, err := uuid.Parse(projectID); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project id"})
+			return
+		}
+		where = `project_id = $2`
+		args = append(args, projectID)
+	}
 	rows, err := h.pool.Query(ctx, `
 SELECT `+chatSessionCols+`
 FROM dr_chat_sessions
+WHERE `+where+`
 ORDER BY updated_at DESC, id
-LIMIT $1`, drChatLabSessionsCap)
+LIMIT $1`, args...)
 	if err != nil {
 		log.Printf("dr chatlab: list sessions: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load chats"})
@@ -371,7 +408,7 @@ LIMIT $1`, drChatLabSessionsCap)
 	sessions := make([]models.DrChatSession, 0)
 	for rows.Next() {
 		var s scannedChatSession
-		if err := rows.Scan(&s.id, &s.title, &s.titleSource, &s.createdByEmail, &s.lastModel, &s.lastReasoningEffort, &s.createdAt, &s.updatedAt); err != nil {
+		if err := rows.Scan(s.scanFields()...); err != nil {
 			log.Printf("dr chatlab: scan session: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load chats"})
 			return
@@ -399,15 +436,41 @@ func (h *DrChatLabHandler) CreateSession(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 		return
 	}
+	// Optional body: {projectId?}. An empty body stays valid (general chat).
+	var req models.DrChatCreateSessionRequest
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			return
+		}
+	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	var projectID *string
+	if pid := strings.TrimSpace(req.ProjectID); pid != "" {
+		if _, err := uuid.Parse(pid); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project id"})
+			return
+		}
+		var exists bool
+		if err := h.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM dr_chat_projects WHERE id = $1)`, pid).Scan(&exists); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create chat"})
+			return
+		}
+		if !exists {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})
+			return
+		}
+		projectID = &pid
+	}
+
 	var s scannedChatSession
 	err := h.pool.QueryRow(ctx, `
-INSERT INTO dr_chat_sessions (created_by_uid, created_by_email)
-VALUES ($1, lower($2))
-RETURNING `+chatSessionCols, claims.UID, claims.Email).
-		Scan(&s.id, &s.title, &s.titleSource, &s.createdByEmail, &s.lastModel, &s.lastReasoningEffort, &s.createdAt, &s.updatedAt)
+INSERT INTO dr_chat_sessions (created_by_uid, created_by_email, project_id)
+VALUES ($1, lower($2), $3)
+RETURNING `+chatSessionCols, claims.UID, claims.Email, projectID).
+		Scan(s.scanFields()...)
 	if err != nil {
 		log.Printf("dr chatlab: create session: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create chat"})
@@ -450,7 +513,7 @@ func (h *DrChatLabHandler) GetSession(c *gin.Context) {
 	rows, err := h.pool.Query(ctx, `
 SELECT id, role, author_email, content, reasoning, model, reasoning_effort,
        status, error_message, prompt_tokens, completion_tokens, reasoning_tokens,
-       total_cost_usd, created_at
+       total_cost_usd, tool_activity, created_at
 FROM dr_chat_messages
 WHERE session_id = $1
 ORDER BY created_at, seq`, sessionID)
@@ -465,14 +528,20 @@ ORDER BY created_at, seq`, sessionID)
 		for rows.Next() {
 			var m models.DrChatMessage
 			var createdAt time.Time
+			var toolActivityRaw []byte
 			if err := rows.Scan(&m.ID, &m.Role, &m.AuthorEmail, &m.Content, &m.Reasoning, &m.Model, &m.ReasoningEffort,
 				&m.Status, &m.ErrorMessage, &m.PromptTokens, &m.CompletionTokens, &m.ReasoningTokens,
-				&m.TotalCostUsd, &createdAt); err != nil {
+				&m.TotalCostUsd, &toolActivityRaw, &createdAt); err != nil {
 				log.Printf("dr chatlab: scan message: %v", err)
 				continue
 			}
 			m.CreatedAt = models.UTCTime{Time: createdAt}
 			m.Attachments = []models.DrChatAttachment{}
+			if len(toolActivityRaw) > 0 {
+				if err := json.Unmarshal(toolActivityRaw, &m.ToolActivity); err != nil {
+					log.Printf("dr chatlab: decode tool activity for %s: %v", m.ID, err)
+				}
+			}
 			msgs = append(msgs, m)
 		}
 	}()
@@ -488,8 +557,20 @@ ORDER BY created_at, seq`, sessionID)
 		}
 	}
 
+	// Project breadcrumb reference (one tiny lookup, only for project chats).
+	var projectRef *models.DrChatSessionProjectRef
+	if session.projectID != nil {
+		var name string
+		if err := h.pool.QueryRow(ctx, `SELECT name FROM dr_chat_projects WHERE id = $1`, *session.projectID).Scan(&name); err == nil {
+			projectRef = &models.DrChatSessionProjectRef{ID: *session.projectID, Name: name}
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			log.Printf("dr chatlab: load session project ref: %v", err)
+		}
+	}
+
 	c.JSON(http.StatusOK, models.DrChatSessionDetailResponse{
 		Session:  session.toDTO(claims.Email),
+		Project:  projectRef,
 		Messages: msgs,
 	})
 }
@@ -543,7 +624,7 @@ UPDATE dr_chat_sessions
 SET title = $1, title_source = 'manual'
 WHERE id = $2
 RETURNING `+chatSessionCols, title, sessionID).
-		Scan(&session.id, &session.title, &session.titleSource, &session.createdByEmail, &session.lastModel, &session.lastReasoningEffort, &session.createdAt, &session.updatedAt)
+		Scan(session.scanFields()...)
 	if err != nil {
 		log.Printf("dr chatlab: rename session: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to rename chat"})
@@ -604,31 +685,7 @@ func (h *DrChatLabHandler) DeleteSession(c *gin.Context) {
 // (chatlab/{sessionId}/). Failures are logged, never surfaced — this is
 // best-effort cleanup of disposable test data.
 func (h *DrChatLabHandler) deleteSessionObjects(sessionID string) {
-	if h.s3Client == nil || h.cfg == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	prefix := fmt.Sprintf("chatlab/%s/", sessionID)
-	var token *string
-	for {
-		out, err := h.s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
-			Bucket:            aws.String(h.cfg.S3Bucket),
-			Prefix:            aws.String(prefix),
-			ContinuationToken: token,
-		})
-		if err != nil {
-			log.Printf("dr chatlab: list session objects %s: %v", prefix, err)
-			return
-		}
-		for _, obj := range out.Contents {
-			h.deleteObject(ctx, aws.ToString(obj.Key))
-		}
-		if !aws.ToBool(out.IsTruncated) {
-			return
-		}
-		token = out.NextContinuationToken
-	}
+	h.deletePrefixObjects(fmt.Sprintf("chatlab/%s/", sessionID))
 }
 
 // ----------------------------------------------------------------------- //

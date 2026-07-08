@@ -7,23 +7,43 @@
 // usage accounting) as of 2026-07.
 package openrouter
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // ---- Chat completion request ------------------------------------------------
 
 // Message is one chat turn. Content is either a plain string (text-only) or a
-// []ContentPart (multimodal: text + image_url + file parts).
+// []ContentPart (multimodal: text + image_url + input_audio + file parts).
+//
+// For an assistant turn that requested tools, ToolCalls carries the finalized
+// calls and ReasoningDetails carries the model's reasoning_details VERBATIM —
+// per the reasoning docs the block sequence must be passed back unmodified for
+// reasoning models to continue after tool execution. For a tool-result turn
+// (Role "tool"), ToolCallID links the result to its call.
 type Message struct {
-	Role    string `json:"role"`
-	Content any    `json:"content"`
+	Role             string            `json:"role"`
+	Content          any               `json:"content"`
+	ToolCalls        []ToolCall        `json:"tool_calls,omitempty"`
+	ToolCallID       string            `json:"tool_call_id,omitempty"`
+	ReasoningDetails []json.RawMessage `json:"reasoning_details,omitempty"`
 }
 
 // ContentPart is one multimodal content element of a user message.
 type ContentPart struct {
-	Type     string    `json:"type"` // "text" | "image_url" | "file"
-	Text     string    `json:"text,omitempty"`
-	ImageURL *ImageURL `json:"image_url,omitempty"`
-	File     *FilePart `json:"file,omitempty"`
+	Type       string      `json:"type"` // "text" | "image_url" | "input_audio" | "file"
+	Text       string      `json:"text,omitempty"`
+	ImageURL   *ImageURL   `json:"image_url,omitempty"`
+	InputAudio *InputAudio `json:"input_audio,omitempty"`
+	File       *FilePart   `json:"file,omitempty"`
+}
+
+// InputAudio carries audio as RAW base64 (per the audio docs: base64 only,
+// direct URLs are not supported for audio) plus its format ("mp3", "wav", …).
+type InputAudio struct {
+	Data   string `json:"data"`
+	Format string `json:"format"`
 }
 
 // ImageURL carries an image as a URL — for the chat lab always a base64 data
@@ -70,6 +90,48 @@ type ChatRequest struct {
 	MaxTokens int        `json:"max_tokens,omitempty"`
 	Reasoning *Reasoning `json:"reasoning,omitempty"`
 	Plugins   []Plugin   `json:"plugins,omitempty"`
+	Tools     []Tool     `json:"tools,omitempty"`
+}
+
+// Tool is one entry of the request's tools array (OpenAI function format).
+type Tool struct {
+	Type     string       `json:"type"` // "function"
+	Function ToolFunction `json:"function"`
+}
+
+// ToolFunction describes the function; Parameters is a raw JSON Schema object.
+type ToolFunction struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters"`
+}
+
+// ToolCall is a finalized tool invocation on an assistant message.
+type ToolCall struct {
+	ID       string           `json:"id"`
+	Type     string           `json:"type"` // "function"
+	Function ToolCallFunction `json:"function"`
+}
+
+type ToolCallFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"` // JSON-encoded argument object
+}
+
+// ToolCallDelta is one streamed tool-call fragment (choices[].delta.tool_calls).
+// The FIRST chunk for an index carries id/type/function.name; subsequent chunks
+// carry only function.arguments fragments to concatenate — accumulate with
+// toolCallAccumulator-style logic keyed by Index.
+type ToolCallDelta struct {
+	Index    int                   `json:"index"`
+	ID       string                `json:"id"`
+	Type     string                `json:"type"`
+	Function ToolCallFunctionDelta `json:"function"`
+}
+
+type ToolCallFunctionDelta struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
 // ---- Models catalog -----------------------------------------------------------
@@ -125,15 +187,19 @@ type StreamChoice struct {
 // Delta carries the incremental content. Reasoning may arrive as the legacy
 // plaintext `reasoning` field and/or structured `reasoning_details` entries —
 // ReasoningText() below merges the two, preferring the plaintext field.
+// ReasoningDetails is kept RAW so callers can pass the blocks back verbatim on
+// the assistant tool-call message (the reasoning docs forbid rearranging or
+// modifying the sequence). ToolCalls are streamed fragments (see ToolCallDelta).
 type Delta struct {
 	Content          string            `json:"content"`
 	Reasoning        string            `json:"reasoning"`
-	ReasoningDetails []ReasoningDetail `json:"reasoning_details"`
+	ReasoningDetails []json.RawMessage `json:"reasoning_details"`
+	ToolCalls        []ToolCallDelta   `json:"tool_calls"`
 }
 
-// ReasoningDetail is one structured reasoning entry ("reasoning.text" /
-// "reasoning.summary" / "reasoning.encrypted" — encrypted payloads carry no
-// readable text and are skipped).
+// ReasoningDetail is the typed view of one structured reasoning entry
+// ("reasoning.text" / "reasoning.summary" / "reasoning.encrypted" — encrypted
+// payloads carry no readable text and are skipped for display).
 type ReasoningDetail struct {
 	Type    string `json:"type"`
 	Text    string `json:"text"`
@@ -148,7 +214,11 @@ func (d Delta) ReasoningText() string {
 		return d.Reasoning
 	}
 	var out string
-	for _, rd := range d.ReasoningDetails {
+	for _, raw := range d.ReasoningDetails {
+		var rd ReasoningDetail
+		if err := json.Unmarshal(raw, &rd); err != nil {
+			continue
+		}
 		switch rd.Type {
 		case "reasoning.text":
 			out += rd.Text

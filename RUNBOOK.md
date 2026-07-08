@@ -356,6 +356,10 @@ Runtime verification: `docs/dr-chatlab-verification.md`.
 | `DR_CHATLAB_TITLE_MODEL` | _(empty)_ | Optional cheap model id for auto-titling new chats (e.g. `openai/gpt-5.2-mini`). Empty disables LLM titling — titles fall back to a truncation of the first message. |
 | `DR_CHATLAB_MAX_OUTPUT_TOKENS` | `8192` | `max_tokens` sent upstream per completion. |
 | `DR_CHATLAB_ATTRIBUTION_URL` | `https://media-manipulator.com` | Sent as OpenRouter's `HTTP-Referer` app-attribution header. |
+| `DR_CHATLAB_MEMORY_MODEL` | _(empty)_ | Cheap model id that regenerates each project's living memory (e.g. `openai/gpt-5.2-mini`). **Empty = memory disabled** — projects still work, the Memory card shows `disabled`. Runtime verification: `docs/dr-chatlab-projects-verification.md`. |
+| `DR_CHATLAB_MEMORY_MAX_CHARS` | `4096` | Hard cap on the generated project memory (chars). |
+| `DR_CHATLAB_TOOL_MAX_ROUNDS` | `5` | Max upstream rounds per send in the `read_asset` tool loop (exceeding → the turn ends with `Tool call limit reached`). |
+| `DR_CHATLAB_ASSET_READ_CAP_BYTES` | `49152` | Per-read cap on text/code asset content returned to the model (truncated with a note beyond it). |
 
 ---
 

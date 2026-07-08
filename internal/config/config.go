@@ -308,6 +308,16 @@ type Config struct {
 	DRChatLabTitleModel      string
 	DRChatLabMaxOutputTokens int
 	DRChatLabAttributionURL  string
+	// Chat-lab Projects: DRChatLabMemoryModel names a cheap model that
+	// regenerates each project's living memory after chats and context edits;
+	// empty disables memory (projects work, memory shows 'disabled').
+	// DRChatLabToolMaxRounds bounds the read_asset tool-execution loop per
+	// send; DRChatLabAssetReadCapBytes caps one text/code asset read returned
+	// to the model.
+	DRChatLabMemoryModel       string
+	DRChatLabMemoryMaxChars    int
+	DRChatLabToolMaxRounds     int
+	DRChatLabAssetReadCapBytes int
 }
 
 func Load() *Config {
@@ -552,6 +562,11 @@ func Load() *Config {
 		DRChatLabTitleModel:      getEnv("DR_CHATLAB_TITLE_MODEL", ""),
 		DRChatLabMaxOutputTokens: getEnvInt("DR_CHATLAB_MAX_OUTPUT_TOKENS", 8192),
 		DRChatLabAttributionURL:  getEnv("DR_CHATLAB_ATTRIBUTION_URL", "https://media-manipulator.com"),
+
+		DRChatLabMemoryModel:       getEnv("DR_CHATLAB_MEMORY_MODEL", ""),
+		DRChatLabMemoryMaxChars:    getEnvInt("DR_CHATLAB_MEMORY_MAX_CHARS", 4096),
+		DRChatLabToolMaxRounds:     getEnvInt("DR_CHATLAB_TOOL_MAX_ROUNDS", 5),
+		DRChatLabAssetReadCapBytes: getEnvInt("DR_CHATLAB_ASSET_READ_CAP_BYTES", 49152),
 	}
 }
 

@@ -91,17 +91,23 @@ func buildChatLabModel(m openrouter.Model) models.DrChatLabModel {
 		provider = m.ID[:i]
 	}
 	supportsImages := false
+	supportsAudio := false
 	for _, mod := range m.Architecture.InputModalities {
 		if strings.EqualFold(mod, "image") {
 			supportsImages = true
-			break
+		}
+		if strings.EqualFold(mod, "audio") {
+			supportsAudio = true
 		}
 	}
 	supportsReasoning := false
+	supportsTools := false
 	for _, p := range m.SupportedParameters {
 		if strings.EqualFold(p, "reasoning") {
 			supportsReasoning = true
-			break
+		}
+		if strings.EqualFold(p, "tools") {
+			supportsTools = true
 		}
 	}
 	var efforts []string
@@ -119,6 +125,8 @@ func buildChatLabModel(m openrouter.Model) models.DrChatLabModel {
 		ContextLength:     m.ContextLength,
 		SupportsImages:    supportsImages,
 		SupportsReasoning: supportsReasoning,
+		SupportsTools:     supportsTools,
+		SupportsAudio:     supportsAudio,
 		SupportedEfforts:  efforts,
 		Pricing: models.DrChatLabModelPricing{
 			PromptUsdPerMTok:     parsePerTokenUSD(m.Pricing.Prompt),

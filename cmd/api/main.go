@@ -634,10 +634,11 @@ func runDrFeedbackAttachmentReaper(ctx context.Context, h *handlers.DrFeedbackHa
 	}
 }
 
-// runDrChatLabAttachmentReaper runs the DR chat-lab unbound-attachment reaper
-// shortly after boot and then daily, until ctx is cancelled. Mirrors
-// runDrFeedbackAttachmentReaper; it removes only unbound chat attachments
-// (uploaded while composing but never bound to a sent message) older than 24h.
+// runDrChatLabAttachmentReaper runs the DR chat-lab reapers shortly after boot
+// and then daily, until ctx is cancelled. Mirrors
+// runDrFeedbackAttachmentReaper; it removes unbound chat attachments (uploaded
+// while composing but never bound to a sent message) AND pending project
+// assets (uploads never completed), both older than 24h.
 func runDrChatLabAttachmentReaper(ctx context.Context, h *handlers.DrChatLabHandler) {
 	timer := time.NewTimer(4 * time.Minute)
 	defer timer.Stop()
@@ -647,6 +648,7 @@ func runDrChatLabAttachmentReaper(ctx context.Context, h *handlers.DrChatLabHand
 			return
 		case <-timer.C:
 			h.ReapUnboundAttachments(ctx)
+			h.ReapStaleProjectAssets(ctx)
 			timer.Reset(24 * time.Hour)
 		}
 	}
