@@ -524,7 +524,7 @@ func (h *DrChatLabHandler) GetSession(c *gin.Context) {
 	rows, err := h.pool.Query(ctx, `
 SELECT id, role, author_email, content, reasoning, model, reasoning_effort,
        status, error_message, prompt_tokens, completion_tokens, reasoning_tokens,
-       total_cost_usd, tool_activity, created_at
+       total_cost_usd, tool_activity, duration_ms, reasoning_ms, first_token_ms, request_type, created_at
 FROM dr_chat_messages
 WHERE session_id = $1
 ORDER BY created_at, seq`, sessionID)
@@ -542,7 +542,7 @@ ORDER BY created_at, seq`, sessionID)
 			var toolActivityRaw []byte
 			if err := rows.Scan(&m.ID, &m.Role, &m.AuthorEmail, &m.Content, &m.Reasoning, &m.Model, &m.ReasoningEffort,
 				&m.Status, &m.ErrorMessage, &m.PromptTokens, &m.CompletionTokens, &m.ReasoningTokens,
-				&m.TotalCostUsd, &toolActivityRaw, &createdAt); err != nil {
+				&m.TotalCostUsd, &toolActivityRaw, &m.DurationMs, &m.ReasoningMs, &m.FirstTokenMs, &m.RequestType, &createdAt); err != nil {
 				log.Printf("dr chatlab: scan message: %v", err)
 				continue
 			}
@@ -687,6 +687,13 @@ func (h *DrChatLabHandler) DeleteSession(c *gin.Context) {
 		log.Printf("dr chatlab: delete session: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete chat"})
 		return
+	}
+
+	// Drop the session's memory-hash row (project chats only have one; no-op
+	// otherwise): the row-set change alters the project fingerprint, so the
+	// nightly job regenerates memory without the deleted transcript.
+	if session.projectID != nil {
+		h.removeSessionMemoryHash(sessionID)
 	}
 
 	// Best-effort S3 prefix cleanup AFTER the DB commit, detached from the

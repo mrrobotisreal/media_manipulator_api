@@ -477,12 +477,12 @@ func TestBuildMemoryPrompt(t *testing.T) {
 		MaxChars: 4096,
 	})
 
-	// The system prompt is the base instruction plus the appended feedback-
-	// steering line (added by the stats/feedback build).
-	if system != fmt.Sprintf(drChatLabMemoryInstruction, 4096)+"\n"+drChatLabMemoryFeedbackInstruction {
+	// The system prompt is exactly the six-section instruction (the feedback-
+	// distillation guidance now lives inside the Key learnings charter).
+	if system != fmt.Sprintf(drChatLabMemoryInstruction, 4096) {
 		t.Fatalf("system prompt = %q", system)
 	}
-	if !strings.Contains(system, "Maximum 4096 characters.") {
+	if !strings.Contains(system, "Maximum 4096 characters") {
 		t.Fatalf("char cap not interpolated: %q", system)
 	}
 	for _, want := range []string{
@@ -519,9 +519,38 @@ func TestSanitizeProjectMemory(t *testing.T) {
 	if got := sanitizeProjectMemory("  hi  ", 4096); got != "hi" {
 		t.Fatalf("trim failed: %q", got)
 	}
-	long := strings.Repeat("x", 5000)
-	if got := sanitizeProjectMemory(long, 4096); len([]rune(got)) != 4096 {
-		t.Fatalf("cap failed: %d runes", len([]rune(got)))
+	// Under the cap: markdown headings pass through untouched.
+	structured := "## Purpose & context\n- A lab.\n\n## Current state\n- Built."
+	if got := sanitizeProjectMemory(structured, 4096); got != structured {
+		t.Fatalf("markdown must be preserved: %q", got)
+	}
+	// Over the cap: truncation lands on a LINE boundary (never mid-line) with
+	// an appended ellipsis, and stays within the cap.
+	long := "## Purpose & context\n" + strings.Repeat("- bullet line\n", 400)
+	got := sanitizeProjectMemory(long, 512)
+	if n := len([]rune(got)); n > 512 {
+		t.Fatalf("cap exceeded: %d runes", n)
+	}
+	if !strings.HasSuffix(got, "\n…") {
+		t.Fatalf("truncated memory must end with an ellipsis line: %q", got[len(got)-20:])
+	}
+	if !strings.Contains(got, "## Purpose & context") {
+		t.Fatal("heading stripped by truncation")
+	}
+	body := strings.TrimSuffix(got, "\n…")
+	for _, line := range strings.Split(body, "\n")[1:] {
+		if line != "- bullet line" {
+			t.Fatalf("line sliced mid-way: %q", line)
+		}
+	}
+	// A single line with no newline still truncates with the ellipsis.
+	oneLine := strings.Repeat("y", 100)
+	got = sanitizeProjectMemory(oneLine, 50)
+	if n := len([]rune(got)); n > 50 {
+		t.Fatalf("single-line cap exceeded: %d runes", n)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Fatalf("single-line truncation must end with …: %q", got)
 	}
 }
 

@@ -31,6 +31,13 @@ type usageEventInsert struct {
 	Usage         *openrouter.Usage
 	CostUSD       *float64
 	CostEstimated bool
+	// Per-response performance metrics (see dr_chatlab_perf.go). All nil for
+	// events recorded before the metrics landed; title/memory events carry
+	// only DurationMs + RequestType ("text").
+	DurationMs   *int
+	ReasoningMs  *int
+	FirstTokenMs *int
+	RequestType  *string // "text"|"file"|"image"|"pdf"|"audio"|"mixed"
 }
 
 // estimateCostUSD resolves an event's cost: the provider-reported cost when
@@ -70,10 +77,12 @@ func (h *DrChatLabHandler) recordUsageEvent(ctx context.Context, ev usageEventIn
 	if _, err := h.pool.Exec(ctx, `
 INSERT INTO dr_chat_usage_events
     (kind, model, session_id, session_title, project_id, project_name, message_id,
-     user_uid, user_email, prompt_tokens, completion_tokens, reasoning_tokens, cost_usd, cost_estimated)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, lower($9), $10, $11, $12, $13, $14)`,
+     user_uid, user_email, prompt_tokens, completion_tokens, reasoning_tokens, cost_usd, cost_estimated,
+     duration_ms, reasoning_ms, first_token_ms, request_type)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, lower($9), $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
 		ev.Kind, ev.Model, ev.SessionID, ev.SessionTitle, ev.ProjectID, ev.ProjectName, ev.MessageID,
-		ev.UserUID, ev.UserEmail, promptTokens, completionTokens, reasoningTokens, ev.CostUSD, ev.CostEstimated); err != nil {
+		ev.UserUID, ev.UserEmail, promptTokens, completionTokens, reasoningTokens, ev.CostUSD, ev.CostEstimated,
+		ev.DurationMs, ev.ReasoningMs, ev.FirstTokenMs, ev.RequestType); err != nil {
 		log.Printf("dr chatlab usage: record %s event: %v", ev.Kind, err)
 	}
 }

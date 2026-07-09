@@ -76,6 +76,11 @@ type chatLabUsageEvent struct {
 	CompletionTokens int     `json:"completionTokens"`
 	ReasoningTokens  int     `json:"reasoningTokens"`
 	CostUsd          float64 `json:"costUsd"`
+	// Timing so the just-streamed message renders its footer without a
+	// refetch. DurationMs is always set on the usage event; ReasoningMs is
+	// null when no reasoning occurred.
+	DurationMs  *int `json:"durationMs"`
+	ReasoningMs *int `json:"reasoningMs"`
 }
 
 type chatLabDoneEvent struct {
@@ -851,6 +856,20 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 	streamCtx, streamCancel := context.WithCancel(c.Request.Context())
 	defer streamCancel()
 
+	// Request-type tracking: seeded from the NEW user message's attachments;
+	// successful read_asset executions in the tool loop upgrade it (a mid-turn
+	// image read is vision work). Classified at persist time.
+	var mods requestModalities
+	for _, a := range attachmentsByMsg[userMessageID] {
+		mods.addAttachment(a.Kind, a.ContentType)
+	}
+
+	// Performance clock: t0 sits immediately before the FIRST upstream round
+	// is dispatched — after validation and the user-message persist, so we
+	// measure model/provider time, not our DB writes. Monotonic (Hard
+	// Constraint 7). A pre-stream failure below records nothing.
+	clock := newPerfClock(time.Now())
+
 	// First round starts BEFORE any SSE bytes: a failure here is a plain 502
 	// JSON response. Upstream details go to the logs only.
 	stream, err := h.or.StreamChat(streamCtx, chatReq)
@@ -871,8 +890,10 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 	var toolActivity []models.DrChatToolActivity
 
 	// persist writes the assistant row EXACTLY ONCE per request — every return
-	// path below calls it exactly once — and fires the project-memory updater
-	// for project sessions with non-empty content.
+	// path below calls it exactly once — finalizing the perf metrics on
+	// whatever terminal path got here, and dirty-marks the session's memory
+	// hash for project sessions with non-empty content (the nightly job
+	// regenerates memory; nothing fires immediately anymore).
 	attr := chatUsageAttribution{
 		UserUID:      claims.UID,
 		UserEmail:    claims.Email,
@@ -891,9 +912,16 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 		if len(errorMessage) > 0 {
 			msg = errorMessage[0]
 		}
-		h.persistAssistantMessage(assistantMessageID, sessionID, model.ID, effort, contentB.String(), reasoningB.String(), status, msg, totals.toUsage(), toolActivity, attr)
+		durationMs, reasoningMs, firstTokenMs := clock.finalize(time.Now())
+		requestType := classifyRequestType(mods)
+		perf := chatPerfMetrics{DurationMs: &durationMs, ReasoningMs: reasoningMs, FirstTokenMs: firstTokenMs, RequestType: &requestType}
+		h.persistAssistantMessage(assistantMessageID, sessionID, model.ID, effort, contentB.String(), reasoningB.String(), status, msg, totals.toUsage(), toolActivity, perf, attr)
 		if session.projectID != nil && contentB.Len() > 0 {
-			h.triggerMemoryUpdate(*session.projectID, claims.UID, claims.Email)
+			// The append cursor (last message id + count) is O(1) to hash —
+			// history already holds every prior message plus the user's new
+			// one, and the assistant row makes it one more.
+			h.markMemoryHash(*session.projectID, memoryHashKindSession, sessionID,
+				hashSessionAppend(sessionID, assistantMessageID, len(history)+1))
 		}
 	}
 
@@ -940,6 +968,9 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 		sawToolFinish := false
 
 		finish := func() chatRoundResult {
+			// Round boundary for the perf clock: a reasoning-only round (it
+			// ended in tool calls) books its span here.
+			clock.onRoundEnd(time.Now())
 			if sawToolFinish || acc.hasCalls() {
 				// Some providers misreport finish_reason "stop" on tool-call
 				// rounds — the presence of finalized calls wins.
@@ -972,6 +1003,7 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 				chunk := item.chunk
 				for _, choice := range chunk.Choices {
 					if rt := choice.Delta.ReasoningText(); rt != "" {
+						clock.onReasoningDelta(time.Now())
 						reasoningB.WriteString(rt)
 						if err := writeChatLabEvent(c.Writer, chatLabReasoningEvent{Type: "reasoning", Text: rt}); err != nil {
 							return chatRoundResult{outcome: roundClientGone}
@@ -979,6 +1011,7 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 					}
 					details = append(details, choice.Delta.ReasoningDetails...)
 					if choice.Delta.Content != "" {
+						clock.onContentDelta(time.Now())
 						contentB.WriteString(choice.Delta.Content)
 						roundText.WriteString(choice.Delta.Content)
 						if err := writeChatLabEvent(c.Writer, chatLabDeltaEvent{Type: "delta", Text: choice.Delta.Content}); err != nil {
@@ -1030,12 +1063,17 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 
 		case roundFinal:
 			if totals.seen {
+				// finalize is memoized — the persist below reads the SAME
+				// values, so the instant footer and the stored row agree.
+				durationMs, reasoningMs, _ := clock.finalize(time.Now())
 				_ = writeChatLabEvent(c.Writer, chatLabUsageEvent{
 					Type:             "usage",
 					PromptTokens:     totals.promptTokens,
 					CompletionTokens: totals.completionTokens,
 					ReasoningTokens:  totals.reasoningTokens,
 					CostUsd:          totals.cost,
+					DurationMs:       &durationMs,
+					ReasoningMs:      reasoningMs,
 				})
 			}
 			persist("complete", "")
@@ -1092,6 +1130,13 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 
 				exec := executeReadAsset(call.Function.Arguments, projectAssets, model, h.cfg.DRChatLabAssetReadCapBytes, fetchBody)
 				toolActivity = append(toolActivity, exec.Activity)
+				// A successful read upgrades the request type: the model now
+				// has to process that asset's modality this turn.
+				if exec.Activity.Status == "ok" {
+					if a := findProjectAsset(projectAssets, exec.Activity.AssetID); a != nil {
+						mods.addAssetKind(a.Kind)
+					}
+				}
 				upstreamMessages = append(upstreamMessages, openrouter.Message{Role: "tool", ToolCallID: call.ID, Content: exec.ResultText})
 				if exec.MediaPart != nil {
 					mediaParts = append(mediaParts, *exec.MediaPart)
@@ -1242,10 +1287,11 @@ type chatUsageAttribution struct {
 
 // persistAssistantMessage inserts the assistant row on a terminal condition,
 // bumps the session's updated_at, and records the turn's usage event (a
-// failed event insert is logged, never breaks the message persist). Runs on
-// context.Background() with a short timeout so a client disconnect can't
+// failed event insert is logged, never breaks the message persist). Perf
+// metrics land on BOTH writes (the display row and the analytics event). Runs
+// on context.Background() with a short timeout so a client disconnect can't
 // cancel the write.
-func (h *DrChatLabHandler) persistAssistantMessage(id, sessionID, model, effort, content, reasoning, status, errorMessage string, usage *openrouter.Usage, toolActivity []models.DrChatToolActivity, attr chatUsageAttribution) {
+func (h *DrChatLabHandler) persistAssistantMessage(id, sessionID, model, effort, content, reasoning, status, errorMessage string, usage *openrouter.Usage, toolActivity []models.DrChatToolActivity, perf chatPerfMetrics, attr chatUsageAttribution) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1275,9 +1321,11 @@ func (h *DrChatLabHandler) persistAssistantMessage(id, sessionID, model, effort,
 
 	if _, err := h.pool.Exec(ctx, `
 INSERT INTO dr_chat_messages (id, session_id, role, content, reasoning, model, reasoning_effort,
-                              status, error_message, prompt_tokens, completion_tokens, reasoning_tokens, total_cost_usd, tool_activity)
-VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-		id, sessionID, content, reasoningPtr, model, effort, status, errPtr, promptTokens, completionTokens, reasoningTokens, costUsd, toolActivityRaw); err != nil {
+                              status, error_message, prompt_tokens, completion_tokens, reasoning_tokens, total_cost_usd, tool_activity,
+                              duration_ms, reasoning_ms, first_token_ms, request_type)
+VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+		id, sessionID, content, reasoningPtr, model, effort, status, errPtr, promptTokens, completionTokens, reasoningTokens, costUsd, toolActivityRaw,
+		perf.DurationMs, perf.ReasoningMs, perf.FirstTokenMs, perf.RequestType); err != nil {
 		log.Printf("dr chatlab: persist assistant message: %v", err)
 		return
 	}
@@ -1302,6 +1350,10 @@ VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 		Usage:         usage,
 		CostUSD:       cost,
 		CostEstimated: estimated,
+		DurationMs:    perf.DurationMs,
+		ReasoningMs:   perf.ReasoningMs,
+		FirstTokenMs:  perf.FirstTokenMs,
+		RequestType:   perf.RequestType,
 	})
 }
 
@@ -1335,6 +1387,7 @@ func (h *DrChatLabHandler) autoTitleSession(sessionID, firstUserMessage, actorUI
 		if len(excerpt) > drChatLabTitlePromptTruncate {
 			excerpt = strings.ToValidUTF8(excerpt[:drChatLabTitlePromptTruncate], "")
 		}
+		started := time.Now()
 		resp, err := h.or.Complete(ctx, openrouter.ChatRequest{
 			Model: titleModel,
 			Messages: []openrouter.Message{
@@ -1343,6 +1396,7 @@ func (h *DrChatLabHandler) autoTitleSession(sessionID, firstUserMessage, actorUI
 			},
 			MaxTokens: 64,
 		})
+		elapsedMs := int(time.Since(started).Milliseconds())
 		if err != nil {
 			log.Printf("dr chatlab: title generation failed (falling back to derived): %v", err)
 		} else {
@@ -1361,12 +1415,16 @@ WHERE s.id = $1`, sessionID).Scan(&sessionTitle, &projectID, &projName)
 				snapshotTitle = sessionTitle
 			}
 			cost, estimated := estimateCostUSD(resp.Usage, h.cachedCatalogModel(titleModel))
+			// Background completion: duration + request_type='text' only —
+			// reasoning/first-token stay NULL (non-streaming call).
+			requestType := chatLabRequestTypeText
 			h.recordUsageEvent(ctx, usageEventInsert{
 				Kind: "title", Model: titleModel,
 				SessionID: &sessionID, SessionTitle: &snapshotTitle,
 				ProjectID: projectID, ProjectName: projName,
 				UserUID: actorUID, UserEmail: actorEmail,
 				Usage: resp.Usage, CostUSD: cost, CostEstimated: estimated,
+				DurationMs: &elapsedMs, RequestType: &requestType,
 			})
 		}
 	}

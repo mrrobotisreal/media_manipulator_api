@@ -19,7 +19,8 @@ import (
 // both).
 const drChatLabDefaultModelRulesFixture = "anthropic/,openai/,z-ai/glm-5.2,moonshotai/kimi-k2.6," +
 	"google/gemini-3.1-pro-preview,google/gemini-3-pro-preview,google/gemini-3.1-flash-lite,google/gemini-3.5-flash,qwen/qwen3.7-plus," +
-	"google/gemini-3-flash-preview,google/gemini-2.5-flash,google/gemini-2.0-flash-001,qwen/qwen3.6-plus,qwen/qwen3.6-flash,qwen/qwen3.7-max,qwen/qwen3-vl-235b-a22b-instruct"
+	"google/gemini-3-flash-preview,google/gemini-2.5-flash,google/gemini-2.0-flash-001,qwen/qwen3.6-plus,qwen/qwen3.6-flash,qwen/qwen3.7-max,qwen/qwen3-vl-235b-a22b-instruct," +
+	"xai/grok-4.5,xai/grok-4.3"
 
 var drChatLabNewModelIDs = []string{
 	"google/gemini-3.1-pro-preview",
@@ -34,6 +35,8 @@ var drChatLabNewModelIDs = []string{
 	"qwen/qwen3.6-flash",
 	"qwen/qwen3.7-max",
 	"qwen/qwen3-vl-235b-a22b-instruct",
+	"xai/grok-4.5",
+	"xai/grok-4.3",
 }
 
 func TestDefaultModelRulesAdmitNewModels(t *testing.T) {
@@ -48,11 +51,13 @@ func TestDefaultModelRulesAdmitNewModels(t *testing.T) {
 		orModel("openai/gpt-5.2"),
 		orModel("z-ai/glm-5.2"),
 		orModel("moonshotai/kimi-k2.6"),
-		// Pollution that exact-id rules must NOT admit (why google//qwen/ are
-		// not prefixes):
+		// Pollution that exact-id rules must NOT admit (why google//qwen//xai/
+		// are not prefixes):
 		orModel("google/gemini-embedding-001"),
 		orModel("google/imagen-4"),
 		orModel("qwen/qwen-image-edit"),
+		orModel("xai/grok-2-image-1212"),
+		orModel("xai/grok-code-fast-1"),
 		// A drifted/unknown preview slug that exists upstream but not in our
 		// rules stays out:
 		orModel("google/gemini-4-ultra-preview"),
@@ -70,7 +75,7 @@ func TestDefaultModelRulesAdmitNewModels(t *testing.T) {
 			t.Fatalf("new model %s missing from filtered catalog", want)
 		}
 	}
-	for _, banned := range []string{"google/gemini-embedding-001", "google/imagen-4", "qwen/qwen-image-edit", "google/gemini-4-ultra-preview", "anthropic/claude-haiku-4.5:free"} {
+	for _, banned := range []string{"google/gemini-embedding-001", "google/imagen-4", "qwen/qwen-image-edit", "xai/grok-2-image-1212", "xai/grok-code-fast-1", "google/gemini-4-ultra-preview", "anthropic/claude-haiku-4.5:free"} {
 		if ids[banned] {
 			t.Fatalf("%s must not pass the rules", banned)
 		}
@@ -81,7 +86,7 @@ func TestDefaultModelRulesAdmitNewModels(t *testing.T) {
 }
 
 func TestProviderRankGoogleQwen(t *testing.T) {
-	order := []string{"anthropic", "openai", "google", "qwen", "mistralai"}
+	order := []string{"anthropic", "openai", "google", "qwen", "xai", "mistralai"}
 	for i := 1; i < len(order); i++ {
 		if !(providerRank(order[i-1]) < providerRank(order[i])) &&
 			providerRank(order[i-1]) == providerRank(order[i]) {
@@ -163,8 +168,10 @@ func TestBuildMemoryPromptFeedbackSection(t *testing.T) {
 			{Rating: "up", Model: "anthropic/claude-opus-4.8", Categories: []string{"Great OCR/transcription"}},
 		},
 	})
-	if !strings.Contains(system, drChatLabMemoryFeedbackInstruction) {
-		t.Fatal("system prompt must carry the feedback-steering instruction")
+	// The feedback-distillation guidance lives inside the Key learnings &
+	// principles charter of the six-section instruction.
+	if !strings.Contains(system, "durable guidance distilled from response feedback") {
+		t.Fatal("system prompt must carry the feedback-distillation guidance")
 	}
 	if !strings.Contains(user, "## Response feedback") {
 		t.Fatalf("feedback section missing:\n%s", user)

@@ -54,6 +54,35 @@ var statsDimensions = map[string]statsDimension{
 		labelExpr: "COALESCE(s.title, e.session_title, 'deleted chat')",
 		join:      "LEFT JOIN dr_chat_sessions s ON s.id = e.session_id",
 	},
+	// Request-type mix ("why was this slow? oh, it was analyzing an image").
+	// Rows recorded before the perf-metrics migration have NULL request_type
+	// and bucket under "Untracked (pre-metrics)".
+	"type": {
+		keyExpr: "COALESCE(e.request_type, 'untracked')",
+		labelExpr: `CASE COALESCE(e.request_type, 'untracked')
+		            WHEN 'text' THEN 'Text' WHEN 'file' THEN 'File' WHEN 'image' THEN 'Image'
+		            WHEN 'pdf' THEN 'PDF' WHEN 'audio' THEN 'Audio' WHEN 'mixed' THEN 'Mixed'
+		            ELSE 'Untracked (pre-metrics)' END`,
+	},
+}
+
+// validStatsTypeFilter validates the optional ?type= query value against the
+// request-type allowlist; "" means no filter. Pure; unit-tested.
+func validStatsTypeFilter(raw string) bool {
+	return raw == "" || chatLabRequestTypes[raw]
+}
+
+// parseStatsTypeFilter reads the optional ?type= param. ok=false → a 400 was
+// already written. A set filter later becomes an equality condition, which
+// naturally EXCLUDES NULL-request_type rows (pre-metrics history); with no
+// filter they are included everywhere.
+func parseStatsTypeFilter(c *gin.Context) (string, bool) {
+	raw := strings.TrimSpace(c.Query("type"))
+	if !validStatsTypeFilter(raw) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid type"})
+		return "", false
+	}
+	return raw, true
 }
 
 // statsTimeseriesDimensions is the allowlist for the timeseries dimension
@@ -265,6 +294,10 @@ func (h *DrChatLabHandler) StatsBreakdown(c *gin.Context) {
 	if !ok {
 		return
 	}
+	typeFilter, ok := parseStatsTypeFilter(c)
+	if !ok {
+		return
+	}
 	limit := 50
 	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
 		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 200 {
@@ -275,20 +308,34 @@ func (h *DrChatLabHandler) StatsBreakdown(c *gin.Context) {
 	defer cancel()
 
 	where, args := statsRangeWhere(from, to)
+	if typeFilter != "" {
+		args = append(args, typeFilter)
+		where += fmt.Sprintf(" AND e.request_type = $%d", len(args))
+	}
+	// Latency aggregates run over kind='chat' events with metrics ONLY —
+	// title/memory background completions would poison latency stats, and
+	// pre-metrics rows have NULL duration. Empty groups yield NULL (→ "—").
+	const latencyFilter = "FILTER (WHERE e.kind = 'chat' AND e.duration_ms IS NOT NULL)"
 	query := fmt.Sprintf(`
-SELECT %s AS key,
-       MAX(%s) AS label,
+SELECT %[1]s AS key,
+       MAX(%[2]s) AS label,
        COALESCE(SUM(e.cost_usd), 0)::float8,
        COALESCE(SUM(e.prompt_tokens), 0)::bigint,
        COALESCE(SUM(e.completion_tokens), 0)::bigint,
        COALESCE(SUM(e.reasoning_tokens), 0)::bigint,
-       COUNT(*)::bigint
+       COUNT(*)::bigint,
+       COUNT(*) %[6]s::bigint,
+       ROUND(AVG(e.duration_ms) %[6]s)::bigint,
+       ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY e.duration_ms) %[6]s)::bigint,
+       ROUND(percentile_cont(0.95) WITHIN GROUP (ORDER BY e.duration_ms) %[6]s)::bigint,
+       ROUND(AVG(e.first_token_ms) FILTER (WHERE e.kind = 'chat' AND e.first_token_ms IS NOT NULL))::bigint,
+       ROUND(AVG(e.reasoning_ms) FILTER (WHERE e.kind = 'chat' AND e.reasoning_ms IS NOT NULL))::bigint
 FROM dr_chat_usage_events e
-%s
-WHERE %s
+%[3]s
+WHERE %[4]s
 GROUP BY 1
 ORDER BY 3 DESC
-LIMIT %d`, dim.keyExpr, dim.labelExpr, dim.join, where, limit)
+LIMIT %[5]d`, dim.keyExpr, dim.labelExpr, dim.join, where, limit, latencyFilter)
 
 	rows, err := h.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -301,7 +348,8 @@ LIMIT %d`, dim.keyExpr, dim.labelExpr, dim.join, where, limit)
 		defer rows.Close()
 		for rows.Next() {
 			var r models.DrChatStatsBreakdownRow
-			if err := rows.Scan(&r.Key, &r.Label, &r.CostUsd, &r.PromptTokens, &r.CompletionTokens, &r.ReasoningTokens, &r.Events); err != nil {
+			if err := rows.Scan(&r.Key, &r.Label, &r.CostUsd, &r.PromptTokens, &r.CompletionTokens, &r.ReasoningTokens, &r.Events,
+				&r.ChatEvents, &r.AvgDurationMs, &r.P50DurationMs, &r.P95DurationMs, &r.AvgFirstTokenMs, &r.AvgReasoningMs); err != nil {
 				log.Printf("dr chatlab stats: scan breakdown: %v", err)
 				continue
 			}
@@ -443,10 +491,18 @@ func (h *DrChatLabHandler) StatsTimeseries(c *gin.Context) {
 	if !ok {
 		return
 	}
+	typeFilter, ok := parseStatsTypeFilter(c)
+	if !ok {
+		return
+	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 	defer cancel()
 
 	where, args := statsRangeWhere(from, to)
+	if typeFilter != "" {
+		args = append(args, typeFilter)
+		where += fmt.Sprintf(" AND e.request_type = $%d", len(args))
+	}
 	args = append(args, bucket)
 	bucketArg := fmt.Sprintf("$%d", len(args))
 
@@ -460,12 +516,16 @@ func (h *DrChatLabHandler) StatsTimeseries(c *gin.Context) {
 		groupBy = "GROUP BY 1, 2"
 		orderBy = "ORDER BY 1, 2"
 	}
+	// Latency: chat-only + non-NULL duration, like the breakdown (title/memory
+	// events would poison the numbers; pre-metrics rows have no timing).
 	query := fmt.Sprintf(`
 SELECT date_trunc(%s, e.occurred_at AT TIME ZONE 'UTC') AS bucket,
        %s,
        COALESCE(SUM(e.cost_usd), 0)::float8,
        COALESCE(SUM(e.prompt_tokens + e.completion_tokens + e.reasoning_tokens), 0)::bigint,
-       COUNT(*)::bigint
+       COUNT(*)::bigint,
+       ROUND(AVG(e.duration_ms) FILTER (WHERE e.kind = 'chat' AND e.duration_ms IS NOT NULL))::bigint,
+       ROUND(percentile_cont(0.95) WITHIN GROUP (ORDER BY e.duration_ms) FILTER (WHERE e.kind = 'chat' AND e.duration_ms IS NOT NULL))::bigint
 FROM dr_chat_usage_events e
 WHERE %s
 %s
@@ -483,7 +543,7 @@ WHERE %s
 		for rows.Next() {
 			var p models.DrChatStatsTimeseriesPoint
 			var bucketTime time.Time
-			if err := rows.Scan(&bucketTime, &p.Key, &p.CostUsd, &p.TotalTokens, &p.Events); err != nil {
+			if err := rows.Scan(&bucketTime, &p.Key, &p.CostUsd, &p.TotalTokens, &p.Events, &p.AvgDurationMs, &p.P95DurationMs); err != nil {
 				log.Printf("dr chatlab stats: scan timeseries: %v", err)
 				continue
 			}

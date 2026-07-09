@@ -225,6 +225,10 @@ func main() {
 		// Companion reaper for unbound chat-lab attachments (uploaded while
 		// composing but never bound to a sent chat message).
 		go runDrChatLabAttachmentReaper(ctx, drChatLabHandler)
+		// Nightly hash-gated project-memory scheduler (default 4 AM
+		// America/Denver): regenerates memory only for projects whose content
+		// fingerprint changed since the last successful generation.
+		go runDrChatLabMemoryScheduler(ctx, drChatLabHandler, cfg)
 	}
 
 	// Periodic active-jobs gauge update.
@@ -650,6 +654,51 @@ func runDrChatLabAttachmentReaper(ctx context.Context, h *handlers.DrChatLabHand
 			h.ReapUnboundAttachments(ctx)
 			h.ReapStaleProjectAssets(ctx)
 			timer.Reset(24 * time.Hour)
+		}
+	}
+}
+
+// runDrChatLabMemoryScheduler runs the nightly hash-gated project-memory job
+// at DR_CHATLAB_MEMORY_JOB_HOUR o'clock in DR_CHATLAB_MEMORY_JOB_TZ (default
+// 4 AM America/Denver — deliberately a WALL-CLOCK schedule, the one exception
+// to UTC-thinking, so it stays 4 AM local across DST). One minute after boot
+// (mirroring the reaper warm-up) it first checks dr_chatlab_job_state and
+// catches up on a missed occurrence — a restart at 3:59 AM or a server down
+// overnight must not silently skip a night. Each occurrence is computed fresh
+// with time.Date in the location, which makes DST automatic: 4 AM Denver is
+// 10:00 UTC in summer and 11:00 UTC in winter, and this loop never needs to
+// know.
+func runDrChatLabMemoryScheduler(ctx context.Context, h *handlers.DrChatLabHandler, cfg *config.Config) {
+	loc, err := time.LoadLocation(cfg.DRChatLabMemoryJobTZ)
+	if err != nil {
+		// Fail-open on scheduling, never crash boot: the job still runs, just
+		// pinned to UTC until the zone name is fixed.
+		log.Printf("dr chatlab memory scheduler: invalid DR_CHATLAB_MEMORY_JOB_TZ %q (falling back to UTC): %v", cfg.DRChatLabMemoryJobTZ, err)
+		loc = time.UTC
+	}
+	hour := cfg.DRChatLabMemoryJobHour
+
+	// Boot catch-up (one minute of warm-up first).
+	warmup := time.NewTimer(time.Minute)
+	defer warmup.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-warmup.C:
+		h.MaybeRunNightlyMemoryCatchUp(ctx, hour, loc)
+	}
+
+	// The hand-rolled timer loop (no cron dependency): sleep until the next
+	// HH:00 in loc, run, recompute, repeat.
+	for {
+		next := handlers.NextMemoryJobRun(time.Now(), hour, loc)
+		timer := time.NewTimer(time.Until(next))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+			h.RunNightlyMemoryJob(ctx)
 		}
 	}
 }

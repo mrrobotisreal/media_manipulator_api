@@ -247,7 +247,13 @@ type DrChatMessage struct {
 	CompletionTokens *int                    `json:"completionTokens"`
 	ReasoningTokens  *int                    `json:"reasoningTokens"`
 	TotalCostUsd     *float64                `json:"totalCostUsd"`
-	CreatedAt        UTCTime                 `json:"createdAt"`
+	// Per-response performance metrics (assistant messages persisted after the
+	// 20260710001 migration; NULL on historical rows — no backfill possible).
+	DurationMs   *int    `json:"durationMs"`   // request start → terminal, incl. tool rounds
+	ReasoningMs  *int    `json:"reasoningMs"`  // summed thinking time; NULL when no reasoning
+	FirstTokenMs *int    `json:"firstTokenMs"` // request start → first streamed delta
+	RequestType  *string `json:"requestType"`  // "text"|"file"|"image"|"pdf"|"audio"|"mixed"
+	CreatedAt    UTCTime `json:"createdAt"`
 	Attachments      []DrChatAttachment      `json:"attachments"`
 	ToolActivity     []DrChatToolActivity    `json:"toolActivity"` // null when the turn used no tools
 	Feedback         []DrChatMessageFeedback `json:"feedback"`     // assistant messages; null when none — BOTH users' rows (shared steering signals)
@@ -340,7 +346,11 @@ type DrChatStatsSummaryResponse struct {
 }
 
 // DrChatStatsBreakdownRow is one row of GET /chatlab/stats/breakdown.
-// ThumbsUp/ThumbsDown are populated for dimension=model only.
+// ThumbsUp/ThumbsDown are populated for dimension=model only. The latency
+// aggregates are computed over kind='chat' events with non-NULL duration only
+// (title/memory completions would poison latency stats; historical
+// pre-metrics rows have no timing) — nil when no such events exist in the
+// group.
 type DrChatStatsBreakdownRow struct {
 	Key              string  `json:"key"`
 	Label            string  `json:"label"`
@@ -349,6 +359,12 @@ type DrChatStatsBreakdownRow struct {
 	CompletionTokens int64   `json:"completionTokens"`
 	ReasoningTokens  int64   `json:"reasoningTokens"`
 	Events           int64   `json:"events"`
+	ChatEvents       int64   `json:"chatEvents"` // kind='chat' with metrics — the latency aggregates' sample size
+	AvgDurationMs    *int64  `json:"avgDurationMs"`
+	P50DurationMs    *int64  `json:"p50DurationMs"`
+	P95DurationMs    *int64  `json:"p95DurationMs"`
+	AvgFirstTokenMs  *int64  `json:"avgFirstTokenMs"`
+	AvgReasoningMs   *int64  `json:"avgReasoningMs"`
 	ThumbsUp         *int64  `json:"thumbsUp,omitempty"`
 	ThumbsDown       *int64  `json:"thumbsDown,omitempty"`
 }
@@ -360,12 +376,17 @@ type DrChatStatsBreakdownResponse struct {
 
 // DrChatStatsTimeseriesPoint is one (bucket[, key]) point. Bucket boundaries
 // are UTC. Key is empty for dimension=none; "other" is the top-N rollup.
+// Latency fields are chat-only + non-NULL-duration aggregates (like the
+// breakdown); nil when the bucket has no measured chat events, and nil on
+// "other" rollup points (averages can't be merged).
 type DrChatStatsTimeseriesPoint struct {
-	Bucket      string  `json:"bucket"` // RFC3339, UTC bucket start
-	Key         string  `json:"key,omitempty"`
-	CostUsd     float64 `json:"costUsd"`
-	TotalTokens int64   `json:"totalTokens"`
-	Events      int64   `json:"events"`
+	Bucket        string  `json:"bucket"` // RFC3339, UTC bucket start
+	Key           string  `json:"key,omitempty"`
+	CostUsd       float64 `json:"costUsd"`
+	TotalTokens   int64   `json:"totalTokens"`
+	Events        int64   `json:"events"`
+	AvgDurationMs *int64  `json:"avgDurationMs"`
+	P95DurationMs *int64  `json:"p95DurationMs"`
 }
 
 // DrChatStatsTimeseriesResponse is GET /chatlab/stats/timeseries.

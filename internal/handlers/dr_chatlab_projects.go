@@ -468,7 +468,8 @@ func (h *DrChatLabHandler) UpdateProject(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
-	contextChanged := description != p.description || instructions != p.instructions
+	descriptionChanged := description != p.description
+	instructionsChanged := instructions != p.instructions
 
 	err = h.pool.QueryRow(ctx, `
 UPDATE dr_chat_projects
@@ -482,9 +483,13 @@ RETURNING `+chatProjectCols, name, description, instructions, projectID).
 		return
 	}
 
-	// The model's background context changed → regenerate the memory.
-	if contextChanged {
-		h.triggerMemoryUpdate(projectID, claims.UID, claims.Email)
+	// The model's background context changed → dirty-mark the changed fields
+	// so the nightly job regenerates memory (no immediate model call).
+	if descriptionChanged {
+		h.markMemoryHash(projectID, memoryHashKindDescription, "", hashText(description))
+	}
+	if instructionsChanged {
+		h.markMemoryHash(projectID, memoryHashKindInstructions, "", hashText(instructions))
 	}
 	c.JSON(http.StatusOK, p.toSummaryDTO(claims.Email))
 }
@@ -773,6 +778,9 @@ FROM dr_chat_project_assets WHERE id = $1`, assetID).
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm upload"})
 		return
 	}
+	// The manifest feeds the memory prompt — dirty-mark it for the nightly
+	// job. (Asset changes did not previously trigger memory; they now should.)
+	h.markAssetsHash(projectID)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -814,6 +822,8 @@ func (h *DrChatLabHandler) DeleteProjectAsset(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete asset"})
 		return
 	}
+	// Manifest changed → dirty-mark for the nightly memory job.
+	h.markAssetsHash(projectID)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

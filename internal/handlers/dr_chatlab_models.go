@@ -137,7 +137,7 @@ func buildChatLabModel(m openrouter.Model) models.DrChatLabModel {
 }
 
 // providerRank orders provider groups: Anthropic → OpenAI → Google → Qwen →
-// everyone else alphabetically.
+// xAI → everyone else alphabetically.
 func providerRank(provider string) int {
 	switch provider {
 	case "anthropic":
@@ -148,8 +148,10 @@ func providerRank(provider string) int {
 		return 2
 	case "qwen":
 		return 3
-	default:
+	case "xai":
 		return 4
+	default:
+		return 5
 	}
 }
 

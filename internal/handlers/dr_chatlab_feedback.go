@@ -209,10 +209,11 @@ RETURNING rating, categories, comment, rater_email, updated_at`,
 	dto.IsMine = true
 	dto.UpdatedAt = models.UTCTime{Time: updatedAt}
 
-	// Feedback in a project steers future responses through the memory (the
-	// single-flight latch coalesces bursts).
+	// Feedback in a project steers future responses through the memory:
+	// dirty-mark the project's feedback state so the nightly job folds it in
+	// (manual Refresh regenerates on demand).
 	if target.projectID != nil {
-		h.triggerMemoryUpdate(*target.projectID, claims.UID, claims.Email)
+		h.markFeedbackHash(*target.projectID)
 	}
 	c.JSON(http.StatusOK, dto)
 }
@@ -252,7 +253,7 @@ RETURNING project_id`, messageID, claims.UID).Scan(&projectID)
 		return
 	}
 	if projectID != nil {
-		h.triggerMemoryUpdate(*projectID, claims.UID, claims.Email)
+		h.markFeedbackHash(*projectID)
 	}
 	c.JSON(http.StatusOK, gin.H{"deleted": true})
 }

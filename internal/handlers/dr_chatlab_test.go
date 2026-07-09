@@ -421,9 +421,17 @@ func TestChatLabEventMarshaling(t *testing.T) {
 			`{"type":"delta","text":"Hello"}`,
 		},
 		{
+			// durationMs/reasoningMs ride on the usage event so the
+			// just-streamed message renders its timing without a refetch.
 			"usage",
-			chatLabUsageEvent{Type: "usage", PromptTokens: 10, CompletionTokens: 20, ReasoningTokens: 5, CostUsd: 0.0042},
-			`{"type":"usage","promptTokens":10,"completionTokens":20,"reasoningTokens":5,"costUsd":0.0042}`,
+			chatLabUsageEvent{Type: "usage", PromptTokens: 10, CompletionTokens: 20, ReasoningTokens: 5, CostUsd: 0.0042, DurationMs: intPtr(231000), ReasoningMs: intPtr(194000)},
+			`{"type":"usage","promptTokens":10,"completionTokens":20,"reasoningTokens":5,"costUsd":0.0042,"durationMs":231000,"reasoningMs":194000}`,
+		},
+		{
+			// No reasoning → reasoningMs is null, never 0.
+			"usage without reasoning",
+			chatLabUsageEvent{Type: "usage", PromptTokens: 10, CompletionTokens: 20, CostUsd: 0.0042, DurationMs: intPtr(8600)},
+			`{"type":"usage","promptTokens":10,"completionTokens":20,"reasoningTokens":0,"costUsd":0.0042,"durationMs":8600,"reasoningMs":null}`,
 		},
 		{
 			"done",

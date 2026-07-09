@@ -309,13 +309,22 @@ type Config struct {
 	DRChatLabMaxOutputTokens int
 	DRChatLabAttributionURL  string
 	// Chat-lab Projects: DRChatLabMemoryModel names a cheap model that
-	// regenerates each project's living memory after chats and context edits;
-	// empty disables memory (projects work, memory shows 'disabled').
+	// regenerates each project's living memory; empty disables memory
+	// (projects work, memory shows 'disabled'). Regeneration is nightly and
+	// hash-gated (see dr_chatlab_memory_hashes.go): DRChatLabMemoryJobHour +
+	// DRChatLabMemoryJobTZ schedule the sweep in a WALL-CLOCK timezone
+	// (default 4 AM America/Denver) — the ONE deliberate exception to
+	// UTC-thinking, so the hour survives DST; resolved with time.LoadLocation,
+	// falling back to UTC (fail-open) when the zone name is invalid.
+	// DRChatLabMemoryMaxChars caps the generated memory (the structured
+	// six-section briefing needs room — default 8192).
 	// DRChatLabToolMaxRounds bounds the read_asset tool-execution loop per
 	// send; DRChatLabAssetReadCapBytes caps one text/code asset read returned
 	// to the model.
 	DRChatLabMemoryModel       string
 	DRChatLabMemoryMaxChars    int
+	DRChatLabMemoryJobHour     int
+	DRChatLabMemoryJobTZ       string
 	DRChatLabToolMaxRounds     int
 	DRChatLabAssetReadCapBytes int
 }
@@ -558,24 +567,28 @@ func Load() *Config {
 		// here — never log or echo it.
 		OpenRouterAPIKey:  getEnv("OPENROUTER_API_KEY", ""),
 		OpenRouterBaseURL: getEnv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-		// Gemini/Qwen additions are deliberately EXACT ids, not google//qwen/
-		// prefixes — those providers publish dozens of unrelated models
-		// (embeddings, image gen) that would pollute the picker. Gemini
-		// `-preview` slugs drift over time: docs/dr-chatlab-stats-feedback-
-		// verification.md has a catalog curl to confirm each slug resolves; a
-		// slug missing from the live catalog is silently absent from the
-		// picker. (Embedding models for the entity-resolution pipeline are a
-		// separate future feature — different endpoint, not this allowlist.)
+		// Gemini/Qwen/Grok additions are deliberately EXACT ids, not google//
+		// qwen//xai/ prefixes — those providers publish unrelated models
+		// (embeddings, image gen, code variants) that would pollute the
+		// picker. Gemini `-preview` slugs drift over time: docs/dr-chatlab-
+		// stats-feedback-verification.md has a catalog curl to confirm each
+		// slug resolves; a slug missing from the live catalog is silently
+		// absent from the picker. (Embedding models for the entity-resolution
+		// pipeline are a separate future feature — different endpoint, not
+		// this allowlist.)
 		DRChatLabModelRules: splitCSVLower(getEnv("DR_CHATLAB_MODEL_RULES",
 			"anthropic/,openai/,z-ai/glm-5.2,moonshotai/kimi-k2.6,"+
 				"google/gemini-3.1-pro-preview,google/gemini-3-pro-preview,google/gemini-3.1-flash-lite,google/gemini-3.5-flash,qwen/qwen3.7-plus,"+
-				"google/gemini-3-flash-preview,google/gemini-2.5-flash,google/gemini-2.0-flash-001,qwen/qwen3.6-plus,qwen/qwen3.6-flash,qwen/qwen3.7-max,qwen/qwen3-vl-235b-a22b-instruct")),
+				"google/gemini-3-flash-preview,google/gemini-2.5-flash,google/gemini-2.0-flash-001,qwen/qwen3.6-plus,qwen/qwen3.6-flash,qwen/qwen3.7-max,qwen/qwen3-vl-235b-a22b-instruct,"+
+				"xai/grok-4.5,xai/grok-4.3")),
 		DRChatLabTitleModel:      getEnv("DR_CHATLAB_TITLE_MODEL", ""),
 		DRChatLabMaxOutputTokens: getEnvInt("DR_CHATLAB_MAX_OUTPUT_TOKENS", 8192),
 		DRChatLabAttributionURL:  getEnv("DR_CHATLAB_ATTRIBUTION_URL", "https://media-manipulator.com"),
 
 		DRChatLabMemoryModel:       getEnv("DR_CHATLAB_MEMORY_MODEL", ""),
-		DRChatLabMemoryMaxChars:    getEnvInt("DR_CHATLAB_MEMORY_MAX_CHARS", 4096),
+		DRChatLabMemoryMaxChars:    getEnvInt("DR_CHATLAB_MEMORY_MAX_CHARS", 8192),
+		DRChatLabMemoryJobHour:     getEnvInt("DR_CHATLAB_MEMORY_JOB_HOUR", 4),
+		DRChatLabMemoryJobTZ:       getEnv("DR_CHATLAB_MEMORY_JOB_TZ", "America/Denver"),
 		DRChatLabToolMaxRounds:     getEnvInt("DR_CHATLAB_TOOL_MAX_ROUNDS", 5),
 		DRChatLabAssetReadCapBytes: getEnvInt("DR_CHATLAB_ASSET_READ_CAP_BYTES", 49152),
 	}
