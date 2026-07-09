@@ -20,7 +20,7 @@ import (
 const drChatLabDefaultModelRulesFixture = "anthropic/,openai/,z-ai/glm-5.2,moonshotai/kimi-k2.6," +
 	"google/gemini-3.1-pro-preview,google/gemini-3-pro-preview,google/gemini-3.1-flash-lite,google/gemini-3.5-flash,qwen/qwen3.7-plus," +
 	"google/gemini-3-flash-preview,google/gemini-2.5-flash,google/gemini-2.0-flash-001,qwen/qwen3.6-plus,qwen/qwen3.6-flash,qwen/qwen3.7-max,qwen/qwen3-vl-235b-a22b-instruct," +
-	"xai/grok-4.5,xai/grok-4.3"
+	"x-ai/grok-4.5,x-ai/grok-4.3"
 
 var drChatLabNewModelIDs = []string{
 	"google/gemini-3.1-pro-preview",
@@ -35,8 +35,8 @@ var drChatLabNewModelIDs = []string{
 	"qwen/qwen3.6-flash",
 	"qwen/qwen3.7-max",
 	"qwen/qwen3-vl-235b-a22b-instruct",
-	"xai/grok-4.5",
-	"xai/grok-4.3",
+	"x-ai/grok-4.5",
+	"x-ai/grok-4.3",
 }
 
 func TestDefaultModelRulesAdmitNewModels(t *testing.T) {
@@ -56,8 +56,8 @@ func TestDefaultModelRulesAdmitNewModels(t *testing.T) {
 		orModel("google/gemini-embedding-001"),
 		orModel("google/imagen-4"),
 		orModel("qwen/qwen-image-edit"),
-		orModel("xai/grok-2-image-1212"),
-		orModel("xai/grok-code-fast-1"),
+		orModel("x-ai/grok-2-image-1212"),
+		orModel("x-ai/grok-code-fast-1"),
 		// A drifted/unknown preview slug that exists upstream but not in our
 		// rules stays out:
 		orModel("google/gemini-4-ultra-preview"),
@@ -75,7 +75,7 @@ func TestDefaultModelRulesAdmitNewModels(t *testing.T) {
 			t.Fatalf("new model %s missing from filtered catalog", want)
 		}
 	}
-	for _, banned := range []string{"google/gemini-embedding-001", "google/imagen-4", "qwen/qwen-image-edit", "xai/grok-2-image-1212", "xai/grok-code-fast-1", "google/gemini-4-ultra-preview", "anthropic/claude-haiku-4.5:free"} {
+	for _, banned := range []string{"google/gemini-embedding-001", "google/imagen-4", "qwen/qwen-image-edit", "x-ai/grok-2-image-1212", "x-ai/grok-code-fast-1", "google/gemini-4-ultra-preview", "anthropic/claude-haiku-4.5:free"} {
 		if ids[banned] {
 			t.Fatalf("%s must not pass the rules", banned)
 		}
@@ -85,8 +85,51 @@ func TestDefaultModelRulesAdmitNewModels(t *testing.T) {
 	}
 }
 
+func TestStripProviderPrefix(t *testing.T) {
+	cases := []struct {
+		name     string
+		provider string
+		want     string
+	}{
+		{"Anthropic: Claude Opus 4.8", "anthropic", "Claude Opus 4.8"},
+		{"OpenAI: GPT-5.5", "openai", "GPT-5.5"},
+		{"xAI: Grok 4.5", "x-ai", "Grok 4.5"},           // both normalize to "xai"
+		{"Z.AI: GLM 5.2", "z-ai", "GLM 5.2"},            // both normalize to "zai"
+		{"Moonshot AI: Kimi K2.6", "moonshotai", "Kimi K2.6"},
+		{"Google: Gemini 3.5 Flash", "google", "Gemini 3.5 Flash"},
+		// No colon → passthrough.
+		{"Claude Opus 4.8", "anthropic", "Claude Opus 4.8"},
+		// The colon segment is NOT the provider → passthrough (never strip a
+		// real model-name colon).
+		{"Llama 4: Scout", "meta-llama", "Llama 4: Scout"},
+		{"Anthropic: Claude Opus 4.8", "openai", "Anthropic: Claude Opus 4.8"},
+	}
+	for _, tc := range cases {
+		if got := stripProviderPrefix(tc.name, tc.provider); got != tc.want {
+			t.Fatalf("stripProviderPrefix(%q, %q) = %q, want %q", tc.name, tc.provider, got, tc.want)
+		}
+	}
+}
+
+// TestXAISlugRegression pins the root cause of the missing-Grok bug: the
+// OpenRouter provider slug is x-ai (hyphenated), so the OLD unhyphenated
+// xai/… rule admits NOTHING from a catalog that carries the real ids, while
+// the corrected x-ai/… rule admits them. Reintroducing the misnomer fails
+// this test.
+func TestXAISlugRegression(t *testing.T) {
+	catalog := []openrouter.Model{orModel("x-ai/grok-4.5"), orModel("x-ai/grok-4.3")}
+
+	if got := filterModels(catalog, []string{"xai/grok-4.5", "xai/grok-4.3"}); len(got) != 0 {
+		t.Fatalf("the old unhyphenated rules must admit nothing, got %d models", len(got))
+	}
+	got := filterModels(catalog, []string{"x-ai/grok-4.5", "x-ai/grok-4.3"})
+	if len(got) != 2 {
+		t.Fatalf("the corrected rules must admit both Grok models, got %d", len(got))
+	}
+}
+
 func TestProviderRankGoogleQwen(t *testing.T) {
-	order := []string{"anthropic", "openai", "google", "qwen", "xai", "mistralai"}
+	order := []string{"anthropic", "openai", "google", "qwen", "x-ai", "mistralai"}
 	for i := 1; i < len(order); i++ {
 		if !(providerRank(order[i-1]) < providerRank(order[i])) &&
 			providerRank(order[i-1]) == providerRank(order[i]) {

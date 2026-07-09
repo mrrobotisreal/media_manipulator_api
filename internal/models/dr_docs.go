@@ -42,8 +42,12 @@ type DrDocSummary struct {
 	CreatedBy      string  `json:"createdBy"`
 	CanDelete      bool    `json:"canDelete"`
 	HasEditSession bool    `json:"hasEditSession"`
-	CreatedAt      UTCTime `json:"createdAt"`
-	UpdatedAt      UTCTime `json:"updatedAt"`
+	// FolderID places the document in the docs-explorer tree; nil = root
+	// (additive — populated by ListDocs/GetDoc; other summary producers leave
+	// it nil and the client reconciles via the list).
+	FolderID  *string `json:"folderId"`
+	CreatedAt UTCTime `json:"createdAt"`
+	UpdatedAt UTCTime `json:"updatedAt"`
 }
 
 // DrDoc is the full single-document payload: the summary metadata plus the
@@ -55,6 +59,55 @@ type DrDoc struct {
 	DrDocSummary
 	ContentFormat string          `json:"contentFormat"`
 	Content       json.RawMessage `json:"content"`
+}
+
+// ---------------------------------------------------------------------------
+// Documentation filesystem (dr_doc_folders.go). Folders are COLLABORATIVE:
+// both allowlisted users create/rename/move/delete them (like chat-lab
+// projects); document delete keeps its creator-only rule.
+// ---------------------------------------------------------------------------
+
+// DrDocFolder is one folder row. ParentID nil = a root-level folder.
+type DrDocFolder struct {
+	ID             string  `json:"id"`
+	ParentID       *string `json:"parentId"`
+	Name           string  `json:"name"`
+	CreatedByEmail string  `json:"createdByEmail"`
+	CreatedAt      UTCTime `json:"createdAt"`
+	UpdatedAt      UTCTime `json:"updatedAt"`
+}
+
+// DrDocFoldersResponse is GET /doc-folders: the FLAT list (cap 500) — the
+// client assembles the tree (flat is simpler, cheaper, and immune to
+// deep-nesting JSON recursion).
+type DrDocFoldersResponse struct {
+	Folders []DrDocFolder `json:"folders"`
+}
+
+// DrCreateDocFolderRequest creates a folder. ParentID nil/omitted = root.
+type DrCreateDocFolderRequest struct {
+	Name     string  `json:"name"`
+	ParentID *string `json:"parentId"`
+}
+
+// DrUpdateDocFolderRequest partially updates a folder: rename and/or move in
+// one call. ParentID is raw JSON so ABSENT (no move) is distinguishable from
+// NULL (move to root) — a *string cannot express that difference.
+type DrUpdateDocFolderRequest struct {
+	Name     *string         `json:"name"`
+	ParentID json.RawMessage `json:"parentId"`
+}
+
+// DrMoveDocRequest is PUT /docs/:slug/move. FolderID nil = move to root.
+type DrMoveDocRequest struct {
+	FolderID *string `json:"folderId"`
+}
+
+// DrRenameDocRequest is PUT /docs/:slug/rename — title ONLY, never the slug
+// (slugs are stable identifiers baked into URLs and the comments/revisions
+// chain).
+type DrRenameDocRequest struct {
+	Title string `json:"title"`
 }
 
 // ---------------------------------------------------------------------------

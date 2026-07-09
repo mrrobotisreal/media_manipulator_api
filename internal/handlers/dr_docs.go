@@ -96,6 +96,17 @@ func RegisterDrDocsRoutes(r gin.IRouter, h *DrDocsHandler) {
 	r.POST("/docs/:slug/assets", h.PresignAsset)              // UUID
 	r.POST("/docs/:slug/assets/:assetId/complete", h.CompleteAsset) // UUID
 	r.DELETE("/docs/:slug/assets/:assetId", h.DeleteAsset)    // UUID
+
+	// Documentation filesystem (dr_doc_folders.go). Folder CRUD lives under
+	// the DISTINCT /doc-folders prefix — registering /docs/folders would
+	// conflict with the pinned :slug wildcard above. The per-document
+	// move/rename operations join the :slug subtree (UUID-interpreted).
+	r.GET("/doc-folders", h.ListDocFolders)
+	r.POST("/doc-folders", h.CreateDocFolder)
+	r.PUT("/doc-folders/:folderId", h.UpdateDocFolder)
+	r.DELETE("/doc-folders/:folderId", h.DeleteDocFolder)
+	r.PUT("/docs/:slug/move", h.MoveDoc)     // UUID
+	r.PUT("/docs/:slug/rename", h.RenameDoc) // UUID
 }
 
 // drSlugPattern mirrors the kebab-case slug shape the seed + UI use. Validated
@@ -175,7 +186,7 @@ func (h *DrDocsHandler) ListDocs(c *gin.Context) {
 	defer cancel()
 
 	rows, err := h.pool.Query(ctx, `
-SELECT d.id, d.slug, d.title, d.summary, d.status, COALESCE(d.created_by, ''), d.created_at, d.updated_at,
+SELECT d.id, d.slug, d.title, d.summary, d.status, COALESCE(d.created_by, ''), d.folder_id, d.created_at, d.updated_at,
        EXISTS(SELECT 1 FROM dr_document_edit_sessions s WHERE s.document_id = d.id) AS has_edit_session
 FROM dr_documents d
 WHERE d.status = 'published' AND d.deleted_at IS NULL
@@ -191,7 +202,7 @@ ORDER BY d.updated_at DESC
 	docs := make([]models.DrDocSummary, 0)
 	for rows.Next() {
 		var d models.DrDocSummary
-		if err := rows.Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedBy, &d.CreatedAt, &d.UpdatedAt, &d.HasEditSession); err != nil {
+		if err := rows.Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedBy, &d.FolderID, &d.CreatedAt, &d.UpdatedAt, &d.HasEditSession); err != nil {
 			log.Printf("dr docs: list scan failed: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list documents"})
 			return
@@ -240,11 +251,11 @@ func (h *DrDocsHandler) GetDoc(c *gin.Context) {
 	// NOT NULL) are excluded → 404 for everyone.
 	var content []byte
 	err := h.pool.QueryRow(ctx, `
-SELECT d.id, d.slug, d.title, d.summary, d.status, COALESCE(d.created_by, ''), d.content_format, d.content, d.created_at, d.updated_at,
+SELECT d.id, d.slug, d.title, d.summary, d.status, COALESCE(d.created_by, ''), d.folder_id, d.content_format, d.content, d.created_at, d.updated_at,
        EXISTS(SELECT 1 FROM dr_document_edit_sessions s WHERE s.document_id = d.id)
 FROM dr_documents d
 WHERE d.slug = $1 AND d.deleted_at IS NULL
-`, slug).Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedBy, &d.ContentFormat, &content, &d.CreatedAt, &d.UpdatedAt, &d.HasEditSession)
+`, slug).Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedBy, &d.FolderID, &d.ContentFormat, &content, &d.CreatedAt, &d.UpdatedAt, &d.HasEditSession)
 	if errors.Is(err, pgx.ErrNoRows) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
 		return

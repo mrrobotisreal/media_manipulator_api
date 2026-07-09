@@ -77,6 +77,35 @@ func parsePerTokenUSD(raw string) float64 {
 	return v * 1_000_000
 }
 
+// stripProviderPrefix removes OpenRouter's redundant "Provider: " prefix from
+// a catalog display name ("Anthropic: Claude Opus 4.8" → "Claude Opus 4.8").
+// The picker already groups models under provider section labels, so the
+// embedded prefix only eats row width. Matching is defensive: the text before
+// the first ": " must equal the provider slug once both are normalized
+// (lowercased, all non-alphanumeric runes dropped) — so "xAI"/"x-ai",
+// "Z.AI"/"z-ai", and "Moonshot AI"/"moonshotai" all strip, while a colon
+// segment that is NOT the provider (e.g. "Llama 4: Scout") passes through
+// unchanged. Pure; unit-tested.
+func stripProviderPrefix(name, provider string) string {
+	prefix, rest, found := strings.Cut(name, ": ")
+	if !found {
+		return name
+	}
+	normalize := func(s string) string {
+		var b strings.Builder
+		for _, r := range strings.ToLower(s) {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+				b.WriteRune(r)
+			}
+		}
+		return b.String()
+	}
+	if normalize(prefix) != normalize(provider) {
+		return name
+	}
+	return strings.TrimSpace(rest)
+}
+
 // buildChatLabModel maps one raw catalog entry to the UI DTO.
 //
 // SupportedEfforts heuristic: the models payload advertises WHETHER a model
@@ -118,8 +147,11 @@ func buildChatLabModel(m openrouter.Model) models.DrChatLabModel {
 		}
 	}
 	return models.DrChatLabModel{
-		ID:                m.ID,
-		Name:              m.Name,
+		ID: m.ID,
+		// The redundant "Provider: " prefix is stripped server-side so every
+		// consumer (picker rows, message badges, stats labels) benefits; the
+		// raw id keeps the provider, so picker search still matches on it.
+		Name:              stripProviderPrefix(m.Name, provider),
 		Description:       m.Description,
 		Provider:          strings.ToLower(provider),
 		ContextLength:     m.ContextLength,
@@ -148,7 +180,8 @@ func providerRank(provider string) int {
 		return 2
 	case "qwen":
 		return 3
-	case "xai":
+	case "x-ai":
+		// OpenRouter's xAI provider slug is hyphenated (openrouter.ai/x-ai).
 		return 4
 	default:
 		return 5

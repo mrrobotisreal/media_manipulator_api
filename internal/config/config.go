@@ -576,11 +576,13 @@ func Load() *Config {
 		// absent from the picker. (Embedding models for the entity-resolution
 		// pipeline are a separate future feature — different endpoint, not
 		// this allowlist.)
+		// NOTE: OpenRouter's xAI provider slug is HYPHENATED — x-ai, per
+		// openrouter.ai/x-ai — an unhyphenated xai/… rule matches nothing.
 		DRChatLabModelRules: splitCSVLower(getEnv("DR_CHATLAB_MODEL_RULES",
 			"anthropic/,openai/,z-ai/glm-5.2,moonshotai/kimi-k2.6,"+
 				"google/gemini-3.1-pro-preview,google/gemini-3-pro-preview,google/gemini-3.1-flash-lite,google/gemini-3.5-flash,qwen/qwen3.7-plus,"+
 				"google/gemini-3-flash-preview,google/gemini-2.5-flash,google/gemini-2.0-flash-001,qwen/qwen3.6-plus,qwen/qwen3.6-flash,qwen/qwen3.7-max,qwen/qwen3-vl-235b-a22b-instruct,"+
-				"xai/grok-4.5,xai/grok-4.3")),
+				"x-ai/grok-4.5,x-ai/grok-4.3")),
 		DRChatLabTitleModel:      getEnv("DR_CHATLAB_TITLE_MODEL", ""),
 		DRChatLabMaxOutputTokens: getEnvInt("DR_CHATLAB_MAX_OUTPUT_TOKENS", 8192),
 		DRChatLabAttributionURL:  getEnv("DR_CHATLAB_ATTRIBUTION_URL", "https://media-manipulator.com"),
