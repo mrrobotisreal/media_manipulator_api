@@ -136,7 +136,7 @@ func buildChatLabModel(m openrouter.Model) models.DrChatLabModel {
 	}
 }
 
-// providerRank orders provider groups: Anthropic first, OpenAI second, then
+// providerRank orders provider groups: Anthropic → OpenAI → Google → Qwen →
 // everyone else alphabetically.
 func providerRank(provider string) int {
 	switch provider {
@@ -144,8 +144,12 @@ func providerRank(provider string) int {
 		return 0
 	case "openai":
 		return 1
-	default:
+	case "google":
 		return 2
+	case "qwen":
+		return 3
+	default:
+		return 4
 	}
 }
 
@@ -230,5 +234,10 @@ func (h *DrChatLabHandler) ListModels(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to load model catalog"})
 		return
 	}
-	c.JSON(http.StatusOK, models.DrChatLabModelsResponse{Models: catalog})
+	c.JSON(http.StatusOK, models.DrChatLabModelsResponse{
+		Models: catalog,
+		// The feedback category catalog rides along on this "lab config"
+		// fetch so the UI never hardcodes the option ids.
+		FeedbackCategories: chatLabFeedbackCategories(),
+	})
 }

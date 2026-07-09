@@ -484,7 +484,7 @@ RETURNING `+chatProjectCols, name, description, instructions, projectID).
 
 	// The model's background context changed → regenerate the memory.
 	if contextChanged {
-		h.triggerMemoryUpdate(projectID)
+		h.triggerMemoryUpdate(projectID, claims.UID, claims.Email)
 	}
 	c.JSON(http.StatusOK, p.toSummaryDTO(claims.Email))
 }
@@ -597,7 +597,8 @@ func (h *DrChatLabHandler) RefreshProjectMemory(c *gin.Context) {
 	if !h.dbReady(c) {
 		return
 	}
-	if _, ok := drCallerClaims(c); !ok {
+	claims, ok := drCallerClaims(c)
+	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 		return
 	}
@@ -619,7 +620,7 @@ func (h *DrChatLabHandler) RefreshProjectMemory(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "disabled"})
 		return
 	}
-	h.triggerMemoryUpdate(projectID)
+	h.triggerMemoryUpdate(projectID, claims.UID, claims.Email)
 	c.JSON(http.StatusAccepted, gin.H{"status": "updating"})
 }
 

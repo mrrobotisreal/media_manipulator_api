@@ -78,6 +78,11 @@ func (s *singleflightLatest) Do(key string, run func()) {
 // model; %d is interpolated with DR_CHATLAB_MEMORY_MAX_CHARS.
 const drChatLabMemoryInstruction = "You maintain the persistent memory for a project workspace. Rewrite the memory from scratch as a concise briefing of the most important durable facts, decisions, preferences, findings, and open questions from this project — the context a new assistant would need to be immediately effective. Do not include conversational filler, greetings, or transcript quotes. Plain text or simple markdown lists. Maximum %d characters."
 
+// drChatLabMemoryFeedbackInstruction is appended to the system prompt so
+// response feedback (👍/👎 + categories + comments) steers future responses:
+// the memory rides along in every project chat's system prompt.
+const drChatLabMemoryFeedbackInstruction = "If response feedback reveals durable preferences or recurring problems (formatting rules, models that under/over-perform for specific task types, instructions that get ignored), capture them in the memory as concrete guidance for future responses."
+
 // drChatLabMemoryMsgTruncate caps each transcript message fed to the memory
 // model.
 const drChatLabMemoryMsgTruncate = 2 << 10 // 2 KiB
@@ -90,6 +95,15 @@ type memoryTranscriptEntry struct {
 	Content      string
 }
 
+// memoryFeedbackEntry is one recent response-feedback row (categories are the
+// human LABELS, resolved from the ids before building the prompt).
+type memoryFeedbackEntry struct {
+	Rating     string // "up" | "down"
+	Model      string
+	Categories []string
+	Comment    string
+}
+
 // memoryPromptInput gathers everything the memory model sees.
 type memoryPromptInput struct {
 	Name          string
@@ -98,14 +112,15 @@ type memoryPromptInput struct {
 	CurrentMemory string
 	Assets        []storedProjectAsset // manifest only: names/kinds/sizes
 	Messages      []memoryTranscriptEntry
+	Feedback      []memoryFeedbackEntry
 	MaxChars      int
 }
 
 // buildMemoryPrompt renders the (system, user) messages for the memory
 // completion. Pure — unit-tested for sectioning, message truncation/prefixes,
-// and the char-cap interpolation.
+// the feedback section, and the char-cap interpolation.
 func buildMemoryPrompt(in memoryPromptInput) (system, user string) {
-	system = fmt.Sprintf(drChatLabMemoryInstruction, in.MaxChars)
+	system = fmt.Sprintf(drChatLabMemoryInstruction, in.MaxChars) + "\n" + drChatLabMemoryFeedbackInstruction
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Project: %s\n", in.Name)
@@ -134,6 +149,20 @@ func buildMemoryPrompt(in memoryPromptInput) (system, user string) {
 			fmt.Fprintf(&b, "[%s] %s: %s\n", m.SessionTitle, m.Role, content)
 		}
 	}
+	if len(in.Feedback) > 0 {
+		b.WriteString("\n## Response feedback\n")
+		for _, f := range in.Feedback {
+			thumb := "👍"
+			if f.Rating == "down" {
+				thumb = "👎"
+			}
+			line := fmt.Sprintf("[feedback · %s · %s] %s", thumb, f.Model, strings.Join(f.Categories, "; "))
+			if strings.TrimSpace(f.Comment) != "" {
+				line += fmt.Sprintf(" — %q", f.Comment)
+			}
+			b.WriteString(line + "\n")
+		}
+	}
 	return system, b.String()
 }
 
@@ -153,20 +182,22 @@ func sanitizeProjectMemory(raw string, maxChars int) string {
 // ----------------------------------------------------------------------- //
 
 // triggerMemoryUpdate fires a (single-flighted) memory regeneration for the
-// project. Fire-and-forget: safe to call from request handlers and the stream
-// loop; never blocks.
-func (h *DrChatLabHandler) triggerMemoryUpdate(projectID string) {
+// project, attributed to the acting user for usage accounting. Fire-and-forget:
+// safe to call from request handlers and the stream loop; never blocks. A
+// coalesced rerun keeps the FIRST trigger's actor — an acceptable attribution
+// approximation for back-to-back triggers in a two-person lab.
+func (h *DrChatLabHandler) triggerMemoryUpdate(projectID, actorUID, actorEmail string) {
 	if h.pool == nil || projectID == "" {
 		return
 	}
-	h.memoryFlights.Do(projectID, func() { h.runMemoryUpdate(projectID) })
+	h.memoryFlights.Do(projectID, func() { h.runMemoryUpdate(projectID, actorUID, actorEmail) })
 }
 
 // runMemoryUpdate performs one regeneration. Background context with a 120s
 // timeout, additionally cancelled on server shutdown. On failure the previous
 // memory is left intact (stale memory beats no memory) and memory_status is
-// set to 'error'.
-func (h *DrChatLabHandler) runMemoryUpdate(projectID string) {
+// set to 'error'. The completion is recorded as a kind='memory' usage event.
+func (h *DrChatLabHandler) runMemoryUpdate(projectID, actorUID, actorEmail string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	if h.appCtx != nil {
@@ -192,7 +223,7 @@ func (h *DrChatLabHandler) runMemoryUpdate(projectID string) {
 	setStatus("updating")
 
 	// Gather inputs: project context + asset manifest + the latest messages
-	// across ALL of the project's sessions.
+	// across ALL of the project's sessions + the latest response feedback.
 	project, assets, err := h.loadProjectContext(ctx, projectID)
 	if err != nil {
 		log.Printf("dr chatlab memory: load project %s: %v", projectID, err)
@@ -202,6 +233,12 @@ func (h *DrChatLabHandler) runMemoryUpdate(projectID string) {
 	messages, err := h.loadRecentProjectMessages(ctx, projectID, 40)
 	if err != nil {
 		log.Printf("dr chatlab memory: load messages for %s: %v", projectID, err)
+		setStatus("error")
+		return
+	}
+	feedback, err := h.loadRecentProjectFeedback(ctx, projectID, 20)
+	if err != nil {
+		log.Printf("dr chatlab memory: load feedback for %s: %v", projectID, err)
 		setStatus("error")
 		return
 	}
@@ -217,11 +254,13 @@ func (h *DrChatLabHandler) runMemoryUpdate(projectID string) {
 		CurrentMemory: project.Memory,
 		Assets:        assets,
 		Messages:      messages,
+		Feedback:      feedback,
 		MaxChars:      maxChars,
 	})
 
+	memoryModel := strings.TrimSpace(h.cfg.DRChatLabMemoryModel)
 	resp, err := h.or.Complete(ctx, openrouter.ChatRequest{
-		Model: h.cfg.DRChatLabMemoryModel,
+		Model: memoryModel,
 		Messages: []openrouter.Message{
 			{Role: "system", Content: system},
 			{Role: "user", Content: user},
@@ -232,6 +271,19 @@ func (h *DrChatLabHandler) runMemoryUpdate(projectID string) {
 		log.Printf("dr chatlab memory: completion for %s failed: %v", projectID, err)
 		setStatus("error")
 		return
+	}
+
+	// The completion happened — record its usage whatever the sanitize
+	// outcome below.
+	{
+		nameCopy := project.Name
+		cost, estimated := estimateCostUSD(resp.Usage, h.cachedCatalogModel(memoryModel))
+		h.recordUsageEvent(ctx, usageEventInsert{
+			Kind: "memory", Model: memoryModel,
+			ProjectID: &projectID, ProjectName: &nameCopy,
+			UserUID: actorUID, UserEmail: actorEmail,
+			Usage: resp.Usage, CostUSD: cost, CostEstimated: estimated,
+		})
 	}
 	memory := sanitizeProjectMemory(resp.FirstText(), maxChars)
 	if memory == "" {
@@ -278,6 +330,48 @@ LIMIT $2`, projectID, limit)
 	}
 	// Reverse to chronological order for the prompt.
 	out := make([]memoryTranscriptEntry, 0, len(newestFirst))
+	for i := len(newestFirst) - 1; i >= 0; i-- {
+		out = append(out, newestFirst[i])
+	}
+	return out, nil
+}
+
+// loadRecentProjectFeedback returns the latest `limit` feedback rows for the
+// project (via the denormalized project_id), oldest→newest, with category ids
+// resolved to their human labels for the prompt.
+func (h *DrChatLabHandler) loadRecentProjectFeedback(ctx context.Context, projectID string, limit int) ([]memoryFeedbackEntry, error) {
+	rows, err := h.pool.Query(ctx, `
+SELECT rating, model, categories, comment
+FROM dr_chat_message_feedback
+WHERE project_id = $1
+ORDER BY updated_at DESC
+LIMIT $2`, projectID, limit)
+	if err != nil {
+		return nil, err
+	}
+	var newestFirst []memoryFeedbackEntry
+	func() {
+		defer rows.Close()
+		for rows.Next() {
+			var e memoryFeedbackEntry
+			var categoryIDs []string
+			if err := rows.Scan(&e.Rating, &e.Model, &categoryIDs, &e.Comment); err != nil {
+				continue
+			}
+			for _, id := range categoryIDs {
+				if label, ok := drChatLabFeedbackCategoryLabels[id]; ok {
+					e.Categories = append(e.Categories, label)
+				} else {
+					e.Categories = append(e.Categories, id)
+				}
+			}
+			newestFirst = append(newestFirst, e)
+		}
+	}()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]memoryFeedbackEntry, 0, len(newestFirst))
 	for i := len(newestFirst) - 1; i >= 0; i-- {
 		out = append(out, newestFirst[i])
 	}

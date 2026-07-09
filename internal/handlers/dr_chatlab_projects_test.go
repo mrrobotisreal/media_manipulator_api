@@ -477,7 +477,9 @@ func TestBuildMemoryPrompt(t *testing.T) {
 		MaxChars: 4096,
 	})
 
-	if system != fmt.Sprintf(drChatLabMemoryInstruction, 4096) {
+	// The system prompt is the base instruction plus the appended feedback-
+	// steering line (added by the stats/feedback build).
+	if system != fmt.Sprintf(drChatLabMemoryInstruction, 4096)+"\n"+drChatLabMemoryFeedbackInstruction {
 		t.Fatalf("system prompt = %q", system)
 	}
 	if !strings.Contains(system, "Maximum 4096 characters.") {

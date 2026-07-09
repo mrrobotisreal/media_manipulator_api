@@ -95,6 +95,17 @@ func RegisterDrChatLabRoutes(r gin.IRouter, h *DrChatLabHandler) {
 	r.POST("/chatlab/sessions/:id/attachments/:attachmentId/complete", h.CompleteAttachment)
 	r.DELETE("/chatlab/sessions/:id/attachments/:attachmentId", h.DeleteAttachment)
 	r.POST("/chatlab/sessions/:id/messages", h.SendChatMessage)
+	// Response feedback (dr_chatlab_feedback.go): 👍/👎 on assistant messages.
+	r.PUT("/chatlab/messages/:messageId/feedback", h.PutMessageFeedback)
+	r.DELETE("/chatlab/messages/:messageId/feedback", h.DeleteMessageFeedback)
+	// Usage & spend analytics + credit ledger (dr_chatlab_stats.go).
+	r.GET("/chatlab/stats/summary", h.StatsSummary)
+	r.GET("/chatlab/stats/breakdown", h.StatsBreakdown)
+	r.GET("/chatlab/stats/timeseries", h.StatsTimeseries)
+	r.GET("/chatlab/credits", h.ListCredits)
+	r.POST("/chatlab/credits", h.CreateCreditEntry)
+	r.PUT("/chatlab/credits/:creditId", h.UpdateCreditEntry)
+	r.DELETE("/chatlab/credits/:creditId", h.DeleteCreditEntry)
 	// Projects (dr_chatlab_projects.go): grouped workspaces with shared
 	// description/instructions/assets/memory context.
 	r.GET("/chatlab/projects", h.ListProjects)
@@ -551,9 +562,13 @@ ORDER BY created_at, seq`, sessionID)
 		ids = append(ids, m.ID)
 	}
 	attByMsg := h.hydrateChatAttachments(ctx, ids)
+	feedbackByMsg := h.hydrateMessageFeedback(ctx, ids, claims.UID)
 	for i := range msgs {
 		if atts, ok := attByMsg[msgs[i].ID]; ok {
 			msgs[i].Attachments = atts
+		}
+		if fb, ok := feedbackByMsg[msgs[i].ID]; ok {
+			msgs[i].Feedback = fb
 		}
 	}
 

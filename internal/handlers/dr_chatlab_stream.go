@@ -220,6 +220,22 @@ func dataURL(contentType string, body []byte) string {
 	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(body)
 }
 
+// checkVisionSupport is the server half of the vision guard (belt and
+// suspenders with the composer's client-side hint): a client-facing error when
+// the new message's attachments include an image and the selected model lacks
+// image support ("" = fine). Pure; unit-tested.
+func checkVisionSupport(attachmentKinds []string, model *models.DrChatLabModel) string {
+	if model == nil || model.SupportsImages {
+		return ""
+	}
+	for _, k := range attachmentKinds {
+		if k == "image" {
+			return "The selected model does not support image attachments"
+		}
+	}
+	return ""
+}
+
 // hasPDFAttachment reports whether any message carries a PDF (→ the request
 // needs the file-parser plugin).
 func hasPDFAttachment(attachmentsByMsg map[string][]storedChatAttachment) bool {
@@ -677,6 +693,34 @@ func (h *DrChatLabHandler) SendChatMessage(c *gin.Context) {
 		effort = "" // silently ignore effort for models without reasoning
 	}
 
+	// Vision guard: reject image attachments on text-only models BEFORE the
+	// user message is persisted (the composer already blocks this client-side).
+	if len(req.AttachmentIDs) > 0 && !model.SupportsImages {
+		ids := make([]string, 0, len(req.AttachmentIDs))
+		for _, rawID := range req.AttachmentIDs {
+			ids = append(ids, strings.TrimSpace(rawID))
+		}
+		kinds := make([]string, 0, len(ids))
+		kindRows, kerr := h.pool.Query(setupCtx, `SELECT kind FROM dr_chat_attachments WHERE id = ANY($1) AND session_id = $2`, ids, sessionID)
+		if kerr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send message"})
+			return
+		}
+		func() {
+			defer kindRows.Close()
+			for kindRows.Next() {
+				var k string
+				if err := kindRows.Scan(&k); err == nil {
+					kinds = append(kinds, k)
+				}
+			}
+		}()
+		if msg := checkVisionSupport(kinds, model); msg != "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+			return
+		}
+	}
+
 	// -- Persist the user message (step 2) — committed BEFORE upstream ---------
 	tx, err := h.pool.Begin(setupCtx)
 	if err != nil {
@@ -731,8 +775,9 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 	}
 
 	// Auto-title after the first exchange (fire-and-forget; guarded by
-	// title_source='default' so a racing manual rename wins).
-	go h.autoTitleSession(sessionID, content)
+	// title_source='default' so a racing manual rename wins). The caller is
+	// attributed for the title call's usage event.
+	go h.autoTitleSession(sessionID, content, claims.UID, claims.Email)
 
 	// -- Assemble the upstream conversation (step 3) ---------------------------
 	history, attachmentsByMsg, err := h.loadConversation(setupCtx, sessionID)
@@ -759,6 +804,7 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 	// round, exactly the original behavior.
 	toolsEnabled := false
 	var projectAssets []storedProjectAsset
+	var projectName *string
 	if session.projectID != nil {
 		project, assets, perr := h.loadProjectContext(setupCtx, *session.projectID)
 		if perr != nil {
@@ -767,6 +813,8 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 			return
 		}
 		projectAssets = assets
+		nameCopy := project.Name
+		projectName = &nameCopy
 		toolsEnabled = model.SupportsTools && len(assets) > 0
 		systemPrompt, perr := buildProjectSystemPrompt(project, assets, model.SupportsTools, fetchBody)
 		if perr != nil {
@@ -825,6 +873,14 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 	// persist writes the assistant row EXACTLY ONCE per request — every return
 	// path below calls it exactly once — and fires the project-memory updater
 	// for project sessions with non-empty content.
+	attr := chatUsageAttribution{
+		UserUID:      claims.UID,
+		UserEmail:    claims.Email,
+		SessionTitle: session.title,
+		ProjectID:    session.projectID,
+		ProjectName:  projectName,
+		CatalogModel: model,
+	}
 	persisted := false
 	persist := func(status string, errorMessage ...string) {
 		if persisted {
@@ -835,9 +891,9 @@ WHERE id = $3`, model.ID, effort, sessionID); err != nil {
 		if len(errorMessage) > 0 {
 			msg = errorMessage[0]
 		}
-		h.persistAssistantMessage(assistantMessageID, sessionID, model.ID, effort, contentB.String(), reasoningB.String(), status, msg, totals.toUsage(), toolActivity)
+		h.persistAssistantMessage(assistantMessageID, sessionID, model.ID, effort, contentB.String(), reasoningB.String(), status, msg, totals.toUsage(), toolActivity, attr)
 		if session.projectID != nil && contentB.Len() > 0 {
-			h.triggerMemoryUpdate(*session.projectID)
+			h.triggerMemoryUpdate(*session.projectID, claims.UID, claims.Email)
 		}
 	}
 
@@ -1171,10 +1227,25 @@ ORDER BY created_at, id`, projectID)
 	return p, assets, rows.Err()
 }
 
-// persistAssistantMessage inserts the assistant row on a terminal condition
-// and bumps the session's updated_at. Runs on context.Background() with a
-// short timeout so a client disconnect can't cancel the write.
-func (h *DrChatLabHandler) persistAssistantMessage(id, sessionID, model, effort, content, reasoning, status, errorMessage string, usage *openrouter.Usage, toolActivity []models.DrChatToolActivity) {
+// chatUsageAttribution carries the who/where snapshots the usage event needs
+// (everything is already loaded in SendChatMessage — no extra queries).
+type chatUsageAttribution struct {
+	UserUID      string
+	UserEmail    string
+	SessionTitle string
+	ProjectID    *string
+	ProjectName  *string
+	// CatalogModel enables the cost-estimate fallback when the provider
+	// reports no cost.
+	CatalogModel *models.DrChatLabModel
+}
+
+// persistAssistantMessage inserts the assistant row on a terminal condition,
+// bumps the session's updated_at, and records the turn's usage event (a
+// failed event insert is logged, never breaks the message persist). Runs on
+// context.Background() with a short timeout so a client disconnect can't
+// cancel the write.
+func (h *DrChatLabHandler) persistAssistantMessage(id, sessionID, model, effort, content, reasoning, status, errorMessage string, usage *openrouter.Usage, toolActivity []models.DrChatToolActivity, attr chatUsageAttribution) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1213,16 +1284,36 @@ VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 	if _, err := h.pool.Exec(ctx, `UPDATE dr_chat_sessions SET updated_at = now() WHERE id = $1`, sessionID); err != nil {
 		log.Printf("dr chatlab: bump session after assistant message: %v", err)
 	}
+
+	// Every send is one usage event, even interrupted/error turns (the call
+	// happened; usage may be zero when upstream never reported it).
+	cost, estimated := estimateCostUSD(usage, attr.CatalogModel)
+	title := attr.SessionTitle
+	h.recordUsageEvent(ctx, usageEventInsert{
+		Kind:          "chat",
+		Model:         model,
+		SessionID:     &sessionID,
+		SessionTitle:  &title,
+		ProjectID:     attr.ProjectID,
+		ProjectName:   attr.ProjectName,
+		MessageID:     &id,
+		UserUID:       attr.UserUID,
+		UserEmail:     attr.UserEmail,
+		Usage:         usage,
+		CostUSD:       cost,
+		CostEstimated: estimated,
+	})
 }
 
 // ---- Auto-title (unchanged from the original build) --------------------------------
 
 // autoTitleSession sets the session title after the first exchange. When
 // DR_CHATLAB_TITLE_MODEL is configured it makes ONE non-streaming completion
-// call; on any failure — or when unset — it falls back to a truncation of the
-// first user message. Guarded by WHERE title_source='default' so a manual
-// rename racing this goroutine wins.
-func (h *DrChatLabHandler) autoTitleSession(sessionID, firstUserMessage string) {
+// call (recorded as a kind='title' usage event, attributed to the user who
+// sent the first message); on any failure — or when unset — it falls back to
+// a truncation of the first user message. Guarded by WHERE
+// title_source='default' so a manual rename racing this goroutine wins.
+func (h *DrChatLabHandler) autoTitleSession(sessionID, firstUserMessage, actorUID, actorEmail string) {
 	if h.pool == nil {
 		return
 	}
@@ -1239,12 +1330,13 @@ func (h *DrChatLabHandler) autoTitleSession(sessionID, firstUserMessage string) 
 	title := ""
 	source := "derived"
 	if h.or != nil && strings.TrimSpace(h.cfg.DRChatLabTitleModel) != "" {
+		titleModel := strings.TrimSpace(h.cfg.DRChatLabTitleModel)
 		excerpt := firstUserMessage
 		if len(excerpt) > drChatLabTitlePromptTruncate {
 			excerpt = strings.ToValidUTF8(excerpt[:drChatLabTitlePromptTruncate], "")
 		}
 		resp, err := h.or.Complete(ctx, openrouter.ChatRequest{
-			Model: h.cfg.DRChatLabTitleModel,
+			Model: titleModel,
 			Messages: []openrouter.Message{
 				{Role: "system", Content: "Generate a concise 3–6 word title for this conversation. Reply with the title only."},
 				{Role: "user", Content: excerpt},
@@ -1253,8 +1345,29 @@ func (h *DrChatLabHandler) autoTitleSession(sessionID, firstUserMessage string) 
 		})
 		if err != nil {
 			log.Printf("dr chatlab: title generation failed (falling back to derived): %v", err)
-		} else if t := sanitizeGeneratedTitle(resp.FirstText()); t != "" {
-			title, source = t, "generated"
+		} else {
+			if t := sanitizeGeneratedTitle(resp.FirstText()); t != "" {
+				title, source = t, "generated"
+			}
+			// The call happened — record it whatever the sanitize outcome.
+			var sessionTitle string
+			var projectID, projName *string
+			_ = h.pool.QueryRow(ctx, `
+SELECT s.title, s.project_id, p.name
+FROM dr_chat_sessions s LEFT JOIN dr_chat_projects p ON p.id = s.project_id
+WHERE s.id = $1`, sessionID).Scan(&sessionTitle, &projectID, &projName)
+			snapshotTitle := title
+			if snapshotTitle == "" {
+				snapshotTitle = sessionTitle
+			}
+			cost, estimated := estimateCostUSD(resp.Usage, h.cachedCatalogModel(titleModel))
+			h.recordUsageEvent(ctx, usageEventInsert{
+				Kind: "title", Model: titleModel,
+				SessionID: &sessionID, SessionTitle: &snapshotTitle,
+				ProjectID: projectID, ProjectName: projName,
+				UserUID: actorUID, UserEmail: actorEmail,
+				Usage: resp.Usage, CostUSD: cost, CostEstimated: estimated,
+			})
 		}
 	}
 	if title == "" {

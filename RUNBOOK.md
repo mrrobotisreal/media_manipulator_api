@@ -352,7 +352,7 @@ Runtime verification: `docs/dr-chatlab-verification.md`.
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | _(empty)_ | OpenRouter Bearer key. **Empty → chat-lab send/models endpoints return 503 `{"error": "AI chat is not configured"}`** (fail closed). The other true secret — never commit or log. |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | API root override, for testing only. |
-| `DR_CHATLAB_MODEL_RULES` | `anthropic/,openai/,z-ai/glm-5.2,moonshotai/kimi-k2.6` | CSV of allow rules against the live model catalog. A rule ending in `/` is a provider prefix match; anything else is an exact model-id match. Prefix rules exclude `:free`/`:extended`-style variants; an exact rule naming a variant admits it. Case-insensitive. |
+| `DR_CHATLAB_MODEL_RULES` | `anthropic/,openai/,z-ai/glm-5.2,moonshotai/kimi-k2.6,google/gemini-3.1-pro-preview,google/gemini-3-pro-preview,google/gemini-3.1-flash-lite,google/gemini-3.5-flash,qwen/qwen3.7-plus,google/gemini-3-flash-preview,google/gemini-2.5-flash,google/gemini-2.0-flash-001,qwen/qwen3.6-plus,qwen/qwen3.6-flash,qwen/qwen3.7-max,qwen/qwen3-vl-235b-a22b-instruct` | CSV of allow rules against the live model catalog. A rule ending in `/` is a provider prefix match; anything else is an exact model-id match (Gemini/Qwen are deliberately exact ids — those providers publish dozens of unrelated models). Prefix rules exclude `:free`/`:extended`-style variants; an exact rule naming a variant admits it. Case-insensitive. Gemini `-preview` slugs drift — `docs/dr-chatlab-stats-feedback-verification.md` §2 has the check. |
 | `DR_CHATLAB_TITLE_MODEL` | _(empty)_ | Optional cheap model id for auto-titling new chats (e.g. `openai/gpt-5.2-mini`). Empty disables LLM titling — titles fall back to a truncation of the first message. |
 | `DR_CHATLAB_MAX_OUTPUT_TOKENS` | `8192` | `max_tokens` sent upstream per completion. |
 | `DR_CHATLAB_ATTRIBUTION_URL` | `https://media-manipulator.com` | Sent as OpenRouter's `HTTP-Referer` app-attribution header. |
@@ -360,6 +360,15 @@ Runtime verification: `docs/dr-chatlab-verification.md`.
 | `DR_CHATLAB_MEMORY_MAX_CHARS` | `4096` | Hard cap on the generated project memory (chars). |
 | `DR_CHATLAB_TOOL_MAX_ROUNDS` | `5` | Max upstream rounds per send in the `read_asset` tool loop (exceeding → the turn ends with `Tool call limit reached`). |
 | `DR_CHATLAB_ASSET_READ_CAP_BYTES` | `49152` | Per-read cap on text/code asset content returned to the model (truncated with a note beyond it). |
+
+Usage & spend analytics (`/api/dr/chatlab/stats/*`, `/api/dr/chatlab/credits`)
+and response feedback (`/api/dr/chatlab/messages/:id/feedback`) need no new
+env vars — every OpenRouter call (chat/title/memory) is recorded as an
+immutable `dr_chat_usage_events` row (NO FKs: the financial record survives
+session/project hard-deletes), and the credit balance is a manual ledger
+(`dr_chat_credit_ledger`) reconciled against the OpenRouter dashboard with
+adjustment entries. Runtime verification:
+`docs/dr-chatlab-stats-feedback-verification.md`.
 
 ---
 
