@@ -42,6 +42,11 @@ type DrDocSummary struct {
 	CreatedBy      string  `json:"createdBy"`
 	CanDelete      bool    `json:"canDelete"`
 	HasEditSession bool    `json:"hasEditSession"`
+	// Per-document edit sharing (dr_docs_sharing.go): AllowPartnerEdits is the
+	// creator-controlled flag; CanEdit is SERVER-computed for the caller via
+	// drCanEdit (creator always, partner iff the flag is on).
+	AllowPartnerEdits bool `json:"allowPartnerEdits"`
+	CanEdit           bool `json:"canEdit"`
 	// FolderID places the document in the docs-explorer tree; nil = root
 	// (additive — populated by ListDocs/GetDoc; other summary producers leave
 	// it nil and the client reconciles via the list).
@@ -110,6 +115,12 @@ type DrRenameDocRequest struct {
 	Title string `json:"title"`
 }
 
+// DrUpdateDocSharingRequest is PUT /docs/:slug/sharing (creator-only). The
+// pointer makes an absent field a clean 400 instead of silently reading false.
+type DrUpdateDocSharingRequest struct {
+	AllowPartnerEdits *bool `json:"allowPartnerEdits"`
+}
+
 // ---------------------------------------------------------------------------
 // "Create Doc" editor request/response contracts (see internal/handlers/
 // dr_docs.go). Authorship (created_by/updated_by/author_uid) is always taken
@@ -173,8 +184,12 @@ type DrEditSession struct {
 	Content    json.RawMessage `json:"content"`
 	CreatedBy  string          `json:"createdBy"`
 	UpdatedBy  string          `json:"updatedBy"`
-	CreatedAt  UTCTime         `json:"createdAt"`
-	UpdatedAt  UTCTime         `json:"updatedAt"`
+	// Additive sharing state (see DrDocSummary): filled from the edit gate so
+	// the editor knows the document's sharing without a second fetch.
+	AllowPartnerEdits bool    `json:"allowPartnerEdits"`
+	CanEdit           bool    `json:"canEdit"`
+	CreatedAt         UTCTime `json:"createdAt"`
+	UpdatedAt         UTCTime `json:"updatedAt"`
 }
 
 // DrStartEditRequest opens/resumes/replaces the document's edit session. Both

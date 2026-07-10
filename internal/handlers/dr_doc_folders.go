@@ -514,7 +514,8 @@ func (h *DrDocsHandler) RenameDoc(c *gin.Context) {
 	if !h.dbReady(c) {
 		return
 	}
-	if _, ok := drCallerClaims(c); !ok {
+	claims, ok := drCallerClaims(c)
+	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 		return
 	}
@@ -534,6 +535,13 @@ func (h *DrDocsHandler) RenameDoc(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
+
+	// Edit-sharing gate: renaming changes content-facing state (the title), so
+	// it follows the same rule as editing. Move stays ungated (organization,
+	// not content).
+	if _, ok := h.requireDocEditAccess(c, ctx, docID, claims.Email); !ok {
+		return
+	}
 
 	tag, err := h.pool.Exec(ctx, `
 UPDATE dr_documents SET title = $1, updated_at = now()

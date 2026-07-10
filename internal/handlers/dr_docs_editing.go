@@ -234,6 +234,13 @@ func (h *DrDocsHandler) StartOrResumeEdit(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	// Edit-sharing gate: only the creator (or an opted-in partner) may open an
+	// edit session.
+	gate, gok := h.requireDocEditAccess(c, ctx, id, claims.Email)
+	if !gok {
+		return
+	}
+
 	// Only live, published docs can be edited (drafts use the create flow).
 	var status string
 	err := h.pool.QueryRow(ctx, `SELECT status FROM dr_documents WHERE id = $1 AND deleted_at IS NULL`, id).Scan(&status)
@@ -263,6 +270,8 @@ func (h *DrDocsHandler) StartOrResumeEdit(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load editing session"})
 			return
 		}
+		session.AllowPartnerEdits = gate.allowPartnerEdits
+		session.CanEdit = drCanEdit(gate.createdBy, gate.allowPartnerEdits, claims.Email)
 		h.respondEditSession(c, ctx, http.StatusOK, session)
 		return
 
@@ -325,6 +334,8 @@ RETURNING document_id, title, summary, content, created_by, updated_by, created_
 			return
 		}
 		session.Content = sessContent
+		session.AllowPartnerEdits = gate.allowPartnerEdits
+		session.CanEdit = drCanEdit(gate.createdBy, gate.allowPartnerEdits, claims.Email)
 		h.respondEditSession(c, ctx, http.StatusCreated, session)
 	}
 }
@@ -378,14 +389,10 @@ func (h *DrDocsHandler) UpdateEdit(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	// The document must be live (a deleted doc's session was already removed).
-	var exists bool
-	if err := h.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM dr_documents WHERE id = $1 AND deleted_at IS NULL)`, id).Scan(&exists); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save changes"})
-		return
-	}
-	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+	// Edit-sharing gate. This doubles as the liveness check (it 404s a
+	// missing/deleted doc). Saves 403 when the creator flipped the toggle off
+	// MID-session — the author can still Discard (see dr_docs_sharing.go).
+	if _, ok := h.requireDocEditAccess(c, ctx, id, claims.Email); !ok {
 		return
 	}
 
@@ -425,6 +432,13 @@ func (h *DrDocsHandler) PublishEdit(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
+
+	// Edit-sharing gate: publishing a session 403s if the creator revoked
+	// access mid-edit (Discard remains available — see dr_docs_sharing.go).
+	gate, gok := h.requireDocEditAccess(c, ctx, id, claims.Email)
+	if !gok {
+		return
+	}
 
 	// Load the staged session.
 	var (
@@ -565,16 +579,18 @@ VALUES ($1, (SELECT COALESCE(MAX(revision_number), 0) + 1 FROM dr_document_revis
 	h.prunePreservingRevisions(pruneCtx, id)
 
 	c.JSON(http.StatusOK, models.DrDocSummary{
-		ID:             id,
-		Slug:           slug,
-		Title:          title,
-		Summary:        finalSummary,
-		Status:         string(models.DrDocStatusPublished),
-		CreatedBy:      createdBy,
-		CanDelete:      drCanDelete(createdBy, claims.Email),
-		HasEditSession: false,
-		CreatedAt:      createdAt,
-		UpdatedAt:      updatedAt,
+		ID:                id,
+		Slug:              slug,
+		Title:             title,
+		Summary:           finalSummary,
+		Status:            string(models.DrDocStatusPublished),
+		CreatedBy:         createdBy,
+		CanDelete:         drCanDelete(createdBy, claims.Email),
+		HasEditSession:    false,
+		AllowPartnerEdits: gate.allowPartnerEdits,
+		CanEdit:           drCanEdit(gate.createdBy, gate.allowPartnerEdits, claims.Email),
+		CreatedAt:         createdAt,
+		UpdatedAt:         updatedAt,
 	})
 }
 
@@ -582,6 +598,11 @@ VALUES ($1, (SELECT COALESCE(MAX(revision_number), 0) + 1 FROM dr_document_revis
 // DELETE /docs/:slug/edit — DiscardEdit. Param = UUID.
 // ----------------------------------------------------------------------- //
 
+// DiscardEdit is deliberately NOT gated by the edit-sharing flag: the author
+// of an existing session must always be able to discard it, even after the
+// creator flips "Partner can edit" off mid-session — otherwise a partner whose
+// access was revoked would be trapped with an undiscardable session (their
+// save/publish 403 per the gate). Discard destroys only the staged copy.
 func (h *DrDocsHandler) DiscardEdit(c *gin.Context) {
 	if !h.dbReady(c) {
 		return

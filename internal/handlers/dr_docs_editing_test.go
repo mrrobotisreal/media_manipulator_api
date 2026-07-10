@@ -31,6 +31,41 @@ func TestDrCanDelete(t *testing.T) {
 	}
 }
 
+func TestDrCanEdit(t *testing.T) {
+	tests := []struct {
+		name              string
+		createdBy         string
+		allowPartnerEdits bool
+		caller            string
+		want              bool
+	}{
+		// The creator can ALWAYS edit, flag on or off.
+		{"creator, flag off", "owner@example.com", false, "owner@example.com", true},
+		{"creator, flag on", "owner@example.com", true, "owner@example.com", true},
+		{"creator case-insensitive, flag off", "Owner@Example.com", false, "owner@example.com", true},
+		// The partner edits iff the flag is on.
+		{"partner, flag off", "owner@example.com", false, "partner@example.com", false},
+		{"partner, flag on", "owner@example.com", true, "partner@example.com", true},
+		// Ownerless (seed:migration) documents: editable by everyone iff the
+		// flag is true — and the flag is immutable (no creator to change it).
+		{"ownerless seed, flag on", "seed:migration", true, "owner@example.com", true},
+		{"ownerless seed, flag off", "seed:migration", false, "owner@example.com", false},
+		{"empty createdBy, flag on", "", true, "owner@example.com", true},
+		{"empty createdBy, flag off", "", false, "owner@example.com", false},
+		// An empty caller email never edits, whatever the flag says.
+		{"empty caller, flag on", "owner@example.com", true, "", false},
+		{"empty caller, flag off", "owner@example.com", false, "", false},
+		{"both empty, flag on", "", true, "", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := drCanEdit(tc.createdBy, tc.allowPartnerEdits, tc.caller); got != tc.want {
+				t.Fatalf("drCanEdit(%q, %v, %q) = %v, want %v", tc.createdBy, tc.allowPartnerEdits, tc.caller, got, tc.want)
+			}
+		})
+	}
+}
+
 func intPtr(n int) *int { return &n }
 
 func TestDecideStartEdit(t *testing.T) {

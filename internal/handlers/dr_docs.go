@@ -107,6 +107,10 @@ func RegisterDrDocsRoutes(r gin.IRouter, h *DrDocsHandler) {
 	r.DELETE("/doc-folders/:folderId", h.DeleteDocFolder)
 	r.PUT("/docs/:slug/move", h.MoveDoc)     // UUID
 	r.PUT("/docs/:slug/rename", h.RenameDoc) // UUID
+
+	// Per-document edit sharing (dr_docs_sharing.go): the creator's
+	// "Partner can edit" toggle.
+	r.PUT("/docs/:slug/sharing", h.UpdateDocSharing) // UUID — creator-only
 }
 
 // drSlugPattern mirrors the kebab-case slug shape the seed + UI use. Validated
@@ -186,7 +190,7 @@ func (h *DrDocsHandler) ListDocs(c *gin.Context) {
 	defer cancel()
 
 	rows, err := h.pool.Query(ctx, `
-SELECT d.id, d.slug, d.title, d.summary, d.status, COALESCE(d.created_by, ''), d.folder_id, d.created_at, d.updated_at,
+SELECT d.id, d.slug, d.title, d.summary, d.status, COALESCE(d.created_by, ''), d.folder_id, d.allow_partner_edits, d.created_at, d.updated_at,
        EXISTS(SELECT 1 FROM dr_document_edit_sessions s WHERE s.document_id = d.id) AS has_edit_session
 FROM dr_documents d
 WHERE d.status = 'published' AND d.deleted_at IS NULL
@@ -202,12 +206,13 @@ ORDER BY d.updated_at DESC
 	docs := make([]models.DrDocSummary, 0)
 	for rows.Next() {
 		var d models.DrDocSummary
-		if err := rows.Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedBy, &d.FolderID, &d.CreatedAt, &d.UpdatedAt, &d.HasEditSession); err != nil {
+		if err := rows.Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedBy, &d.FolderID, &d.AllowPartnerEdits, &d.CreatedAt, &d.UpdatedAt, &d.HasEditSession); err != nil {
 			log.Printf("dr docs: list scan failed: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list documents"})
 			return
 		}
 		d.CanDelete = drCanDelete(d.CreatedBy, claims.Email)
+		d.CanEdit = drCanEdit(d.CreatedBy, d.AllowPartnerEdits, claims.Email)
 		docs = append(docs, d)
 	}
 	if err := rows.Err(); err != nil {
@@ -251,11 +256,11 @@ func (h *DrDocsHandler) GetDoc(c *gin.Context) {
 	// NOT NULL) are excluded → 404 for everyone.
 	var content []byte
 	err := h.pool.QueryRow(ctx, `
-SELECT d.id, d.slug, d.title, d.summary, d.status, COALESCE(d.created_by, ''), d.folder_id, d.content_format, d.content, d.created_at, d.updated_at,
+SELECT d.id, d.slug, d.title, d.summary, d.status, COALESCE(d.created_by, ''), d.folder_id, d.allow_partner_edits, d.content_format, d.content, d.created_at, d.updated_at,
        EXISTS(SELECT 1 FROM dr_document_edit_sessions s WHERE s.document_id = d.id)
 FROM dr_documents d
 WHERE d.slug = $1 AND d.deleted_at IS NULL
-`, slug).Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedBy, &d.FolderID, &d.ContentFormat, &content, &d.CreatedAt, &d.UpdatedAt, &d.HasEditSession)
+`, slug).Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedBy, &d.FolderID, &d.AllowPartnerEdits, &d.ContentFormat, &content, &d.CreatedAt, &d.UpdatedAt, &d.HasEditSession)
 	if errors.Is(err, pgx.ErrNoRows) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
 		return
@@ -266,6 +271,7 @@ WHERE d.slug = $1 AND d.deleted_at IS NULL
 		return
 	}
 	d.CanDelete = drCanDelete(d.CreatedBy, claims.Email)
+	d.CanEdit = drCanEdit(d.CreatedBy, d.AllowPartnerEdits, claims.Email)
 	// Read-time hydration of dr-asset:// media references → presigned URLs.
 	d.Content = h.hydrateContent(ctx, d.ID, content)
 	c.JSON(http.StatusOK, d)

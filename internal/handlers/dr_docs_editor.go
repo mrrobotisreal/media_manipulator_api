@@ -326,6 +326,23 @@ func drCanDelete(createdBy, callerEmail string) bool {
 	return strings.EqualFold(createdBy, callerEmail)
 }
 
+// drCanEdit reports whether callerEmail may edit a document: the creator can
+// ALWAYS edit their own document, and anyone (allowlisted — the API gate ran
+// already) may edit when the creator opened it up with allow_partner_edits.
+// Corollary: an ownerless document ("seed:migration" or empty created_by) is
+// editable by everyone iff its flag is true — and since it has no creator,
+// its flag can never be changed (the sharing endpoint is creator-only), which
+// is why the 20260712001 migration grandfathers existing rows to true.
+// Case-insensitive like drCanDelete; an empty caller email never edits (no
+// verified identity, no access — belt and suspenders under the auth gate).
+// Pure; unit-tested.
+func drCanEdit(createdBy string, allowPartnerEdits bool, callerEmail string) bool {
+	if strings.TrimSpace(callerEmail) == "" {
+		return false
+	}
+	return drCanDelete(createdBy, callerEmail) || allowPartnerEdits
+}
+
 // startEditDecision is the pure resolution of a StartOrResumeEdit request given
 // whether a session already exists. It encodes the §4.3 table so it can be unit
 // tested without a database.
@@ -451,6 +468,12 @@ func (h *DrDocsHandler) UpdateDoc(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
+
+	// Edit-sharing gate: a draft is content like anything else — only the
+	// creator (or an opted-in partner) may autosave it.
+	if _, ok := h.requireDocEditAccess(c, ctx, id, claims.Email); !ok {
+		return
+	}
 
 	// Draft-only + live: distinguish 404 (missing/deleted) from 409 (published).
 	var status string
@@ -749,6 +772,12 @@ func (h *DrDocsHandler) PublishDoc(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	// Edit-sharing gate (publish is the ultimate content mutation).
+	gate, gok := h.requireDocEditAccess(c, ctx, id, claims.Email)
+	if !gok {
+		return
+	}
+
 	var (
 		title, contentFormat, status, createdBy string
 		summary                                  *string
@@ -891,16 +920,18 @@ VALUES ($1, (SELECT COALESCE(MAX(revision_number), 0) + 1 FROM dr_document_revis
 	h.prunePreservingRevisions(pruneCtx, id)
 
 	c.JSON(http.StatusOK, models.DrDocSummary{
-		ID:             id,
-		Slug:           finalSlug,
-		Title:          title,
-		Summary:        finalSummary,
-		Status:         string(models.DrDocStatusPublished),
-		CreatedBy:      createdBy,
-		CanDelete:      drCanDelete(createdBy, claims.Email),
-		HasEditSession: false,
-		CreatedAt:      createdAt,
-		UpdatedAt:      updatedAt,
+		ID:                id,
+		Slug:              finalSlug,
+		Title:             title,
+		Summary:           finalSummary,
+		Status:            string(models.DrDocStatusPublished),
+		CreatedBy:         createdBy,
+		CanDelete:         drCanDelete(createdBy, claims.Email),
+		HasEditSession:    false,
+		AllowPartnerEdits: gate.allowPartnerEdits,
+		CanEdit:           drCanEdit(gate.createdBy, gate.allowPartnerEdits, claims.Email),
+		CreatedAt:         createdAt,
+		UpdatedAt:         updatedAt,
 	})
 }
 
