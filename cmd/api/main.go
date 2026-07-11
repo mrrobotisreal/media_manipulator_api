@@ -296,6 +296,10 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// RESTORE_REQUIRE_FIREBASE_AUTH is enabled).
 		"https://dr.media-manipulator.com",
 		"http://localhost:3000",
+		// Standalone Double Raven portal — Electron desktop app (fixed local port).
+		"http://localhost:41999",
+		// Standalone Double Raven portal — web deployment on Vercel.
+		"https://drportal.wintrow.dev",
 	}
 	// PUT is required by the Content Studio project save (PUT /api/studio/projects/:id);
 	// PATCH/DELETE are allowed too so the editor's CRUD surface doesn't trip CORS.
