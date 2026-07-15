@@ -177,6 +177,14 @@ func main() {
 	// on graceful shutdown. With OPENROUTER_API_KEY unset the chat endpoints
 	// fail closed (503).
 	drChatLabHandler := handlers.NewDrChatLabHandler(ctx, pool, cfg, s3Client)
+	// DR Portal desktop app installers: short-TTL presigned download URLs for
+	// the private Mac (arm64/Intel) and Windows builds. Presign-only — no DB,
+	// no uploads; nil presign client (S3 unconfigured) → 503.
+	var drDesktopPresign *s3.PresignClient
+	if s3Client != nil {
+		drDesktopPresign = s3.NewPresignClient(s3Client)
+	}
+	drDesktopHandler := handlers.NewDrDesktopHandler(cfg, drDesktopPresign)
 
 	// Future auth seam (default OFF): when RESTORE_REQUIRE_FIREBASE_AUTH is
 	// set, /api/video-restore/* verifies Firebase ID tokens. Init failure
@@ -234,7 +242,7 @@ func main() {
 	// Periodic active-jobs gauge update.
 	go pollActiveJobs(ctx, jobManager, metricsReg)
 
-	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, restoreAuthVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, store, enricher, limiter, metricsReg)
+	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, restoreAuthVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drDesktopHandler, store, enricher, limiter, metricsReg)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -282,7 +290,7 @@ func newS3Client(cfg *config.Config) *s3.Client {
 	})
 }
 
-func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, restoreAuthVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, drCommentsHandler *handlers.DrCommentsHandler, drFeedbackHandler *handlers.DrFeedbackHandler, drChatLabHandler *handlers.DrChatLabHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
+func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, restoreAuthVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, drCommentsHandler *handlers.DrCommentsHandler, drFeedbackHandler *handlers.DrFeedbackHandler, drChatLabHandler *handlers.DrChatLabHandler, drDesktopHandler *handlers.DrDesktopHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.Default()
@@ -379,6 +387,8 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// DR AI Chat Test Lab — model catalog, chat sessions/messages (the
 		// send streams SSE over POST), and attachments, on the same group.
 		handlers.RegisterDrChatLabRoutes(drGroup, drChatLabHandler)
+		// DR Portal desktop app installer downloads, on the same group.
+		handlers.RegisterDrDesktopRoutes(drGroup, drDesktopHandler)
 
 		// Tighter limits for upload/transcode/analysis paths.
 		api.Use() // marker; per-route limiters below

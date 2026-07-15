@@ -370,6 +370,22 @@ session/project hard-deletes), and the credit balance is a manual ledger
 adjustment entries. Runtime verification:
 `docs/dr-chatlab-stats-feedback-verification.md`.
 
+### 4.10 DR Portal desktop app downloads
+
+`GET /api/dr/desktop/download-url?platform=mac-arm64|mac-intel|windows` (same
+always-on DR auth as §4.8) returns a **5-minute** presigned GET for the private
+desktop installer in the shared bucket, with an `attachment` Content-Disposition
+so the browser downloads it under the artifact's own filename. The keys default
+to the `0.1.0` electron-builder artifacts and contain **literal spaces** (the SDK
+presigner handles encoding) — a version bump is an env change + an S3 upload, no
+deploy. Runtime verification: `docs/dr-desktop-downloads-verification.md`.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `DR_DESKTOP_MAC_ARM64_KEY` | `double-raven/desktop/mac/apple/Double Raven Portal-0.1.0-arm64.dmg` | S3 key of the Mac (Apple Silicon) `.dmg`. |
+| `DR_DESKTOP_MAC_INTEL_KEY` | `double-raven/desktop/mac/intel/Double Raven Portal-0.1.0.dmg` | S3 key of the Mac (Intel) `.dmg`. |
+| `DR_DESKTOP_WINDOWS_KEY` | `double-raven/desktop/windows/Double Raven Portal Setup 0.1.0.exe` | S3 key of the Windows installer `.exe`. |
+
 ---
 
 ## 5. HTTP API surface

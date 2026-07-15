@@ -327,6 +327,15 @@ type Config struct {
 	DRChatLabMemoryJobTZ       string
 	DRChatLabToolMaxRounds     int
 	DRChatLabAssetReadCapBytes int
+
+	// Double Raven Portal desktop app installers (private Electron builds in
+	// the shared S3 bucket, served only as short-TTL presigned GETs behind
+	// /api/dr). One key per platform so a version bump is an env change plus an
+	// upload — no deploy. The default keys contain LITERAL spaces (they mirror
+	// the electron-builder artifact names); the SDK presigner handles encoding.
+	DRDesktopMacArm64Key string
+	DRDesktopMacIntelKey string
+	DRDesktopWindowsKey  string
 }
 
 func Load() *Config {
@@ -593,6 +602,11 @@ func Load() *Config {
 		DRChatLabMemoryJobTZ:       getEnv("DR_CHATLAB_MEMORY_JOB_TZ", "America/Denver"),
 		DRChatLabToolMaxRounds:     getEnvInt("DR_CHATLAB_TOOL_MAX_ROUNDS", 5),
 		DRChatLabAssetReadCapBytes: getEnvInt("DR_CHATLAB_ASSET_READ_CAP_BYTES", 49152),
+
+		// DR Portal desktop app installer keys (see struct doc — literal spaces).
+		DRDesktopMacArm64Key: getEnv("DR_DESKTOP_MAC_ARM64_KEY", "double-raven/desktop/mac/apple/Double Raven Portal-0.1.0-arm64.dmg"),
+		DRDesktopMacIntelKey: getEnv("DR_DESKTOP_MAC_INTEL_KEY", "double-raven/desktop/mac/intel/Double Raven Portal-0.1.0.dmg"),
+		DRDesktopWindowsKey:  getEnv("DR_DESKTOP_WINDOWS_KEY", "double-raven/desktop/windows/Double Raven Portal Setup 0.1.0.exe"),
 	}
 }
 
