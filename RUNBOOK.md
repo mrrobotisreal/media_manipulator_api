@@ -37,6 +37,7 @@ debug commands.
 10. [Common incidents and recovery](#10-common-incidents-and-recovery)
 11. [Logging conventions](#11-logging-conventions)
 12. [Command appendix](#12-command-appendix)
+13. [DR Tasks (kanban) rollout](#13-dr-tasks-kanban-rollout)
 
 ---
 
@@ -1422,3 +1423,184 @@ go test ./internal/services/ -v     # should be all PASS
   in-memory queue for whisper-ctranslate2 subprocesses.
 - **Stage** — one row in the `stages[]` array of a transcode job. Each
   stage has a key, label, status, and message.
+
+---
+
+## 13. DR Tasks (kanban) rollout
+
+Operator steps for the `/dr/tasks` Jira-style board (migration
+`20260715001_add_dr_tasks`, endpoints `/api/dr/tasks/*`, UI in
+`double-raven-portal`). Run in order. No new environment variables, no S3
+usage — the feature rides the existing pgx pool + `DR_ALLOWED_EMAILS`
+allowlist + Firebase-gated `/api/dr` group.
+
+### 13.1 Migrate
+
+The API auto-migrates at boot (`api auto-migrate up complete` in the logs),
+so a deploy+restart applies the migration by itself. To apply it explicitly
+first (recommended, so a migration failure is not entangled with a restart):
+
+```bash
+cd Website/Frontend/media_manipulator/media_manipulator_api
+go run ./internal/migrations up        # applies 20260715001_add_dr_tasks (and anything else pending)
+go run ./internal/migrations version   # expect: 20260715001 (dirty=false)
+```
+
+Rollback (drops `dr_task_activity` + `dr_tasks` and ALL their data):
+
+```bash
+go run ./internal/migrations down      # steps back exactly ONE migration
+```
+
+`DATABASE_URL` comes from the repo `.env` (same as every other migration).
+
+### 13.2 Deploy / restart
+
+```bash
+# systemd-style placeholder — use the host's actual unit name
+sudo systemctl restart media-manipulator-api
+journalctl -u media-manipulator-api -f
+```
+
+Confirm in the logs, in order:
+
+1. `api auto-migrate up complete` — schema is current.
+2. `media-manipulator-api listening` — server is up.
+3. With `GIN_MODE` unset (debug), the route dump includes
+   `POST /api/dr/tasks` and `POST /api/dr/tasks/:taskId/move`. In release
+   mode there is no route dump — the smoke tests below are the check.
+
+### 13.3 curl smoke tests
+
+`$TOKEN` is a Firebase ID token for an account on `DR_ALLOWED_EMAILS`
+(grab one from the portal devtools: any `/api/dr/*` request's
+`Authorization` header). `$API` is the API origin, e.g.
+`https://<api-host>`.
+
+```bash
+API=https://<api-host>
+AUTH="Authorization: Bearer $TOKEN"
+JSON="Content-Type: application/json"
+```
+
+**Create** (expect `201`, body echoes the task with `"key":"DR-<n>"`,
+`"status":"todo"`, `"position":"1024.0000000000"` in an empty column):
+
+```bash
+curl -sS -X POST "$API/api/dr/tasks" -H "$AUTH" -H "$JSON" -d '{
+  "title": "Smoke test task",
+  "status": "todo",
+  "type": "task",
+  "priority": "high",
+  "labels": ["smoke-test"],
+  "dueDate": "2026-08-01"
+}'
+# → 201 {"id":"<uuid>","key":"DR-1","taskNumber":1,"title":"Smoke test task",
+#        "status":"todo","type":"task","priority":"high","assigneeEmail":null,
+#        "labels":["smoke-test"],"dueDate":"2026-08-01","position":"1024.0000000000",
+#        "archivedAt":null,...}
+TASK=<uuid from the response>
+```
+
+**List** (expect `200`, the task above in `tasks[]`):
+
+```bash
+curl -sS "$API/api/dr/tasks" -H "$AUTH"
+# → 200 {"tasks":[{"id":"...","key":"DR-1",...}]}
+```
+
+**PATCH title** (expect `200`; a second `updated`-action activity row is
+born):
+
+```bash
+curl -sS -X PATCH "$API/api/dr/tasks/$TASK" -H "$AUTH" -H "$JSON" \
+  -d '{"title": "Smoke test task (renamed)"}'
+# → 200 {...,"title":"Smoke test task (renamed)",...}
+```
+
+**Move between columns** (expect `200` with `"rebalanced":false`; the
+`moved` activity row records `todo → in_progress`):
+
+```bash
+curl -sS -X POST "$API/api/dr/tasks/$TASK/move" -H "$AUTH" -H "$JSON" \
+  -d '{"status": "in_progress"}'
+# → 200 {"task":{...,"status":"in_progress",...},"rebalanced":false}
+```
+
+With neighbors — create a second task in `in_progress`, then drop the first
+one BELOW it (`beforeTaskId` = the card that ends up above):
+
+```bash
+TASK2=$(curl -sS -X POST "$API/api/dr/tasks" -H "$AUTH" -H "$JSON" \
+  -d '{"title":"Neighbor","status":"in_progress"}' | jq -r .id)
+curl -sS -X POST "$API/api/dr/tasks/$TASK/move" -H "$AUTH" -H "$JSON" \
+  -d "{\"status\":\"in_progress\",\"beforeTaskId\":\"$TASK2\"}"
+# → 200; task's position is now neighbor's position + 1024
+```
+
+**Archive → restore** (expect `200` each; re-archiving an archived task →
+`409 {"error":"Task is already archived"}`):
+
+```bash
+curl -sS -X POST "$API/api/dr/tasks/$TASK/archive" -H "$AUTH"
+# → 200 {...,"archivedAt":"2026-...Z",...}
+curl -sS -X POST "$API/api/dr/tasks/$TASK/restore" -H "$AUTH"
+# → 200 {...,"archivedAt":null,...}  (back at the TOP of in_progress)
+```
+
+**Detail + activity** (expect `200`; activity ordered oldest→newest:
+`created`, `updated`(title), `moved`, `archived`, `restored`):
+
+```bash
+curl -sS "$API/api/dr/tasks/$TASK" -H "$AUTH"
+# → 200 {"task":{...},"activity":[{"action":"created",...},
+#        {"action":"updated","field":"title",...},{"action":"moved",...},
+#        {"action":"archived",...},{"action":"restored",...}]}
+```
+
+**Negative — assignee not on the allowlist** (expect `400`):
+
+```bash
+curl -sS -X PATCH "$API/api/dr/tasks/$TASK" -H "$AUTH" -H "$JSON" \
+  -d '{"assigneeEmail": "stranger@example.com"}'
+# → 400 {"error":"Assignee is not a portal user"}
+```
+
+**Conflict — stale neighbor** (the concurrent-drag signal): move a task
+naming a `beforeTaskId`/`afterTaskId` that is archived, deleted, or sitting
+in a DIFFERENT column than the destination. Expect
+`409 {"error":"Board changed — please retry"}`. Easiest reproduction:
+archive `$TASK2`, then re-run the neighbor move above — the UI reacts to
+this by refetching the board and toasting "Couldn't move task — board
+refreshed".
+
+### 13.4 UI smoke checklist (Electron dev)
+
+```bash
+cd Website/Frontend/media_manipulator/double-raven-portal
+npm run electron:dev
+```
+
+1. Sign in; the home grid now shows FOUR cards (2×2) — open **Tasks**.
+2. Create one task in each of the five columns via each column's `+`
+   (dialog opens pre-set to that column; new card lands at the TOP and
+   flashes a highlight ring).
+3. Drag a card up/down within a column (order sticks after the 20s poll),
+   then across columns (a `moved` row appears in its activity feed; a pure
+   in-column reorder adds NO activity).
+4. Filter by each facet — search text, assignee avatar chips (incl.
+   Unassigned), priority, type, labels — column counts animate and reflect
+   the filtered set; **Clear filters** appears with the active-facet count.
+5. Click a card → detail sheet; the URL gains `?task=DR-<n>`. Reload the
+   app at that URL — the sheet reopens on the same task. Edit the title
+   inline (Enter saves, Esc cancels), edit description, change every
+   metadata field one at a time.
+6. Status select in the sheet moves the card to the top of the new column.
+7. Archive from the sheet (confirm dialog) — the card leaves the board;
+   Restore returns it to the top of its column.
+8. Confirm the Activity feed lists one row per changed field with sensible
+   sentences and relative times.
+9. Enable the OS reduced-motion setting (macOS: System Settings →
+   Accessibility → Display → Reduce motion) and reload: cards/badges fade
+   without sliding/scaling, and the drag overlay drops its tilt/scale.
+

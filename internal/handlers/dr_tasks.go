@@ -572,7 +572,9 @@ func (h *DrTasksHandler) CreateTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	var description json.RawMessage
+	// description is `any` so an absent description is an untyped nil → SQL
+	// NULL (a typed-nil json.RawMessage can encode as jsonb 'null' instead).
+	var description any
 	if len(req.Description) > 0 && !isJSONNull(req.Description) {
 		if err := validateDrMessageJSON(req.Description); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -809,9 +811,10 @@ func (h *DrTasksHandler) UpdateTask(c *gin.Context) {
 	if next.Assignee != "" {
 		assignee = &next.Assignee
 	}
-	var description json.RawMessage
+	// Untyped nil for a cleared/absent description → unambiguous SQL NULL.
+	var description any
 	if len(next.Description) > 0 {
-		description = next.Description
+		description = json.RawMessage(next.Description)
 	}
 	updated, err := scanTaskRow(tx.QueryRow(ctx, `
 UPDATE dr_tasks
