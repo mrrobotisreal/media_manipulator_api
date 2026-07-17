@@ -51,6 +51,9 @@ type DrDocSummary struct {
 	// (additive — populated by ListDocs/GetDoc; other summary producers leave
 	// it nil and the client reconciles via the list).
 	FolderID  *string `json:"folderId"`
+	// NotionLink is the optional originating Notion page URL; nil when the
+	// document has no Notion twin. Surfaces "View in Notion" in the explorer.
+	NotionLink *string `json:"notionLink"`
 	CreatedAt UTCTime `json:"createdAt"`
 	UpdatedAt UTCTime `json:"updatedAt"`
 }

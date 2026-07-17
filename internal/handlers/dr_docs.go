@@ -190,7 +190,7 @@ func (h *DrDocsHandler) ListDocs(c *gin.Context) {
 	defer cancel()
 
 	rows, err := h.pool.Query(ctx, `
-SELECT d.id, d.slug, d.title, d.summary, d.status, COALESCE(d.created_by, ''), d.folder_id, d.allow_partner_edits, d.created_at, d.updated_at,
+SELECT d.id, d.slug, d.title, d.summary, d.status, COALESCE(d.created_by, ''), d.folder_id, d.allow_partner_edits, d.notion_link, d.created_at, d.updated_at,
        EXISTS(SELECT 1 FROM dr_document_edit_sessions s WHERE s.document_id = d.id) AS has_edit_session
 FROM dr_documents d
 WHERE d.status = 'published' AND d.deleted_at IS NULL
@@ -206,7 +206,7 @@ ORDER BY d.updated_at DESC
 	docs := make([]models.DrDocSummary, 0)
 	for rows.Next() {
 		var d models.DrDocSummary
-		if err := rows.Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedBy, &d.FolderID, &d.AllowPartnerEdits, &d.CreatedAt, &d.UpdatedAt, &d.HasEditSession); err != nil {
+		if err := rows.Scan(&d.ID, &d.Slug, &d.Title, &d.Summary, &d.Status, &d.CreatedBy, &d.FolderID, &d.AllowPartnerEdits, &d.NotionLink, &d.CreatedAt, &d.UpdatedAt, &d.HasEditSession); err != nil {
 			log.Printf("dr docs: list scan failed: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list documents"})
 			return
