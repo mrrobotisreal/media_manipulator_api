@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,14 +45,91 @@ type studioProjectSidecar struct {
 	Audio         *models.StudioAudioConfig  `json:"audio,omitempty"`
 }
 
-func (r *StudioRepository) CreateProject(ctx context.Context, sessionID string, req models.StudioCreateProjectRequest) (*models.StudioProject, error) {
+// StudioOwner identifies who a project belongs to.
+//
+// FIX B13. Projects used to be scoped by the CLIENT-SUPPLIED X-MM-Session-ID
+// alone, and GetProject/SaveProject took only a project id — so guessing either
+// value read or overwrote someone else's editor document. Ownership is now
+// explicit and checked on every project-scoped call.
+//
+// A signed-in caller owns by user id, which survives a cleared session and a
+// new device. A signed-out caller still owns by session id, because the
+// anonymous editor has to keep working; those rows are claimed by the account
+// the first time that visitor signs in (ClaimSessionProjects).
+type StudioOwner struct {
+	// UserID is the mm_users row id, or "" for an anonymous caller.
+	UserID string
+	// SessionID is always present.
+	SessionID string
+}
+
+// userParam renders UserID for SQL: a real uuid, or NULL when anonymous.
+func (o StudioOwner) userParam() any {
+	if strings.TrimSpace(o.UserID) == "" {
+		return nil
+	}
+	return o.UserID
+}
+
+func (r *StudioRepository) CreateProject(ctx context.Context, owner StudioOwner, req models.StudioCreateProjectRequest) (*models.StudioProject, error) {
 	tracks := []byte("[]")
 	row := r.pool.QueryRow(ctx, `
-INSERT INTO studio_projects (session_id, name, fps, width, height, duration_seconds, tracks)
-VALUES ($1, $2, $3, $4, $5, 0, $6)
+INSERT INTO studio_projects (session_id, user_id, name, fps, width, height, duration_seconds, tracks)
+VALUES ($1, $2, $3, $4, $5, $6, 0, $7)
 RETURNING id, name, fps, width, height, duration_seconds, tracks, captions, created_at, updated_at
-`, sessionID, req.Name, req.FPS, req.Width, req.Height, tracks)
+`, owner.SessionID, owner.userParam(), req.Name, req.FPS, req.Width, req.Height, tracks)
 	return scanProject(row)
+}
+
+// OwnsProject reports whether owner may read or write this project.
+//
+// A signed-in caller matches on user_id, or on an unclaimed row from their own
+// session (the window between creating a project and the sign-in that claims
+// it). An anonymous caller matches only an unclaimed row from their session —
+// once a project belongs to an account, a bare session id can never reach it
+// again, which is the actual hole B13 describes.
+func (r *StudioRepository) OwnsProject(ctx context.Context, projectID string, owner StudioOwner) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `
+SELECT EXISTS (
+  SELECT 1 FROM studio_projects
+  WHERE id = $1
+    AND (
+      ($2::uuid IS NOT NULL AND user_id = $2::uuid)
+      OR (user_id IS NULL AND session_id = $3)
+    )
+)
+`, projectID, owner.userParam(), owner.SessionID).Scan(&exists)
+	return exists, err
+}
+
+// ClaimSessionProjects attaches the projects a visitor created while signed out
+// to the account they just signed into. Only unclaimed rows move, so it can
+// never steal a project from another account, and it is idempotent.
+func (r *StudioRepository) ClaimSessionProjects(ctx context.Context, userID, sessionID string) (int64, error) {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(sessionID) == "" {
+		return 0, nil
+	}
+	tag, err := r.pool.Exec(ctx, `
+UPDATE studio_projects SET user_id = $1::uuid, updated_at = now()
+WHERE session_id = $2 AND user_id IS NULL
+`, userID, sessionID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// CountProjectsForUser backs the saved-project cap. Anonymous session rows are
+// deliberately not counted: the cap is an account entitlement.
+func (r *StudioRepository) CountProjectsForUser(ctx context.Context, userID string) (int, error) {
+	if strings.TrimSpace(userID) == "" {
+		return 0, nil
+	}
+	var n int
+	err := r.pool.QueryRow(ctx,
+		`SELECT count(*) FROM studio_projects WHERE user_id = $1::uuid`, userID).Scan(&n)
+	return n, err
 }
 
 func (r *StudioRepository) GetProject(ctx context.Context, id string) (*models.StudioProject, error) {
@@ -66,15 +144,17 @@ FROM studio_projects WHERE id = $1
 	return p, err
 }
 
-func (r *StudioRepository) ListRecentProjects(ctx context.Context, sessionID string, limit int) ([]*models.StudioProject, error) {
+func (r *StudioRepository) ListRecentProjects(ctx context.Context, owner StudioOwner, limit int) ([]*models.StudioProject, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 25
 	}
 	rows, err := r.pool.Query(ctx, `
 SELECT id, name, fps, width, height, duration_seconds, tracks, captions, created_at, updated_at
-FROM studio_projects WHERE session_id = $1
-ORDER BY updated_at DESC LIMIT $2
-`, sessionID, limit)
+FROM studio_projects
+WHERE ($1::uuid IS NOT NULL AND user_id = $1::uuid)
+   OR (user_id IS NULL AND session_id = $2)
+ORDER BY updated_at DESC LIMIT $3
+`, owner.userParam(), owner.SessionID, limit)
 	if err != nil {
 		return nil, err
 	}

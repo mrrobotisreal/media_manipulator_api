@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 )
@@ -114,6 +115,48 @@ func (h *StudioHandler) sessionID(c *gin.Context) string {
 	return sanitizeS3PathSegment(firstNonEmpty(c.GetHeader("X-MM-Session-ID"), uuid.NewString()))
 }
 
+// owner is who this request may act as.
+//
+// FIX B13: the client-supplied X-MM-Session-ID used to be the ONLY scope on a
+// project, and the read/write endpoints did not even check that. A signed-in
+// caller is now identified by their mm_users id, which no client can forge;
+// signed-out callers keep the session scope so the anonymous editor still
+// works, and their rows are claimed by the account on first sign-in.
+func (h *StudioHandler) owner(c *gin.Context) services.StudioOwner {
+	out := services.StudioOwner{SessionID: h.sessionID(c)}
+	if res, ok := middleware.ResolveTier(c); ok && res.User != nil {
+		out.UserID = res.User.ID
+	}
+	return out
+}
+
+// requireProjectAccess is the gate on every project-scoped endpoint. It answers
+// 404 rather than 403 on a miss: telling a stranger that a project id exists
+// but is not theirs is a disclosure in itself.
+//
+// Fails CLOSED. If the ownership check itself errors the request is refused —
+// the opposite posture from the quota middleware, because here the failure mode
+// is handing someone else's editor document over, not blocking a conversion.
+func (h *StudioHandler) requireProjectAccess(c *gin.Context, projectID string) bool {
+	if projectID == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})
+		return false
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+	ok, err := h.repo.OwnsProject(ctx, projectID, h.owner(c))
+	if err != nil {
+		log.Printf("studio: ownership check failed for project %s: %v", projectID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open project"})
+		return false
+	}
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})
+		return false
+	}
+	return true
+}
+
 // ----------------------------------------------------------------------- //
 // PROJECTS
 // ----------------------------------------------------------------------- //
@@ -131,7 +174,32 @@ func (h *StudioHandler) CreateProject(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
-	project, err := h.repo.CreateProject(ctx, h.sessionID(c), req)
+
+	owner := h.owner(c)
+	// Saved-project cap, per the tier matrix. Only counted for signed-in
+	// callers: an anonymous visitor's single local project is not an account
+	// entitlement, and counting hashed sessions would punish a shared browser.
+	if owner.UserID != "" {
+		if res, ok := middleware.ResolveTier(c); ok && res.Limits.StudioProjects >= 0 {
+			count, countErr := h.repo.CountProjectsForUser(ctx, owner.UserID)
+			if countErr != nil {
+				// Fail open on the CAP only — a broken count must not stop
+				// someone starting an edit. Ownership still fails closed.
+				log.Printf("studio: project count failed, allowing create: %v", countErr)
+			} else if count >= res.Limits.StudioProjects {
+				c.JSON(http.StatusForbidden, gin.H{
+					"error":       "project_limit_reached",
+					"message":     "You have reached the saved-project limit for your plan.",
+					"limit":       res.Limits.StudioProjects,
+					"used":        count,
+					"upgradePath": "premium",
+				})
+				return
+			}
+		}
+	}
+
+	project, err := h.repo.CreateProject(ctx, owner, req)
 	if err != nil {
 		log.Printf("studio: create project failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create project"})
@@ -144,14 +212,17 @@ func (h *StudioHandler) ListProjects(c *gin.Context) {
 	if !h.dbReady(c) {
 		return
 	}
-	sessionID := strings.TrimSpace(c.GetHeader("X-MM-Session-ID"))
-	if sessionID == "" {
+	owner := h.owner(c)
+	// A caller with neither an account nor a session has nothing to list. Do
+	// not fall back to the generated session id from h.sessionID — that would
+	// be a fresh uuid and could never match a row anyway.
+	if owner.UserID == "" && strings.TrimSpace(c.GetHeader("X-MM-Session-ID")) == "" {
 		c.JSON(http.StatusOK, gin.H{"projects": []models.StudioProject{}})
 		return
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
-	projects, err := h.repo.ListRecentProjects(ctx, sanitizeS3PathSegment(sessionID), 25)
+	projects, err := h.repo.ListRecentProjects(ctx, owner, 25)
 	if err != nil {
 		log.Printf("studio: list projects failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list projects"})
@@ -162,6 +233,9 @@ func (h *StudioHandler) ListProjects(c *gin.Context) {
 
 func (h *StudioHandler) GetProject(c *gin.Context) {
 	if !h.dbReady(c) {
+		return
+	}
+	if !h.requireProjectAccess(c, strings.TrimSpace(c.Param("id"))) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -185,6 +259,9 @@ func (h *StudioHandler) SaveProject(c *gin.Context) {
 	}
 	clampSaveProject(&req)
 
+	if !h.requireProjectAccess(c, strings.TrimSpace(c.Param("id"))) {
+		return
+	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 	project, err := h.repo.SaveProject(ctx, strings.TrimSpace(c.Param("id")), req)
@@ -202,6 +279,9 @@ func (h *StudioHandler) SaveProject(c *gin.Context) {
 
 func (h *StudioHandler) ListAssets(c *gin.Context) {
 	if !h.dbReady(c) {
+		return
+	}
+	if !h.requireProjectAccess(c, strings.TrimSpace(c.Param("id"))) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -304,6 +384,12 @@ func (h *StudioHandler) CompleteAsset(c *gin.Context) {
 	key := h.sanitizeStudioKey(req.S3Key)
 	if key == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid s3Key"})
+		return
+	}
+
+	// The project id comes from the request body here, so it is exactly as
+	// untrusted as a path parameter and gets the same gate.
+	if !h.requireProjectAccess(c, projectID) {
 		return
 	}
 
@@ -521,6 +607,12 @@ func (h *StudioHandler) DeriveAsset(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
 		return
 	}
+	// Derive spends GPU time and writes a new asset into someone's project, so
+	// it is gated on that project. Checked via the asset's own projectId rather
+	// than a client-supplied one.
+	if !h.requireProjectAccess(c, src.ProjectID) {
+		return
+	}
 	if !src.HasAudio {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Asset has no audio to process"})
 		return
@@ -663,6 +755,13 @@ func (h *StudioHandler) serveAssetDerivative(c *gin.Context, which string) {
 	if !h.dbReady(c) {
 		return
 	}
+	// NOT owner-scoped, deliberately. These bytes are fetched by <video>,
+	// <audio> and <img> elements, which cannot attach an Authorization or
+	// X-MM-Session-ID header — gating them would break playback in the editor
+	// for exactly the signed-in users the scoping is meant to protect. They are
+	// capability URLs: unguessable asset uuids, no listing endpoint, and no
+	// project metadata in the response. The editor document itself (the thing
+	// B13 was about) IS owner-scoped, above.
 	ctx := c.Request.Context()
 	asset, err := h.repo.GetAsset(ctx, strings.TrimSpace(c.Param("id")))
 	if err != nil {
@@ -830,6 +929,9 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	defer cancel()
 
 	projectID := strings.TrimSpace(c.Param("id"))
+	if !h.requireProjectAccess(c, projectID) {
+		return
+	}
 	project, err := h.repo.GetProject(loadCtx, projectID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})
@@ -1015,6 +1117,9 @@ func (h *StudioHandler) GenerateCaptions(c *gin.Context) {
 	loadCtx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 	projectID := strings.TrimSpace(c.Param("id"))
+	if !h.requireProjectAccess(c, projectID) {
+		return
+	}
 	project, err := h.repo.GetProject(loadCtx, projectID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})

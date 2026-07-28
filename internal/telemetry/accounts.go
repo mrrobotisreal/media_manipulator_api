@@ -3,6 +3,7 @@ package telemetry
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -188,6 +189,32 @@ func (s *Store) UsageForDay(ctx context.Context, subjectKind models.UsageSubject
 		out[metric] = count
 	}
 	return out, rows.Err()
+}
+
+// ClaimStudioProjectsForUser attaches the projects a visitor created while
+// signed out to the account they have just signed into.
+//
+// Only unclaimed rows move (user_id IS NULL), so this can never take a project
+// from another account, and it is idempotent — safe on every sync, which is
+// what makes "sign in on a second device" behave.
+func (s *Store) ClaimStudioProjectsForUser(ctx context.Context, userID, sessionID string) (int64, error) {
+	if !s.Enabled() {
+		return 0, ErrNoStore
+	}
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(sessionID) == "" {
+		return 0, nil
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+
+	tag, err := s.Pool.Exec(ctx, `
+UPDATE studio_projects SET user_id = $1, updated_at = now()
+WHERE session_id = $2 AND user_id IS NULL
+`, userID, sessionID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
 
 // CountStudioProjectsForUser is the saved-project cap check. Projects created

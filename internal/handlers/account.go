@@ -148,6 +148,20 @@ func (h *AccountHandler) Sync(c *gin.Context) {
 		return
 	}
 
+	// Claim the Content Studio projects this visitor created while signed out.
+	// Sign-in is the only moment we can connect the two identities, and doing
+	// it here means the anonymous editor's work survives making an account
+	// instead of silently becoming unreachable once ownership is by user id.
+	if session := c.GetHeader("X-MM-Session-ID"); session != "" && user != nil {
+		if moved, claimErr := h.store.ClaimStudioProjectsForUser(c.Request.Context(), user.ID, session); claimErr != nil {
+			// Never fail the sync over this: the account exists either way, and
+			// the next sync retries.
+			h.logger.Warn("account: claiming studio projects failed", "error", claimErr.Error())
+		} else if moved > 0 {
+			h.logger.Info("account: claimed studio projects on sign-in", "count", moved)
+		}
+	}
+
 	c.JSON(http.StatusOK, h.buildUsageResponse(c, user, true))
 }
 

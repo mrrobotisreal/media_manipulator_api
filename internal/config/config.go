@@ -479,14 +479,18 @@ func Load() *Config {
 
 		// Tier limits — see the struct comment. These defaults are the
 		// published matrix; /pricing renders them via GET /api/tiers.
-		// DEFAULT OFF until the UI ships.
 		//
-		// The enforcement path is complete and tested, but a 429 with no quota
-		// meter, no sign-up modal and no /pricing page to explain it would be a
-		// worse product than no quota at all — and would read badly to an
-		// AdSense reviewer. Flip this to true in the same release as the
-		// account UI (Phase 4 UI steps 7–8).
-		TierQuotaEnabled: getEnvBool("TIER_QUOTA_ENABLED", false),
+		// DEFAULT ON as of the Phase 4 UI release. The quota meter, the
+		// contextual account panel and /pricing all ship in the same change, so
+		// a 429 now arrives with an explanation and a way forward instead of
+		// being a dead end.
+		//
+		// This is the single kill switch for the whole tier system, not just
+		// for counting: with it off, middleware.TierContext attaches no
+		// resolver, so the upload byte caps, the source-duration check, the
+		// transcode ladder and the Studio project cap all fall back to the
+		// pre-tier global-config behaviour exactly.
+		TierQuotaEnabled: getEnvBool("TIER_QUOTA_ENABLED", true),
 
 		TierAnonOpsPerDay:       getEnvInt("TIER_ANON_OPS_PER_DAY", 5),
 		TierAnonAIOpsPerDay:     getEnvInt("TIER_ANON_AI_OPS_PER_DAY", 1),
