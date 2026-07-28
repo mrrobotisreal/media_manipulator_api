@@ -1,0 +1,57 @@
+package models
+
+import "time"
+
+// User is a row of mm_users — one Firebase-authenticated person and the tier
+// they are entitled to. Postgres is the only source of truth for entitlement;
+// the frontend keeps no parallel copy.
+type User struct {
+	ID            string     `json:"id"`
+	FirebaseUID   string     `json:"firebaseUid"`
+	Email         string     `json:"email,omitempty"`
+	EmailVerified bool       `json:"emailVerified"`
+	Tier          string     `json:"tier"`
+	TierSource    string     `json:"tierSource"`
+	TierExpiresAt *time.Time `json:"tierExpiresAt,omitempty"`
+	DisplayName   string     `json:"displayName,omitempty"`
+	SignupSource  string     `json:"signupSource,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+	LastSeenAt    *time.Time `json:"lastSeenAt,omitempty"`
+}
+
+// UsageSubjectKind identifies what a quota counter is keyed on. Preference
+// order is user → session → ip: the more stable the identifier, the fairer the
+// counting.
+type UsageSubjectKind string
+
+const (
+	UsageSubjectUser    UsageSubjectKind = "user"
+	UsageSubjectSession UsageSubjectKind = "session"
+	UsageSubjectIP      UsageSubjectKind = "ip"
+)
+
+// Quota metrics. These are the CHECK-constrained values in mm_usage_counters.
+const (
+	MetricOps     = "ops"
+	MetricAIOps   = "ai_ops"
+	MetricBytesIn = "bytes_in"
+	MetricExport  = "export"
+)
+
+// UsageCounter is one (subject, metric, day) row of the quota ledger.
+type UsageCounter struct {
+	Metric string `json:"metric"`
+	Count  int64  `json:"count"`
+}
+
+// TierGrant is an audit row: who was given what, by whom, and why.
+type TierGrant struct {
+	ID        string     `json:"id"`
+	UserID    string     `json:"userId"`
+	Tier      string     `json:"tier"`
+	GrantedBy string     `json:"grantedBy"`
+	Reason    string     `json:"reason,omitempty"`
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+}

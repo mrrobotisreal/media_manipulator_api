@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"log"
 	"log/slog"
@@ -38,9 +39,11 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/logger"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/metrics"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/redisx"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
 
 func loadDotEnv() {
@@ -192,15 +195,24 @@ func main() {
 	// Future auth seam (default OFF): when RESTORE_REQUIRE_FIREBASE_AUTH is
 	// set, /api/video-restore/* verifies Firebase ID tokens. Init failure
 	// leaves the verifier nil and the middleware fails CLOSED on that group.
-	var restoreAuthVerifier middleware.TokenVerifier
-	if cfg.RestoreRequireFirebaseAuth {
-		verifier, err := middleware.NewFirebaseVerifier(ctx, cfg.FirebaseProjectID)
-		if err != nil {
-			logging.Error("firebase auth init failed; /api/video-restore/* will reject all requests", "error", err.Error())
-		} else {
-			restoreAuthVerifier = verifier
+	// One Firebase ID-token verifier, shared by two consumers with different
+	// postures:
+	//   - the restore routes, gated behind RESTORE_REQUIRE_FIREBASE_AUTH, which
+	//     fail CLOSED when the flag is on and init failed;
+	//   - accounts and tier resolution, which are always on and fail OPEN — a
+	//     request with no usable verifier is simply anonymous.
+	// It is therefore initialized unconditionally rather than only when the
+	// restore flag is set.
+	var firebaseVerifier middleware.TokenVerifier
+	if verifier, err := middleware.NewFirebaseVerifier(ctx, cfg.FirebaseProjectID); err != nil {
+		logging.Error("firebase auth init failed; sign-in and tier resolution are unavailable (all callers anonymous)", "error", err.Error())
+		if cfg.RestoreRequireFirebaseAuth {
+			logging.Error("RESTORE_REQUIRE_FIREBASE_AUTH is on; /api/video-restore/* will reject all requests")
 		}
+	} else {
+		firebaseVerifier = verifier
 	}
+	restoreAuthVerifier := firebaseVerifier
 
 	// Double Raven portal auth (ALWAYS on, independent of
 	// RESTORE_REQUIRE_FIREBASE_AUTH): initialize a Firebase claims verifier for
@@ -245,7 +257,13 @@ func main() {
 	// Periodic active-jobs gauge update.
 	go pollActiveJobs(ctx, jobManager, metricsReg)
 
-	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, restoreAuthVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg)
+	// Tier limits are resolved once from config and shared by the quota
+	// middleware, the validators and the public /api/tiers endpoint. One table,
+	// read in one place.
+	tierRegistry := tiers.New(cfg)
+	accountHandler := handlers.NewAccountHandler(store, tierRegistry, cfg, logging)
+
+	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -293,7 +311,7 @@ func newS3Client(cfg *config.Config) *s3.Client {
 	})
 }
 
-func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, restoreAuthVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, drCommentsHandler *handlers.DrCommentsHandler, drFeedbackHandler *handlers.DrFeedbackHandler, drChatLabHandler *handlers.DrChatLabHandler, drTasksHandler *handlers.DrTasksHandler, drDesktopHandler *handlers.DrDesktopHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
+func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, accountHandler *handlers.AccountHandler, tierRegistry *tiers.Registry, restoreAuthVerifier middleware.TokenVerifier, firebaseVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, drCommentsHandler *handlers.DrCommentsHandler, drFeedbackHandler *handlers.DrFeedbackHandler, drChatLabHandler *handlers.DrChatLabHandler, drTasksHandler *handlers.DrTasksHandler, drDesktopHandler *handlers.DrDesktopHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.Default()
@@ -330,13 +348,28 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 	corsConfig.AllowCredentials = false
 	// Expose the byte-range response headers so cross-origin <video> seeking and
 	// the Content Studio proxy passthrough work.
-	corsConfig.ExposeHeaders = []string{"Content-Length", "Content-Disposition", "Content-Range", "Accept-Ranges", "X-MM-Request-ID"}
+	corsConfig.ExposeHeaders = []string{
+		"Content-Length", "Content-Disposition", "Content-Range", "Accept-Ranges", "X-MM-Request-ID",
+		// Quota state, read by the UI's meter after every gated request. The
+		// browser hides response headers that are not listed here.
+		middleware.HeaderQuotaLimit, middleware.HeaderQuotaRemaining,
+		middleware.HeaderQuotaReset, middleware.HeaderTier,
+	}
 	router.Use(cors.New(corsConfig))
 	router.Use(middleware.RequestContext())
 	router.Use(middleware.AccessLog(store, enricher))
 	router.Use(m.Middleware())
 	// Global per-IP rate limit guard.
 	router.Use(limiter.GlobalIPRPS())
+
+	// FIX B3: this used to be called at the END of setupRouter, after every
+	// route had already been registered. Gin's group.combineHandlers snapshots
+	// the middleware slice at registration time, so an engine-level Use() after
+	// the fact only reaches the 404/405 chains — all sixteen per-route buckets
+	// were dead code that never executed. It has to be installed before the
+	// route groups below are created. The dispatcher does its own path
+	// matching, so running globally is correct.
+	router.Use(routeLimitDispatcher(cfg, limiter, newRouteGuard(limiter)))
 
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "healthy", "service": "media_manipulator_api"})
@@ -348,6 +381,25 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 
 	api := router.Group("/api")
 	{
+		// Identity, then quota — installed on the group BEFORE any route is
+		// registered, so they are part of every handler chain the Register*
+		// calls below snapshot. Installing them after registration is what made
+		// B3, and it fails silently.
+		//
+		// OptionalFirebaseAuth is safe everywhere on /api: with no Bearer header
+		// it returns immediately, and it never rejects. Quota is applied only to
+		// the paths in quotaRoutes.
+		api.Use(middleware.OptionalFirebaseAuth(true, firebaseVerifier))
+		api.Use(quotaDispatcher(middleware.QuotaConfig{
+			Store:    store,
+			Registry: tierRegistry,
+			Enabled:  cfg.TierQuotaEnabled,
+			// A fixed salt, like internal/limits/limiter.go's. The goal is that
+			// the ledger holds no reversible address, not cryptographic secrecy.
+			IPHashSecret: quotaIPSalt[:],
+			Logger:       slog.Default(),
+		}))
+
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "healthy", "service": "media_manipulator_api"})
 		})
@@ -396,33 +448,111 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// DR Portal desktop app installer downloads, on the same group.
 		handlers.RegisterDrDesktopRoutes(drGroup, drDesktopHandler)
 
-		// Tighter limits for upload/transcode/analysis paths.
-		api.Use() // marker; per-route limiters below
-		registerLimitedRoute := func(path string, h gin.HandlerFunc, sessionLimit, ipLimit int, tool string) {
-			api.POST(path, limiter.Route(strings.ReplaceAll(strings.TrimPrefix(path, "/"), "/", "_"), tool, sessionLimit, ipLimit), h)
-		}
-		_ = registerLimitedRoute // wired below for limiter middlewares applied on existing routes
-
 		telemetryHandler := handlers.NewTelemetryHandler(store, enricher)
 		telemetryHandler.Register(api)
-	}
 
-	// Per-route limiters: we attach extra-strict limits via a second
-	// router group so the original handler logic is untouched. We re-mount
-	// the limited endpoints under the same paths; gin allows multiple
-	// handlers per (method, path), so the order matters: this group sits
-	// behind the conversion routes already registered above. To preserve
-	// behavior we set the limiter as middleware on a fresh "guarded" view
-	// that does nothing on its own — limiter aborts on 429.
-	guard := func(routeKey, tool string, sessionLimit, ipLimit int) gin.HandlerFunc {
-		return limiter.Route(routeKey, tool, sessionLimit, ipLimit)
+		// Accounts and the public tier matrix. /sync and /me require a verified
+		// token; /usage works anonymously so a signed-out visitor's quota meter
+		// is real; /tiers is fully public and is what /pricing renders from.
+		handlers.RegisterAccountRoutes(api, accountHandler, cfg, restoreAuthVerifier)
 	}
-	// Wrap by replacing handler chains is complex; instead we add limiter
-	// middleware via Use on a child group bound to specific paths via
-	// path matching middleware.
-	router.Use(routeLimitDispatcher(cfg, limiter, guard))
 
 	return router
+}
+
+// newRouteGuard builds the per-route limiter middleware factory the dispatcher
+// calls. It is a package variable so cmd/api's test can substitute a spy and
+// prove the dispatcher actually runs on a real route — the failure mode in B3
+// was silent, and only a test keeps it fixed.
+var newRouteGuard = func(limiter *limits.Limiter) func(routeKey, tool string, sessionLimit, ipLimit int) gin.HandlerFunc {
+	return func(routeKey, tool string, sessionLimit, ipLimit int) gin.HandlerFunc {
+		return limiter.Route(routeKey, tool, sessionLimit, ipLimit)
+	}
+}
+
+// quotaIPSalt salts the hashed-IP quota subject. Fixed, like the rate
+// limiter's — non-reversibility within a snapshot, not secrecy.
+var quotaIPSalt = sha256.Sum256([]byte("mm-api-quota-ip-salt"))
+
+// quotaRoute maps one gated endpoint to the metric it spends.
+type quotaRoute struct {
+	metric string
+	// matches overrides the default exact-path comparison, for the
+	// parameterized Content Studio routes.
+	path    string
+	matches func(path string) bool
+}
+
+// quotaRoutes is the whole gated surface. Anything not listed here is free of
+// charge — status polls, downloads, capability probes and the account
+// endpoints themselves must never spend a visitor's allowance.
+var quotaRoutes = []quotaRoute{
+	// `ops` — the everyday conversion work the daily allowance is about.
+	{metric: models.MetricOps, path: "/api/upload"},
+	{metric: models.MetricOps, path: "/api/video-upload/complete"},
+	{metric: models.MetricOps, path: "/api/video-transcode/start"},
+	{metric: models.MetricOps, path: "/api/tools/caption-translator"},
+	{metric: models.MetricOps, path: "/api/tools/stitch-audio-to-video"},
+
+	// `ai_ops` — GPU-bound work with a much tighter allowance.
+	{metric: models.MetricAIOps, path: "/api/document-scan/start"},
+	{metric: models.MetricAIOps, path: "/api/image-restore/start"},
+	{metric: models.MetricAIOps, path: "/api/video-restore/start"},
+	{
+		metric: models.MetricAIOps,
+		matches: func(path string) bool {
+			return strings.HasPrefix(path, "/api/studio/projects/") && strings.HasSuffix(path, "/captions/generate")
+		},
+	},
+	{
+		metric: models.MetricAIOps,
+		matches: func(path string) bool {
+			return strings.HasPrefix(path, "/api/studio/assets/") && strings.HasSuffix(path, "/derive")
+		},
+	},
+
+	// `export` — a Content Studio render, counted against the ops allowance.
+	{
+		metric: models.MetricExport,
+		matches: func(path string) bool {
+			return strings.HasPrefix(path, "/api/studio/projects/") && strings.HasSuffix(path, "/export")
+		},
+	},
+}
+
+// quotaDispatcher applies RequireQuota to the paths in quotaRoutes.
+//
+// It is installed on the /api group before any route is registered, so it is
+// genuinely part of each route's handler chain. The per-metric handlers are
+// built once at startup rather than per request.
+func quotaDispatcher(cfg middleware.QuotaConfig) gin.HandlerFunc {
+	byMetric := map[string]gin.HandlerFunc{}
+	for _, r := range quotaRoutes {
+		if _, ok := byMetric[r.metric]; !ok {
+			byMetric[r.metric] = middleware.RequireQuota(cfg, r.metric)
+		}
+	}
+
+	return func(c *gin.Context) {
+		// Only mutating requests spend quota. A GET is a status poll or a
+		// download of work already paid for.
+		if c.Request.Method != http.MethodPost {
+			c.Next()
+			return
+		}
+		path := c.Request.URL.Path
+		for _, r := range quotaRoutes {
+			hit := r.matches != nil && r.matches(path)
+			if !hit {
+				hit = r.path != "" && r.path == path
+			}
+			if hit {
+				byMetric[r.metric](c)
+				return
+			}
+		}
+		c.Next()
+	}
 }
 
 // routeLimitDispatcher applies per-route limits using the path on the

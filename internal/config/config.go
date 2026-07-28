@@ -126,6 +126,48 @@ type Config struct {
 	RateLimitAnalysisPerIPPerHour        int
 	RateLimitAuditAllowed                bool
 
+	// Tier limits
+	//
+	// The defaults here ARE the published tier matrix (/pricing renders them
+	// from GET /api/tiers, which serves internal/tiers). Overriding one of
+	// these env vars changes what the product promises, so change the default
+	// rather than setting an env var unless you are deliberately running a
+	// deployment with different economics.
+	//
+	// Anonymous is deliberately generous enough to be genuinely useful — the
+	// SEO landing pages have to convert a first-time visitor with zero
+	// friction, and "convert one file" is the job that brings them.
+	TierQuotaEnabled bool
+
+	TierAnonOpsPerDay       int
+	TierAnonAIOpsPerDay     int
+	TierAnonMaxFileBytes    int64
+	TierAnonMaxVideoSeconds int
+	TierAnonMaxOutputHeight int
+	TierAnonMaxLadderHeight int
+	TierAnonStudioProjects  int
+	TierAnonRetentionHours  int
+
+	TierFreeOpsPerDay       int
+	TierFreeAIOpsPerDay     int
+	TierFreeMaxFileBytes    int64
+	TierFreeMaxVideoSeconds int
+	TierFreeMaxOutputHeight int
+	TierFreeMaxLadderHeight int
+	TierFreeStudioProjects  int
+	TierFreeRetentionHours  int
+
+	TierPremiumOpsPerDay       int
+	TierPremiumAIOpsPerDay     int
+	TierPremiumMaxFileBytes    int64
+	TierPremiumMaxVideoSeconds int
+	TierPremiumMaxOutputHeight int
+	TierPremiumMaxLadderHeight int
+	// -1 = unlimited. getEnvIntDefault, not getEnvInt, because getEnvInt
+	// rejects non-positive values.
+	TierPremiumStudioProjects int
+	TierPremiumRetentionHours int
+
 	// FFmpeg validation
 	MaxVideoDurationSeconds int
 	MaxVideoWidth           int
@@ -434,6 +476,44 @@ func Load() *Config {
 		RateLimitAnalysisPerSessionPerHour:   getEnvInt("RATE_LIMIT_ANALYSIS_PER_SESSION_PER_HOUR", 20),
 		RateLimitAnalysisPerIPPerHour:        getEnvInt("RATE_LIMIT_ANALYSIS_PER_IP_PER_HOUR", 40),
 		RateLimitAuditAllowed:                getEnvBool("RATE_LIMIT_AUDIT_ALLOWED", false),
+
+		// Tier limits — see the struct comment. These defaults are the
+		// published matrix; /pricing renders them via GET /api/tiers.
+		// DEFAULT OFF until the UI ships.
+		//
+		// The enforcement path is complete and tested, but a 429 with no quota
+		// meter, no sign-up modal and no /pricing page to explain it would be a
+		// worse product than no quota at all — and would read badly to an
+		// AdSense reviewer. Flip this to true in the same release as the
+		// account UI (Phase 4 UI steps 7–8).
+		TierQuotaEnabled: getEnvBool("TIER_QUOTA_ENABLED", false),
+
+		TierAnonOpsPerDay:       getEnvInt("TIER_ANON_OPS_PER_DAY", 5),
+		TierAnonAIOpsPerDay:     getEnvInt("TIER_ANON_AI_OPS_PER_DAY", 1),
+		TierAnonMaxFileBytes:    getEnvInt64("TIER_ANON_MAX_FILE_BYTES", 200*1024*1024),
+		TierAnonMaxVideoSeconds: getEnvInt("TIER_ANON_MAX_VIDEO_SECONDS", 5*60),
+		TierAnonMaxOutputHeight: getEnvInt("TIER_ANON_MAX_OUTPUT_HEIGHT", 1080),
+		TierAnonMaxLadderHeight: getEnvInt("TIER_ANON_MAX_LADDER_HEIGHT", 720),
+		TierAnonStudioProjects:  getEnvIntDefault("TIER_ANON_STUDIO_PROJECTS", 1),
+		TierAnonRetentionHours:  getEnvInt("TIER_ANON_RETENTION_HOURS", 24),
+
+		TierFreeOpsPerDay:       getEnvInt("TIER_FREE_OPS_PER_DAY", 30),
+		TierFreeAIOpsPerDay:     getEnvInt("TIER_FREE_AI_OPS_PER_DAY", 5),
+		TierFreeMaxFileBytes:    getEnvInt64("TIER_FREE_MAX_FILE_BYTES", 1024*1024*1024),
+		TierFreeMaxVideoSeconds: getEnvInt("TIER_FREE_MAX_VIDEO_SECONDS", 20*60),
+		TierFreeMaxOutputHeight: getEnvInt("TIER_FREE_MAX_OUTPUT_HEIGHT", 1440),
+		TierFreeMaxLadderHeight: getEnvInt("TIER_FREE_MAX_LADDER_HEIGHT", 1080),
+		TierFreeStudioProjects:  getEnvIntDefault("TIER_FREE_STUDIO_PROJECTS", 5),
+		TierFreeRetentionHours:  getEnvInt("TIER_FREE_RETENTION_HOURS", 7*24),
+
+		TierPremiumOpsPerDay:       getEnvInt("TIER_PREMIUM_OPS_PER_DAY", 300),
+		TierPremiumAIOpsPerDay:     getEnvInt("TIER_PREMIUM_AI_OPS_PER_DAY", 60),
+		TierPremiumMaxFileBytes:    getEnvInt64("TIER_PREMIUM_MAX_FILE_BYTES", 5*1024*1024*1024),
+		TierPremiumMaxVideoSeconds: getEnvInt("TIER_PREMIUM_MAX_VIDEO_SECONDS", 2*60*60),
+		TierPremiumMaxOutputHeight: getEnvInt("TIER_PREMIUM_MAX_OUTPUT_HEIGHT", 2160),
+		TierPremiumMaxLadderHeight: getEnvInt("TIER_PREMIUM_MAX_LADDER_HEIGHT", 2160),
+		TierPremiumStudioProjects:  getEnvIntDefault("TIER_PREMIUM_STUDIO_PROJECTS", -1),
+		TierPremiumRetentionHours:  getEnvInt("TIER_PREMIUM_RETENTION_HOURS", 30*24),
 
 		// FFmpeg validation
 		MaxVideoDurationSeconds: getEnvInt("MAX_VIDEO_DURATION_SECONDS", 7200),
