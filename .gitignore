@@ -24,3 +24,6 @@ scripts/server/tmp/
 scripts/server/*.zip
 scripts/server/*.tar.gz
 gfpgan/
+
+# Stray directory created by internal/services tests (pre-existing test-hygiene issue).
+internal/services/job-*/

@@ -118,19 +118,52 @@ func ProbeVideoReport(ctx context.Context, inputPath string) (*models.VideoProbe
 	}
 
 	out.MaxQualityLabel = classifyMaxQuality(out.Height)
-	all := buildQualityRungs(out.Height, false)
-	enabled, disabled := splitRungs(all)
-	out.SelectableRungs = enabled
-	out.DisabledRungs = disabled
+	// The ladder defaults to the most restrictive tier. Callers that know who
+	// is asking re-apply it with ApplyLadderAccess; callers that do not (the
+	// restore and Studio pipelines, which never show a rung picker) keep the
+	// safe answer.
+	ApplyLadderAccess(out, AnonymousLadderAccess())
 
-	if out.Height > 0 && out.Height < 360 {
-		out.SourceTooSmall = true
-		out.Warnings = append(out.Warnings, freeMinHeightTooltip)
-	}
 	if !out.HasAudio {
 		out.Warnings = append(out.Warnings, captionsNoAudioTip)
 	}
 	return out, nil
+}
+
+// ApplyLadderAccess recomputes the selectable/disabled rung split and the
+// source-too-small warning for a specific caller's tier.
+//
+// This is separate from ProbeVideoReport because the ffprobe run is the
+// expensive part and is tier-independent: exactly one probe per request, then
+// the cheap tier-dependent view on top of it.
+func ApplyLadderAccess(report *models.VideoProbeResponse, access LadderAccess) {
+	if report == nil {
+		return
+	}
+	enabled, disabled := splitRungs(buildQualityRungs(report.Height, access))
+	report.SelectableRungs = enabled
+	report.DisabledRungs = disabled
+
+	report.SourceTooSmall = report.Height > 0 && access.MinHeight > 0 && report.Height < access.MinHeight
+	// Drop any previously-attached minimum-height warning before deciding
+	// again, so re-applying a different tier never leaves a stale one behind.
+	report.Warnings = withoutMinHeightWarnings(report.Warnings)
+	if report.SourceTooSmall {
+		report.Warnings = append(report.Warnings, access.minHeightMessage())
+	}
+}
+
+// withoutMinHeightWarnings strips the warning ApplyLadderAccess owns. Matching
+// on the shared prefix keeps this working if the wording is retuned.
+func withoutMinHeightWarnings(warnings []string) []string {
+	out := warnings[:0]
+	for _, w := range warnings {
+		if strings.HasPrefix(w, "This video is below the ") {
+			continue
+		}
+		out = append(out, w)
+	}
+	return out
 }
 
 func streamInfoFromFFprobe(stream ffprobeStream) models.FFProbeStreamInfo {

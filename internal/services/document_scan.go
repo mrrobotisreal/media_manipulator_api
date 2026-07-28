@@ -86,6 +86,8 @@ type DocumentScanRequest struct {
 	Summarize           bool
 	SessionID           string
 	RequestID           string
+	// GPUPriority lets a Premium caller jump the shared GPU queue.
+	GPUPriority int
 }
 
 // wantsOutput reports whether a given output format was requested.

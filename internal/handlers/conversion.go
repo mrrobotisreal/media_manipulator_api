@@ -19,6 +19,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
 
 type ConversionHandler struct {
@@ -36,9 +37,10 @@ type ConversionHandler struct {
 	s3Presign          *s3.PresignClient
 	faceDetectionStore *services.FaceDetectionStore
 	aiService          *services.AIService
+	tierRegistry       *tiers.Registry
 }
 
-func NewConversionHandler(jobManager *services.JobManager, converter *services.Converter, cfg *config.Config, inspector *services.MediaInspector, analysisJobs *services.AnalysisQueue, transcription *services.TranscriptionService, s3Client *s3.Client, faceDetectionStore *services.FaceDetectionStore) *ConversionHandler {
+func NewConversionHandler(jobManager *services.JobManager, converter *services.Converter, cfg *config.Config, inspector *services.MediaInspector, analysisJobs *services.AnalysisQueue, transcription *services.TranscriptionService, s3Client *s3.Client, faceDetectionStore *services.FaceDetectionStore, tierRegistry *tiers.Registry) *ConversionHandler {
 	converter.SetJobManager(jobManager)
 	converter.SetFaceDetectionStore(faceDetectionStore)
 	var presign *s3.PresignClient
@@ -75,6 +77,7 @@ func NewConversionHandler(jobManager *services.JobManager, converter *services.C
 		s3Presign:          presign,
 		faceDetectionStore: faceDetectionStore,
 		aiService:          ai,
+		tierRegistry:       tierRegistry,
 	}
 }
 
@@ -186,6 +189,7 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare output"})
 		return
 	}
+	markRetention(c, jobUploadDir, jobOutputDir)
 
 	uploadPath := filepath.Join(jobUploadDir, "original_"+safeFilename(fileHeader.Filename))
 	if err := os.Rename(incomingPath, uploadPath); err != nil {
@@ -203,6 +207,15 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 	}
 	if err := services.WriteMetadata(filepath.Join(jobOutputDir, "metadata.json"), metadata); err != nil {
 		log.Printf("failed to write metadata for job %s: %v", job.ID, err)
+	}
+
+	// Duration and resolution caps. ProbeFile already ran ffprobe and kept the
+	// raw JSON, so this reuses that output rather than probing again.
+	if rejection := rejectOverLimit(c, h.cfg, fileType, metadata); rejection != nil {
+		_ = h.jobManager.UpdateJobError(job.ID, rejection.UserMessage)
+		_ = os.RemoveAll(jobUploadDir)
+		c.JSON(rejection.HTTPStatus, gin.H{"error": rejection.UserMessage, "reason": rejection.Reason})
+		return
 	}
 
 	// Skip background analysis for PDFs — the analysis queue targets image,
@@ -395,8 +408,9 @@ func specializedMode(job *models.ConversionJob) string {
 }
 
 func (h *ConversionHandler) multipartFile(c *gin.Context) (io.ReadCloser, *multipartFileHeader, error) {
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, h.cfg.MaxFileSize)
-	if err := c.Request.ParseMultipartForm(h.cfg.MaxFileSize); err != nil {
+	uploadCap := maxUploadBytes(c, h.cfg)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, uploadCap)
+	if err := c.Request.ParseMultipartForm(uploadCap); err != nil {
 		return nil, nil, fmt.Errorf("failed to parse form")
 	}
 	file, fileHeader, err := c.Request.FormFile("file")

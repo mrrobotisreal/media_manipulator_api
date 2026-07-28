@@ -88,6 +88,9 @@ type ImageRestoreRequest struct {
 	FBCNNQualityFactor int
 	SessionID          string
 	RequestID          string
+	// GPUPriority lets a Premium caller jump the shared GPU queue. Zero is the
+	// standard queue; see services.GPUPriority* .
+	GPUPriority int
 }
 
 // ---------------------------------------------------------------------------

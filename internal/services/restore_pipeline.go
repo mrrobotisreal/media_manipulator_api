@@ -484,6 +484,7 @@ func (s *RestoreService) runRestoreModel(ctx context.Context, req RestoreRequest
 	gpuReq := GPURequest{
 		Kind:            "restore-" + string(id),
 		VRAMRequiredMiB: s.cfg.RestoreVRAMMiB[string(id)],
+		Priority:        req.GPUPriority,
 	}
 	task := gpu.TaskRestoreSR
 	if id == models.RestoreModelRealESRGAN {

@@ -169,6 +169,7 @@ func (h *VideoRestoreHandler) StartVideoRestore(c *gin.Context) {
 		IncludeFrames:    req.IncludeFrames,
 		SessionID:        sessionID,
 		RequestID:        c.Writer.Header().Get("X-MM-Request-ID"),
+		GPUPriority:      gpuPriorityFor(c),
 	})
 
 	c.JSON(http.StatusAccepted, models.RestoreStartResponse{JobID: job.ID})

@@ -83,6 +83,8 @@ type RestoreRequest struct {
 	IncludeFrames    bool
 	SessionID        string
 	RequestID        string
+	// GPUPriority lets a Premium caller jump the shared GPU queue.
+	GPUPriority int
 }
 
 // ---------------------------------------------------------------------------

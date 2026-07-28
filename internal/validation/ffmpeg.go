@@ -43,16 +43,38 @@ func (r *Rejection) Error() string {
 	return r.UserMessage
 }
 
-// ValidateVideo enforces the per-config caps against a probed video file.
-func ValidateVideo(cfg *config.Config, p *ProbeReport) error {
+// Limits is the tier-derived slice of the caps this package enforces. It is a
+// local struct rather than tiers.Limits so the validation package stays
+// dependency-free and testable with a literal.
+//
+// Only the caps the published tier matrix actually differentiates appear here.
+// Source width/height/pixels/framerate stay deployment-wide: the matrix's
+// "max output resolution" row governs what we *render*, which is the transcode
+// ladder's job (see services.LadderAccess), not what a caller may upload. A
+// free user converting a 4K source down to 720p is a completely ordinary thing
+// to do and must keep working.
+type Limits struct {
+	// MaxVideoSeconds caps source duration. 0 means "no tier cap".
+	MaxVideoSeconds int
+}
+
+// ValidateVideo enforces the caps against a probed video file.
+//
+// Two ceilings apply and the tighter wins: cfg is the deployment's absolute
+// ceiling and limits is the caller's tier allowance. limits may be nil, which
+// means no tier has been resolved and only the deployment ceiling applies —
+// the behaviour before tiers existed.
+func ValidateVideo(cfg *config.Config, limits *Limits, p *ProbeReport) error {
 	if cfg == nil || p == nil {
 		return nil
 	}
+	maxVideoSeconds := tighter(cfg.MaxVideoDurationSeconds, limits.videoSeconds())
+	maxAudioSeconds := tighter(cfg.MaxAudioDurationSeconds, limits.videoSeconds())
 	if p.HasVideo {
-		if cfg.MaxVideoDurationSeconds > 0 && p.DurationSeconds > float64(cfg.MaxVideoDurationSeconds) {
+		if maxVideoSeconds > 0 && p.DurationSeconds > float64(maxVideoSeconds) {
 			return &Rejection{
 				Reason:          "video_duration",
-				UserMessage:     fmt.Sprintf("Video is too long. Max allowed is %d minutes.", cfg.MaxVideoDurationSeconds/60),
+				UserMessage:     fmt.Sprintf("Video is too long. Your plan allows up to %s.", describeDuration(maxVideoSeconds)),
 				HTTPStatus:      413,
 				DurationSeconds: p.DurationSeconds,
 			}
@@ -77,7 +99,7 @@ func ValidateVideo(cfg *config.Config, p *ProbeReport) error {
 		if cfg.MaxVideoPixels > 0 && pixels > cfg.MaxVideoPixels {
 			return &Rejection{
 				Reason:      "video_pixels",
-				UserMessage: fmt.Sprintf("Video resolution %dx%d exceeds the current free limit (max %d pixels).", p.Width, p.Height, cfg.MaxVideoPixels),
+				UserMessage: fmt.Sprintf("Video resolution %dx%d exceeds the maximum this service accepts (max %d pixels).", p.Width, p.Height, cfg.MaxVideoPixels),
 				HTTPStatus:  413,
 				Width:       p.Width,
 				Height:      p.Height,
@@ -92,15 +114,55 @@ func ValidateVideo(cfg *config.Config, p *ProbeReport) error {
 			}
 		}
 	}
-	if p.HasAudio && !p.HasVideo && cfg.MaxAudioDurationSeconds > 0 && p.DurationSeconds > float64(cfg.MaxAudioDurationSeconds) {
+	if p.HasAudio && !p.HasVideo && maxAudioSeconds > 0 && p.DurationSeconds > float64(maxAudioSeconds) {
 		return &Rejection{
 			Reason:          "audio_duration",
-			UserMessage:     fmt.Sprintf("Audio is too long. Max allowed is %d minutes.", cfg.MaxAudioDurationSeconds/60),
+			UserMessage:     fmt.Sprintf("Audio is too long. Your plan allows up to %s.", describeDuration(maxAudioSeconds)),
 			HTTPStatus:      413,
 			DurationSeconds: p.DurationSeconds,
 		}
 	}
 	return nil
+}
+
+func (l *Limits) videoSeconds() int {
+	if l == nil {
+		return 0
+	}
+	return l.MaxVideoSeconds
+}
+
+// tighter returns the smaller of two caps, treating 0 or less as "uncapped".
+func tighter(a, b int) int {
+	switch {
+	case a <= 0:
+		return b
+	case b <= 0:
+		return a
+	case b < a:
+		return b
+	default:
+		return a
+	}
+}
+
+// describeDuration renders a second count the way the pricing page does:
+// "5 minutes", "20 minutes", "2 hours".
+func describeDuration(seconds int) string {
+	switch {
+	case seconds%3600 == 0 && seconds >= 3600:
+		if seconds == 3600 {
+			return "1 hour"
+		}
+		return fmt.Sprintf("%d hours", seconds/3600)
+	case seconds >= 60:
+		if seconds/60 == 1 {
+			return "1 minute"
+		}
+		return fmt.Sprintf("%d minutes", seconds/60)
+	default:
+		return fmt.Sprintf("%d seconds", seconds)
+	}
 }
 
 // Probe runs ffprobe and returns a ProbeReport. Used by handlers that don't
@@ -122,6 +184,17 @@ func Probe(ctx context.Context, ffprobeBin, path string, timeout time.Duration) 
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe: %w", err)
 	}
+	return ParseProbeJSON(out)
+}
+
+// ParseProbeJSON reduces raw `ffprobe -print_format json -show_streams
+// -show_format` output to a ProbeReport.
+//
+// Exported so callers that have already run ffprobe for another reason can
+// validate without paying for a second process. The upload path is the case:
+// MediaInspector.ProbeFile keeps the raw JSON, so validation costs a JSON
+// decode rather than another probe of a multi-gigabyte file.
+func ParseProbeJSON(out []byte) (*ProbeReport, error) {
 	var raw struct {
 		Streams []struct {
 			CodecType    string `json:"codec_type"`

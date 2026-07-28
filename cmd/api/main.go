@@ -139,7 +139,11 @@ func main() {
 	transcription := services.NewTranscriptionService(cfg, inspector, jobManager, analysisQueue)
 	s3Client := newS3Client(cfg)
 	faceDetectionStore := services.NewFaceDetectionStore(30 * time.Minute)
-	conversionHandler := handlers.NewConversionHandler(jobManager, converter, cfg, inspector, analysisQueue, transcription, s3Client, faceDetectionStore)
+	// Tier limits are resolved once from config and shared by the quota
+	// middleware, the validators, the transcode ladder and the public
+	// /api/tiers endpoint. One table, read in one place.
+	tierRegistry := tiers.New(cfg)
+	conversionHandler := handlers.NewConversionHandler(jobManager, converter, cfg, inspector, analysisQueue, transcription, s3Client, faceDetectionStore, tierRegistry)
 	// Content Studio gets its own handler because it persists projects/assets in
 	// Postgres (the conversion handler is stateless). It shares the jobManager so
 	// ingest/export progress flows through the same /api/job/:jobId machinery.
@@ -257,10 +261,6 @@ func main() {
 	// Periodic active-jobs gauge update.
 	go pollActiveJobs(ctx, jobManager, metricsReg)
 
-	// Tier limits are resolved once from config and shared by the quota
-	// middleware, the validators and the public /api/tiers endpoint. One table,
-	// read in one place.
-	tierRegistry := tiers.New(cfg)
 	accountHandler := handlers.NewAccountHandler(store, tierRegistry, cfg, logging)
 
 	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg)
@@ -381,15 +381,23 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 
 	api := router.Group("/api")
 	{
-		// Identity, then quota — installed on the group BEFORE any route is
-		// registered, so they are part of every handler chain the Register*
-		// calls below snapshot. Installing them after registration is what made
-		// B3, and it fails silently.
+		// Identity, then tier, then quota — installed on the group BEFORE any
+		// route is registered, so they are part of every handler chain the
+		// Register* calls below snapshot. Installing them after registration is
+		// what made B3, and it fails silently.
 		//
 		// OptionalFirebaseAuth is safe everywhere on /api: with no Bearer header
 		// it returns immediately, and it never rejects. Quota is applied only to
 		// the paths in quotaRoutes.
 		api.Use(middleware.OptionalFirebaseAuth(true, firebaseVerifier))
+		// TierContext resolves the caller's entitlement lazily and once. The
+		// quota middleware, the upload byte caps and the transcode ladder all
+		// read the same answer through middleware.ResolveTier.
+		api.Use(middleware.TierContext(middleware.TierConfig{
+			Store:    store,
+			Registry: tierRegistry,
+			Logger:   slog.Default(),
+		}, cfg.TierQuotaEnabled))
 		api.Use(quotaDispatcher(middleware.QuotaConfig{
 			Store:    store,
 			Registry: tierRegistry,

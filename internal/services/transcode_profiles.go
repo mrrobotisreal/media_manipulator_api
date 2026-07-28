@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
 
 // QualityProfile mirrors the CreaTV ladder rung definition: a height plus the
@@ -21,10 +22,11 @@ type QualityProfile struct {
 	Preset           string
 }
 
-// ladderProfiles is the full canonical adaptive ladder. The Media Manipulator
-// product currently only sells the 360p/480p/720p subset to free users — the
-// premium rungs (144p/240p/1080p/2160p) are returned by buildQualityRungs as
-// disabled+premium so the UI can render them grayed-out behind a tooltip.
+// ladderProfiles is the full canonical adaptive ladder. Which rungs a given
+// caller may actually select is decided by LadderAccess, from the tier matrix;
+// the rest are returned by buildQualityRungs as disabled, carrying the name of
+// the tier that would unlock them, so the UI can render them greyed-out behind
+// an honest tooltip.
 func ladderProfiles() []QualityProfile {
 	return []QualityProfile{
 		{Label: "144p", Height: 144, VideoBitrateKbps: 200, AudioBitrateKbps: 64, CRF: 26, Preset: "veryfast"},
@@ -37,19 +39,124 @@ func ladderProfiles() []QualityProfile {
 	}
 }
 
-// freeRungLabels lists the rungs available to free users. Changing this set is
-// the single place to flip a rung from premium to free (or back).
-var freeRungLabels = map[string]bool{
-	"360p": true,
-	"480p": true,
-	"720p": true,
+// ladderFloorHeight is the shortest rung a non-Premium caller may select.
+// Sub-360p output is a specialist need (bandwidth-constrained distribution),
+// not a cheaper one, so it sits with Premium rather than at the bottom of the
+// free ladder.
+const ladderFloorHeight = 360
+
+// LadderAccess is the slice of the transcode ladder one caller may use, derived
+// from their tier. It is the only thing buildQualityRungs and
+// ValidateSelectedRungs consult, so the three-tier rules live in exactly one
+// place — and the tall end of each tier comes from tiers.Limits.MaxLadderHeight
+// (i.e. from configuration) rather than from a literal repeated here.
+//
+// Per the published matrix: anonymous ≤ 720p, free ≤ 1080p, premium the full
+// 144p–2160p ladder.
+type LadderAccess struct {
+	// Tier is the caller's tier, used only to word the disabled tooltips.
+	Tier tiers.Tier
+	// MinHeight and MaxHeight bound the selectable rungs, inclusive.
+	MinHeight int
+	MaxHeight int
+	// unlockedBy names, for each rung this caller cannot select, the cheapest
+	// tier that could. Empty for rungs the caller can already use, and for
+	// rungs no tier offers.
+	unlockedBy map[string]tiers.Tier
+}
+
+// LadderAccessFor builds the access rules for one tier by asking the registry
+// what every tier is allowed, so the "which tier unlocks this rung" copy stays
+// correct automatically if the matrix is retuned via TIER_* env vars.
+func LadderAccessFor(tier tiers.Tier, registry *tiers.Registry) LadderAccess {
+	if registry == nil {
+		return AnonymousLadderAccess()
+	}
+	access := bounds(tier, registry.For(tier))
+	access.unlockedBy = map[string]tiers.Tier{}
+	for _, p := range ladderProfiles() {
+		if access.allows(p.Height) {
+			continue
+		}
+		// tiers.All() is in ascending order of capability, so the first match
+		// is the cheapest tier that would unlock this rung.
+		for _, candidate := range tiers.All() {
+			if bounds(candidate, registry.For(candidate)).allows(p.Height) {
+				access.unlockedBy[p.Label] = candidate
+				break
+			}
+		}
+	}
+	return access
+}
+
+// AnonymousLadderAccess is the safe default for any path that has not resolved
+// a caller — the most restrictive rules, never the most permissive.
+func AnonymousLadderAccess() LadderAccess {
+	return LadderAccess{
+		Tier:      tiers.TierAnonymous,
+		MinHeight: ladderFloorHeight,
+		MaxHeight: 720,
+		unlockedBy: map[string]tiers.Tier{
+			"144p":  tiers.TierPremium,
+			"240p":  tiers.TierPremium,
+			"1080p": tiers.TierFree,
+			"2160p": tiers.TierPremium,
+		},
+	}
+}
+
+func bounds(tier tiers.Tier, limits tiers.Limits) LadderAccess {
+	min := ladderFloorHeight
+	if tier == tiers.TierPremium {
+		min = 0
+	}
+	return LadderAccess{Tier: tier, MinHeight: min, MaxHeight: limits.MaxLadderHeight}
+}
+
+func (a LadderAccess) allows(height int) bool {
+	return height >= a.MinHeight && height <= a.MaxHeight
+}
+
+// tierLabel is the name the tooltips use for a tier.
+func tierLabel(t tiers.Tier) string {
+	switch t {
+	case tiers.TierFree:
+		return "free account"
+	case tiers.TierPremium:
+		return "Premium"
+	default:
+		return "a higher plan"
+	}
+}
+
+// lockedReason words the disabled tooltip for a rung this caller cannot select.
+// §4.9's target is the honest short form — "1080p — free account", "2160p —
+// Premium" — not a sales pitch on every chip.
+func (a LadderAccess) lockedReason(label string) string {
+	if unlock, ok := a.unlockedBy[label]; ok {
+		if unlock == tiers.TierPremium {
+			return fmt.Sprintf("%s — Premium (sign-up coming soon)", label)
+		}
+		return fmt.Sprintf("%s — %s", label, tierLabel(unlock))
+	}
+	return fmt.Sprintf("%s is not available on this plan", label)
+}
+
+// minHeightMessage explains a source that is shorter than the caller's floor.
+func (a LadderAccess) minHeightMessage() string {
+	if a.MinHeight <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"This video is below the %dp transcode minimum for your plan. Premium supports ultra-low-quality sources; otherwise please load a video that is %dp or higher.",
+		a.MinHeight, a.MinHeight,
+	)
 }
 
 const (
-	premiumTooltip       = "Sign up for a Premium account to get full transcode access! (Premium sign-up Coming Soon!)"
-	sourceTooSmallTip    = "The source video is not high enough resolution for this output rung."
-	captionsNoAudioTip   = "Captions require an audio track. This video does not appear to have audio."
-	freeMinHeightTooltip = "This video is below the free transcode minimum of 360p. Premium support for ultra-low-quality sources is coming soon. Please load a video that is 360p or higher."
+	sourceTooSmallTip  = "The source video is not high enough resolution for this output rung."
+	captionsNoAudioTip = "Captions require an audio track. This video does not appear to have audio."
 )
 
 // ProfileByLabel finds the canonical ladder rung for a given label.
@@ -111,11 +218,13 @@ func parseFractionFrameRate(raw string) float64 {
 // cannot be used are still returned but marked Enabled=false with a tooltip
 // reason — that's what lets the UI render greyed-out chips with hover help.
 //
-// isPremium=false (the only path today) means the free-tier rules apply:
-//   - 360p, 480p, 720p are selectable if the source is tall enough;
-//   - 144p/240p/1080p/2160p are disabled "premium coming soon";
-//   - sources < 360p mark every rung as sourceTooSmall.
-func buildQualityRungs(sourceHeight int, isPremium bool) []models.TranscodeQualityRung {
+// The rules, in order of precedence:
+//   - a rung taller than the source is sourceTooSmall, whatever the tier;
+//   - a rung outside the caller's LadderAccess is disabled and names the tier
+//     that would unlock it;
+//   - everything else is selectable, with 360p/480p/720p pre-selected where the
+//     caller can actually use them.
+func buildQualityRungs(sourceHeight int, access LadderAccess) []models.TranscodeQualityRung {
 	rungs := make([]models.TranscodeQualityRung, 0, 7)
 	defaultSelected := map[string]bool{"360p": true, "480p": true, "720p": true}
 	for _, p := range ladderProfiles() {
@@ -125,7 +234,6 @@ func buildQualityRungs(sourceHeight int, isPremium bool) []models.TranscodeQuali
 			BitrateKbps:      p.VideoBitrateKbps,
 			AudioBitrateKbps: p.AudioBitrateKbps,
 		}
-		isFreeRung := freeRungLabels[p.Label]
 		canFit := sourceHeight >= p.Height
 
 		switch {
@@ -133,10 +241,14 @@ func buildQualityRungs(sourceHeight int, isPremium bool) []models.TranscodeQuali
 			rung.Enabled = false
 			rung.SourceTooSmall = true
 			rung.DisabledReason = sourceTooSmallTip
-		case !isFreeRung && !isPremium:
+		case !access.allows(p.Height):
 			rung.Enabled = false
+			// PremiumOnly is the flag the UI styles the "locked" chip from. It
+			// stays true for anything the caller cannot reach, including rungs
+			// a free account would unlock — the chip is identical, only the
+			// tooltip differs.
 			rung.PremiumOnly = true
-			rung.DisabledReason = premiumTooltip
+			rung.DisabledReason = access.lockedReason(p.Label)
 		default:
 			rung.Enabled = true
 			if defaultSelected[p.Label] {
@@ -168,9 +280,9 @@ func splitRungs(all []models.TranscodeQualityRung) ([]models.TranscodeQualityRun
 // when we never offered it. This function rejects that.
 //
 // Returns a normalized, sorted, unique list of profiles to actually transcode.
-func ValidateSelectedRungs(sourceHeight int, selected []string, isPremium bool) ([]QualityProfile, error) {
-	if sourceHeight < 360 && !isPremium {
-		return nil, fmt.Errorf("%s", freeMinHeightTooltip)
+func ValidateSelectedRungs(sourceHeight int, selected []string, access LadderAccess) ([]QualityProfile, error) {
+	if access.MinHeight > 0 && sourceHeight < access.MinHeight {
+		return nil, fmt.Errorf("%s", access.minHeightMessage())
 	}
 	seen := map[string]bool{}
 	out := make([]QualityProfile, 0, len(selected))
@@ -187,8 +299,8 @@ func ValidateSelectedRungs(sourceHeight int, selected []string, isPremium bool) 
 		if sourceHeight < profile.Height {
 			return nil, fmt.Errorf("source video is too small for %s (source=%dp)", profile.Label, sourceHeight)
 		}
-		if !isPremium && !freeRungLabels[profile.Label] {
-			return nil, fmt.Errorf("%s requires a premium account", profile.Label)
+		if !access.allows(profile.Height) {
+			return nil, fmt.Errorf("%s requires %s", profile.Label, tierLabel(access.unlockedBy[profile.Label]))
 		}
 		out = append(out, profile)
 	}

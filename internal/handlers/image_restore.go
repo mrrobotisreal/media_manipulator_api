@@ -68,8 +68,9 @@ func (h *ImageRestoreHandler) StartImageRestore(c *gin.Context) {
 		return
 	}
 
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, h.cfg.MaxFileSize)
-	if err := c.Request.ParseMultipartForm(h.cfg.MaxFileSize); err != nil {
+	uploadCap := maxUploadBytes(c, h.cfg)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, uploadCap)
+	if err := c.Request.ParseMultipartForm(uploadCap); err != nil {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "The uploaded image is too large or the form is malformed"})
 		return
 	}
@@ -172,6 +173,7 @@ func (h *ImageRestoreHandler) StartImageRestore(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare upload"})
 		return
 	}
+	markRetention(c, jobUploadDir, filepath.Join(h.cfg.OutputDir, job.ID))
 	ext := strings.ToLower(filepath.Ext(fileName))
 	if ext == "" {
 		ext = ".img"
@@ -201,6 +203,7 @@ func (h *ImageRestoreHandler) StartImageRestore(c *gin.Context) {
 		FBCNNQualityFactor: opts.FBCNNQualityFactor,
 		SessionID:          sessionID,
 		RequestID:          c.Writer.Header().Get("X-MM-Request-ID"),
+		GPUPriority:        gpuPriorityFor(c),
 	}
 	_ = h.jobManager.ReplaceStages(job.ID, h.imageRestore.PlanStages(req), "queued")
 

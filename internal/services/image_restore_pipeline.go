@@ -468,6 +468,7 @@ func (s *ImageRestoreService) runImageUnit(ctx context.Context, req ImageRestore
 	gpuReq := GPURequest{
 		Kind:            "image-restore-" + string(u.Model),
 		VRAMRequiredMiB: s.cfg.ImageRestoreVRAMMiB[string(u.Model)],
+		Priority:        req.GPUPriority,
 	}
 	if task == gpu.TaskRealESRGAN {
 		gpuReq.PreferredOrder = []int{s.cfg.AIRestoreVulkanGPU, s.cfg.AIRestoreCUDAGPU}

@@ -363,6 +363,7 @@ func (s *DocumentScanService) precleanDocumentPages(ctx context.Context, req Doc
 	gpuReq := GPURequest{
 		Kind:           "document-scan-preclean",
 		PreferredOrder: []int{s.cfg.AIRestoreVulkanGPU, s.cfg.AIRestoreCUDAGPU},
+		Priority:       req.GPUPriority,
 	}
 	_, releaseGPU, err := SharedGPUScheduler().Acquire(ctx, gpuReq)
 	if err != nil {
@@ -441,6 +442,7 @@ func (s *DocumentScanService) runWrapperWithGPU(ctx context.Context, req Documen
 			Kind:            "document-scan-" + mode,
 			VRAMRequiredMiB: vramMiB,
 			ForceIndex:      &force,
+			Priority:        req.GPUPriority,
 		})
 		if err != nil {
 			return fmt.Errorf("Timed out waiting for a free GPU")

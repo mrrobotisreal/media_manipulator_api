@@ -37,8 +37,14 @@ func RegisterToolRoutes(r gin.IRouter, h *ConversionHandler) {
 // translation in a goroutine, and returns the jobId so the client can poll
 // /api/job/:jobId and ultimately download via /api/download/:jobId.
 func (h *ConversionHandler) CaptionTranslatorUpload(c *gin.Context) {
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, services.CaptionTranslatorMaxBytes+16*1024)
-	if err := c.Request.ParseMultipartForm(services.CaptionTranslatorMaxBytes + 16*1024); err != nil {
+	// Subtitle files are tiny, so the tool's own cap is far below any tier
+	// allowance; the tier is still consulted so the rule is the same everywhere.
+	captionCap := int64(services.CaptionTranslatorMaxBytes) + 16*1024
+	if tierCap := maxUploadBytes(c, h.cfg); tierCap > 0 && tierCap < captionCap {
+		captionCap = tierCap
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, captionCap)
+	if err := c.Request.ParseMultipartForm(captionCap); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to parse form (file may be too large)"})
 		return
 	}
@@ -114,6 +120,7 @@ func (h *ConversionHandler) CaptionTranslatorUpload(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare output"})
 		return
 	}
+	markRetention(c, jobUploadDir, jobOutputDir)
 	uploadPath := filepath.Join(jobUploadDir, "original_"+cleanName)
 	if err := os.Rename(incomingPath, uploadPath); err != nil {
 		h.jobManager.UpdateJobError(job.ID, "failed to finalize caption upload")
@@ -179,8 +186,9 @@ const MaxStitchAudioTracks = 3
 // comes from the client gets sanity-checked before being passed to the
 // command line.
 func (h *ConversionHandler) StitchAudioToVideoUpload(c *gin.Context) {
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, h.cfg.MaxFileSize)
-	if err := c.Request.ParseMultipartForm(h.cfg.MaxFileSize); err != nil {
+	uploadCap := maxUploadBytes(c, h.cfg)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, uploadCap)
+	if err := c.Request.ParseMultipartForm(uploadCap); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to parse form (request may be too large)"})
 		return
 	}
@@ -317,6 +325,7 @@ func (h *ConversionHandler) StitchAudioToVideoUpload(c *gin.Context) {
 		for _, st := range stagedTracks {
 			_ = os.Remove(st.path)
 		}
+	markRetention(c, jobUploadDir, jobOutputDir)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare output"})
 		return
 	}

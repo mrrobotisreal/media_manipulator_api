@@ -239,6 +239,151 @@ func TestGPUScheduler_QueueingWhenNoGPUFits(t *testing.T) {
 	}
 }
 
+// Premium's promise is a place at the front of the GPU queue. With one card
+// busy and two callers waiting, the prioritised one must be served first no
+// matter who parked first.
+func TestGPUScheduler_PremiumJumpsTheQueue(t *testing.T) {
+	s := makeTestScheduler([]GPUSnapshot{
+		{Index: 0, Name: "5080", TotalMiB: 16000, FreeMiB: 12000, UsedMiB: 4000},
+	}, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	_, releaseHolder, err := s.Acquire(ctx, GPURequest{Kind: "holder", VRAMRequiredMiB: 5000})
+	if err != nil {
+		t.Fatalf("holder Acquire failed: %v", err)
+	}
+
+	var order []string
+	var orderMu sync.Mutex
+	record := func(name string) {
+		orderMu.Lock()
+		order = append(order, name)
+		orderMu.Unlock()
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// The standard caller parks FIRST — it would win under the old
+	// free-for-all, which is exactly what this asserts against.
+	go func() {
+		defer wg.Done()
+		_, release, err := s.Acquire(ctx, GPURequest{Kind: "standard", VRAMRequiredMiB: 5000})
+		if err != nil {
+			t.Errorf("standard Acquire failed: %v", err)
+			return
+		}
+		record("standard")
+		time.Sleep(20 * time.Millisecond)
+		release()
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	go func() {
+		defer wg.Done()
+		_, release, err := s.Acquire(ctx, GPURequest{Kind: "premium", VRAMRequiredMiB: 5000, Priority: GPUPriorityPremium})
+		if err != nil {
+			t.Errorf("premium Acquire failed: %v", err)
+			return
+		}
+		record("premium")
+		time.Sleep(20 * time.Millisecond)
+		release()
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	releaseHolder()
+	wg.Wait()
+
+	orderMu.Lock()
+	defer orderMu.Unlock()
+	if len(order) != 2 {
+		t.Fatalf("expected both callers to complete, got %v", order)
+	}
+	if order[0] != "premium" {
+		t.Errorf("expected premium to be served first, got %v", order)
+	}
+}
+
+// A prioritised request that no card could ever satisfy must not wedge the
+// scheduler: it stops deterring standard callers once the probe proves the
+// hardware cannot hold it.
+func TestGPUScheduler_ImpossiblePremiumDoesNotBlockStandard(t *testing.T) {
+	s := makeTestScheduler([]GPUSnapshot{
+		{Index: 0, Name: "5060Ti", TotalMiB: 8000, FreeMiB: 8000, UsedMiB: 0},
+	}, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// Wants more than the card physically has — it can never be satisfied.
+	premiumCtx, cancelPremium := context.WithCancel(ctx)
+	defer cancelPremium()
+	go func() {
+		_, release, err := s.Acquire(premiumCtx, GPURequest{
+			Kind: "impossible-premium", VRAMRequiredMiB: 64000, Priority: GPUPriorityPremium,
+		})
+		if err == nil && release != nil {
+			release()
+		}
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	done := make(chan struct{})
+	go func() {
+		_, release, err := s.Acquire(ctx, GPURequest{Kind: "standard", VRAMRequiredMiB: 1000})
+		if err == nil && release != nil {
+			release()
+		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("standard caller was starved by a premium request no card can satisfy")
+	}
+}
+
+// Priority only orders the queue; it must never bypass the per-GPU capacity
+// rule and double-book a card.
+func TestGPUScheduler_PriorityDoesNotOversubscribe(t *testing.T) {
+	s := makeTestScheduler([]GPUSnapshot{
+		{Index: 0, Name: "5080", TotalMiB: 16000, FreeMiB: 12000, UsedMiB: 4000},
+	}, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	_, release1, err := s.Acquire(ctx, GPURequest{Kind: "holder", VRAMRequiredMiB: 5000})
+	if err != nil {
+		t.Fatalf("holder Acquire failed: %v", err)
+	}
+
+	acquired := make(chan struct{})
+	go func() {
+		_, release2, err := s.Acquire(ctx, GPURequest{Kind: "premium", VRAMRequiredMiB: 5000, Priority: GPUPriorityPremium})
+		if err == nil && release2 != nil {
+			release2()
+		}
+		close(acquired)
+	}()
+
+	select {
+	case <-acquired:
+		t.Fatal("premium acquired a card that was already at its job limit")
+	case <-time.After(200 * time.Millisecond):
+	}
+	release1()
+	select {
+	case <-acquired:
+	case <-time.After(1 * time.Second):
+		t.Fatal("premium never acquired after the holder released")
+	}
+}
+
 func TestGPUScheduler_ConcurrentAcquiresSerializedPerGPU(t *testing.T) {
 	// 1 GPU, default max 1 job per GPU. Two acquires → must be serialized.
 	s := makeTestScheduler([]GPUSnapshot{

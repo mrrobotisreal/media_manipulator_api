@@ -60,6 +60,12 @@ type TranscodeRequest struct {
 	FileName            string
 	Probe               *models.VideoProbeResponse
 	ResultBucket        string
+	// LadderAccess is the tier slice of the ladder the requester was entitled
+	// to when they started the job. Re-checked here rather than trusted from
+	// the handler's earlier check, because the pipeline is the last gate before
+	// the GPU is spent. The zero value is not usable — the handler always sets
+	// it, and Process falls back to the anonymous rules if it is empty.
+	LadderAccess LadderAccess
 }
 
 // CaptionTrack describes one generated subtitle rendition that the HLS master
@@ -126,16 +132,23 @@ func (s *TranscodeService) Process(ctx context.Context, req TranscodeRequest) {
 		probe.ContentType = req.Probe.ContentType
 		probe.FileSizeBytes = req.Probe.FileSizeBytes
 	}
+	access := req.LadderAccess
+	if access.MaxHeight <= 0 {
+		access = AnonymousLadderAccess()
+	}
+	// Recompute the rung split against the requester's tier before the report
+	// is published, so the job's stored probe matches what they were offered.
+	ApplyLadderAccess(probe, access)
 	_ = s.jobManager.SetTranscodeReport(req.JobID, probe)
 	advance("probing_source", models.StageStatusCompleted, 10, "")
 
 	advance("validating_options", models.StageStatusProcessing, 12, "")
-	if _, err := ValidateSelectedRungs(probe.Height, profileLabels(req.Profiles), false); err != nil {
+	if _, err := ValidateSelectedRungs(probe.Height, profileLabels(req.Profiles), access); err != nil {
 		s.fail(req.JobID, stages, err)
 		return
 	}
 	if probe.SourceTooSmall {
-		s.fail(req.JobID, stages, fmt.Errorf("%s", freeMinHeightTooltip))
+		s.fail(req.JobID, stages, fmt.Errorf("%s", access.minHeightMessage()))
 		return
 	}
 	advance("validating_options", models.StageStatusCompleted, 15, "")

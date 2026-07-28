@@ -45,6 +45,18 @@ type QuotaConfig struct {
 	Logger       *slog.Logger
 }
 
+// resolution returns the caller's tier, preferring the shared per-request
+// resolver TierContext installs so the mm_users row is read once per request
+// rather than once per consumer. Falling back to a private resolution keeps
+// RequireQuota usable on its own — which is how the tests drive it, and what
+// makes it independent of middleware ordering elsewhere.
+func (q QuotaConfig) resolution(c *gin.Context) TierResolution {
+	if res, ok := ResolveTier(c); ok {
+		return res
+	}
+	return TierConfig{Store: q.Store, Registry: q.Registry, Logger: q.Logger}.resolveNow(c)
+}
+
 // quotaSubject is who a request is counted against.
 type quotaSubject struct {
 	kind models.UsageSubjectKind
@@ -125,21 +137,12 @@ func RequireQuota(cfg QuotaConfig, metric string) gin.HandlerFunc {
 
 		ctx := c.Request.Context()
 
-		// Identity → account row → tier. A lookup failure degrades to the
-		// anonymous/free path rather than blocking the request.
-		var user *models.User
-		principal, signedIn := PrincipalFrom(c)
-		if signedIn {
-			u, err := cfg.Store.UserByFirebaseUID(ctx, principal.UID)
-			if err != nil {
-				logger.Warn("quota: user lookup failed, treating as unsynced", "error", err.Error())
-			} else {
-				user = u
-			}
-		}
-		tier := tiers.Resolve(signedIn, user)
-		limits := cfg.Registry.For(tier)
-		limit := limitFor(limits, metric)
+		// Identity → account row → tier, shared with every other consumer on
+		// this request so mm_users is read at most once.
+		resolution := cfg.resolution(c)
+		tier := resolution.Tier
+		user := resolution.User
+		limit := limitFor(resolution.Limits, metric)
 
 		now := time.Now().UTC()
 		reset := nextUTCMidnight(now)

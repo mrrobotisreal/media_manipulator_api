@@ -17,6 +17,7 @@ import (
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/metrics"
+	retentionpkg "github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 )
 
@@ -209,9 +210,17 @@ func (w *Worker) sweepRoot(ctx context.Context, root string, retention time.Dura
 			w.Logger.Warn("cleanup skipping path outside root", "path", "<root>/"+name)
 			continue
 		}
+		entryRetention := retention
 		if jobAware && e.IsDir() {
 			if _, busy := active[name]; busy {
 				continue
+			}
+			// A job directory may carry its own retention window, written from
+			// the owner's tier when the job was created. Premium results are
+			// kept for 30 days, free for 7, anonymous for the global default.
+			// A directory with no marker keeps the global window exactly.
+			if window, ok := retentionpkg.Read(full); ok {
+				entryRetention = window
 			}
 		}
 		info, err := e.Info()
@@ -219,7 +228,7 @@ func (w *Worker) sweepRoot(ctx context.Context, root string, retention time.Dura
 			continue
 		}
 		age := now.Sub(info.ModTime())
-		if age < retention {
+		if age < entryRetention {
 			continue
 		}
 		size := int64(0)

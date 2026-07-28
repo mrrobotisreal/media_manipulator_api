@@ -244,6 +244,15 @@ type JobUpsert struct {
 	ResultFileName string
 	ResultExpires  *time.Time
 	ErrorMessage   string
+	// OwnerTier is the tier of whoever started the job, for retention and
+	// reporting. Empty writes NULL.
+	//
+	// NOTE: nothing calls UpsertJob today — mm_conversion_jobs has no writer at
+	// all — so this column stays NULL in practice. The live per-job retention
+	// window is carried by internal/retention's marker file instead; see that
+	// package's doc comment. When job telemetry is wired up, the column becomes
+	// the better source and the marker can be retired.
+	OwnerTier string
 }
 
 // UpsertJob is idempotent on (job_id). On conflict the row is updated.
@@ -259,13 +268,13 @@ INSERT INTO mm_conversion_jobs (
   source_format, target_format, options,
   started_at, completed_at, duration_ms,
   result_s3_key, result_file_name, result_expires_at,
-  error_message
+  error_message, owner_tier
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7,
   $8, $9, $10,
   $11, $12, $13,
   $14, $15, $16,
-  $17
+  $17, $18
 )
 ON CONFLICT (job_id) DO UPDATE SET
   status = EXCLUDED.status,
@@ -282,13 +291,14 @@ ON CONFLICT (job_id) DO UPDATE SET
   result_file_name = COALESCE(NULLIF(EXCLUDED.result_file_name, ''), mm_conversion_jobs.result_file_name),
   result_expires_at = COALESCE(EXCLUDED.result_expires_at, mm_conversion_jobs.result_expires_at),
   error_message = COALESCE(NULLIF(EXCLUDED.error_message, ''), mm_conversion_jobs.error_message),
+  owner_tier = COALESCE(EXCLUDED.owner_tier, mm_conversion_jobs.owner_tier),
   updated_at = now()
 `,
 		j.JobID, uuidOrNil(j.VisitorID), uuidOrNil(j.SessionID), j.Status, nullable(j.Mode), nullable(j.Tool), nullable(j.MediaKind),
 		nullable(j.SourceFormat), nullable(j.TargetFormat), jsonBytes(j.Options),
 		j.StartedAt, j.CompletedAt, intPtr(j.DurationMS),
 		nullable(j.ResultS3Key), nullable(j.ResultFileName), j.ResultExpires,
-		nullable(j.ErrorMessage),
+		nullable(j.ErrorMessage), nullable(j.OwnerTier),
 	)
 	s.logErr("upsert_job", err, "jobId", j.JobID)
 }

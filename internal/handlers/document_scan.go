@@ -64,8 +64,9 @@ func (h *DocumentScanHandler) Start(c *gin.Context) {
 		return
 	}
 
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, h.cfg.MaxFileSize)
-	if err := c.Request.ParseMultipartForm(h.cfg.MaxFileSize); err != nil {
+	uploadCap := maxUploadBytes(c, h.cfg)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, uploadCap)
+	if err := c.Request.ParseMultipartForm(uploadCap); err != nil {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "The upload is too large or the form is malformed"})
 		return
 	}
@@ -207,6 +208,7 @@ func (h *DocumentScanHandler) Start(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare upload"})
 		return
 	}
+	markRetention(c, filepath.Join(h.cfg.UploadDir, job.ID), filepath.Join(h.cfg.OutputDir, job.ID))
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), h.cfg.CommandTimeout)
 	defer cancel()
@@ -258,6 +260,7 @@ func (h *DocumentScanHandler) Start(c *gin.Context) {
 		Summarize:           opts.Summarize,
 		SessionID:           sessionID,
 		RequestID:           c.Writer.Header().Get("X-MM-Request-ID"),
+		GPUPriority:         gpuPriorityFor(c),
 	}
 	_ = h.jobManager.ReplaceStages(job.ID, h.svc.BuildStages(req), "queued")
 

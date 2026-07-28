@@ -70,6 +70,8 @@ func (h *ConversionHandler) ProbeVideoForTranscode(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("ffprobe failed: %v", err)})
 		return
 	}
+	// The probe itself is tier-independent; which rungs it offers is not.
+	services.ApplyLadderAccess(report, ladderAccessFor(c, h.tierRegistry))
 	report.S3Key = key
 	report.Bucket = h.cfg.S3Bucket
 	report.FileName = fileName
@@ -203,6 +205,7 @@ func (h *ConversionHandler) StartVideoTranscode(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare output"})
 		return
 	}
+	markRetention(c, jobUploadDir, jobOutputDir)
 
 	uploadPath := filepath.Join(jobUploadDir, "original_"+fileName)
 	if err := h.downloadS3Object(ctx, key, uploadPath); err != nil {
@@ -223,7 +226,9 @@ func (h *ConversionHandler) StartVideoTranscode(c *gin.Context) {
 	probe.ContentType = contentType
 	probe.FileSizeBytes = size
 
-	profiles, validateErr := validateSelectedRungsFromHandler(probe.Height, req.QualityRungs)
+	access := ladderAccessFor(c, h.tierRegistry)
+	services.ApplyLadderAccess(probe, access)
+	profiles, validateErr := validateSelectedRungsFromHandler(probe.Height, req.QualityRungs, access)
 	if validateErr != nil {
 		_ = h.jobManager.UpdateJobError(job.ID, validateErr.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"error": validateErr.Error()})
@@ -256,6 +261,7 @@ func (h *ConversionHandler) StartVideoTranscode(c *gin.Context) {
 		FileName:            fileName,
 		Probe:               probe,
 		ResultBucket:        h.cfg.S3Bucket,
+		LadderAccess:        access,
 	}
 	go h.transcode.Process(context.Background(), pipelineReq)
 
@@ -299,7 +305,9 @@ func (h *ConversionHandler) GetTranscodeCapabilities(c *gin.Context) {
 }
 
 // validateSelectedRungsFromHandler is a tiny wrapper that re-uses the service
-// validator so the handler stays free of import-cycle issues. Free-only for now.
-func validateSelectedRungsFromHandler(sourceHeight int, selected []string) ([]services.QualityProfile, error) {
-	return services.ValidateSelectedRungs(sourceHeight, selected, false)
+// validator so the handler stays free of import-cycle issues. The UI is
+// untrusted, so this is the enforcement point: the tooltip in the probe
+// response is UX, this check is security.
+func validateSelectedRungsFromHandler(sourceHeight int, selected []string, access services.LadderAccess) ([]services.QualityProfile, error) {
+	return services.ValidateSelectedRungs(sourceHeight, selected, access)
 }

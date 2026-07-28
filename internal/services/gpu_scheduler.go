@@ -40,7 +40,18 @@ type GPURequest struct {
 	SafetyMarginMiB int64 // 0 → use GPU_SCHED_SAFETY_MARGIN_MIB env (default 512)
 	PreferredOrder  []int
 	ForceIndex      *int
+	// Priority lets a Premium job jump the queue. Higher wins; use the
+	// GPUPriority* constants. The default zero value is the standard queue, so
+	// every existing call site keeps its current behaviour.
+	Priority int
 }
+
+// GPU queue priorities. Two levels is all the tier matrix sells, and a wider
+// scale would only invite fine-grained tuning nobody can reason about.
+const (
+	GPUPriorityStandard = 0
+	GPUPriorityPremium  = 10
+)
 
 // GPUScheduler is a process-wide, GPU-aware queue. Multiple goroutines can
 // call Acquire concurrently; whoever can fit on a free card gets it,
@@ -51,8 +62,24 @@ type GPUScheduler struct {
 	inUse   map[int]int // gpu index → number of jobs we've reserved on it
 	enabled bool
 
+	// waiters is every in-flight Acquire, including the one currently probing.
+	// It exists so a standard-priority caller can tell whether a Premium caller
+	// is queued behind it and stand aside.
+	waiters map[*gpuWaiter]struct{}
+
 	// probe is injectable for tests; production callers use ProbeGPUSnapshots.
 	probe func(context.Context) ([]GPUSnapshot, error)
+}
+
+// gpuWaiter is one in-flight Acquire.
+type gpuWaiter struct {
+	priority int
+	// blocking is whether lower-priority callers must stand aside for this
+	// one. It starts true for a prioritised waiter and is cleared if the probe
+	// shows no card in the box could ever satisfy it — otherwise an
+	// impossible Premium request would wedge the whole scheduler rather than
+	// simply failing to find a home.
+	blocking bool
 }
 
 var (
@@ -87,9 +114,26 @@ func SharedGPUScheduler() *GPUScheduler {
 }
 
 func newGPUScheduler(probe func(context.Context) ([]GPUSnapshot, error)) *GPUScheduler {
-	s := &GPUScheduler{inUse: make(map[int]int), probe: probe}
+	s := &GPUScheduler{inUse: make(map[int]int), waiters: map[*gpuWaiter]struct{}{}, probe: probe}
 	s.cond = sync.NewCond(&s.mu)
 	return s
+}
+
+// blockedByHigherPriority reports whether a caller must stand aside because a
+// more important one is queued. Callers must hold s.mu.
+//
+// FOLLOW-UP: this is strict precedence with no aging, so a continuous stream of
+// Premium jobs can starve the standard queue indefinitely. That is acceptable
+// at current volume — Premium is not purchasable yet and concurrency is single
+// digits — but a fair scheduler wants either priority aging or a reserved
+// standard-queue share before Premium goes on sale.
+func (s *GPUScheduler) blockedByHigherPriority(w *gpuWaiter) bool {
+	for other := range s.waiters {
+		if other != w && other.blocking && other.priority > w.priority {
+			return true
+		}
+	}
+	return false
 }
 
 // Enabled reports whether the scheduler has GPU info to work with.
@@ -119,6 +163,18 @@ func (s *GPUScheduler) Acquire(ctx context.Context, req GPURequest) (int, func()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Register before the first probe so a Premium caller starts deterring
+	// standard callers immediately, not only once it has already lost a race.
+	w := &gpuWaiter{priority: req.Priority, blocking: req.Priority > GPUPriorityStandard}
+	s.waiters[w] = struct{}{}
+	defer func() {
+		delete(s.waiters, w)
+		// Whoever was standing aside for this caller can stop now.
+		if w.blocking {
+			s.cond.Broadcast()
+		}
+	}()
+
 	var waitStarted time.Time
 
 	for {
@@ -142,7 +198,27 @@ func (s *GPUScheduler) Acquire(ctx context.Context, req GPURequest) (int, func()
 
 		cands := s.buildCandidateOrder(req, snaps, gpuByIdx)
 
+		// A prioritised request that no card could ever hold — not "is busy",
+		// but "is too small even when idle" — stops deterring everyone else.
+		if w.blocking && !fitsAnyCard(required, cands, gpuByIdx) {
+			w.blocking = false
+			s.cond.Broadcast()
+			log.Printf("gpu-scheduler: %s requires %dMiB, which exceeds every card; dropping its queue priority",
+				req.Kind, required)
+		}
+
+		// Stand aside for a Premium job. Checked per iteration rather than
+		// once, because the prioritised caller may arrive while we are parked.
+		yielding := s.blockedByHigherPriority(w)
+		if yielding && waitStarted.IsZero() {
+			waitStarted = time.Now()
+			log.Printf("gpu-scheduler: %s standing aside for a higher-priority job", req.Kind)
+		}
+
 		for _, idx := range cands {
+			if yielding {
+				break
+			}
 			g := gpuByIdx[idx]
 			if s.inUse[idx] >= maxPerGPU {
 				continue
@@ -182,6 +258,18 @@ func (s *GPUScheduler) Acquire(ctx context.Context, req GPURequest) (int, func()
 			return -1, nil, err
 		}
 	}
+}
+
+// fitsAnyCard reports whether any candidate card has enough TOTAL memory for
+// the request — i.e. whether waiting could ever succeed, ignoring what is
+// currently in use.
+func fitsAnyCard(required int64, cands []int, byIdx map[int]GPUSnapshot) bool {
+	for _, idx := range cands {
+		if byIdx[idx].TotalMiB >= required {
+			return true
+		}
+	}
+	return false
 }
 
 // buildCandidateOrder enumerates GPUs in the order we should try them: forced

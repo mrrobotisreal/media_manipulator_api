@@ -166,6 +166,7 @@ func (h *ConversionHandler) CompleteVideoUpload(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare output"})
 		return
 	}
+	markRetention(c, jobUploadDir, jobOutputDir)
 
 	uploadPath := filepath.Join(jobUploadDir, "original_"+fileName)
 	if err := os.Rename(incomingPath, uploadPath); err != nil {
