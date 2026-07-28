@@ -165,6 +165,13 @@ func (h *ImageRestoreHandler) StartImageRestore(c *gin.Context) {
 	}
 	job := h.jobManager.CreateJob(originalFile, options)
 	_ = h.jobManager.SetMode(job.ID, "image_restore")
+	recordJobCreated(c, h.jobManager, job, services.JobFacts{
+		Tool:         "image_restore",
+		Mode:         "image_restore",
+		MediaKind:    string(models.FileTypeImage),
+		SourceFormat: formatOf(fileName),
+		TargetFormat: "tar.gz",
+	})
 
 	jobUploadDir := filepath.Join(h.cfg.UploadDir, job.ID)
 	if err := os.MkdirAll(jobUploadDir, 0o755); err != nil {

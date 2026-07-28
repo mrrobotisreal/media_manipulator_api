@@ -176,6 +176,7 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 
 	originalFile := models.OriginalFileInfo{Name: fileHeader.Filename, Size: fileHeader.Size, Type: mimeType}
 	job := h.jobManager.CreateJob(originalFile, options)
+	recordJobCreated(c, h.jobManager, job, h.conversionJobFacts(job, fileType))
 
 	jobUploadDir := filepath.Join(h.cfg.UploadDir, job.ID)
 	jobOutputDir := filepath.Join(h.cfg.OutputDir, job.ID)

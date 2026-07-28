@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -227,9 +228,13 @@ ON CONFLICT (session_id) DO UPDATE SET
 
 // JobUpsert mirrors mm_conversion_jobs writes.
 type JobUpsert struct {
-	JobID          string
-	VisitorID      string
-	SessionID      string
+	JobID     string
+	VisitorID string
+	SessionID string
+	// UserID is the mm_users row that owns the job, or empty for an anonymous
+	// one. Unlike VisitorID/SessionID it is server-resolved and unforgeable,
+	// which is why the conversion-history query keys on it.
+	UserID         string
 	Status         string
 	Mode           string
 	Tool           string
@@ -247,11 +252,12 @@ type JobUpsert struct {
 	// OwnerTier is the tier of whoever started the job, for retention and
 	// reporting. Empty writes NULL.
 	//
-	// NOTE: nothing calls UpsertJob today — mm_conversion_jobs has no writer at
-	// all — so this column stays NULL in practice. The live per-job retention
-	// window is carried by internal/retention's marker file instead; see that
-	// package's doc comment. When job telemetry is wired up, the column becomes
-	// the better source and the marker can be retired.
+	// It is written at creation by handlers.recordJobCreated. The cleanup
+	// sweeper still reads internal/retention's marker file rather than this
+	// column: the marker sits next to the artifacts it governs and so cannot
+	// disagree with them, and it needs no database round-trip during a
+	// filesystem walk. Retiring the marker in favour of this column is a
+	// deliberate follow-up, not an oversight.
 	OwnerTier string
 }
 
@@ -264,20 +270,21 @@ func (s *Store) UpsertJob(ctx context.Context, j JobUpsert) {
 	defer cancel()
 	_, err := s.Pool.Exec(ctx, `
 INSERT INTO mm_conversion_jobs (
-  job_id, visitor_id, session_id, status, mode, tool, media_kind,
+  job_id, visitor_id, session_id, user_id, status, mode, tool, media_kind,
   source_format, target_format, options,
   started_at, completed_at, duration_ms,
   result_s3_key, result_file_name, result_expires_at,
   error_message, owner_tier
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7,
-  $8, $9, $10,
-  $11, $12, $13,
-  $14, $15, $16,
-  $17, $18
+  $1, $2, $3, $4, $5, $6, $7, $8,
+  $9, $10, $11,
+  $12, $13, $14,
+  $15, $16, $17,
+  $18, $19
 )
 ON CONFLICT (job_id) DO UPDATE SET
   status = EXCLUDED.status,
+  user_id = COALESCE(EXCLUDED.user_id, mm_conversion_jobs.user_id),
   mode = COALESCE(NULLIF(EXCLUDED.mode, ''), mm_conversion_jobs.mode),
   tool = COALESCE(NULLIF(EXCLUDED.tool, ''), mm_conversion_jobs.tool),
   media_kind = COALESCE(EXCLUDED.media_kind, mm_conversion_jobs.media_kind),
@@ -294,7 +301,7 @@ ON CONFLICT (job_id) DO UPDATE SET
   owner_tier = COALESCE(EXCLUDED.owner_tier, mm_conversion_jobs.owner_tier),
   updated_at = now()
 `,
-		j.JobID, uuidOrNil(j.VisitorID), uuidOrNil(j.SessionID), j.Status, nullable(j.Mode), nullable(j.Tool), nullable(j.MediaKind),
+		j.JobID, uuidOrNil(j.VisitorID), uuidOrNil(j.SessionID), uuidOrNil(j.UserID), j.Status, nullable(j.Mode), nullable(j.Tool), nullable(j.MediaKind),
 		nullable(j.SourceFormat), nullable(j.TargetFormat), jsonBytes(j.Options),
 		j.StartedAt, j.CompletedAt, intPtr(j.DurationMS),
 		nullable(j.ResultS3Key), nullable(j.ResultFileName), j.ResultExpires,
@@ -1144,9 +1151,17 @@ func nullable(s string) any {
 	return s
 }
 
-// uuidOrNil returns nil when the input is empty so optional uuid columns stay NULL.
+// uuidOrNil returns nil when the input is not a usable uuid, so optional uuid
+// columns stay NULL.
+//
+// The validation matters: these values include client-supplied headers
+// (X-MM-Session-ID, X-MM-Visitor-ID). Passing a non-uuid string straight
+// through makes Postgres reject the whole statement on a type cast, which for a
+// fire-and-forget writer means losing the entire row over one bad header. A
+// NULL correlation id is the strictly better failure.
 func uuidOrNil(s string) any {
-	if strings.TrimSpace(s) == "" {
+	s = strings.TrimSpace(s)
+	if s == "" || uuid.Validate(s) != nil {
 		return nil
 	}
 	return s

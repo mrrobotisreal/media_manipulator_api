@@ -192,6 +192,13 @@ func (h *ConversionHandler) StartVideoTranscode(c *gin.Context) {
 	originalFile := models.OriginalFileInfo{Name: fileName, Size: size, Type: contentType}
 	job := h.jobManager.CreateJob(originalFile, options)
 	_ = h.jobManager.SetMode(job.ID, "transcode")
+	recordJobCreated(c, h.jobManager, job, services.JobFacts{
+		Tool:         "video_transcode",
+		Mode:         "transcode",
+		MediaKind:    string(models.FileTypeVideo),
+		SourceFormat: formatOf(fileName),
+		TargetFormat: protocol,
+	})
 
 	jobUploadDir := filepath.Join(h.cfg.UploadDir, job.ID)
 	jobOutputDir := filepath.Join(h.cfg.OutputDir, job.ID)

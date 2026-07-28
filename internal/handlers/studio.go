@@ -641,6 +641,13 @@ func (h *StudioHandler) DeriveAsset(c *gin.Context) {
 		map[string]interface{}{"mode": "studio_derive"},
 	)
 	_ = h.jobManager.SetMode(job.ID, "studio_derive")
+	recordJobCreated(c, h.jobManager, job, services.JobFacts{
+		Tool:         "studio_derive",
+		Mode:         "studio_derive",
+		MediaKind:    string(models.FileTypeAudio),
+		SourceFormat: formatOf(asset.OriginalFileName),
+		TargetFormat: "wav",
+	})
 
 	go h.runDeriveJob(job.ID, created, src.S3KeyOriginal, derivedKey, op)
 	c.JSON(http.StatusOK, models.StudioAssetCompleteResponse{Asset: created, JobID: job.ID})
@@ -964,6 +971,13 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 		models.OriginalFileInfo{Name: baseName, Size: 0, Type: "video/mp4"},
 		map[string]interface{}{"mode": "studio_export", "format": "mp4"},
 	)
+	recordJobCreated(c, h.jobManager, job, services.JobFacts{
+		Tool:      "studio_export",
+		Mode:      "studio_export",
+		MediaKind: string(models.FileTypeVideo),
+		// The source is a multi-track timeline, not one file.
+		TargetFormat: "mp4",
+	})
 	jobOutputDir := filepath.Join(h.cfg.OutputDir, job.ID)
 	if err := os.MkdirAll(jobOutputDir, 0o755); err != nil {
 		h.jobManager.UpdateJobError(job.ID, "Failed to create output directory")
@@ -1158,6 +1172,12 @@ func (h *StudioHandler) GenerateCaptions(c *gin.Context) {
 		map[string]interface{}{"mode": "studio_captions"},
 	)
 	_ = h.jobManager.SetMode(job.ID, "studio_captions")
+	recordJobCreated(c, h.jobManager, job, services.JobFacts{
+		Tool:         "studio_captions",
+		Mode:         "studio_captions",
+		MediaKind:    string(models.FileTypeAudio),
+		TargetFormat: "vtt",
+	})
 	go h.runCaptionsJob(job, projectID, refs, duration, strings.TrimSpace(req.Language))
 	c.JSON(http.StatusOK, gin.H{"jobId": job.ID})
 }

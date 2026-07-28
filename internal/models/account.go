@@ -45,6 +45,26 @@ type UsageCounter struct {
 	Count  int64  `json:"count"`
 }
 
+// ConversionHistoryEntry is one mm_conversion_jobs row as the account history
+// reads it. Deliberately has no JSON tags: the handler maps it to its own
+// response shape so the S3 key can never be serialised by accident.
+type ConversionHistoryEntry struct {
+	JobID           string
+	Tool            string
+	Mode            string
+	MediaKind       string
+	SourceFormat    string
+	TargetFormat    string
+	Status          string
+	OwnerTier       string
+	CreatedAt       time.Time
+	CompletedAt     *time.Time
+	DurationMS      *int
+	ResultS3Key     string
+	ResultFileName  string
+	ResultExpiresAt *time.Time
+}
+
 // TierGrant is an audit row: who was given what, by whom, and why.
 type TierGrant struct {
 	ID        string     `json:"id"`

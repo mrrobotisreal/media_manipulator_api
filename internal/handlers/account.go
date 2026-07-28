@@ -1,10 +1,15 @@
 package handlers
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
@@ -22,13 +27,28 @@ type AccountHandler struct {
 	registry *tiers.Registry
 	cfg      *config.Config
 	logger   *slog.Logger
+	// presign mints the short-lived download links in conversion history. nil
+	// when S3 is not configured — history still lists its rows, they just carry
+	// no link.
+	presign *s3.PresignClient
+	// jobs answers whether a locally-stored result is still addressable by
+	// GET /api/download/:jobId. Optional.
+	jobs JobLookup
 }
 
-func NewAccountHandler(store *telemetry.Store, registry *tiers.Registry, cfg *config.Config, logger *slog.Logger) *AccountHandler {
+// JobLookup is the slice of the in-memory job manager conversion history needs:
+// results that were never uploaded to S3 are served off local disk by
+// /api/download/:jobId, which resolves the output path from the live job, so a
+// link is only worth offering while that job is still in memory.
+type JobLookup interface {
+	GetJob(jobID string) (*models.ConversionJob, error)
+}
+
+func NewAccountHandler(store *telemetry.Store, registry *tiers.Registry, cfg *config.Config, logger *slog.Logger, presign *s3.PresignClient, jobs JobLookup) *AccountHandler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &AccountHandler{store: store, registry: registry, cfg: cfg, logger: logger}
+	return &AccountHandler{store: store, registry: registry, cfg: cfg, logger: logger, presign: presign, jobs: jobs}
 }
 
 // tierDescriptor is one row of the public matrix.
@@ -184,6 +204,208 @@ func (h *AccountHandler) Usage(c *gin.Context) {
 	c.JSON(http.StatusOK, h.buildUsageResponse(c, user, signedIn))
 }
 
+// --- conversion history ----------------------------------------------------
+
+// History paging. The cap exists so one request cannot ask for an unbounded scan
+// of an account with thousands of jobs.
+const (
+	historyDefaultLimit = 20
+	historyMaxLimit     = 50
+	// historyDownloadTTL keeps a link useful for one sitting without turning a
+	// history page into a durable, shareable URL for someone's media.
+	historyDownloadTTL = 15 * time.Minute
+)
+
+// historyEntry is one row as the UI sees it.
+//
+// Note what is not here: result_s3_key. The key is an internal storage detail;
+// callers get a presigned URL or nothing.
+type historyEntry struct {
+	JobID           string `json:"jobId"`
+	Tool            string `json:"tool,omitempty"`
+	Mode            string `json:"mode,omitempty"`
+	MediaKind       string `json:"mediaKind,omitempty"`
+	SourceFormat    string `json:"sourceFormat,omitempty"`
+	TargetFormat    string `json:"targetFormat,omitempty"`
+	Status          string `json:"status"`
+	CreatedAt       string `json:"createdAt"`
+	CompletedAt     string `json:"completedAt,omitempty"`
+	DurationMS      *int   `json:"durationMs,omitempty"`
+	ResultFileName  string `json:"resultFileName,omitempty"`
+	ResultExpiresAt string `json:"resultExpiresAt,omitempty"`
+	// Expired is computed server-side: the client must not have to know a
+	// retention matrix to render a row correctly.
+	Expired bool `json:"expired"`
+	// DownloadURL is a short-lived presigned GET, present only for an unexpired
+	// result that lives in S3.
+	DownloadURL string `json:"downloadUrl,omitempty"`
+	// DownloadPath is the API-relative path that serves a result kept on local
+	// disk — the common case, since only the packaging pipelines upload to S3.
+	// Relative rather than absolute so the server never has to guess its own
+	// public origin from a client-supplied Host header; the client resolves it
+	// against the API base it already knows.
+	DownloadPath string `json:"downloadPath,omitempty"`
+}
+
+type historyResponse struct {
+	Entries []historyEntry `json:"entries"`
+	Total   int            `json:"total"`
+	Limit   int            `json:"limit"`
+	Offset  int            `json:"offset"`
+}
+
+// clampedInt reads a positive integer query parameter, falling back to def and
+// never exceeding max. Junk input is a default, not a 400 — a malformed page
+// parameter should show page one, not an error page.
+func clampedInt(raw string, def, max int) int {
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v < 0 {
+		return def
+	}
+	if max > 0 && v > max {
+		return max
+	}
+	return v
+}
+
+// resultExpiry is when a job's artifacts stop being available.
+//
+// Pipelines that upload to S3 record an explicit expiry. Everything else keeps
+// its output on local disk, reaped by the cleanup worker against the retention
+// window of the tier that owned the job — so that window, applied to the
+// creation time, is the honest answer for those rows. With no owner tier
+// recorded (the tier system was switched off) the expiry is genuinely unknown
+// and reported as such.
+func (h *AccountHandler) resultExpiry(e models.ConversionHistoryEntry) *time.Time {
+	if e.ResultExpiresAt != nil {
+		return e.ResultExpiresAt
+	}
+	if e.OwnerTier == "" || h.registry == nil {
+		return nil
+	}
+	hours := h.registry.For(tiers.Tier(e.OwnerTier)).ResultRetentionHours
+	if hours <= 0 {
+		return nil
+	}
+	expiry := e.CreatedAt.Add(time.Duration(hours) * time.Hour)
+	return &expiry
+}
+
+// presignResult mints a download link for an S3-backed result. Returns "" for
+// anything it cannot sign, which the caller renders as "no link", never as an
+// error: a history page must still load when S3 is unhappy.
+func (h *AccountHandler) presignResult(ctx context.Context, key, fileName string) string {
+	if h.presign == nil || key == "" || h.cfg == nil || h.cfg.S3Bucket == "" {
+		return ""
+	}
+	in := &s3.GetObjectInput{Bucket: aws.String(h.cfg.S3Bucket), Key: aws.String(key)}
+	if fileName != "" {
+		in.ResponseContentDisposition = aws.String(fmt.Sprintf("attachment; filename=%q", fileName))
+	}
+	signed, err := h.presign.PresignGetObject(ctx, in, func(o *s3.PresignOptions) { o.Expires = historyDownloadTTL })
+	if err != nil {
+		h.logger.Warn("account: presigning a history result failed", "error", err.Error())
+		return ""
+	}
+	return signed.URL
+}
+
+// liveLocalResult reports whether /api/download/:jobId can still serve this
+// job's result.
+//
+// Only the packaging pipelines (transcode, restore) upload to S3; an ordinary
+// conversion leaves its output on local disk, where the download endpoint
+// resolves the filename from the live in-memory job. So the honest test for
+// "is there a link" is "is the job still in memory, and did it finish" — a link
+// that 404s is worse than no link at all.
+//
+// This is why a history row can lose its download while the file itself is still
+// inside its retention window: an API restart drops the in-memory job. Making
+// local results addressable after a restart needs the on-disk output name
+// persisted and a database-backed download path, which is a follow-up.
+func (h *AccountHandler) liveLocalResult(jobID string) bool {
+	if h.jobs == nil || jobID == "" {
+		return false
+	}
+	job, err := h.jobs.GetJob(jobID)
+	if err != nil || job == nil {
+		return false
+	}
+	return job.Status == models.StatusCompleted
+}
+
+// History lists the signed-in caller's own jobs, newest first.
+//
+// Signed-in only, on purpose: "saved history" is what a free account buys over
+// anonymous use. Anonymous jobs are still recorded — they need retention and
+// abuse triage — they are simply not readable through an account endpoint.
+func (h *AccountHandler) History(c *gin.Context) {
+	user, signedIn := h.currentUser(c)
+	if !signedIn {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+	// Someone's own operation log is never cacheable, by us or by a proxy.
+	c.Header("Cache-Control", "no-store")
+
+	limit := clampedInt(c.Query("limit"), historyDefaultLimit, historyMaxLimit)
+	if limit == 0 {
+		limit = historyDefaultLimit
+	}
+	offset := clampedInt(c.Query("offset"), 0, 0)
+
+	// A signed-in caller whose account row has not been created yet (sync has
+	// not landed) has no history rather than an error.
+	if user == nil {
+		c.JSON(http.StatusOK, historyResponse{Entries: []historyEntry{}, Total: 0, Limit: limit, Offset: offset})
+		return
+	}
+
+	rows, total, err := h.store.ConversionHistoryForUser(c.Request.Context(), user.ID, limit, offset)
+	if err != nil {
+		h.logger.Warn("account: history lookup failed", "error", err.Error())
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "History is temporarily unavailable"})
+		return
+	}
+
+	now := time.Now().UTC()
+	entries := make([]historyEntry, 0, len(rows))
+	for _, r := range rows {
+		out := historyEntry{
+			JobID:          r.JobID,
+			Tool:           r.Tool,
+			Mode:           r.Mode,
+			MediaKind:      r.MediaKind,
+			SourceFormat:   r.SourceFormat,
+			TargetFormat:   r.TargetFormat,
+			Status:         r.Status,
+			CreatedAt:      r.CreatedAt.UTC().Format(time.RFC3339),
+			DurationMS:     r.DurationMS,
+			ResultFileName: r.ResultFileName,
+		}
+		if r.CompletedAt != nil {
+			out.CompletedAt = r.CompletedAt.UTC().Format(time.RFC3339)
+		}
+		if expiry := h.resultExpiry(r); expiry != nil {
+			out.ResultExpiresAt = expiry.UTC().Format(time.RFC3339)
+			out.Expired = expiry.Before(now)
+		}
+		if !out.Expired && r.Status == string(models.StatusCompleted) {
+			if r.ResultS3Key != "" {
+				out.DownloadURL = h.presignResult(c.Request.Context(), r.ResultS3Key, r.ResultFileName)
+			} else if h.liveLocalResult(r.JobID) {
+				out.DownloadPath = "/download/" + r.JobID
+			}
+		}
+		entries = append(entries, out)
+	}
+
+	c.JSON(http.StatusOK, historyResponse{Entries: entries, Total: total, Limit: limit, Offset: offset})
+}
+
 // Tiers serves the public tier matrix. /pricing, the upgrade prompts and the
 // inline capability hints all render from this, so the numbers exist in exactly
 // one place (internal/tiers, fed by config).
@@ -210,6 +432,10 @@ func (h *AccountHandler) Tiers(c *gin.Context) {
 // could not be built — an endpoint that returns account data must never guess.
 // /usage and /tiers are public: /usage reads whatever identity the group-level
 // OptionalFirebaseAuth already attached, and /tiers needs none.
+//
+// /history joins the authed group. It is a read, so it stays out of quotaRoutes
+// (which is POST-only anyway) — looking at your own history must never cost an
+// operation.
 func RegisterAccountRoutes(rg *gin.RouterGroup, h *AccountHandler, cfg *config.Config, verifier middleware.TokenVerifier) {
 	rg.GET("/tiers", h.Tiers)
 
@@ -220,4 +446,5 @@ func RegisterAccountRoutes(rg *gin.RouterGroup, h *AccountHandler, cfg *config.C
 	authed.Use(middleware.RequireFirebaseAuth(true, verifier))
 	authed.POST("/sync", h.Sync)
 	authed.GET("/me", h.Me)
+	authed.GET("/history", h.History)
 }

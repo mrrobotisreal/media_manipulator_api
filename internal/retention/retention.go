@@ -1,13 +1,18 @@
 // Package retention records how long one job's artifacts must be kept, so the
 // cleanup sweeper can honour a per-tier promise without a database round-trip.
 //
-// Why a marker file rather than a column: the sweeper walks the filesystem, and
-// the obvious storage — mm_conversion_jobs.owner_tier — has no writer at all
-// today (nothing calls telemetry.Store.UpsertJob). A marker written next to the
-// artifacts it describes needs no schema, survives a restart, costs one 4-byte
-// write per job, and cannot disagree with the files it governs. When the job
-// telemetry path is eventually wired up, the column becomes the better source
-// and this can be retired.
+// Why a marker file rather than a column: the sweeper walks the filesystem. A
+// marker written next to the artifacts it describes needs no schema, survives a
+// restart, costs one 4-byte write per job, needs no database round-trip mid-walk,
+// and cannot disagree with the files it governs.
+//
+// mm_conversion_jobs.owner_tier does now have a writer (handlers.recordJobCreated,
+// added with the conversion-history work), so the column is a viable second
+// source. The sweeper still reads the marker: swapping it for a per-directory
+// query would make artifact deletion depend on database availability, which is
+// the one dependency a filesystem reaper should not have. Retiring the marker is
+// a deliberate follow-up, and the decision to make then is whether a DB outage
+// should stop the sweeper.
 package retention
 
 import (

@@ -126,6 +126,14 @@ func main() {
 
 	// Existing services
 	jobManager := services.NewJobManager()
+	// Give the in-memory job model a durable shadow. mm_conversion_jobs is
+	// written on creation (from the handlers, which know the owner) and on
+	// lifecycle transitions (from here); it is never read back in the job-status
+	// path, so a database problem cannot slow or fail a conversion. A nil store
+	// leaves the recorder unset and every record call a no-op.
+	if store.Enabled() {
+		jobManager.SetRecorder(store)
+	}
 	converter := services.NewConverter(cfg)
 	inspector := services.NewMediaInspector(cfg.CommandTimeout)
 	analysisQueue := services.NewAnalysisQueue(cfg, inspector)
@@ -261,7 +269,14 @@ func main() {
 	// Periodic active-jobs gauge update.
 	go pollActiveJobs(ctx, jobManager, metricsReg)
 
-	accountHandler := handlers.NewAccountHandler(store, tierRegistry, cfg, logging)
+	// The presign client is what turns a conversion-history row into a working
+	// download link; nil (no S3 configured) simply means history lists results
+	// without links.
+	var accountPresign *s3.PresignClient
+	if s3Client != nil {
+		accountPresign = s3.NewPresignClient(s3Client)
+	}
+	accountHandler := handlers.NewAccountHandler(store, tierRegistry, cfg, logging, accountPresign, jobManager)
 
 	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg)
 

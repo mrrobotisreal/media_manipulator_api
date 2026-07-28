@@ -217,6 +217,72 @@ WHERE session_id = $2 AND user_id IS NULL
 	return tag.RowsAffected(), nil
 }
 
+// historyColumns is the projection GET /api/account/history reads. Nullable text
+// columns are coalesced so the scan target can stay a plain string.
+const historyColumns = `job_id::text, coalesce(tool, ''), coalesce(mode, ''),
+	coalesce(media_kind, ''), coalesce(source_format, ''), coalesce(target_format, ''),
+	status, coalesce(owner_tier, ''), created_at, completed_at, duration_ms,
+	coalesce(result_s3_key, ''), coalesce(result_file_name, ''), result_expires_at`
+
+// ConversionHistoryForUser returns one page of a signed-in user's jobs, newest
+// first, plus the unpaginated total so the caller can page honestly.
+//
+// Keyed on user_id and nothing else: session and visitor ids are client-supplied,
+// and history is an account feature precisely because it should follow the person
+// rather than the browser. Anonymous jobs (user_id IS NULL) are recorded but are
+// not readable here — by design.
+func (s *Store) ConversionHistoryForUser(ctx context.Context, userID string, limit, offset int) ([]models.ConversionHistoryEntry, int, error) {
+	if !s.Enabled() {
+		return nil, 0, ErrNoStore
+	}
+	if strings.TrimSpace(userID) == "" {
+		return nil, 0, nil
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+
+	var total int
+	if err := s.Pool.QueryRow(ctx,
+		`SELECT count(*) FROM mm_conversion_jobs WHERE user_id = $1`, userID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return nil, 0, nil
+	}
+
+	rows, err := s.Pool.Query(ctx, `SELECT `+historyColumns+`
+FROM mm_conversion_jobs
+WHERE user_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3`, userID, limit, offset)
+	if err != nil {
+		return nil, total, err
+	}
+	defer rows.Close()
+
+	out := make([]models.ConversionHistoryEntry, 0, limit)
+	for rows.Next() {
+		var e models.ConversionHistoryEntry
+		if err := rows.Scan(
+			&e.JobID, &e.Tool, &e.Mode,
+			&e.MediaKind, &e.SourceFormat, &e.TargetFormat,
+			&e.Status, &e.OwnerTier, &e.CreatedAt, &e.CompletedAt, &e.DurationMS,
+			&e.ResultS3Key, &e.ResultFileName, &e.ResultExpiresAt,
+		); err != nil {
+			return out, total, err
+		}
+		out = append(out, e)
+	}
+	return out, total, rows.Err()
+}
+
 // CountStudioProjectsForUser is the saved-project cap check. Projects created
 // while signed out are scoped by session and are not counted here.
 func (s *Store) CountStudioProjectsForUser(ctx context.Context, userID string) (int, error) {

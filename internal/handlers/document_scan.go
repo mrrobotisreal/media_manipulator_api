@@ -201,6 +201,12 @@ func (h *DocumentScanHandler) Start(c *gin.Context) {
 	}
 	job := h.jobManager.CreateJob(originalFile, options)
 	_ = h.jobManager.SetMode(job.ID, "document_scan")
+	recordJobCreated(c, h.jobManager, job, services.JobFacts{
+		Tool:         "document_scan",
+		Mode:         "document_scan",
+		SourceFormat: "image",
+		TargetFormat: strings.Join(documentScanOutputStrings(outputs), "+"),
+	})
 
 	srcDir := filepath.Join(h.cfg.UploadDir, job.ID, "src")
 	if err := os.MkdirAll(srcDir, 0o755); err != nil {

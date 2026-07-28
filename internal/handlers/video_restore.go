@@ -154,6 +154,13 @@ func (h *VideoRestoreHandler) StartVideoRestore(c *gin.Context) {
 	originalFile := models.OriginalFileInfo{Name: fileName, Size: objectSize, Type: contentType}
 	job := h.jobManager.CreateJob(originalFile, options)
 	_ = h.jobManager.SetMode(job.ID, "restore")
+	recordJobCreated(c, h.jobManager, job, services.JobFacts{
+		Tool:         "video_restore",
+		Mode:         "restore",
+		MediaKind:    string(models.FileTypeVideo),
+		SourceFormat: formatOf(fileName),
+		TargetFormat: "tar.gz",
+	})
 	stages := h.restore.BuildStages(selected)
 	_ = h.jobManager.ReplaceStages(job.ID, stages, "queued")
 

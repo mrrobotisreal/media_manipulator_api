@@ -151,6 +151,7 @@ func (h *ConversionHandler) CompleteVideoUpload(c *gin.Context) {
 	}
 	originalFile := models.OriginalFileInfo{Name: fileName, Size: objectSize, Type: mimeType}
 	job := h.jobManager.CreateJob(originalFile, options)
+	recordJobCreated(c, h.jobManager, job, h.conversionJobFacts(job, fileType))
 
 	jobUploadDir := filepath.Join(h.cfg.UploadDir, job.ID)
 	jobOutputDir := filepath.Join(h.cfg.OutputDir, job.ID)
