@@ -31,6 +31,8 @@ type Registry struct {
 	cleanupErrors           prometheus.Counter
 	activeJobs              prometheus.Gauge
 	sseSubscribers          prometheus.Gauge
+	analyticsEmitEvents     *prometheus.CounterVec
+	analyticsEmitBatches    *prometheus.CounterVec
 }
 
 // New creates a fresh Registry with all metrics registered.
@@ -114,14 +116,44 @@ func New() *Registry {
 		Help: "Connected SSE subscribers across all jobs.",
 	})
 
+	// Product-analytics emission (internal/analyticsemit). These are the only
+	// visibility into a feed that is deliberately silent on failure: nothing in
+	// that package ever returns an error to a caller, so `failed` and `dropped`
+	// climbing is the sole signal that server-truth events are not arriving.
+	r.analyticsEmitEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mm_analytics_emit_events_total",
+		Help: "Server-truth analytics events by outcome (sent, failed, dropped, skipped_no_identity).",
+	}, []string{"result"})
+	r.analyticsEmitBatches = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mm_analytics_emit_batches_total",
+		Help: "Server-truth analytics batches POSTed to the analytics service, by status.",
+	}, []string{"status"})
+
 	reg.MustRegister(
 		r.httpDuration, r.httpStatus, r.conversionJobs, r.toolUsage,
 		r.commandDuration, r.commandFailures, r.ffmpegValidationRejects,
 		r.rateLimitEvents, r.gpuWait, r.gpuRun,
 		r.cleanupDeletedFiles, r.cleanupDeletedBytes, r.cleanupErrors,
 		r.activeJobs, r.sseSubscribers,
+		r.analyticsEmitEvents, r.analyticsEmitBatches,
 	)
 	return r
+}
+
+// AnalyticsEmitEvents records n server-truth analytics events with one outcome.
+func (r *Registry) AnalyticsEmitEvents(result string, n int) {
+	if r == nil || n <= 0 {
+		return
+	}
+	r.analyticsEmitEvents.WithLabelValues(result).Add(float64(n))
+}
+
+// AnalyticsEmitBatch records one POSTed batch.
+func (r *Registry) AnalyticsEmitBatch(status string) {
+	if r == nil {
+		return
+	}
+	r.analyticsEmitBatches.WithLabelValues(status).Inc()
 }
 
 // Middleware records http duration + status per request.

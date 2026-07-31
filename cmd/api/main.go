@@ -28,6 +28,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/cleanup"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/cmdaudit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
@@ -121,7 +122,19 @@ func main() {
 
 	// Metrics + GPU + rate limiter
 	metricsReg := metrics.New()
+
+	// Server-truth product analytics. A SECOND, non-authoritative consumer that
+	// runs alongside the mm_* telemetry above and never replaces it: mm_* is the
+	// operational, audit-grade record; this feed exists so the analytics service
+	// has ground truth for job outcomes, downloads, quota rejections and signups
+	// that a browser cannot reliably report. Disabled unless ANALYTICS_SERVER_KEY
+	// is set, in which case every emission below is a no-op.
+	analyticsEmitter := analyticsemit.New(cfg, logging, metricsReg)
+
 	limiter := limits.New(redisClient, cfg, store, metricsReg)
+	// An exported field rather than a New() parameter, so the limiter's existing
+	// callers and tests are untouched.
+	limiter.Analytics = analyticsEmitter
 	gpuMgr := gpu.NewManager(cfg, store, metricsReg, logging)
 
 	// Existing services
@@ -134,6 +147,11 @@ func main() {
 	if store.Enabled() {
 		jobManager.SetRecorder(store)
 	}
+	// And the product-analytics shadow. Independent of the recorder above: a box
+	// with no telemetry database can still report product analytics, and vice
+	// versa. Job lifecycle emission lives in the job manager because completion and
+	// failure happen inside the pipeline, long after any request context is gone.
+	jobManager.SetAnalyticsEmitter(analyticsEmitter)
 	converter := services.NewConverter(cfg)
 	inspector := services.NewMediaInspector(cfg.CommandTimeout)
 	analysisQueue := services.NewAnalysisQueue(cfg, inspector)
@@ -152,6 +170,9 @@ func main() {
 	// /api/tiers endpoint. One table, read in one place.
 	tierRegistry := tiers.New(cfg)
 	conversionHandler := handlers.NewConversionHandler(jobManager, converter, cfg, inspector, analysisQueue, transcription, s3Client, faceDetectionStore, tierRegistry)
+	// `server_download_served` — the one server-truth event whose call site is a
+	// plain request handler.
+	conversionHandler.SetAnalyticsEmitter(analyticsEmitter)
 	// Content Studio gets its own handler because it persists projects/assets in
 	// Postgres (the conversion handler is stateless). It shares the jobManager so
 	// ingest/export progress flows through the same /api/job/:jobId machinery.
@@ -277,8 +298,11 @@ func main() {
 		accountPresign = s3.NewPresignClient(s3Client)
 	}
 	accountHandler := handlers.NewAccountHandler(store, tierRegistry, cfg, logging, accountPresign, jobManager)
+	// `server_signup_completed` — the exact signup number, which only the account
+	// sync can produce (see AccountHandler.emitSignupCompleted).
+	accountHandler.SetAnalyticsEmitter(analyticsEmitter)
 
-	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg)
+	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg, analyticsEmitter)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -312,6 +336,13 @@ func main() {
 	if adminServer != nil {
 		_ = adminServer.Shutdown(shutdownCtx)
 	}
+	// Best-effort flush of queued analytics events, AFTER the HTTP server has
+	// stopped accepting requests so nothing new is being queued. Bounded at 5s: a
+	// wedged analytics service must not hold up the API's restart, and the events
+	// it would take are the least important thing this process owns.
+	if !analyticsEmitter.Close(5 * time.Second) {
+		logging.Warn("analytics emitter did not flush within the shutdown deadline; queued events dropped")
+	}
 }
 
 func newS3Client(cfg *config.Config) *s3.Client {
@@ -326,7 +357,7 @@ func newS3Client(cfg *config.Config) *s3.Client {
 	})
 }
 
-func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, accountHandler *handlers.AccountHandler, tierRegistry *tiers.Registry, restoreAuthVerifier middleware.TokenVerifier, firebaseVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, drCommentsHandler *handlers.DrCommentsHandler, drFeedbackHandler *handlers.DrFeedbackHandler, drChatLabHandler *handlers.DrChatLabHandler, drTasksHandler *handlers.DrTasksHandler, drDesktopHandler *handlers.DrDesktopHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry) *gin.Engine {
+func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, accountHandler *handlers.AccountHandler, tierRegistry *tiers.Registry, restoreAuthVerifier middleware.TokenVerifier, firebaseVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, drCommentsHandler *handlers.DrCommentsHandler, drFeedbackHandler *handlers.DrFeedbackHandler, drChatLabHandler *handlers.DrChatLabHandler, drTasksHandler *handlers.DrTasksHandler, drDesktopHandler *handlers.DrDesktopHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry, analyticsEmitter *analyticsemit.Emitter) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.Default()
@@ -421,6 +452,9 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 			// the ledger holds no reversible address, not cryptographic secrecy.
 			IPHashSecret: quotaIPSalt[:],
 			Logger:       slog.Default(),
+			// Every 429 also becomes a `server_quota_rejected` product-analytics
+			// event. Nil when analytics is unconfigured, which is a no-op.
+			Analytics: analyticsEmitter,
 		}))
 
 		api.GET("/health", func(c *gin.Context) {

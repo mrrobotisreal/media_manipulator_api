@@ -16,7 +16,9 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
@@ -38,6 +40,21 @@ type ConversionHandler struct {
 	faceDetectionStore *services.FaceDetectionStore
 	aiService          *services.AIService
 	tierRegistry       *tiers.Registry
+	// analytics is the server-truth product-analytics feed. Attached by a setter
+	// rather than a constructor parameter because NewConversionHandler's signature
+	// is already at the limit of readability, and because nil is a fully supported
+	// configuration — see SetAnalyticsEmitter.
+	analytics *analyticsemit.Emitter
+}
+
+// SetAnalyticsEmitter attaches the server-truth analytics feed. Optional: a nil
+// emitter (the default, and what an unconfigured box has) makes every emission a
+// no-op. Matches the SetJobManager/SetRecorder wiring style used elsewhere.
+func (h *ConversionHandler) SetAnalyticsEmitter(e *analyticsemit.Emitter) {
+	if h == nil {
+		return
+	}
+	h.analytics = e
 }
 
 func NewConversionHandler(jobManager *services.JobManager, converter *services.Converter, cfg *config.Config, inspector *services.MediaInspector, analysisJobs *services.AnalysisQueue, transcription *services.TranscriptionService, s3Client *s3.Client, faceDetectionStore *services.FaceDetectionStore, tierRegistry *tiers.Registry) *ConversionHandler {
@@ -260,13 +277,78 @@ func (h *ConversionHandler) DownloadFile(c *gin.Context) {
 	}
 
 	outputPath := h.outputPath(job, filepath.Join(h.cfg.OutputDir, job.ID))
-	if _, err := os.Stat(outputPath); err != nil {
+	info, err := os.Stat(outputPath)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Converted file not found"})
 		return
 	}
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", h.getOutputFilename(job)))
 	c.Header("Content-Type", "application/octet-stream")
 	c.File(outputPath)
+
+	// Server truth for a download. Emitted AFTER c.File so it reflects a response
+	// that was actually written, and emitted here rather than trusted from the
+	// client because the browser's `download_completed` is fired during page
+	// teardown and can be lost — this is the number that cannot be.
+	//
+	// The size comes from the stat, not from the job: a job's ResultSizeBytes is
+	// only set by the pipelines that happen to know it, while the file on disk is
+	// what the visitor received.
+	h.emitDownloadServed(c, job, info.Size())
+}
+
+// mediaKindFromMIME derives the analytics media kind from a stored MIME type.
+//
+// A download request has no detected models.FileType to hand — that lives in the creating
+// handler's request, which is long gone — only the MIME string the browser sent at upload
+// time. mediaKindFor cannot be reused because it takes a FileType ('video'), not a MIME
+// ('video/quicktime'), and passing the latter through it silently yields an empty kind.
+//
+// An unrecognised prefix returns empty rather than "unknown": the analytics service treats
+// an empty media kind as NULL ("not applicable"), which is the honest answer, whereas
+// "unknown" claims we looked and could not tell.
+func mediaKindFromMIME(mime string) string {
+	switch {
+	case strings.HasPrefix(mime, "image/"):
+		return "image"
+	case strings.HasPrefix(mime, "video/"):
+		return "video"
+	case strings.HasPrefix(mime, "audio/"):
+		return "audio"
+	case mime == "application/pdf":
+		return "document"
+	default:
+		return ""
+	}
+}
+
+// emitDownloadServed reports one served result to the analytics service.
+func (h *ConversionHandler) emitDownloadServed(c *gin.Context, job *models.ConversionJob, bytes int64) {
+	if h == nil || !h.analytics.Enabled() || job == nil {
+		return
+	}
+	props := map[string]any{"job_id": job.ID}
+	if bytes > 0 {
+		props["bytes"] = bytes
+	}
+	if format := strings.TrimPrefix(h.getOutputExtension(job), "."); format != "" {
+		props["output_format"] = format
+	}
+	tier := ""
+	if res, ok := middleware.ResolveTier(c); ok {
+		tier = string(res.Tier)
+	}
+	h.analytics.Emit(analyticsemit.Event{
+		EventName: analyticsemit.ServerDownloadServed,
+		EventTS:   time.Now().UTC(),
+		// Identity comes from the request headers, which is the only identity a
+		// download request carries: it is a plain GET the browser may even have
+		// issued in a new tab.
+		VisitorID:  strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
+		SessionID:  strings.TrimSpace(c.GetHeader("X-MM-Session-ID")),
+		Context:    analyticsemit.Context(conversionToolFor(job), mediaKindFromMIME(job.OriginalFile.Type), job.ID, tier),
+		Properties: props,
+	})
 }
 
 func (h *ConversionHandler) GetTranscriptResult(c *gin.Context) {

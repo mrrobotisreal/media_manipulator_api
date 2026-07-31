@@ -6,12 +6,14 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
@@ -34,6 +36,17 @@ type AccountHandler struct {
 	// jobs answers whether a locally-stored result is still addressable by
 	// GET /api/download/:jobId. Optional.
 	jobs JobLookup
+	// analytics receives `server_signup_completed`. Attached by a setter; nil is a
+	// supported configuration.
+	analytics *analyticsemit.Emitter
+}
+
+// SetAnalyticsEmitter attaches the server-truth analytics feed.
+func (h *AccountHandler) SetAnalyticsEmitter(e *analyticsemit.Emitter) {
+	if h == nil {
+		return
+	}
+	h.analytics = e
 }
 
 // JobLookup is the slice of the in-memory job manager conversion history needs:
@@ -155,7 +168,7 @@ func (h *AccountHandler) Sync(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&body) // Optional; an empty body is a valid sync.
 
-	user, err := h.store.UpsertUser(c.Request.Context(), telemetry.UserSyncInput{
+	user, created, err := h.store.UpsertUser(c.Request.Context(), telemetry.UserSyncInput{
 		FirebaseUID:   principal.UID,
 		Email:         principal.Email,
 		EmailVerified: principal.EmailVerified,
@@ -166,6 +179,9 @@ func (h *AccountHandler) Sync(c *gin.Context) {
 		h.logger.Error("account: sync failed", "error", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save your account"})
 		return
+	}
+	if created {
+		h.emitSignupCompleted(c, principal.UID, user, body.SignupSource)
 	}
 
 	// Claim the Content Studio projects this visitor created while signed out.
@@ -183,6 +199,52 @@ func (h *AccountHandler) Sync(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, h.buildUsageResponse(c, user, true))
+}
+
+// emitSignupCompleted reports an authoritative signup.
+//
+// THIS IS THE EXACT SIGNUP NUMBER, and the reason the whole server-truth feed
+// exists. The browser cannot produce it: Firebase's Google popup resolves the same
+// way for a new account and a returning user, so the UI emits `signup_completed`
+// only on the email path and `signin_completed` on the Google path — under-reporting
+// deliberately, because over-reporting the primary growth metric is worse. `created`
+// comes from the upsert's `xmax = 0`, which is the database telling us which branch
+// it took.
+//
+// The PersonHint is what makes it stitchable: the analytics service links the
+// visitor to a person keyed by Firebase UID, so this event both counts the signup
+// and connects everything that visitor did before it to the account they now have.
+func (h *AccountHandler) emitSignupCompleted(c *gin.Context, firebaseUID string, user *models.User, signupSource string) {
+	if h == nil || !h.analytics.Enabled() || c == nil {
+		return
+	}
+	tier := ""
+	if user != nil {
+		tier = user.Tier
+	}
+	// The client's own signup event carries `method` ('email'/'google'), and the
+	// sync body's signupSource is where the UI puts the same information. Passed
+	// through when present rather than guessed at: an absent method is honest,
+	// a wrong one is not.
+	props := map[string]any{}
+	if m := strings.TrimSpace(signupSource); m != "" {
+		props["method"] = m
+	}
+	if tier != "" {
+		props["tier"] = tier
+	}
+	h.analytics.Emit(analyticsemit.Event{
+		EventName: analyticsemit.ServerSignupCompleted,
+		EventTS:   time.Now().UTC(),
+		VisitorID: strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
+		SessionID: strings.TrimSpace(c.GetHeader("X-MM-Session-ID")),
+		PersonHint: &analyticsemit.PersonHint{
+			FirebaseUID: firebaseUID,
+			Tier:        tier,
+		},
+		Context:    analyticsemit.Context("", "", "", tier),
+		Properties: props,
+	})
 }
 
 // Me returns the signed-in caller's account, tier, limits and today's usage.

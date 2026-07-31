@@ -87,6 +87,32 @@ type Config struct {
 	TelemetryAuditCommands bool
 	TelemetryWriteTimeout  time.Duration
 
+	// --- Product-analytics emission (media_manipulator_analytics) ----------
+	//
+	// Separate from the telemetry settings above, and deliberately so: the mm_*
+	// tables are operational truth and always on when a database is present,
+	// while this is a lossy feed to a second service that must be able to be
+	// off. Both keys unset (the default) means the API behaves exactly as it did
+	// before this existed.
+
+	// AnalyticsIngestURL is the analytics service's base URL. Localhost by
+	// default because the two services run on the same box — going out through
+	// nginx and Cloudflare to reach a process on 127.0.0.1 would add latency,
+	// a TLS handshake, and two more things that can break.
+	AnalyticsIngestURL string
+	// AnalyticsServerKey is a SECRET (unlike the browser write key, which is
+	// public by necessity). It authorizes `source='server'` events, which the
+	// analytics service trusts more than browser events — it skips bot detection
+	// and geo enrichment for them. Empty disables emission entirely.
+	AnalyticsServerKey string
+	// AnalyticsEmitBuffer bounds the in-memory queue. When it fills, events are
+	// dropped and counted rather than blocking a request.
+	AnalyticsEmitBuffer int
+	// AnalyticsEmitFlush is the batching interval.
+	AnalyticsEmitFlush time.Duration
+	// AnalyticsEmitTimeout bounds one POST.
+	AnalyticsEmitTimeout time.Duration
+
 	RedisURL      string
 	RedisAddr     string
 	RedisPassword string
@@ -435,6 +461,15 @@ func Load() *Config {
 		TelemetryDBEnabled:     getEnvBool("TELEMETRY_DB_ENABLED", true),
 		TelemetryAuditCommands: getEnvBool("TELEMETRY_AUDIT_COMMANDS", true),
 		TelemetryWriteTimeout:  time.Duration(getEnvInt("TELEMETRY_WRITE_TIMEOUT_SECONDS", 5)) * time.Second,
+
+		// Product analytics (media_manipulator_analytics, port 59998). Disabled
+		// until ANALYTICS_SERVER_KEY is set to a value in that service's
+		// SERVER_KEYS.
+		AnalyticsIngestURL:   getEnv("ANALYTICS_INGEST_URL", "http://127.0.0.1:59998"),
+		AnalyticsServerKey:   getEnv("ANALYTICS_SERVER_KEY", ""),
+		AnalyticsEmitBuffer:  getEnvInt("ANALYTICS_EMIT_BUFFER", 512),
+		AnalyticsEmitFlush:   time.Duration(getEnvInt("ANALYTICS_EMIT_FLUSH_MS", 2000)) * time.Millisecond,
+		AnalyticsEmitTimeout: time.Duration(getEnvInt("ANALYTICS_EMIT_TIMEOUT_SECONDS", 5)) * time.Second,
 
 		// Redis
 		RedisURL:      getEnv("REDIS_URL", ""),

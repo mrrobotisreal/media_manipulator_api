@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 )
@@ -19,6 +20,35 @@ import (
 // every record call becomes a no-op.
 type JobRecorder interface {
 	UpsertJob(ctx context.Context, j telemetry.JobUpsert)
+}
+
+// JobAnalytics is the slice of *analyticsemit.Emitter this package needs, so the
+// job model keeps no hard dependency on analytics being configured. Same posture
+// as JobRecorder: nil is fully supported and every call is a no-op.
+//
+// Job lifecycle emission lives HERE rather than in the handler layer because the
+// handlers only see creation. Completion and failure happen inside the pipeline,
+// long after the request returned and the gin context died, and this is the one
+// place that observes every terminal transition exactly once.
+type JobAnalytics interface {
+	Enabled() bool
+	Emit(ev analyticsemit.Event)
+}
+
+// jobEmitContext is the owner and tool facts a job's TERMINAL analytics events
+// need, remembered from creation.
+//
+// WHY THIS HAS TO BE REMEMBERED. recordTransition deliberately writes lifecycle
+// fields only; the owner columns are set once at creation and preserved by
+// UpsertJob's COALESCE clauses. That is right for Postgres and useless for
+// analytics, which has no prior row to COALESCE against — an event with no
+// visitor_id is dropped by the emitter (synthesizing one would fabricate a visitor).
+// So the owner is held in memory for the life of the job, exactly as the job itself
+// is. Entries are removed when the terminal event is emitted, and swept alongside
+// jm.jobs by CleanupOldJobs, so the map cannot outgrow the job map.
+type jobEmitContext struct {
+	owner JobOwner
+	facts JobFacts
 }
 
 // JobOwner is who started a job, as far as the request layer could tell.
@@ -69,6 +99,13 @@ type JobManager struct {
 	recordCh  chan telemetry.JobUpsert
 	recFlush  chan chan struct{}
 	recopened bool
+
+	// Product-analytics emission. A separate mutex from recMu because the two are
+	// independent switches: the durable recorder and the analytics feed are
+	// configured, and can fail, entirely apart from one another.
+	emitMu     sync.RWMutex
+	emitter    JobAnalytics
+	emitOwners map[string]jobEmitContext
 }
 
 func NewJobManager() *JobManager {
@@ -78,6 +115,7 @@ func NewJobManager() *JobManager {
 		subscribers: make(map[string][]chan *models.ConversionJob),
 		recordCh:    make(chan telemetry.JobUpsert, 256),
 		recFlush:    make(chan chan struct{}, 4),
+		emitOwners:  make(map[string]jobEmitContext),
 	}
 	go jm.handleProgressUpdates()
 	return jm
@@ -98,6 +136,61 @@ func (jm *JobManager) SetRecorder(r JobRecorder) {
 	if !opened {
 		go jm.drainRecords()
 	}
+}
+
+// SetAnalyticsEmitter attaches the server-truth analytics feed. Called once at
+// boot, matching SetRecorder's wiring style. A nil emitter leaves emission off.
+func (jm *JobManager) SetAnalyticsEmitter(e JobAnalytics) {
+	if e == nil {
+		return
+	}
+	jm.emitMu.Lock()
+	jm.emitter = e
+	jm.emitMu.Unlock()
+}
+
+// analytics returns the emitter when it is live, else nil.
+func (jm *JobManager) analytics() JobAnalytics {
+	if jm == nil {
+		return nil
+	}
+	jm.emitMu.RLock()
+	e := jm.emitter
+	jm.emitMu.RUnlock()
+	if e == nil || !e.Enabled() {
+		return nil
+	}
+	return e
+}
+
+// rememberJobOwner stores the identity a job's terminal events will need.
+func (jm *JobManager) rememberJobOwner(jobID string, owner JobOwner, facts JobFacts) {
+	if jm == nil || jobID == "" {
+		return
+	}
+	jm.emitMu.Lock()
+	if jm.emitOwners == nil {
+		jm.emitOwners = make(map[string]jobEmitContext)
+	}
+	jm.emitOwners[jobID] = jobEmitContext{owner: owner, facts: facts}
+	jm.emitMu.Unlock()
+}
+
+// takeJobOwner reads and removes a job's remembered identity. Removing on read is
+// what makes the terminal event fire at most once per job even though
+// recordTransition runs on several state changes: only the first terminal
+// transition finds a context.
+func (jm *JobManager) takeJobOwner(jobID string) (jobEmitContext, bool) {
+	if jm == nil || jobID == "" {
+		return jobEmitContext{}, false
+	}
+	jm.emitMu.Lock()
+	defer jm.emitMu.Unlock()
+	ctx, ok := jm.emitOwners[jobID]
+	if ok {
+		delete(jm.emitOwners, jobID)
+	}
+	return ctx, ok
 }
 
 // drainRecords is the single consumer of recordCh.
@@ -155,10 +248,20 @@ func (jm *JobManager) enqueueRecord(rec telemetry.JobUpsert) {
 // exist before a pipeline emits its first event. One small INSERT on a request
 // that is about to run ffmpeg is free.
 func (jm *JobManager) RecordJobCreated(ctx context.Context, jobID string, owner JobOwner, facts JobFacts) {
+	if jobID == "" {
+		return
+	}
+
+	// Analytics first, and unconditionally on the recorder: the two feeds are
+	// independent, and a box with no telemetry database should still be able to
+	// report product analytics.
+	jm.rememberJobOwner(jobID, owner, facts)
+	jm.emitJobCreated(jobID, owner, facts)
+
 	jm.recMu.RLock()
 	recorder := jm.recorder
 	jm.recMu.RUnlock()
-	if recorder == nil || jobID == "" {
+	if recorder == nil {
 		return
 	}
 
@@ -195,9 +298,11 @@ func (jm *JobManager) recordTransition(jobID string) {
 	jm.recMu.RLock()
 	recorder := jm.recorder
 	jm.recMu.RUnlock()
-	if recorder == nil {
+	emitter := jm.analytics()
+	if recorder == nil && emitter == nil {
 		return
 	}
+
 	jm.mu.RLock()
 	job, ok := jm.jobs[jobID]
 	if !ok {
@@ -221,8 +326,20 @@ func (jm *JobManager) recordTransition(jobID string) {
 		}
 		rec.DurationMS = &ms
 	}
+	// Snapshot the analytics inputs while the read lock is held, so nothing below
+	// touches the job pointer after the unlock.
+	status := job.Status
+	resultFileName := job.ResultFileName
+	resultSize := job.ResultSizeBytes
+	errMsg := job.Error
 	jm.mu.RUnlock()
-	jm.enqueueRecord(rec)
+
+	if recorder != nil {
+		jm.enqueueRecord(rec)
+	}
+	if emitter != nil {
+		jm.emitTerminal(emitter, jobID, status, rec.DurationMS, resultFileName, resultSize, errMsg)
+	}
 }
 
 // flushRecords blocks until every record queued so far has been handed to the
@@ -547,11 +664,30 @@ func (jm *JobManager) ActiveCount() int {
 
 func (jm *JobManager) CleanupOldJobs(maxAge time.Duration) {
 	jm.mu.Lock()
-	defer jm.mu.Unlock()
 	cutoff := time.Now().UTC().Add(-maxAge)
 	for jobID, job := range jm.jobs {
 		if job.CompletedAt != nil && job.CompletedAt.Before(cutoff) {
 			delete(jm.jobs, jobID)
 		}
 	}
+	// Snapshot the surviving ids so the analytics sweep below does not need the
+	// jobs lock while it takes the emit lock (two locks, always in this order).
+	live := make(map[string]struct{}, len(jm.jobs))
+	for jobID := range jm.jobs {
+		live[jobID] = struct{}{}
+	}
+	jm.mu.Unlock()
+
+	// Drop remembered owners for jobs that no longer exist. Normally the terminal
+	// emit removes the entry itself; this covers the jobs that never reach a
+	// terminal state — without it, an abandoned job's identity would sit in this
+	// map for the process's lifetime. Bounding it by jm.jobs means the map can
+	// never be larger than the job map it shadows.
+	jm.emitMu.Lock()
+	for jobID := range jm.emitOwners {
+		if _, ok := live[jobID]; !ok {
+			delete(jm.emitOwners, jobID)
+		}
+	}
+	jm.emitMu.Unlock()
 }

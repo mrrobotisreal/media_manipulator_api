@@ -7,10 +7,12 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
@@ -43,6 +45,9 @@ type QuotaConfig struct {
 	// an address. Mirrors internal/limits/limiter.go's approach.
 	IPHashSecret []byte
 	Logger       *slog.Logger
+	// Analytics receives a `server_quota_rejected` event on every 429. Optional;
+	// nil (or an unconfigured emitter) makes it a no-op.
+	Analytics *analyticsemit.Emitter
 }
 
 // resolution returns the caller's tier, preferring the shared per-request
@@ -113,6 +118,28 @@ func upgradePathFor(t tiers.Tier) string {
 	return "premium"
 }
 
+// emitQuotaRejected sends one `server_quota_rejected` event. Fire-and-forget, and
+// the properties mirror the JSON body the caller is about to receive so a report
+// and a support ticket describe the same numbers.
+func (q QuotaConfig) emitQuotaRejected(c *gin.Context, metric, tier string, limit, used int64) {
+	if !q.Analytics.Enabled() || c == nil {
+		return
+	}
+	q.Analytics.Emit(analyticsemit.Event{
+		EventName: analyticsemit.ServerQuotaRejected,
+		EventTS:   time.Now().UTC(),
+		VisitorID: strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
+		SessionID: strings.TrimSpace(c.GetHeader("X-MM-Session-ID")),
+		Context:   analyticsemit.Context("", "", "", tier),
+		Properties: map[string]any{
+			"metric": metric,
+			"tier":   tier,
+			"limit":  limit,
+			"used":   used,
+		},
+	})
+}
+
 // RequireQuota counts one unit of `metric` against the caller's daily
 // allowance and rejects the request with 429 once the allowance is spent.
 //
@@ -172,6 +199,12 @@ func RequireQuota(cfg QuotaConfig, metric string) gin.HandlerFunc {
 		c.Header(HeaderQuotaRemaining, strconv.FormatInt(remaining, 10))
 
 		if count > limit {
+			// Server truth for the exact instant of monetization friction. The UI
+			// emits its own `quota_exceeded_shown` when it renders the block, and
+			// both are wanted: the client event says the visitor SAW it, this one
+			// says it HAPPENED, and the gap between the two counts is how often the
+			// 429 lands somewhere the UI never surfaced.
+			cfg.emitQuotaRejected(c, metric, string(tier), limit, count)
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error":       "quota_exceeded",
 				"tier":        string(tier),

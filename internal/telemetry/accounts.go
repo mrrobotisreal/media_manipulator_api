@@ -38,6 +38,27 @@ func scanUser(row pgx.Row) (*models.User, error) {
 	return &u, nil
 }
 
+// scanUserWithCreated scans a row that leads with the `created` flag UpsertUser
+// selects. Kept separate from scanUser rather than adding a parameter: the column
+// order is the contract between the SQL and the Scan call, and one function per
+// column list is how that stays checkable by reading.
+func scanUserWithCreated(row pgx.Row) (*models.User, bool, error) {
+	var (
+		u       models.User
+		created bool
+	)
+	err := row.Scan(
+		&created,
+		&u.ID, &u.FirebaseUID, &u.Email, &u.EmailVerified,
+		&u.Tier, &u.TierSource, &u.TierExpiresAt, &u.DisplayName,
+		&u.SignupSource, &u.CreatedAt, &u.UpdatedAt, &u.LastSeenAt,
+	)
+	if err != nil {
+		return nil, false, err
+	}
+	return &u, created, nil
+}
+
 // UserByFirebaseUID returns the account for a verified principal, or
 // (nil, nil) when no row exists yet. A signed-in caller with no row is a normal
 // state — the sync call may simply not have landed — so it is not an error.
@@ -73,14 +94,40 @@ type UserSyncInput struct {
 // later, the billing webhook) may change a tier. A sync that silently reset a
 // tier to 'free' on every login would be a very quiet way to lose paying
 // customers.
-func (s *Store) UpsertUser(ctx context.Context, in UserSyncInput) (*models.User, error) {
+// The second return value reports whether this call CREATED the account, which is
+// the only reliable signup signal in the whole system.
+//
+// The browser cannot answer it. Firebase's Google popup succeeds identically for a
+// brand-new account and a returning user, so the UI deliberately under-reports
+// signups (it emits `signin_completed` on that path) rather than inflate the most
+// important growth number in the product. This statement knows: either the INSERT
+// took, or the ON CONFLICT branch did.
+//
+// `xmax = 0` is how you ask Postgres which branch ran. xmax is the system column
+// holding the id of the transaction that deleted or locked a row; on a genuinely
+// new row it is 0, and on a row that ON CONFLICT DO UPDATE touched it is the
+// current transaction's id. It is the standard trick precisely because the
+// alternatives are worse: a preceding SELECT would race two concurrent syncs into
+// both reporting "created", and splitting into an explicit INSERT-then-UPDATE would
+// need error-code sniffing and two round trips. The cost is one non-obvious
+// expression, documented here.
+func (s *Store) UpsertUser(ctx context.Context, in UserSyncInput) (*models.User, bool, error) {
 	if !s.Enabled() {
-		return nil, ErrNoStore
+		return nil, false, ErrNoStore
 	}
 	ctx, cancel := s.ctx(ctx)
 	defer cancel()
 
-	const q = `
+	row := s.Pool.QueryRow(ctx, upsertUserQuery,
+		in.FirebaseUID, in.Email, in.EmailVerified, in.DisplayName, in.SignupSource)
+	return scanUserWithCreated(row)
+}
+
+// upsertUserQuery is package-level so a test can assert the two things about it
+// that are easy to break and impossible to notice: that the `created` flag comes
+// from `xmax = 0` (not from a racy preceding SELECT), and that it is the FIRST
+// returned column, matching scanUserWithCreated's Scan order.
+const upsertUserQuery = `
 INSERT INTO mm_users (firebase_uid, email, email_verified, display_name, signup_source, last_seen_at)
 VALUES ($1, nullif($2, ''), $3, nullif($4, ''), nullif($5, ''), now())
 ON CONFLICT (firebase_uid) DO UPDATE SET
@@ -89,11 +136,7 @@ ON CONFLICT (firebase_uid) DO UPDATE SET
 	display_name   = COALESCE(nullif(EXCLUDED.display_name, ''), mm_users.display_name),
 	updated_at     = now(),
 	last_seen_at   = now()
-RETURNING ` + userColumns
-
-	row := s.Pool.QueryRow(ctx, q, in.FirebaseUID, in.Email, in.EmailVerified, in.DisplayName, in.SignupSource)
-	return scanUser(row)
-}
+RETURNING (xmax = 0) AS created, ` + userColumns
 
 // SetUserTier changes an account's tier and records the matching audit row, in
 // one transaction — a grant with no audit trail, or an audit row for a grant

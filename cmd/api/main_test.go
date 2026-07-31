@@ -156,6 +156,9 @@ func TestSetupRouterAppliesRateLimitsToRegisteredRoutes(t *testing.T) {
 	router := setupRouter(
 		cfg, nil, nil, nil, nil, nil, nil, tiers.New(cfg), nil, nil, nil,
 		nil, nil, nil, nil, nil, nil, nil, nil, limits.New(nil, cfg, nil, nil), metrics.New(),
+		// nil analytics emitter: an unconfigured emitter is a supported state and
+		// every emission is a no-op, which is exactly what this test wants.
+		nil,
 	)
 
 	w := httptest.NewRecorder()

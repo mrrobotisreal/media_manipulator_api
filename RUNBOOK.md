@@ -69,6 +69,13 @@ returned to the client as presigned GET URLs.
 The API speaks JSON over HTTPS, with one SSE endpoint at
 `GET /api/job/:jobId/events` for live progress.
 
+It also writes to **two separate observability stores, which must not be
+confused**. `mm_*` in the `media_manipulator` database (`internal/telemetry`) is
+operational truth: abuse investigation, audit, billing-grade. Separately,
+`internal/analyticsemit` sends a handful of **server-truth product-analytics**
+events to `media_manipulator_analytics` on port 59998 — non-authoritative, lossy by
+design, and off unless `ANALYTICS_SERVER_KEY` is set. See §4.11.
+
 ---
 
 ## 2. Architecture diagram
@@ -386,6 +393,83 @@ deploy. Runtime verification: `docs/dr-desktop-downloads-verification.md`.
 | `DR_DESKTOP_MAC_ARM64_KEY` | `double-raven/desktop/mac/apple/Double Raven Portal-0.1.0-arm64.dmg` | S3 key of the Mac (Apple Silicon) `.dmg`. |
 | `DR_DESKTOP_MAC_INTEL_KEY` | `double-raven/desktop/mac/intel/Double Raven Portal-0.1.0.dmg` | S3 key of the Mac (Intel) `.dmg`. |
 | `DR_DESKTOP_WINDOWS_KEY` | `double-raven/desktop/windows/Double Raven Portal Setup 0.1.0.exe` | S3 key of the Windows installer `.exe`. |
+
+### 4.11 Product-analytics emission (media_manipulator_analytics)
+
+The API emits a small set of **server-truth** product-analytics events to the
+analytics service on port 59998 (`internal/analyticsemit`). This is a second,
+deliberately lossy consumer that sits alongside — never replaces — the `mm_*`
+operational telemetry: `mm_*` is the durable, audit-grade, billing-grade record;
+this feed exists because a browser cannot reliably report an outcome it was not
+present for (a tab closed mid-transcode takes its `job_completed` with it).
+
+**Disabled by default.** With `ANALYTICS_SERVER_KEY` unset, every emission in the
+process is a no-op and the API behaves exactly as it did before the feed existed.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `ANALYTICS_INGEST_URL` | `http://127.0.0.1:59998` | Analytics service base URL. Localhost by default: both services run on this box, and routing through nginx + Cloudflare to reach 127.0.0.1 would add latency and two more failure modes. |
+| `ANALYTICS_SERVER_KEY` | *(empty — disabled)* | **Secret.** Must match an entry in the analytics service's `SERVER_KEYS`. Authorizes `source='server'` events, which that service trusts more than browser events. Unlike the browser write key, this is not public. |
+| `ANALYTICS_EMIT_BUFFER` | `512` | In-memory queue depth. When full, events are dropped and counted — `Emit` never blocks a request. |
+| `ANALYTICS_EMIT_FLUSH_MS` | `2000` | Batching interval. Batches are also sent at 100 events, which is the analytics service's `MAX_BATCH_EVENTS`. |
+| `ANALYTICS_EMIT_TIMEOUT_SECONDS` | `5` | Per-POST timeout. |
+
+**What is emitted, and from where**
+
+| Event | Call site |
+| --- | --- |
+| `server_job_created` | `services.JobManager.RecordJobCreated` (the handlers' `recordJobCreated` path) |
+| `server_job_completed` / `server_job_failed` | `services.JobManager.recordTransition`, on the first terminal transition |
+| `server_download_served` | `ConversionHandler.DownloadFile`, after the file is written |
+| `server_quota_rejected` | `middleware.RequireQuota`, the 429 branch |
+| `server_rate_limited` | `limits.Limiter.recordEvent`, blocked decisions only |
+| `server_signup_completed` | `AccountHandler.Sync`, when the upsert created the row |
+
+**How to enable**
+
+1. On the analytics service, add a secret to `SERVER_KEYS` (convention: an `mms_`
+   prefix, to distinguish it at a glance from the public `mmk_web_` browser key).
+2. Put the same value in this API's `.env` as `ANALYTICS_SERVER_KEY`.
+3. Restart the API. The boot log says `analytics emission enabled` with the
+   resolved endpoint — or `analytics emission disabled` if a value is missing.
+
+**How to verify**
+
+```bash
+curl -s localhost:59997/metrics | grep mm_analytics_emit
+# mm_analytics_emit_events_total{result="sent"}   should climb during real traffic
+# mm_analytics_emit_batches_total{status="ok"}    likewise
+```
+
+Then run a job through the site and check the analytics database:
+
+```sql
+SELECT event_name, is_bot, country_code, tool_slug
+  FROM events WHERE source = 'server' ORDER BY event_ts DESC LIMIT 10;
+```
+
+`is_bot` must be **false** and the geo columns **NULL** — the analytics service
+skips both bot detection and geo enrichment for server batches. (Geo would stamp
+this datacentre onto every job outcome; the bot check is worse, because the stock
+Go user agent matches its bot regex and bot-flagged events are excluded from the
+identity tables, which would leave every server event stored and invisible to every
+join. This emitter also sends an explicit `User-Agent:
+media-manipulator-api/analyticsemit` as a second lock on that door.)
+
+**What failure looks like**
+
+| Symptom | Meaning |
+| --- | --- |
+| `mm_analytics_emit_events_total{result="failed"}` climbing + `ERROR analytics emit batch failed after retry` | The analytics service is unreachable or answering non-2xx. Each batch is tried twice and then abandoned. |
+| `{result="dropped"}` climbing + one `WARN analytics emit buffer full` | The service is up but too slow to keep pace, so the queue filled. |
+| `{result="skipped_no_identity"}` climbing | Requests are arriving without valid `X-MM-Visitor-ID` / `X-MM-Session-ID` UUIDs. Expected for curl and old cached bundles; a sustained climb means the UI stopped sending the headers. |
+| 401s from the analytics service | `ANALYTICS_SERVER_KEY` is not in that service's `SERVER_KEYS`. |
+
+**None of these are incidents.** Nothing in this feed is authoritative; losing
+analytics events during an analytics outage is the designed trade, and `mm_*`
+remains the complete record. Do not add retries, a durable outbox, or blocking
+behaviour to make it lossless — an analytics problem must never be able to slow or
+fail a conversion.
 
 ---
 

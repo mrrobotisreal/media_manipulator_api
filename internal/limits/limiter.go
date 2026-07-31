@@ -26,6 +26,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/geo"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/logger"
@@ -42,7 +43,11 @@ type Limiter struct {
 	Store        *telemetry.Store
 	Metrics      *metrics.Registry
 	AuditAllowed bool
-	hashSecret   []byte
+	// Analytics receives a `server_rate_limited` event on every BLOCKED decision.
+	// An exported field rather than a New() parameter so existing callers and
+	// tests are unaffected; nil is a fully supported configuration.
+	Analytics  *analyticsemit.Emitter
+	hashSecret []byte
 }
 
 // Decision describes the outcome of a single limiter check.
@@ -225,6 +230,15 @@ func (l *Limiter) recordEvent(c *gin.Context, scope, route, tool, ip string, d D
 			l.Metrics.RateLimitBlocked(scope, route)
 		}
 	}
+	// Server truth for a blocked request. Only blocks are emitted: an ALLOWED
+	// decision is every ordinary request, which would be a per-request analytics
+	// event and a self-inflicted flood. Emitted beside the mm_rate_limit_events
+	// insert rather than instead of it — that row is the abuse-investigation record
+	// and keeps the IP; this event is the product signal and never sees one.
+	if !allowed {
+		l.emitRateLimited(c, scope, route)
+	}
+
 	if l.Store == nil {
 		return
 	}
@@ -251,6 +265,28 @@ func (l *Limiter) recordEvent(c *gin.Context, scope, route, tool, ip string, d D
 		rl.RequestID = fields.RequestID
 	}
 	go l.Store.InsertRateLimitEvent(context.Background(), rl)
+}
+
+// emitRateLimited sends one `server_rate_limited` event.
+//
+// `route_key` is the limiter's route label, not the request path: paths contain job
+// ids and would make the dimension unbounded. Note there is no client twin for this
+// event — a rate-limited request is often one the UI never got to react to, which is
+// exactly why the server has to be the one reporting it.
+func (l *Limiter) emitRateLimited(c *gin.Context, scope, route string) {
+	if l == nil || !l.Analytics.Enabled() || c == nil {
+		return
+	}
+	l.Analytics.Emit(analyticsemit.Event{
+		EventName: analyticsemit.ServerRateLimited,
+		EventTS:   time.Now().UTC(),
+		VisitorID: strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
+		SessionID: strings.TrimSpace(c.GetHeader("X-MM-Session-ID")),
+		Properties: map[string]any{
+			"scope":     scope,
+			"route_key": route,
+		},
+	})
 }
 
 // hash returns a stable opaque key suitable for Redis. The salt is a fixed
