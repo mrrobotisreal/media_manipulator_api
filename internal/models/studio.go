@@ -51,13 +51,17 @@ type StudioProject struct {
 	CaptionsEnabled bool                `json:"captionsEnabled"`
 	Audio           *StudioAudioConfig  `json:"audio,omitempty"`
 
+	// EDL v3: timeline markers (≤500, sorted by t). Stored in the same sidecar.
+	Markers []StudioMarker `json:"markers,omitempty"`
+
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// StudioSchemaVersionCurrent is the EDL version the server emits. v1 documents
-// load unchanged (the new fields are additive); the client normalizes on load.
-const StudioSchemaVersionCurrent = 2
+// StudioSchemaVersionCurrent is the EDL version the server emits. Older
+// documents load unchanged (the new fields are additive); the client
+// normalizes on load.
+const StudioSchemaVersionCurrent = 3
 
 // StudioTrack is one timeline lane.
 type StudioTrack struct {
@@ -66,6 +70,16 @@ type StudioTrack struct {
 	Index int             `json:"index"` // V1=0,V2=1… / A1=0,A2=1…
 	Muted bool            `json:"muted"`
 	Clips []StudioClip    `json:"clips"`
+
+	// EDL v3 (all optional; absent = default behavior). Gain/Pan are pointers
+	// so "absent" (defaults 1 / 0) is distinguishable from a real 0.
+	Name    string              `json:"name,omitempty"`   // ≤80 chars
+	Locked  bool                `json:"locked,omitempty"` // part 18: reject edits
+	Hidden  bool                `json:"hidden,omitempty"` // video: hide from composite
+	Solo    bool                `json:"solo,omitempty"`   // audio: solo in the mix
+	Gain    *float64            `json:"gain,omitempty"`   // 0..2 (default 1)
+	Pan     *float64            `json:"pan,omitempty"`    // -1 (L) .. 1 (R) (default 0)
+	Effects *StudioTrackEffects `json:"effects,omitempty"`
 }
 
 // StudioClip is a placement of a source asset's stream on the timeline. The
@@ -95,6 +109,22 @@ type StudioClip struct {
 	Effects         []StudioEffect         `json:"effects,omitempty"`
 	VolumeKeyframes []StudioVolumeKeyframe `json:"volumeKeyframes,omitempty"`
 	Pan             *float64               `json:"pan,omitempty"` // -1 (L) .. 1 (R)
+
+	// EDL v3 (all optional; absent = no effect). Ranges/names mirror
+	// lib/studioTypes.ts (Zod) and STUDIO_V3_RANGES in effectRegistry.ts.
+	// Transition supersedes TransitionInSeconds (still written for now; the
+	// sanitizer upgrades legacy values and keeps the two mirrored).
+	Transition *StudioTransition    `json:"transition,omitempty"`
+	Keyframes  *StudioClipKeyframes `json:"keyframes,omitempty"`
+	// Title makes this an assetless TITLE CLIP; the sanitizer enforces
+	// AssetID XOR Title ("" = no asset).
+	Title *StudioTitle `json:"title,omitempty"`
+	// Speed/Reverse are mutually exclusive with Freeze (freeze wins).
+	Speed         *float64      `json:"speed,omitempty"`         // 0.1..10 (default 1)
+	Reverse       bool          `json:"reverse,omitempty"`       //
+	MaintainPitch *bool         `json:"maintainPitch,omitempty"` // default true when absent
+	Freeze        *StudioFreeze `json:"freeze,omitempty"`
+	GroupID       string        `json:"groupId,omitempty"` // clip grouping (part 18)
 }
 
 // StudioAdjustments are per-clip color tweaks mapped onto ffmpeg's eq filter
@@ -190,6 +220,171 @@ type StudioVolumeKeyframe struct {
 	Gain float64 `json:"gain"`
 }
 
+// ---------------------------------------------------------------------------
+// EDL v3 — typed transitions, per-property keyframes, title clips, speed,
+// track mixer/effects, project markers (ADR ws/0004). Additive and inert until
+// parts 14–21; ranges mirror STUDIO_V3_RANGES in lib/studio/effectRegistry.ts.
+// ---------------------------------------------------------------------------
+
+// Transition type discriminators (mirror studioTransitionTypeSchema).
+const (
+	StudioTransitionCrossDissolve = "crossDissolve"
+	StudioTransitionDipToBlack    = "dipToBlack"
+	StudioTransitionDipToWhite    = "dipToWhite"
+	StudioTransitionWipeLeft      = "wipeLeft"
+	StudioTransitionWipeRight     = "wipeRight"
+	StudioTransitionWipeUp        = "wipeUp"
+	StudioTransitionWipeDown      = "wipeDown"
+	StudioTransitionPushLeft      = "pushLeft"
+	StudioTransitionPushRight     = "pushRight"
+	StudioTransitionPushUp        = "pushUp"
+	StudioTransitionPushDown      = "pushDown"
+	StudioTransitionSlideLeft     = "slideLeft"
+	StudioTransitionSlideRight    = "slideRight"
+	StudioTransitionSlideUp       = "slideUp"
+	StudioTransitionSlideDown     = "slideDown"
+)
+
+// StudioTransition describes how a clip enters over its predecessor's overlap
+// region. It supersedes TransitionInSeconds (which stays mirrored for now).
+type StudioTransition struct {
+	Type            string             `json:"type"`
+	DurationSeconds float64            `json:"durationSeconds"`  // 0.1..5
+	Params          map[string]float64 `json:"params,omitempty"` // per-type tuning (part 14)
+}
+
+// StudioKeyframe is one automation point. T is clip-local seconds; Ease is
+// linear | hold | easeIn | easeOut | easeBoth.
+type StudioKeyframe struct {
+	T     float64 `json:"t"`
+	Value float64 `json:"value"`
+	Ease  string  `json:"ease"`
+}
+
+// StudioClipKeyframes holds the per-property automation lanes (each sorted by
+// T, ≤64 points). Effects keys are "<effectId>.<param>" (e.g.
+// "lumetri1.exposure"), clamped against the effect registry's ranges. Volume
+// supersedes the legacy VolumeKeyframes (client normalize upgrades; volume
+// wins when both exist).
+type StudioClipKeyframes struct {
+	PositionX []StudioKeyframe            `json:"positionX,omitempty"`
+	PositionY []StudioKeyframe            `json:"positionY,omitempty"`
+	Scale     []StudioKeyframe            `json:"scale,omitempty"`
+	Rotation  []StudioKeyframe            `json:"rotation,omitempty"`
+	Opacity   []StudioKeyframe            `json:"opacity,omitempty"`
+	Volume    []StudioKeyframe            `json:"volume,omitempty"`
+	Pan       []StudioKeyframe            `json:"pan,omitempty"`
+	Effects   map[string][]StudioKeyframe `json:"effects,omitempty"`
+}
+
+// Title layer type discriminators (mirror studioTitleLayerSchema).
+const (
+	StudioTitleLayerText = "text"
+	StudioTitleLayerRect = "rect"
+	StudioTitleLayerLine = "line"
+)
+
+// StudioTitle makes a clip an assetless TITLE CLIP rendered from its layer
+// stack (≤8 layers). The sanitizer enforces AssetID XOR Title.
+type StudioTitle struct {
+	Layers []StudioTitleLayer `json:"layers"`
+}
+
+// StudioTitleLayer is one layer of a title clip. Go has no native discriminated
+// union, so — like StudioEffect — every per-type field is a pointer with
+// omitempty. The sanitizer fills every field the active type requires, so a
+// sanitized layer always serializes the fields the Zod union marks required
+// (a pointer-to-0 survives where an omitted field would not).
+type StudioTitleLayer struct {
+	Type string `json:"type"` // text | rect | line
+
+	// text. X/Y are the normalized 0..1 center of the block (like textOverlays).
+	Text            *string                `json:"text,omitempty"`          // ≤500 chars
+	FontFamily      *string                `json:"fontFamily,omitempty"`    //
+	FontSizePx      *float64               `json:"fontSizePx,omitempty"`    // 8..500
+	FontWeight      *int                   `json:"fontWeight,omitempty"`    // 400 | 700
+	FillColor       *string                `json:"fillColor,omitempty"`     // #RRGGBB
+	StrokeColor     *string                `json:"strokeColor,omitempty"`   // #RRGGBB
+	StrokeWidthPx   *float64               `json:"strokeWidthPx,omitempty"` // 0..50
+	Shadow          *StudioTitleShadow     `json:"shadow,omitempty"`
+	Background      *StudioTitleBackground `json:"background,omitempty"`
+	LetterSpacingPx *float64               `json:"letterSpacingPx,omitempty"` // -20..100
+	LineHeight      *float64               `json:"lineHeight,omitempty"`      // 0.5..3
+	Align           *string                `json:"align,omitempty"`           // left|center|right
+
+	// text + rect origin / rect size (normalized 0..1).
+	X *float64 `json:"x,omitempty"`
+	Y *float64 `json:"y,omitempty"`
+	W *float64 `json:"w,omitempty"`
+	H *float64 `json:"h,omitempty"`
+
+	// rect + line color; rect opacity/radius.
+	Color    *string  `json:"color,omitempty"`    // #RRGGBB
+	Opacity  *float64 `json:"opacity,omitempty"`  // 0..1
+	RadiusPx *float64 `json:"radiusPx,omitempty"` // 0..200
+
+	// line endpoints (normalized 0..1) + thickness.
+	X1          *float64 `json:"x1,omitempty"`
+	Y1          *float64 `json:"y1,omitempty"`
+	X2          *float64 `json:"x2,omitempty"`
+	Y2          *float64 `json:"y2,omitempty"`
+	ThicknessPx *float64 `json:"thicknessPx,omitempty"` // 1..100
+}
+
+// StudioTitleShadow is a text layer's drop shadow (project-resolution px).
+type StudioTitleShadow struct {
+	XPx    float64 `json:"xPx"`    // -100..100
+	YPx    float64 `json:"yPx"`    // -100..100
+	BlurPx float64 `json:"blurPx"` // 0..100
+	Color  string  `json:"color"`  // #RRGGBB
+}
+
+// StudioTitleBackground is a text layer's rounded background plate.
+type StudioTitleBackground struct {
+	Color      string  `json:"color"`      // #RRGGBB
+	Opacity    float64 `json:"opacity"`    // 0..1
+	PaddingXPx float64 `json:"paddingXPx"` // 0..200
+	PaddingYPx float64 `json:"paddingYPx"` // 0..200
+	RadiusPx   float64 `json:"radiusPx"`   // 0..200
+}
+
+// StudioFreeze holds a clip on a single source frame. Mutually exclusive with
+// Speed/Reverse (the sanitizer enforces; freeze wins).
+type StudioFreeze struct {
+	SourceTime float64 `json:"sourceTime"` // seconds within the source media
+}
+
+// StudioTrackEffects are the track insert effects (3-band EQ + compressor).
+type StudioTrackEffects struct {
+	EQ         *StudioTrackEQ         `json:"eq,omitempty"`
+	Compressor *StudioTrackCompressor `json:"compressor,omitempty"`
+}
+
+// StudioTrackEQ is a 3-band shelf EQ; gains are -12..+12 dB.
+type StudioTrackEQ struct {
+	LowGainDb  float64 `json:"lowGainDb"`
+	MidGainDb  float64 `json:"midGainDb"`
+	HighGainDb float64 `json:"highGainDb"`
+}
+
+// StudioTrackCompressor is a track dynamics compressor.
+type StudioTrackCompressor struct {
+	ThresholdDb float64 `json:"thresholdDb"` // -60..0
+	Ratio       float64 `json:"ratio"`       // 1..20
+	AttackMs    float64 `json:"attackMs"`    // 1..200
+	ReleaseMs   float64 `json:"releaseMs"`   // 20..1000
+	MakeupDb    float64 `json:"makeupDb"`    // 0..12
+}
+
+// StudioMarker is a named point of interest on the project timeline.
+type StudioMarker struct {
+	ID      string  `json:"id"`
+	T       float64 `json:"t"`    // seconds
+	Name    string  `json:"name"` // ≤80 chars
+	Color   string  `json:"color"`
+	Comment string  `json:"comment,omitempty"` // ≤500 chars
+}
+
 // StudioCaptionCue is one caption line on the project's caption lane.
 type StudioCaptionCue struct {
 	ID           string  `json:"id"`
@@ -274,6 +469,9 @@ type StudioSaveProjectRequest struct {
 	CaptionStyle    *StudioCaptionStyle `json:"captionStyle,omitempty"`
 	CaptionsEnabled *bool               `json:"captionsEnabled,omitempty"`
 	Audio           *StudioAudioConfig  `json:"audio,omitempty"`
+
+	// EDL v3 project-level fields.
+	Markers []StudioMarker `json:"markers,omitempty"`
 }
 
 // StudioAssetPresignRequest mirrors VideoUploadPresignRequest but for Content
@@ -333,6 +531,6 @@ const (
 // StudioExportRequest is the body for POST /api/studio/projects/:id/export.
 type StudioExportRequest struct {
 	FileName string `json:"fileName,omitempty"`
-	Preset   string `json:"preset,omitempty"`  // quality preset key
+	Preset   string `json:"preset,omitempty"`   // quality preset key
 	Loudness string `json:"loudness,omitempty"` // '' | streaming | podcast | broadcast
 }

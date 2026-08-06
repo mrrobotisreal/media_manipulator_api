@@ -7,12 +7,12 @@ import (
 
 func f64(v float64) *float64 { return &v }
 func strp(v string) *string  { return &v }
+func intp(v int) *int        { return &v }
 
-// TestSanitizeTracks_V1NoOp is the EDL v2 backward-compat guard: a valid v1 clip
-// (no v2 fields, in-range values) must sanitize to a byte-identical clip so
-// existing projects load / save / export exactly as before.
-func TestSanitizeTracks_V1NoOp(t *testing.T) {
-	v1 := []StudioTrack{
+// v1Fixture is the valid-v1 track tree shared by the no-op guards. Fresh copy
+// per call so tests can mutate their own instance.
+func v1Fixture() []StudioTrack {
+	return []StudioTrack{
 		{
 			ID: "v1", Kind: StudioTrackKindVideo, Index: 0, Muted: false,
 			Clips: []StudioClip{
@@ -33,12 +33,132 @@ func TestSanitizeTracks_V1NoOp(t *testing.T) {
 			},
 		},
 	}
+}
 
-	before, _ := json.Marshal(v1)
-	after, _ := json.Marshal(SanitizeTracks(v1))
-	if string(before) != string(after) {
-		t.Errorf("v1 clip not byte-identical after sanitize:\nbefore: %s\nafter:  %s", before, after)
+// TestSanitizeTracks_V1NoOp is the backward-compat guard: a valid v1 clip
+// (in-range values) must sanitize byte-identically — with the ONE documented
+// v3 exception that a legacy transitionInSeconds > 0 grows a typed
+// crossDissolve mirror (the legacy field itself is untouched).
+func TestSanitizeTracks_V1NoOp(t *testing.T) {
+	want := v1Fixture()
+	want[0].Clips[0].Transition = &StudioTransition{Type: StudioTransitionCrossDissolve, DurationSeconds: 0.5}
+
+	wantJSON, _ := json.Marshal(want)
+	got, _ := json.Marshal(SanitizeTracks(v1Fixture()))
+	if string(wantJSON) != string(got) {
+		t.Errorf("v1 clip changed beyond the documented transition upgrade:\nwant: %s\ngot:  %s", wantJSON, got)
 	}
+}
+
+// TestSanitizeTracks_V2NoOp: a valid v2 clip (every v2 field populated with
+// in-range, already-sanitized values, no legacy transition) is byte-identical.
+func TestSanitizeTracks_V2NoOp(t *testing.T) {
+	v2 := []StudioTrack{
+		{
+			ID: "v1", Kind: StudioTrackKindVideo, Index: 0, Muted: false,
+			Clips: []StudioClip{
+				{
+					ID: "c1", AssetID: "a1", StreamIndex: 0,
+					TimelineStart: 0, SourceIn: 0, SourceOut: 5,
+					Opacity:   f64(0.9),
+					Transform: &StudioTransform{X: 0.1, Y: -0.1, Scale: 1.5, RotationDeg: 45},
+					Crop:      &StudioCrop{Left: 0.1, Top: 0.1, Right: 0.2, Bottom: 0.2},
+					BlendMode: StudioBlendMultiply,
+					Effects: []StudioEffect{{
+						ID: "e1", Type: StudioEffectLumetri, Enabled: true,
+						Exposure: f64(0.5), Contrast: f64(1.1), Saturation: f64(0.9),
+						Temperature: f64(10), Tint: f64(-5), Vibrance: f64(0.2),
+					}},
+					VolumeKeyframes: []StudioVolumeKeyframe{{T: 0, Gain: 1}, {T: 2, Gain: 0.5}},
+					Pan:             f64(-0.5),
+				},
+			},
+		},
+	}
+
+	before, _ := json.Marshal(v2)
+	after, _ := json.Marshal(SanitizeTracks(v2))
+	if string(before) != string(after) {
+		t.Errorf("v2 clip not byte-identical after sanitize:\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
+// TestSanitizeTracks_TransitionUpgrade covers the legacy → typed transition
+// path: upgrade, idempotence, clamping, and the legacy mirror.
+func TestSanitizeTracks_TransitionUpgrade(t *testing.T) {
+	mk := func(c StudioClip) []StudioTrack {
+		return []StudioTrack{{ID: "v1", Kind: StudioTrackKindVideo, Clips: []StudioClip{c}}}
+	}
+
+	t.Run("legacy upgrades to crossDissolve and is kept", func(t *testing.T) {
+		out := SanitizeTracks(mk(StudioClip{ID: "c", AssetID: "a", SourceOut: 5, TransitionInSeconds: f64(0.5)}))
+		c := out[0].Clips[0]
+		if c.Transition == nil || c.Transition.Type != StudioTransitionCrossDissolve || c.Transition.DurationSeconds != 0.5 {
+			t.Fatalf("upgrade: got %+v", c.Transition)
+		}
+		if c.TransitionInSeconds == nil || *c.TransitionInSeconds != 0.5 {
+			t.Errorf("legacy field must be kept: got %v", c.TransitionInSeconds)
+		}
+	})
+
+	t.Run("idempotent: second sanitize is byte-identical", func(t *testing.T) {
+		once := SanitizeTracks(mk(StudioClip{ID: "c", AssetID: "a", SourceOut: 5, TransitionInSeconds: f64(0.5)}))
+		twice := SanitizeTracks(once)
+		a, _ := json.Marshal(once)
+		b, _ := json.Marshal(twice)
+		if string(a) != string(b) {
+			t.Errorf("not idempotent:\nonce:  %s\ntwice: %s", a, b)
+		}
+	})
+
+	t.Run("legacy duration clamps into 0.1..5 on upgrade", func(t *testing.T) {
+		out := SanitizeTracks(mk(StudioClip{ID: "c", AssetID: "a", SourceOut: 5, TransitionInSeconds: f64(9)}))
+		c := out[0].Clips[0]
+		if c.Transition.DurationSeconds != 5 {
+			t.Errorf("duration clamp: got %v want 5", c.Transition.DurationSeconds)
+		}
+		if *c.TransitionInSeconds != 5 {
+			t.Errorf("legacy mirror after clamp: got %v want 5", *c.TransitionInSeconds)
+		}
+	})
+
+	t.Run("typed transition wins and mirrors into the legacy field", func(t *testing.T) {
+		out := SanitizeTracks(mk(StudioClip{
+			ID: "c", AssetID: "a", SourceOut: 5,
+			TransitionInSeconds: f64(0.5),
+			Transition:          &StudioTransition{Type: StudioTransitionWipeLeft, DurationSeconds: 2},
+		}))
+		c := out[0].Clips[0]
+		if c.Transition.Type != StudioTransitionWipeLeft || c.Transition.DurationSeconds != 2 {
+			t.Fatalf("typed transition must win: %+v", c.Transition)
+		}
+		if *c.TransitionInSeconds != 2 {
+			t.Errorf("legacy mirror: got %v want 2", *c.TransitionInSeconds)
+		}
+	})
+
+	t.Run("unknown type is dropped, then legacy refills", func(t *testing.T) {
+		out := SanitizeTracks(mk(StudioClip{
+			ID: "c", AssetID: "a", SourceOut: 5,
+			TransitionInSeconds: f64(1),
+			Transition:          &StudioTransition{Type: "spiral", DurationSeconds: 2},
+		}))
+		c := out[0].Clips[0]
+		if c.Transition == nil || c.Transition.Type != StudioTransitionCrossDissolve || c.Transition.DurationSeconds != 1 {
+			t.Errorf("unknown type should fall back to the legacy upgrade: %+v", c.Transition)
+		}
+	})
+
+	t.Run("zero legacy stays untouched with no transition", func(t *testing.T) {
+		out := SanitizeTracks(mk(StudioClip{ID: "c", AssetID: "a", SourceOut: 5, TransitionInSeconds: f64(0)}))
+		c := out[0].Clips[0]
+		if c.Transition != nil {
+			t.Errorf("no upgrade expected for 0: %+v", c.Transition)
+		}
+		if *c.TransitionInSeconds != 0 {
+			t.Errorf("legacy 0 must survive: %v", *c.TransitionInSeconds)
+		}
+	})
 }
 
 func TestSanitizeTracks_ClampsAndDrops(t *testing.T) {
@@ -48,10 +168,10 @@ func TestSanitizeTracks_ClampsAndDrops(t *testing.T) {
 			Clips: []StudioClip{
 				{
 					ID: "c1", AssetID: "a1", SourceIn: 0, SourceOut: 5,
-					Volume:    f64(3.0),  // > 2 → 2
-					Opacity:   f64(1.5),  // > 1 → 1
-					Pan:       f64(2.0),  // > 1 → 1
-					BlendMode: "bogus",   // unknown → ""
+					Volume:    f64(3.0), // > 2 → 2
+					Opacity:   f64(1.5), // > 1 → 1
+					Pan:       f64(2.0), // > 1 → 1
+					BlendMode: "bogus",  // unknown → ""
 					Transform: &StudioTransform{X: 2, Y: -2, Scale: 0, RotationDeg: 720},
 					Crop:      &StudioCrop{Left: 0.6, Right: 0.6}, // l+r >= 1 → dropped
 					Effects: []StudioEffect{
@@ -177,5 +297,240 @@ func TestSanitizeAudioConfig(t *testing.T) {
 	a := SanitizeAudioConfig(&StudioAudioConfig{DuckAmountDb: 99, DuckAttackMs: 9999, DuckReleaseMs: 99999})
 	if a.DuckAmountDb != 24 || a.DuckAttackMs != 2000 || a.DuckReleaseMs != 5000 {
 		t.Errorf("ducking clamps: got %+v", *a)
+	}
+}
+
+// --- EDL v3 -----------------------------------------------------------------
+
+func TestSanitizeClipKeyframes(t *testing.T) {
+	kf := func(ts ...float64) []StudioKeyframe {
+		out := make([]StudioKeyframe, 0, len(ts))
+		for _, tt := range ts {
+			out = append(out, StudioKeyframe{T: tt, Value: 0.5, Ease: "linear"})
+		}
+		return out
+	}
+
+	t.Run("sorts, dedupes, clamps value and ease", func(t *testing.T) {
+		got := sanitizeClipKeyframes(&StudioClipKeyframes{
+			Opacity: []StudioKeyframe{
+				{T: 5, Value: 2, Ease: "linear"},     // value > 1 → 1
+				{T: 1, Value: -1, Ease: "bounce"},    // bad ease → linear, value → 0
+				{T: 1, Value: 0.25, Ease: "easeIn"},  // dup t → last wins
+				{T: -2, Value: 0.5, Ease: "easeOut"}, // t < 0 → 0
+			},
+		})
+		lane := got.Opacity
+		if len(lane) != 3 {
+			t.Fatalf("dedupe: got %d lanes %+v", len(lane), lane)
+		}
+		if lane[0].T != 0 || lane[0].Ease != "easeOut" {
+			t.Errorf("negative t clamps to 0: %+v", lane[0])
+		}
+		if lane[1].T != 1 || lane[1].Value != 0.25 || lane[1].Ease != "easeIn" {
+			t.Errorf("dup t last-wins: %+v", lane[1])
+		}
+		if lane[2].Value != 1 {
+			t.Errorf("value clamp to opacity range: %+v", lane[2])
+		}
+	})
+
+	t.Run("caps each lane at 64", func(t *testing.T) {
+		ts := make([]float64, 100)
+		for i := range ts {
+			ts[i] = float64(i)
+		}
+		got := sanitizeClipKeyframes(&StudioClipKeyframes{Scale: kf(ts...)})
+		if len(got.Scale) != 64 {
+			t.Errorf("cap: got %d want 64", len(got.Scale))
+		}
+	})
+
+	t.Run("effects keys clamp by param name, unknown keys drop", func(t *testing.T) {
+		got := sanitizeClipKeyframes(&StudioClipKeyframes{
+			Effects: map[string][]StudioKeyframe{
+				"lumetri1.exposure": {{T: 0, Value: 9, Ease: "linear"}}, // 9 → 3
+				"lumetri1.bogus":    {{T: 0, Value: 1, Ease: "linear"}}, // unknown param → dropped
+				"noDotKey":          {{T: 0, Value: 1, Ease: "linear"}}, // malformed key → dropped
+			},
+		})
+		if len(got.Effects) != 1 {
+			t.Fatalf("effects keys: got %+v", got.Effects)
+		}
+		if got.Effects["lumetri1.exposure"][0].Value != 3 {
+			t.Errorf("exposure clamp: %+v", got.Effects["lumetri1.exposure"])
+		}
+	})
+
+	t.Run("all-empty container drops to nil", func(t *testing.T) {
+		if got := sanitizeClipKeyframes(&StudioClipKeyframes{}); got != nil {
+			t.Errorf("empty keyframes should drop: %+v", got)
+		}
+	})
+}
+
+func TestSanitizeTracks_TitleClips(t *testing.T) {
+	mk := func(c StudioClip) []StudioTrack {
+		return []StudioTrack{{ID: "v1", Kind: StudioTrackKindVideo, Clips: []StudioClip{c}}}
+	}
+	textLayer := func() StudioTitleLayer {
+		return StudioTitleLayer{
+			Type: StudioTitleLayerText, Text: strp("Hello"), FontFamily: strp("Inter"),
+			FontSizePx: f64(64), FontWeight: intp(700), FillColor: strp("#ffffff"),
+			Align: strp("left"), X: f64(0.5), Y: f64(0.5),
+		}
+	}
+
+	t.Run("assetless title clip survives; defaults fill", func(t *testing.T) {
+		out := SanitizeTracks(mk(StudioClip{
+			ID: "t1", AssetID: "", SourceOut: 5,
+			Title: &StudioTitle{Layers: []StudioTitleLayer{
+				textLayer(),
+				{Type: StudioTitleLayerRect, X: f64(2), Y: f64(-1), W: f64(0.5), H: f64(0.25), Color: strp("nope")},
+				{Type: StudioTitleLayerLine},
+				{Type: "sticker"}, // unknown → dropped
+			}},
+		}))
+		title := out[0].Clips[0].Title
+		if title == nil || len(title.Layers) != 3 {
+			t.Fatalf("layers: %+v", title)
+		}
+		text := title.Layers[0]
+		if *text.FillColor != "#FFFFFF" || *text.Align != "left" || *text.FontWeight != 700 {
+			t.Errorf("text layer sanitize: %+v", text)
+		}
+		rect := title.Layers[1]
+		if *rect.X != 1 || *rect.Y != 0 || *rect.Color != "#FFFFFF" {
+			t.Errorf("rect clamp/default: %+v", rect)
+		}
+		line := title.Layers[2]
+		if *line.X1 != 0 || *line.X2 != 1 || *line.ThicknessPx != 4 {
+			t.Errorf("line defaults: %+v", line)
+		}
+	})
+
+	t.Run("title on an asset-backed clip is dropped (assetId XOR title)", func(t *testing.T) {
+		out := SanitizeTracks(mk(StudioClip{
+			ID: "c1", AssetID: "a1", SourceOut: 5,
+			Title: &StudioTitle{Layers: []StudioTitleLayer{textLayer()}},
+		}))
+		if out[0].Clips[0].Title != nil {
+			t.Errorf("asset-backed clip must not keep a title")
+		}
+	})
+
+	t.Run("layer cap at 8", func(t *testing.T) {
+		layers := make([]StudioTitleLayer, 0, 12)
+		for i := 0; i < 12; i++ {
+			layers = append(layers, textLayer())
+		}
+		out := SanitizeTracks(mk(StudioClip{ID: "t1", SourceOut: 5, Title: &StudioTitle{Layers: layers}}))
+		if got := len(out[0].Clips[0].Title.Layers); got != 8 {
+			t.Errorf("layer cap: got %d want 8", got)
+		}
+	})
+
+	t.Run("invalid fontWeight coerces to 400, bad font falls back", func(t *testing.T) {
+		l := textLayer()
+		l.FontWeight = intp(600)
+		l.FontFamily = strp("   ")
+		out := SanitizeTracks(mk(StudioClip{ID: "t1", SourceOut: 5, Title: &StudioTitle{Layers: []StudioTitleLayer{l}}}))
+		got := out[0].Clips[0].Title.Layers[0]
+		if *got.FontWeight != 400 || *got.FontFamily != "Inter" {
+			t.Errorf("text defaults: weight=%d font=%q", *got.FontWeight, *got.FontFamily)
+		}
+	})
+}
+
+func TestSanitizeTracks_SpeedAndFreeze(t *testing.T) {
+	mk := func(c StudioClip) []StudioTrack {
+		return []StudioTrack{{ID: "v1", Kind: StudioTrackKindVideo, Clips: []StudioClip{c}}}
+	}
+
+	t.Run("speed clamps into 0.1..10", func(t *testing.T) {
+		out := SanitizeTracks(mk(StudioClip{ID: "c", AssetID: "a", SourceOut: 5, Speed: f64(99)}))
+		if *out[0].Clips[0].Speed != 10 {
+			t.Errorf("speed clamp: got %v", *out[0].Clips[0].Speed)
+		}
+	})
+
+	t.Run("freeze wins over speed/reverse", func(t *testing.T) {
+		out := SanitizeTracks(mk(StudioClip{
+			ID: "c", AssetID: "a", SourceOut: 5,
+			Speed: f64(2), Reverse: true, Freeze: &StudioFreeze{SourceTime: -3},
+		}))
+		c := out[0].Clips[0]
+		if c.Speed != nil || c.Reverse {
+			t.Errorf("freeze must clear speed/reverse: %+v", c)
+		}
+		if c.Freeze.SourceTime != 0 {
+			t.Errorf("freeze sourceTime clamps to 0: %v", c.Freeze.SourceTime)
+		}
+	})
+}
+
+func TestSanitizeTracks_TrackFields(t *testing.T) {
+	long := make([]rune, 0, 100)
+	for i := 0; i < 100; i++ {
+		long = append(long, 'x')
+	}
+	out := SanitizeTracks([]StudioTrack{{
+		ID: "a1", Kind: StudioTrackKindAudio, Index: 0,
+		Name: string(long), Gain: f64(5), Pan: f64(-3),
+		Effects: &StudioTrackEffects{
+			EQ:         &StudioTrackEQ{LowGainDb: -40, MidGainDb: 0, HighGainDb: 40},
+			Compressor: &StudioTrackCompressor{ThresholdDb: -99, Ratio: 50, AttackMs: 0, ReleaseMs: 5, MakeupDb: 99},
+		},
+	}})
+	tr := out[0]
+	if len([]rune(tr.Name)) != 80 {
+		t.Errorf("name truncation: got %d runes", len([]rune(tr.Name)))
+	}
+	if *tr.Gain != 2 || *tr.Pan != -1 {
+		t.Errorf("gain/pan clamps: gain=%v pan=%v", *tr.Gain, *tr.Pan)
+	}
+	if tr.Effects.EQ.LowGainDb != -12 || tr.Effects.EQ.HighGainDb != 12 {
+		t.Errorf("eq clamps: %+v", *tr.Effects.EQ)
+	}
+	comp := tr.Effects.Compressor
+	if comp.ThresholdDb != -60 || comp.Ratio != 20 || comp.AttackMs != 1 || comp.ReleaseMs != 20 || comp.MakeupDb != 12 {
+		t.Errorf("compressor clamps: %+v", *comp)
+	}
+
+	// Empty effects container drops to nil.
+	out = SanitizeTracks([]StudioTrack{{ID: "a1", Kind: StudioTrackKindAudio, Effects: &StudioTrackEffects{}}})
+	if out[0].Effects != nil {
+		t.Errorf("empty track effects should drop: %+v", out[0].Effects)
+	}
+}
+
+func TestSanitizeMarkers(t *testing.T) {
+	ms := SanitizeMarkers([]StudioMarker{
+		{ID: "b", T: 9, Name: "end", Color: "#abcdef"},
+		{ID: "a", T: -1, Name: "start", Color: "nope", Comment: "note"},
+	})
+	if len(ms) != 2 || ms[0].ID != "a" {
+		t.Fatalf("markers should sort by t: %+v", ms)
+	}
+	if ms[0].T != 0 {
+		t.Errorf("negative t clamps to 0: %v", ms[0].T)
+	}
+	if ms[0].Color != "#22C55E" {
+		t.Errorf("bad color → default: %q", ms[0].Color)
+	}
+	if ms[1].Color != "#ABCDEF" {
+		t.Errorf("hex normalized uppercase: %q", ms[1].Color)
+	}
+
+	// Cap at 500.
+	many := make([]StudioMarker, 0, 600)
+	for i := 0; i < 600; i++ {
+		many = append(many, StudioMarker{ID: "m", T: float64(i), Color: "#FFFFFF"})
+	}
+	if got := len(SanitizeMarkers(many)); got != 500 {
+		t.Errorf("marker cap: got %d want 500", got)
+	}
+	if SanitizeMarkers(nil) != nil {
+		t.Errorf("nil markers stay nil (omitempty)")
 	}
 }

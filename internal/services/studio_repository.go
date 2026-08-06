@@ -43,6 +43,9 @@ type studioProjectSidecar struct {
 	Style         *models.StudioCaptionStyle `json:"style,omitempty"`
 	Enabled       *bool                      `json:"enabled,omitempty"`
 	Audio         *models.StudioAudioConfig  `json:"audio,omitempty"`
+	// EDL v3: timeline markers ride the same sidecar (no migration needed);
+	// SaveCaptions only touches the `cues` key so markers survive it.
+	Markers []models.StudioMarker `json:"markers,omitempty"`
 }
 
 // StudioOwner identifies who a project belongs to.
@@ -190,6 +193,7 @@ func (r *StudioRepository) SaveProject(ctx context.Context, id string, req model
 		Style:         models.SanitizeCaptionStyle(req.CaptionStyle),
 		Enabled:       &enabled,
 		Audio:         models.SanitizeAudioConfig(req.Audio),
+		Markers:       models.SanitizeMarkers(req.Markers),
 	}
 	captions, err := json.Marshal(sidecar)
 	if err != nil {
@@ -343,6 +347,7 @@ func scanProject(row scannable) (*models.StudioProject, error) {
 		p.Captions = sc.Cues
 		p.CaptionStyle = sc.Style
 		p.Audio = sc.Audio
+		p.Markers = sc.Markers
 		if sc.Enabled != nil {
 			p.CaptionsEnabled = *sc.Enabled
 		}
