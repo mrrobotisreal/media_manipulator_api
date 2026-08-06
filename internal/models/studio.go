@@ -545,3 +545,32 @@ type StudioExportRequest struct {
 	Preset   string `json:"preset,omitempty"`   // quality preset key
 	Loudness string `json:"loudness,omitempty"` // '' | streaming | podcast | broadcast
 }
+
+// Version history (part 09, ADR ws/0001 item 3).
+
+// StudioVersionKind values for studio_project_versions.kind (mirrors the
+// table's CHECK constraint).
+const (
+	StudioVersionKindAuto   = "auto"
+	StudioVersionKindManual = "manual"
+)
+
+// StudioProjectVersion is the metadata for one studio_project_versions row.
+// The snapshot bodies (tracks + captions sidecar) never travel to the client:
+// the list endpoint returns only this shape, and restore happens server-side
+// and answers with the full updated project.
+type StudioProjectVersion struct {
+	ID        string    `json:"id"`
+	ProjectID string    `json:"projectId"`
+	Kind      string    `json:"kind"`           // auto | manual
+	Name      string    `json:"name,omitempty"` // "" for unnamed autos
+	Revision  int64     `json:"revision"`       // project revision at capture
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// StudioCreateVersionRequest is the body for
+// POST /api/studio/projects/:id/versions. name is required for kind 'manual'.
+type StudioCreateVersionRequest struct {
+	Kind string `json:"kind"` // auto | manual
+	Name string `json:"name,omitempty"`
+}

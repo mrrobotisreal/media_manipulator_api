@@ -51,8 +51,12 @@ type Limits struct {
 	// MaxLadderHeight caps the tallest selectable transcode rung.
 	MaxLadderHeight int `json:"maxLadderHeight"`
 	// StudioProjects is the saved-project cap; -1 means unlimited.
-	StudioProjects       int  `json:"studioProjects"`
-	BatchEnabled         bool `json:"batchEnabled"`
+	StudioProjects int `json:"studioProjects"`
+	// StudioVersionAutoKeep is how many automatic version-history checkpoints
+	// are retained per project (manual versions are never pruned). Uniform
+	// across tiers today; a possible future monetization lever (ADR ws/0001).
+	StudioVersionAutoKeep int  `json:"studioVersionAutoKeep"`
+	BatchEnabled          bool `json:"batchEnabled"`
 	PriorityGPU          bool `json:"priorityGpu"`
 	ResultRetentionHours int  `json:"resultRetentionHours"`
 	AdsRemoved           bool `json:"adsRemoved"`
@@ -78,8 +82,9 @@ func New(cfg *config.Config) *Registry {
 			MaxVideoSeconds:      cfg.TierAnonMaxVideoSeconds,
 			MaxOutputHeight:      cfg.TierAnonMaxOutputHeight,
 			MaxLadderHeight:      cfg.TierAnonMaxLadderHeight,
-			StudioProjects:       cfg.TierAnonStudioProjects,
-			BatchEnabled:         false,
+			StudioProjects:        cfg.TierAnonStudioProjects,
+			StudioVersionAutoKeep: cfg.TierAnonStudioVersionAutoKeep,
+			BatchEnabled:          false,
 			PriorityGPU:          false,
 			ResultRetentionHours: cfg.TierAnonRetentionHours,
 			AdsRemoved:           false,
@@ -91,8 +96,9 @@ func New(cfg *config.Config) *Registry {
 			MaxVideoSeconds:      cfg.TierFreeMaxVideoSeconds,
 			MaxOutputHeight:      cfg.TierFreeMaxOutputHeight,
 			MaxLadderHeight:      cfg.TierFreeMaxLadderHeight,
-			StudioProjects:       cfg.TierFreeStudioProjects,
-			BatchEnabled:         false,
+			StudioProjects:        cfg.TierFreeStudioProjects,
+			StudioVersionAutoKeep: cfg.TierFreeStudioVersionAutoKeep,
+			BatchEnabled:          false,
 			PriorityGPU:          false,
 			ResultRetentionHours: cfg.TierFreeRetentionHours,
 			// Free accounts still see ads. Only Premium removes them — that is
@@ -107,8 +113,9 @@ func New(cfg *config.Config) *Registry {
 			MaxVideoSeconds:      cfg.TierPremiumMaxVideoSeconds,
 			MaxOutputHeight:      cfg.TierPremiumMaxOutputHeight,
 			MaxLadderHeight:      cfg.TierPremiumMaxLadderHeight,
-			StudioProjects:       cfg.TierPremiumStudioProjects,
-			BatchEnabled:         true,
+			StudioProjects:        cfg.TierPremiumStudioProjects,
+			StudioVersionAutoKeep: cfg.TierPremiumStudioVersionAutoKeep,
+			BatchEnabled:          true,
 			PriorityGPU:          true,
 			ResultRetentionHours: cfg.TierPremiumRetentionHours,
 			AdsRemoved:           true,

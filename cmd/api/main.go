@@ -668,6 +668,29 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 				return strings.HasPrefix(path, "/api/studio/assets/") && strings.HasSuffix(path, "/derive")
 			},
 		},
+		// Version-history checkpoints (part 09) are cheap DB writes, but the
+		// client fires them on a timer — share the generous upload bucket
+		// rather than minting a new limiter type. Only POSTs are dispatched,
+		// so the versions LIST is never limited.
+		{
+			routeKey:     "studio_versions_create",
+			tool:         "studio_versions",
+			sessionLimit: cfg.RateLimitUploadsPerSessionPerHour,
+			ipLimit:      cfg.RateLimitUploadsPerIPPerHour,
+			matches: func(path string) bool {
+				return strings.HasPrefix(path, "/api/studio/projects/") && strings.HasSuffix(path, "/versions")
+			},
+		},
+		{
+			routeKey:     "studio_versions_restore",
+			tool:         "studio_versions",
+			sessionLimit: cfg.RateLimitUploadsPerSessionPerHour,
+			ipLimit:      cfg.RateLimitUploadsPerIPPerHour,
+			matches: func(path string) bool {
+				return strings.HasPrefix(path, "/api/studio/projects/") &&
+					strings.Contains(path, "/versions/") && strings.HasSuffix(path, "/restore")
+			},
+		},
 		// Caption generation runs whisper — share the analysis bucket.
 		{
 			routeKey:     "studio_captions_generate",

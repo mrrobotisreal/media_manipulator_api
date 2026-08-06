@@ -173,6 +173,10 @@ type Config struct {
 	TierAnonMaxLadderHeight int
 	TierAnonStudioProjects  int
 	TierAnonRetentionHours  int
+	// Version-history auto-checkpoint retention per project (part 09).
+	// Uniform 20 across tiers by design; per-tier env levers exist so a future
+	// deployment can monetize depth without a code change.
+	TierAnonStudioVersionAutoKeep int
 
 	TierFreeOpsPerDay       int
 	TierFreeAIOpsPerDay     int
@@ -180,8 +184,9 @@ type Config struct {
 	TierFreeMaxVideoSeconds int
 	TierFreeMaxOutputHeight int
 	TierFreeMaxLadderHeight int
-	TierFreeStudioProjects  int
-	TierFreeRetentionHours  int
+	TierFreeStudioProjects        int
+	TierFreeRetentionHours        int
+	TierFreeStudioVersionAutoKeep int
 
 	TierPremiumOpsPerDay       int
 	TierPremiumAIOpsPerDay     int
@@ -191,8 +196,9 @@ type Config struct {
 	TierPremiumMaxLadderHeight int
 	// -1 = unlimited. getEnvIntDefault, not getEnvInt, because getEnvInt
 	// rejects non-positive values.
-	TierPremiumStudioProjects int
-	TierPremiumRetentionHours int
+	TierPremiumStudioProjects        int
+	TierPremiumRetentionHours        int
+	TierPremiumStudioVersionAutoKeep int
 
 	// FFmpeg validation
 	MaxVideoDurationSeconds int
@@ -535,6 +541,7 @@ func Load() *Config {
 		TierAnonMaxLadderHeight: getEnvInt("TIER_ANON_MAX_LADDER_HEIGHT", 720),
 		TierAnonStudioProjects:  getEnvIntDefault("TIER_ANON_STUDIO_PROJECTS", 1),
 		TierAnonRetentionHours:  getEnvInt("TIER_ANON_RETENTION_HOURS", 24),
+		TierAnonStudioVersionAutoKeep: getEnvInt("TIER_ANON_STUDIO_VERSION_AUTO_KEEP", 20),
 
 		TierFreeOpsPerDay:       getEnvInt("TIER_FREE_OPS_PER_DAY", 30),
 		TierFreeAIOpsPerDay:     getEnvInt("TIER_FREE_AI_OPS_PER_DAY", 5),
@@ -544,6 +551,7 @@ func Load() *Config {
 		TierFreeMaxLadderHeight: getEnvInt("TIER_FREE_MAX_LADDER_HEIGHT", 1080),
 		TierFreeStudioProjects:  getEnvIntDefault("TIER_FREE_STUDIO_PROJECTS", 5),
 		TierFreeRetentionHours:  getEnvInt("TIER_FREE_RETENTION_HOURS", 7*24),
+		TierFreeStudioVersionAutoKeep: getEnvInt("TIER_FREE_STUDIO_VERSION_AUTO_KEEP", 20),
 
 		TierPremiumOpsPerDay:       getEnvInt("TIER_PREMIUM_OPS_PER_DAY", 300),
 		TierPremiumAIOpsPerDay:     getEnvInt("TIER_PREMIUM_AI_OPS_PER_DAY", 60),
@@ -553,6 +561,7 @@ func Load() *Config {
 		TierPremiumMaxLadderHeight: getEnvInt("TIER_PREMIUM_MAX_LADDER_HEIGHT", 2160),
 		TierPremiumStudioProjects:  getEnvIntDefault("TIER_PREMIUM_STUDIO_PROJECTS", -1),
 		TierPremiumRetentionHours:  getEnvInt("TIER_PREMIUM_RETENTION_HOURS", 30*24),
+		TierPremiumStudioVersionAutoKeep: getEnvInt("TIER_PREMIUM_STUDIO_VERSION_AUTO_KEEP", 20),
 
 		// FFmpeg validation
 		MaxVideoDurationSeconds: getEnvInt("MAX_VIDEO_DURATION_SECONDS", 7200),

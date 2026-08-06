@@ -83,6 +83,11 @@ func RegisterStudioRoutes(r gin.IRouter, h *StudioHandler) {
 	studio.GET("/projects/:id", h.GetProject)
 	studio.PUT("/projects/:id", h.SaveProject)
 	studio.GET("/projects/:id/assets", h.ListAssets)
+	// Version history (part 09): checkpoints + restore. Restore checkpoints
+	// the current state first, so it is always reversible.
+	studio.GET("/projects/:id/versions", h.ListStudioVersions)
+	studio.POST("/projects/:id/versions", h.CreateStudioVersion)
+	studio.POST("/projects/:id/versions/:versionId/restore", h.RestoreStudioVersion)
 	// Source media ingest (presign -> PUT to S3 -> complete -> proxy/filmstrip job).
 	studio.POST("/assets/presign", h.PresignAsset)
 	studio.POST("/assets/complete", h.CompleteAsset)
@@ -981,6 +986,13 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no clip to export"})
 		return
+	}
+
+	// Version-history auto-checkpoint (part 09): snapshot the EDL this render
+	// will represent, before the job starts. Best-effort — a failed checkpoint
+	// must never block an export the user already paid quota for.
+	if _, vErr := h.repo.CreateVersion(loadCtx, projectID, models.StudioVersionKindAuto, "Before export", h.versionAutoKeep(c)); vErr != nil {
+		log.Printf("studio export: auto-checkpoint failed for project %s: %v", projectID, vErr)
 	}
 
 	exportCfg := buildStudioExportConfig(project, assetByID, req)
