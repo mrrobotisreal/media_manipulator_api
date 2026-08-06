@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,6 +32,26 @@ func (r *StudioRepository) Enabled() bool { return r != nil && r.pool != nil }
 
 // ErrStudioNotFound is returned when a project/asset row doesn't exist.
 var ErrStudioNotFound = errors.New("not found")
+
+// StudioRevisionConflictError is returned by SaveProject when the caller's
+// expectedRevision no longer matches the stored row — another tab or device
+// saved first (ADR ws/0001 item 1: single-writer, never merge). It carries the
+// current server state so the handler can build the 409 payload the client's
+// conflict dialog needs.
+type StudioRevisionConflictError struct {
+	CurrentRevision int64
+	UpdatedAt       time.Time
+}
+
+func (e *StudioRevisionConflictError) Error() string {
+	return fmt.Sprintf("studio project revision conflict (current revision %d)", e.CurrentRevision)
+}
+
+// studioProjectColumns is the canonical read column list for studio_projects.
+// Every project read AND every RETURNING clause must use it so scanProject's
+// scan order stays correct in one place (and `revision` can't silently fall
+// out of a query).
+const studioProjectColumns = `id, name, fps, width, height, duration_seconds, revision, tracks, captions, created_at, updated_at`
 
 // studioProjectSidecar is the JSON envelope persisted in studio_projects.captions
 // (the EDL v2 project sidecar). It bundles the caption set with the project-level
@@ -79,7 +100,7 @@ func (r *StudioRepository) CreateProject(ctx context.Context, owner StudioOwner,
 	row := r.pool.QueryRow(ctx, `
 INSERT INTO studio_projects (session_id, user_id, name, fps, width, height, duration_seconds, tracks)
 VALUES ($1, $2, $3, $4, $5, $6, 0, $7)
-RETURNING id, name, fps, width, height, duration_seconds, tracks, captions, created_at, updated_at
+RETURNING `+studioProjectColumns+`
 `, owner.SessionID, owner.userParam(), req.Name, req.FPS, req.Width, req.Height, tracks)
 	return scanProject(row)
 }
@@ -137,7 +158,7 @@ func (r *StudioRepository) CountProjectsForUser(ctx context.Context, userID stri
 
 func (r *StudioRepository) GetProject(ctx context.Context, id string) (*models.StudioProject, error) {
 	row := r.pool.QueryRow(ctx, `
-SELECT id, name, fps, width, height, duration_seconds, tracks, captions, created_at, updated_at
+SELECT `+studioProjectColumns+`
 FROM studio_projects WHERE id = $1
 `, id)
 	p, err := scanProject(row)
@@ -152,7 +173,7 @@ func (r *StudioRepository) ListRecentProjects(ctx context.Context, owner StudioO
 		limit = 25
 	}
 	rows, err := r.pool.Query(ctx, `
-SELECT id, name, fps, width, height, duration_seconds, tracks, captions, created_at, updated_at
+SELECT `+studioProjectColumns+`
 FROM studio_projects
 WHERE ($1::uuid IS NOT NULL AND user_id = $1::uuid)
    OR (user_id IS NULL AND session_id = $2)
@@ -201,19 +222,59 @@ func (r *StudioRepository) SaveProject(ctx context.Context, id string, req model
 	}
 	duration := computeProjectDuration(cleanTracks)
 	// tracks + captions written in one statement → atomic; the caption-generate
-	// job touches only the captions column (see SaveCaptions).
-	row := r.pool.QueryRow(ctx, `
-UPDATE studio_projects
-SET name = $2, fps = $3, width = $4, height = $5, duration_seconds = $6, tracks = $7, captions = $8, updated_at = now()
-WHERE id = $1
-RETURNING id, name, fps, width, height, duration_seconds, tracks, captions, created_at, updated_at
-`, id, req.Name, req.FPS, req.Width, req.Height, duration, tracks, captions)
+	// job touches only the captions column (see SaveCaptions). Every save bumps
+	// `revision` so a concurrent tab's compare-and-set can detect it — even a
+	// legacy (no expectedRevision) save.
+	if req.ExpectedRevision == nil {
+		// Legacy last-write-wins, kept for embed back-compat (the MM client
+		// always sends expectedRevision).
+		row := r.pool.QueryRow(ctx, studioSaveProjectSQL,
+			id, req.Name, req.FPS, req.Width, req.Height, duration, tracks, captions)
+		p, err := scanProject(row)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrStudioNotFound
+		}
+		return p, err
+	}
+	// Compare-and-set: the UPDATE only lands when the stored revision still
+	// matches what this client last loaded/saved. Zero rows means either the
+	// project is gone (404) or someone else saved first (409) — disambiguate
+	// with a follow-up read of the current revision.
+	row := r.pool.QueryRow(ctx, studioSaveProjectCASSQL,
+		id, req.Name, req.FPS, req.Width, req.Height, duration, tracks, captions, *req.ExpectedRevision)
 	p, err := scanProject(row)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrStudioNotFound
+		var currentRevision int64
+		var updatedAt time.Time
+		probeErr := r.pool.QueryRow(ctx,
+			`SELECT revision, updated_at FROM studio_projects WHERE id = $1`, id).
+			Scan(&currentRevision, &updatedAt)
+		if errors.Is(probeErr, pgx.ErrNoRows) {
+			return nil, ErrStudioNotFound
+		}
+		if probeErr != nil {
+			return nil, probeErr
+		}
+		return nil, &StudioRevisionConflictError{CurrentRevision: currentRevision, UpdatedAt: updatedAt}
 	}
 	return p, err
 }
+
+// The two SaveProject statements, as constants so the revision semantics are
+// unit-testable without Postgres (see studio_repository_revision_test.go).
+const (
+	studioSaveProjectSQL = `
+UPDATE studio_projects
+SET name = $2, fps = $3, width = $4, height = $5, duration_seconds = $6, tracks = $7, captions = $8, revision = revision + 1, updated_at = now()
+WHERE id = $1
+RETURNING ` + studioProjectColumns
+
+	studioSaveProjectCASSQL = `
+UPDATE studio_projects
+SET name = $2, fps = $3, width = $4, height = $5, duration_seconds = $6, tracks = $7, captions = $8, revision = revision + 1, updated_at = now()
+WHERE id = $1 AND revision = $9
+RETURNING ` + studioProjectColumns
+)
 
 // SaveCaptions writes ONLY the cue list into the captions sidecar (via jsonb_set
 // with create_missing), preserving the style/enabled/audio keys. This is used by
@@ -226,11 +287,7 @@ func (r *StudioRepository) SaveCaptions(ctx context.Context, id string, cues []m
 	if err != nil {
 		return fmt.Errorf("marshal cues: %w", err)
 	}
-	tag, err := r.pool.Exec(ctx, `
-UPDATE studio_projects
-SET captions = jsonb_set(coalesce(captions, '{}'::jsonb), '{cues}', $2::jsonb, true), updated_at = now()
-WHERE id = $1
-`, id, payload)
+	tag, err := r.pool.Exec(ctx, studioSaveCaptionsSQL, id, payload)
 	if err != nil {
 		return err
 	}
@@ -239,6 +296,15 @@ WHERE id = $1
 	}
 	return nil
 }
+
+// studioSaveCaptionsSQL deliberately does NOT bump `revision`: the sidecar
+// write bypasses the tracks document, so it must never make an open editor's
+// next compare-and-set save fail with a phantom conflict.
+const studioSaveCaptionsSQL = `
+UPDATE studio_projects
+SET captions = jsonb_set(coalesce(captions, '{}'::jsonb), '{cues}', $2::jsonb, true), updated_at = now()
+WHERE id = $1
+`
 
 func (r *StudioRepository) CreateAsset(ctx context.Context, a *models.StudioAsset) (*models.StudioAsset, error) {
 	probe, _ := json.Marshal(a.ProbeJSON)
@@ -323,7 +389,8 @@ type scannable interface {
 func scanProject(row scannable) (*models.StudioProject, error) {
 	var p models.StudioProject
 	var tracks, captions []byte
-	if err := row.Scan(&p.ID, &p.Name, &p.FPS, &p.Width, &p.Height, &p.DurationSeconds, &tracks, &captions, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	// Scan order matches studioProjectColumns.
+	if err := row.Scan(&p.ID, &p.Name, &p.FPS, &p.Width, &p.Height, &p.DurationSeconds, &p.Revision, &tracks, &captions, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if len(tracks) > 0 {

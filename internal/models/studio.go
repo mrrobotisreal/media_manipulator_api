@@ -54,6 +54,11 @@ type StudioProject struct {
 	// EDL v3: timeline markers (≤500, sorted by t). Stored in the same sidecar.
 	Markers []StudioMarker `json:"markers,omitempty"`
 
+	// Server-incremented optimistic-concurrency counter (part 07). Bumped on
+	// every tracks save; SaveProject compare-and-sets against it. Not part of
+	// the editable document — the client keeps it outside its undo history.
+	Revision int64 `json:"revision"`
+
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -472,6 +477,12 @@ type StudioSaveProjectRequest struct {
 
 	// EDL v3 project-level fields.
 	Markers []StudioMarker `json:"markers,omitempty"`
+
+	// Part 07 (save safety): the revision this save was based on. When set the
+	// repository compare-and-sets and a stale value yields a 409; when omitted
+	// the save is legacy last-write-wins (embed back-compat — the MM client
+	// always sends it).
+	ExpectedRevision *int64 `json:"expectedRevision,omitempty"`
 }
 
 // StudioAssetPresignRequest mirrors VideoUploadPresignRequest but for Content

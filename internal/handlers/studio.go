@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -270,11 +271,30 @@ func (h *StudioHandler) SaveProject(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})
 			return
 		}
+		var conflict *services.StudioRevisionConflictError
+		if errors.As(err, &conflict) {
+			// Stale expectedRevision: another tab/device saved first. The
+			// client resolves via its conflict dialog — "take over" is just a
+			// re-send with expectedRevision = currentRevision (no force flag).
+			c.JSON(http.StatusConflict, studioRevisionConflictBody(conflict))
+			return
+		}
 		log.Printf("studio: save project failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save project"})
 		return
 	}
 	c.JSON(http.StatusOK, project)
+}
+
+// studioRevisionConflictBody is the 409 payload for a stale save. Mirrored by
+// the client's save-state machine (lib/studio/saveState.ts) — keep the keys
+// stable.
+func studioRevisionConflictBody(e *services.StudioRevisionConflictError) gin.H {
+	return gin.H{
+		"error":           "revision_conflict",
+		"currentRevision": e.CurrentRevision,
+		"updatedAt":       e.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
 }
 
 func (h *StudioHandler) ListAssets(c *gin.Context) {
