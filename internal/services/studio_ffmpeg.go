@@ -73,6 +73,15 @@ func probeNVENCH264(cfg *config.Config) bool {
 // libx264 uses -crf. Both pin yuv420p for broad playback compatibility.
 func h264EncodeArgs(encoder, quality string) []string {
 	switch encoder {
+	case "libx264_lossless":
+		// Parity harness only (ParityExportArgs): mathematically lossless x264 in
+		// yuv420p, so frame diffs isolate the filter graph + 4:2:0 roundtrip.
+		return []string{
+			"-c:v", "libx264",
+			"-preset", "medium",
+			"-qp", "0",
+			"-pix_fmt", "yuv420p",
+		}
 	case "h264_nvenc":
 		preset, cq := "p4", "23"
 		switch strings.ToLower(strings.TrimSpace(quality)) {

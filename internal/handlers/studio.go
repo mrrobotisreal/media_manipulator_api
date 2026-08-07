@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -982,7 +981,7 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	// Sanitize the (possibly pre-v2 or hand-edited) EDL before building the
 	// render plan so the export compiler can trust every value.
 	project.Tracks = models.SanitizeTracks(project.Tracks)
-	refs, duration, ok := collectExportRefs(project, assetByID)
+	refs, duration, ok := services.CollectExportRefs(project, assetByID)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no clip to export"})
 		return
@@ -1025,7 +1024,7 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	c.JSON(http.StatusOK, models.UploadResponse{JobID: job.ID})
 }
 
-func (h *StudioHandler) runExportJob(jobID string, refs []studioClipRef, exportCfg studioExportConfig, width, height int, fps, duration float64, quality, outputPath string) {
+func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef, exportCfg studioExportConfig, width, height int, fps, duration float64, quality, outputPath string) {
 	if err := h.jobManager.UpdateJobStatus(jobID, models.StatusProcessing); err != nil {
 		log.Printf("studio export: failed to mark job %s processing: %v", jobID, err)
 		return
@@ -1043,7 +1042,7 @@ func (h *StudioHandler) runExportJob(jobID string, refs []studioClipRef, exportC
 		}
 	}()
 	for _, r := range refs {
-		key := r.asset.S3KeyOriginal
+		key := r.Asset.S3KeyOriginal
 		if _, done := localByKey[key]; done {
 			continue
 		}
@@ -1069,47 +1068,15 @@ func (h *StudioHandler) runExportJob(jobID string, refs []studioClipRef, exportC
 		cleanup = append(cleanup, local)
 	}
 
-	// Build the render plan: one ffmpeg input per ref (shared assets repeat the
+	// Build the render plan via the shared seam (also driven by
+	// cmd/parity-render): one ffmpeg input per ref (shared assets repeat the
 	// same local path). Video clips composite; audio-bearing clips on non-muted
 	// tracks mix in.
-	plan := services.StudioExportPlan{
+	plan := services.AssembleExportPlan(refs, services.StudioPlanSpec{
 		Width: width, Height: height, FPS: fps, Duration: duration,
-		Ducking: exportCfg.ducking, Loudness: exportCfg.loudness,
-	}
-	for _, r := range refs {
-		idx := len(plan.Inputs)
-		plan.Inputs = append(plan.Inputs, localByKey[r.asset.S3KeyOriginal])
-		opacity := 1.0
-		if r.clip.Opacity != nil {
-			opacity = *r.clip.Opacity
-		}
-		volume := 1.0
-		if r.clip.Volume != nil {
-			volume = *r.clip.Volume
-		}
-		if r.trackKind == models.StudioTrackKindVideo {
-			plan.Video = append(plan.Video, services.StudioExportVideoSeg{
-				InputIndex: idx, SourceIn: r.clip.SourceIn, SourceOut: r.clip.SourceOut,
-				TimelineStart: r.clip.TimelineStart, Opacity: opacity, TrackIndex: r.trackIndex,
-				FadeIn: r.fadeIn, Adjustments: r.clip.Adjustments, TextOverlays: r.clip.TextOverlays,
-				Transform: r.clip.Transform, Crop: r.clip.Crop, BlendMode: r.clip.BlendMode,
-				Effects: r.clip.Effects, LutPaths: lutLocalByAssetID,
-			})
-		}
-		if !r.trackMuted && r.asset.HasAudio && (volume > 0 || len(r.clip.VolumeKeyframes) > 0) {
-			pan := 0.0
-			if r.clip.Pan != nil {
-				pan = *r.clip.Pan
-			}
-			plan.Audio = append(plan.Audio, services.StudioExportAudioSeg{
-				InputIndex: idx, SourceIn: r.clip.SourceIn, SourceOut: r.clip.SourceOut,
-				TimelineStart: r.clip.TimelineStart, Volume: volume,
-				FadeIn: r.fadeIn, FadeOut: r.fadeOut,
-				VolumeKeyframes: r.clip.VolumeKeyframes, Pan: pan,
-				Voice: exportCfg.ducking != nil && r.trackID == exportCfg.voiceTrackID,
-			})
-		}
-	}
+		Ducking: exportCfg.ducking, VoiceTrackID: exportCfg.voiceTrackID, Loudness: exportCfg.loudness,
+		LocalByKey: localByKey, LutPaths: lutLocalByAssetID,
+	})
 
 	// Caption burn-in: write the .ass into the job output dir and point the plan
 	// at it (the compiler appends the subtitles filter after the overlay cascade).
@@ -1190,14 +1157,14 @@ func (h *StudioHandler) GenerateCaptions(c *gin.Context) {
 		assetByID[a.ID] = a
 	}
 	project.Tracks = models.SanitizeTracks(project.Tracks)
-	refs, duration, ok := collectExportRefs(project, assetByID)
+	refs, duration, ok := services.CollectExportRefs(project, assetByID)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no media to transcribe"})
 		return
 	}
 	hasAudio := false
 	for _, r := range refs {
-		if !r.trackMuted && r.asset.HasAudio {
+		if !r.TrackMuted && r.Asset.HasAudio {
 			hasAudio = true
 			break
 		}
@@ -1222,7 +1189,7 @@ func (h *StudioHandler) GenerateCaptions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"jobId": job.ID})
 }
 
-func (h *StudioHandler) runCaptionsJob(job *models.ConversionJob, projectID string, refs []studioClipRef, duration float64, language string) {
+func (h *StudioHandler) runCaptionsJob(job *models.ConversionJob, projectID string, refs []services.StudioClipRef, duration float64, language string) {
 	jobID := job.ID
 	if err := h.jobManager.UpdateJobStatus(jobID, models.StatusProcessing); err != nil {
 		log.Printf("studio captions: failed to mark job %s processing: %v", jobID, err)
@@ -1242,10 +1209,10 @@ func (h *StudioHandler) runCaptionsJob(job *models.ConversionJob, projectID stri
 	// plan (timeline-aligned, so segment times == timeline times).
 	localByKey := make(map[string]string)
 	for _, r := range refs {
-		if r.trackMuted || !r.asset.HasAudio {
+		if r.TrackMuted || !r.Asset.HasAudio {
 			continue
 		}
-		key := r.asset.S3KeyOriginal
+		key := r.Asset.S3KeyOriginal
 		if _, done := localByKey[key]; done {
 			continue
 		}
@@ -1260,26 +1227,26 @@ func (h *StudioHandler) runCaptionsJob(job *models.ConversionJob, projectID stri
 
 	plan := services.StudioExportPlan{Duration: duration}
 	for _, r := range refs {
-		if r.trackMuted || !r.asset.HasAudio {
+		if r.TrackMuted || !r.Asset.HasAudio {
 			continue
 		}
 		volume := 1.0
-		if r.clip.Volume != nil {
-			volume = *r.clip.Volume
+		if r.Clip.Volume != nil {
+			volume = *r.Clip.Volume
 		}
-		if volume <= 0 && len(r.clip.VolumeKeyframes) == 0 {
+		if volume <= 0 && len(r.Clip.VolumeKeyframes) == 0 {
 			continue
 		}
 		pan := 0.0
-		if r.clip.Pan != nil {
-			pan = *r.clip.Pan
+		if r.Clip.Pan != nil {
+			pan = *r.Clip.Pan
 		}
 		idx := len(plan.Inputs)
-		plan.Inputs = append(plan.Inputs, localByKey[r.asset.S3KeyOriginal])
+		plan.Inputs = append(plan.Inputs, localByKey[r.Asset.S3KeyOriginal])
 		plan.Audio = append(plan.Audio, services.StudioExportAudioSeg{
-			InputIndex: idx, SourceIn: r.clip.SourceIn, SourceOut: r.clip.SourceOut,
-			TimelineStart: r.clip.TimelineStart, Volume: volume,
-			VolumeKeyframes: r.clip.VolumeKeyframes, Pan: pan,
+			InputIndex: idx, SourceIn: r.Clip.SourceIn, SourceOut: r.Clip.SourceOut,
+			TimelineStart: r.Clip.TimelineStart, Volume: volume,
+			VolumeKeyframes: r.Clip.VolumeKeyframes, Pan: pan,
 		})
 	}
 	if len(plan.Audio) == 0 {
@@ -1401,21 +1368,6 @@ func studioAudioParams(probe *models.VideoProbeResponse) (sampleRate, channels i
 	return sampleRate, channels
 }
 
-// studioClipRef pairs a clip with its resolved asset and the track context the
-// exporter needs (kind for video-vs-audio routing, index for overlay order,
-// muted to drop a track's audio). fadeIn is the clip's own cross-dissolve;
-// fadeOut is the next clip-on-track's dissolve into it (for audio crossfade).
-type studioClipRef struct {
-	clip       models.StudioClip
-	asset      *models.StudioAsset
-	trackID    string
-	trackKind  models.StudioTrackKind
-	trackIndex int
-	trackMuted bool
-	fadeIn     float64
-	fadeOut    float64
-}
-
 // studioExportConfig carries the EDL v2 project-level export inputs resolved up
 // front (before the async render job runs).
 type studioExportConfig struct {
@@ -1463,85 +1415,9 @@ func normalizeLoudness(preset string) string {
 	}
 }
 
-// collectExportRefs flattens the EDL into render refs and the timeline length.
-// A ref is kept only if it produces output: every video clip (mute affects only
-// audio), plus audio-bearing clips on non-muted tracks with volume > 0.
-// Per-track clips are walked in timeline order so transition fades can be paired
-// with their neighbours. Duration spans all clips so the export length matches
-// the timeline.
-func collectExportRefs(p *models.StudioProject, assets map[string]*models.StudioAsset) ([]studioClipRef, float64, bool) {
-	refs := make([]studioClipRef, 0)
-	var duration float64
-	for _, track := range p.Tracks {
-		ordered := append([]models.StudioClip(nil), track.Clips...)
-		sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].TimelineStart < ordered[j].TimelineStart })
-
-		for i, clip := range ordered {
-			dur := clipEffectiveDur(clip)
-			if end := clip.TimelineStart + dur; end > duration {
-				duration = end
-			}
-			asset, ok := assets[clip.AssetID]
-			if !ok {
-				continue
-			}
-			volume := 1.0
-			if clip.Volume != nil {
-				volume = *clip.Volume
-			}
-			contributesAudio := !track.Muted && asset.HasAudio && (volume > 0 || len(clip.VolumeKeyframes) > 0)
-			if track.Kind != models.StudioTrackKindVideo && !contributesAudio {
-				continue // muted/silent audio clip — nothing to render
-			}
-
-			fadeIn := clampFade(transitionOf(clip), dur)
-			fadeOut := 0.0
-			if i+1 < len(ordered) {
-				fadeOut = clampFade(transitionOf(ordered[i+1]), dur)
-			}
-
-			refs = append(refs, studioClipRef{
-				clip:       clip,
-				asset:      asset,
-				trackID:    track.ID,
-				trackKind:  track.Kind,
-				trackIndex: track.Index,
-				trackMuted: track.Muted,
-				fadeIn:     fadeIn,
-				fadeOut:    fadeOut,
-			})
-		}
-	}
-	if len(refs) == 0 || duration <= 0 {
-		return nil, 0, false
-	}
-	return refs, duration, true
-}
-
-func transitionOf(c models.StudioClip) float64 {
-	if c.TransitionInSeconds != nil && *c.TransitionInSeconds > 0 {
-		return *c.TransitionInSeconds
-	}
-	return 0
-}
-
-// clampFade keeps a transition no longer than the clip it applies to.
-func clampFade(d, clipDur float64) float64 {
-	if d <= 0 {
-		return 0
-	}
-	if d > clipDur {
-		return clipDur
-	}
-	return d
-}
-
-func clipEffectiveDur(c models.StudioClip) float64 {
-	if d := c.SourceOut - c.SourceIn; d > 0 {
-		return d
-	}
-	return 0
-}
+// The EDL flattening (CollectExportRefs) and plan assembly (AssembleExportPlan)
+// moved to internal/services/studio_export_plan.go in part 13, shared with the
+// parity-render CLI.
 
 func normalizeExportQuality(preset string) string {
 	switch strings.ToLower(strings.TrimSpace(preset)) {
