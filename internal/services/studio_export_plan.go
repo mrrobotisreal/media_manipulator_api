@@ -13,8 +13,15 @@ import (
 
 // StudioClipRef pairs a clip with its resolved asset and the track context the
 // exporter needs (kind for video-vs-audio routing, index for overlay order,
-// muted to drop a track's audio). FadeIn is the clip's own cross-dissolve;
-// FadeOut is the next clip-on-track's dissolve into it (for audio crossfade).
+// muted to drop a track's audio).
+//
+// Audio: FadeIn/FadeOut are the equal-power crossfade windows, derived (part
+// 14) from the ACTUAL same-track overlaps — whenever two audio-bearing clips
+// overlap on one track the crossfade is automatic, typed transition or not.
+// Video: TransIn* is the clip's typed entrance transition (legacy
+// transitionInSeconds upgraded to crossDissolve); TransOut* is the NEXT
+// clip-on-track's transition into this clip's tail (needed for pushes, which
+// move the outgoing clip too).
 type StudioClipRef struct {
 	Clip       models.StudioClip
 	Asset      *models.StudioAsset
@@ -24,14 +31,33 @@ type StudioClipRef struct {
 	TrackMuted bool
 	FadeIn     float64
 	FadeOut    float64
+
+	TransInType   string
+	TransInDur    float64
+	TransOutType  string
+	TransOutStart float64
+	TransOutDur   float64
+}
+
+// resolveTransition returns the clip's typed entrance transition as
+// (type, duration): the typed field wins, a legacy transitionInSeconds > 0
+// upgrades to crossDissolve (mirrors the sanitizer + the TS clipTransitionOf).
+func resolveTransition(c models.StudioClip) (string, float64) {
+	if c.Transition != nil && c.Transition.DurationSeconds > 0 {
+		return c.Transition.Type, c.Transition.DurationSeconds
+	}
+	if c.TransitionInSeconds != nil && *c.TransitionInSeconds > 0 {
+		return models.StudioTransitionCrossDissolve, *c.TransitionInSeconds
+	}
+	return "", 0
 }
 
 // CollectExportRefs flattens the EDL into render refs and the timeline length.
 // A ref is kept only if it produces output: every video clip (mute affects only
 // audio), plus audio-bearing clips on non-muted tracks with volume > 0.
-// Per-track clips are walked in timeline order so transition fades can be paired
-// with their neighbours. Duration spans all clips so the export length matches
-// the timeline.
+// Per-track clips are walked in timeline order so transitions and crossfades
+// can be paired with their neighbours. Duration spans all clips so the export
+// length matches the timeline.
 func CollectExportRefs(p *models.StudioProject, assets map[string]*models.StudioAsset) ([]StudioClipRef, float64, bool) {
 	refs := make([]StudioClipRef, 0)
 	var duration float64
@@ -57,21 +83,45 @@ func CollectExportRefs(p *models.StudioProject, assets map[string]*models.Studio
 				continue // muted/silent audio clip — nothing to render
 			}
 
-			fadeIn := clampFade(transitionOf(clip), dur)
-			fadeOut := 0.0
-			if i+1 < len(ordered) {
-				fadeOut = clampFade(transitionOf(ordered[i+1]), dur)
+			// Audio crossfades follow the real overlaps (clamped to both
+			// clips' durations), mirroring the preview's prev/nextClipOverlap.
+			fadeIn := 0.0
+			if i > 0 {
+				prev := ordered[i-1]
+				overlap := prev.TimelineStart + clipEffectiveDur(prev) - clip.TimelineStart
+				fadeIn = clampFade(clampFade(overlap, clipEffectiveDur(prev)), dur)
 			}
+			fadeOut := 0.0
+			transOutType := ""
+			transOutStart := 0.0
+			transOutDur := 0.0
+			if i+1 < len(ordered) {
+				next := ordered[i+1]
+				overlap := clip.TimelineStart + dur - next.TimelineStart
+				fadeOut = clampFade(clampFade(overlap, clipEffectiveDur(next)), dur)
+				if ty, d := resolveTransition(next); ty != "" {
+					transOutType = ty
+					transOutStart = next.TimelineStart
+					transOutDur = clampFade(d, clipEffectiveDur(next))
+				}
+			}
+			transInType, transInDur := resolveTransition(clip)
+			transInDur = clampFade(transInDur, dur)
 
 			refs = append(refs, StudioClipRef{
-				Clip:       clip,
-				Asset:      asset,
-				TrackID:    track.ID,
-				TrackKind:  track.Kind,
-				TrackIndex: track.Index,
-				TrackMuted: track.Muted,
-				FadeIn:     fadeIn,
-				FadeOut:    fadeOut,
+				Clip:          clip,
+				Asset:         asset,
+				TrackID:       track.ID,
+				TrackKind:     track.Kind,
+				TrackIndex:    track.Index,
+				TrackMuted:    track.Muted,
+				FadeIn:        fadeIn,
+				FadeOut:       fadeOut,
+				TransInType:   transInType,
+				TransInDur:    transInDur,
+				TransOutType:  transOutType,
+				TransOutStart: transOutStart,
+				TransOutDur:   transOutDur,
 			})
 		}
 	}
@@ -122,13 +172,31 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 			volume = *r.Clip.Volume
 		}
 		if r.TrackKind == models.StudioTrackKindVideo {
-			plan.Video = append(plan.Video, StudioExportVideoSeg{
+			seg := StudioExportVideoSeg{
 				InputIndex: idx, SourceIn: r.Clip.SourceIn, SourceOut: r.Clip.SourceOut,
 				TimelineStart: r.Clip.TimelineStart, Opacity: opacity, TrackIndex: r.TrackIndex,
-				FadeIn: r.FadeIn, Adjustments: r.Clip.Adjustments, TextOverlays: r.Clip.TextOverlays,
+				Adjustments: r.Clip.Adjustments, TextOverlays: r.Clip.TextOverlays,
 				Transform: r.Clip.Transform, Crop: r.Clip.Crop, BlendMode: r.Clip.BlendMode,
 				Effects: r.Clip.Effects, LutPaths: spec.LutPaths,
-			})
+			}
+			// Typed entrance transition (part 14): crossDissolve keeps the
+			// legacy linear-alpha FadeIn path (byte-stable v1/v2 graphs); every
+			// other type is carried by TransitionType/Dur and emitted by the
+			// compiler's per-type expressions. TransOut* moves this clip only
+			// for pushes, but is carried whenever the next clip transitions.
+			switch r.TransInType {
+			case "":
+				// no transition
+			case models.StudioTransitionCrossDissolve:
+				seg.FadeIn = r.TransInDur
+			default:
+				seg.TransitionType = r.TransInType
+				seg.TransitionDur = r.TransInDur
+			}
+			seg.TransOutType = r.TransOutType
+			seg.TransOutStart = r.TransOutStart
+			seg.TransOutDur = r.TransOutDur
+			plan.Video = append(plan.Video, seg)
 		}
 		if !r.TrackMuted && r.Asset.HasAudio && (volume > 0 || len(r.Clip.VolumeKeyframes) > 0) {
 			pan := 0.0
@@ -145,13 +213,6 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 		}
 	}
 	return plan
-}
-
-func transitionOf(c models.StudioClip) float64 {
-	if c.TransitionInSeconds != nil && *c.TransitionInSeconds > 0 {
-		return *c.TransitionInSeconds
-	}
-	return 0
 }
 
 // clampFade keeps a transition no longer than the clip it applies to.

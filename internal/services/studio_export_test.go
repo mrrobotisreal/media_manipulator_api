@@ -382,3 +382,108 @@ func TestBuildMultiTrackExportArgs_AudioOnly(t *testing.T) {
 		t.Errorf("expected 1000ms delay for timelineStart=1: %s", fc)
 	}
 }
+
+// --- Part 14: typed transitions ---------------------------------------------
+
+// twoClipPlan builds the canonical transition scene: A [0,2.5), B entering at
+// 1.5 with a 1s overlap transition of the given type (B carries the entrance,
+// A carries the matching TransOut pairing CollectExportRefs derives).
+func twoClipPlan(transitionType string) StudioExportPlan {
+	return StudioExportPlan{
+		Inputs: []string{"/a.mp4", "/b.mp4"},
+		Video: []StudioExportVideoSeg{
+			{InputIndex: 0, SourceIn: 0, SourceOut: 2.5, TimelineStart: 0, Opacity: 1, TrackIndex: 0,
+				TransOutType: transitionType, TransOutStart: 1.5, TransOutDur: 1},
+			{InputIndex: 1, SourceIn: 0, SourceOut: 2.5, TimelineStart: 1.5, Opacity: 1, TrackIndex: 0,
+				TransitionType: transitionType, TransitionDur: 1},
+		},
+		Width: 1920, Height: 1080, FPS: 30, Duration: 4,
+	}
+}
+
+func TestExportV3_DipToBlack(t *testing.T) {
+	fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(models.StudioTransitionDipToBlack), "libx264", "medium", "/f.ttf", "/out.mp4"))
+	wantAll(t, fc,
+		// The color quad: full canvas, alpha peaking at the overlap midpoint.
+		"color=c=black:s=1920x1080:r=30:d=4.000,format=yuva420p,fade=t=in:st=1.500:d=0.500:alpha=1,fade=t=out:st=2.000:d=0.500:alpha=1[dip1]",
+		// B composites into an intermediate label with its enable shifted to the
+		// midpoint (the cut happens under full color), then the dip goes on top.
+		"enable='between(t,2.000,4.000)':eof_action=pass[vtr1]",
+		"[vtr1][dip1]overlay=x=0:y=0:enable='between(t,1.500,2.500)':eof_action=pass[vout]",
+	)
+	if strings.Contains(fc, "fade=t=in:st=1.500:d=1.000:alpha=1") {
+		t.Errorf("dip must not emit the dissolve alpha fade on the entering clip: %s", fc)
+	}
+}
+
+func TestExportV3_DipToWhite(t *testing.T) {
+	fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(models.StudioTransitionDipToWhite), "libx264", "medium", "/f.ttf", "/out.mp4"))
+	wantAll(t, fc, "color=c=white:s=1920x1080")
+}
+
+func TestExportV3_WipeLeft(t *testing.T) {
+	fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(models.StudioTransitionWipeLeft), "libx264", "medium", "/f.ttf", "/out.mp4"))
+	wantAll(t, fc,
+		// Animated crop on B: revealed width grows with progress p.
+		"crop=w='max(2,iw*min(1,max(0,(t-1.500)/1.000)))':h=ih:x=0:y=0",
+		// The shrinking crop stays anchored to the left canvas edge until the
+		// transition ends, then the normal centering takes over.
+		"overlay=x='if(lt(t,2.500),0,(W-w)/2)':y=(H-h)/2:enable='between(t,1.500,4.000)'",
+	)
+	// A wipe leaves the outgoing clip alone.
+	if !strings.Contains(fc, "overlay=x=(W-w)/2:y=(H-h)/2:enable='between(t,0.000,2.500)'") {
+		t.Errorf("outgoing clip must keep the plain centered overlay under a wipe: %s", fc)
+	}
+}
+
+func TestExportV3_WipeDirections(t *testing.T) {
+	cases := map[string][]string{
+		models.StudioTransitionWipeRight: {"crop=w='max(2,iw*min(1,max(0,(t-1.500)/1.000)))':h=ih:x=iw-ow:y=0", "x='if(lt(t,2.500),W-w,(W-w)/2)'"},
+		models.StudioTransitionWipeUp:    {"crop=w=iw:h='max(2,ih*min(1,max(0,(t-1.500)/1.000)))':x=0:y=0", "y='if(lt(t,2.500),0,(H-h)/2)'"},
+		models.StudioTransitionWipeDown:  {"crop=w=iw:h='max(2,ih*min(1,max(0,(t-1.500)/1.000)))':x=0:y=ih-oh", "y='if(lt(t,2.500),H-h,(H-h)/2)'"},
+	}
+	for ty, wants := range cases {
+		fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(ty), "libx264", "medium", "/f.ttf", "/out.mp4"))
+		wantAll(t, fc, wants...)
+	}
+}
+
+func TestExportV3_PushLeft(t *testing.T) {
+	fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(models.StudioTransitionPushLeft), "libx264", "medium", "/f.ttf", "/out.mp4"))
+	wantAll(t, fc,
+		// B translates in from the left: offset −W·(1−p) toward home.
+		"overlay=x='(W-w)/2-W*(1-min(1,max(0,(t-1.500)/1.000)))':y=(H-h)/2:enable='between(t,1.500,4.000)'",
+		// A is pushed out to the right by W·p over the same window.
+		"overlay=x='(W-w)/2+W*min(1,max(0,(t-1.500)/1.000))':y=(H-h)/2:enable='between(t,0.000,2.500)'",
+	)
+}
+
+func TestExportV3_PushAndSlideDirections(t *testing.T) {
+	type want struct{ b, a string }
+	cases := map[string]want{
+		models.StudioTransitionPushRight: {b: "x='(W-w)/2+W*(1-min(1,max(0,(t-1.500)/1.000)))'", a: "x='(W-w)/2-W*min(1,max(0,(t-1.500)/1.000))'"},
+		models.StudioTransitionPushUp:    {b: "y='(H-h)/2-H*(1-min(1,max(0,(t-1.500)/1.000)))'", a: "y='(H-h)/2+H*min(1,max(0,(t-1.500)/1.000))'"},
+		models.StudioTransitionPushDown:  {b: "y='(H-h)/2+H*(1-min(1,max(0,(t-1.500)/1.000)))'", a: "y='(H-h)/2-H*min(1,max(0,(t-1.500)/1.000))'"},
+		// Slides move ONLY the entering clip; the outgoing stays centered.
+		models.StudioTransitionSlideLeft: {b: "x='(W-w)/2-W*(1-min(1,max(0,(t-1.500)/1.000)))'", a: "overlay=x=(W-w)/2:y=(H-h)/2:enable='between(t,0.000,2.500)'"},
+		models.StudioTransitionSlideUp:   {b: "y='(H-h)/2-H*(1-min(1,max(0,(t-1.500)/1.000)))'", a: "overlay=x=(W-w)/2:y=(H-h)/2:enable='between(t,0.000,2.500)'"},
+	}
+	for ty, w := range cases {
+		fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(ty), "libx264", "medium", "/f.ttf", "/out.mp4"))
+		wantAll(t, fc, w.b, w.a)
+	}
+}
+
+func TestExportV3_CrossDissolveStaysOnLegacyFadePath(t *testing.T) {
+	// crossDissolve arrives as FadeIn (AssembleExportPlan routes it there), so
+	// the graph is byte-identical to the pre-part-14 dissolve.
+	plan := twoClipPlan("")
+	plan.Video[1].FadeIn = 1
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+	wantAll(t, fc, "fade=t=in:st=1.500:d=1.000:alpha=1")
+	for _, forbidden := range []string{"color=c=black:s=1920x1080,format=yuva420p,fade", "crop=w='max(2", "W*(1-min", "[dip"} {
+		if strings.Contains(fc, forbidden) {
+			t.Errorf("dissolve plan unexpectedly emitted typed-transition graph %q: %s", forbidden, fc)
+		}
+	}
+}

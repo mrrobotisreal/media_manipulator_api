@@ -50,6 +50,18 @@ type StudioExportVideoSeg struct {
 	Adjustments  *models.StudioAdjustments
 	TextOverlays []models.StudioTextOverlay
 
+	// EDL v3 typed transitions (part 14). TransitionType/Dur describe this
+	// clip's NON-dissolve entrance (dips/wipes/pushes/slides; crossDissolve
+	// rides the legacy FadeIn path). TransOut* is the next clip-on-track's
+	// transition into this clip's tail — pushes translate this clip out over
+	// [TransOutStart, TransOutStart+TransOutDur]. Directional rule everywhere:
+	// the type names WHERE THE ENTERING CLIP COMES FROM.
+	TransitionType string
+	TransitionDur  float64
+	TransOutType   string
+	TransOutStart  float64
+	TransOutDur    float64
+
 	// EDL v2.
 	Transform *models.StudioTransform
 	Crop      *models.StudioCrop
@@ -215,7 +227,16 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 			if k < len(segs)-1 || plan.CaptionsASSPath != "" {
 				outL = fmt.Sprintf("vov%d", k)
 			}
-			stmts = append(stmts, compositeStep(last, clipLabel, vc, k, width, height, durStr, fpsStr, outL)...)
+			if isDipTransition(vc.TransitionType) && vc.TransitionDur > 0 {
+				// Dip (part 14): composite the clip normally (enable shifted to
+				// the midpoint inside compositeStep), then layer the full-canvas
+				// color quad peaking at mid-transition on top.
+				mid := fmt.Sprintf("vtr%d", k)
+				stmts = append(stmts, compositeStep(last, clipLabel, vc, k, width, height, durStr, fpsStr, mid)...)
+				stmts = append(stmts, dipStatements(vc, k, width, height, fpsStr, durStr, mid, outL)...)
+			} else {
+				stmts = append(stmts, compositeStep(last, clipLabel, vc, k, width, height, durStr, fpsStr, outL)...)
+			}
 			last = outL
 		}
 		// Caption burn-in is the final video filter (Phase 7).
@@ -333,16 +354,29 @@ func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, 
 	if r := rotateArg(vc); r != "" {
 		chain = append(chain, r)
 	}
+	if isWipeTransition(vc.TransitionType) && vc.TransitionDur > 0 {
+		// Wipe (part 14): animated crop reveals the entering clip from its
+		// named edge — dimensions/offsets are per-frame expressions of t
+		// (progress p clamped 0→1 across the overlap; identity once p=1).
+		chain = append(chain, wipeCropArg(vc))
+	}
 	stmts = append(stmts, chainHead+strings.Join(chain, ",")+"["+finalLabel+"]")
 	return stmts, finalLabel
 }
 
 // compositeStep overlays (normal) or blends (non-normal) the clip onto the
 // running composite, honoring the transform position + the enable window.
+// Part 14: push/slide/wipe transitions animate the overlay position (see
+// overlayPosWithTransitions), and dips shift the enable start to the overlap
+// midpoint — the switch happens under the fully opaque color layer.
 func compositeStep(last, clipLabel string, vc StudioExportVideoSeg, k, width, height int, durStr, fpsStr, outL string) []string {
-	tsStr := formatSeconds(vc.TimelineStart)
+	enableStart := vc.TimelineStart
+	if isDipTransition(vc.TransitionType) && vc.TransitionDur > 0 {
+		enableStart += vc.TransitionDur / 2
+	}
+	tsStr := formatSeconds(enableStart)
 	teStr := formatSeconds(vc.TimelineStart + clampDurExport(vc.SourceIn, vc.SourceOut))
-	xExpr, yExpr := overlayPos(vc, width, height)
+	xExpr, yExpr := overlayPosWithTransitions(vc, width, height)
 
 	mode := vc.BlendMode
 	if mode == "" || mode == models.StudioBlendNormal {
@@ -644,6 +678,130 @@ func overlayPos(vc StudioExportVideoSeg, width, height int) (string, string) {
 		}
 	}
 	return x, y
+}
+
+// --- typed transitions (part 14) --------------------------------------------
+
+func isDipTransition(t string) bool {
+	return t == models.StudioTransitionDipToBlack || t == models.StudioTransitionDipToWhite
+}
+
+func isWipeTransition(t string) bool {
+	switch t {
+	case models.StudioTransitionWipeLeft, models.StudioTransitionWipeRight,
+		models.StudioTransitionWipeUp, models.StudioTransitionWipeDown:
+		return true
+	}
+	return false
+}
+
+// transitionProgressExpr is p(t): 0→1 across [start, start+dur], clamped — the
+// same clamp the preview's transitionFrameState applies.
+func transitionProgressExpr(start, dur float64) string {
+	return fmt.Sprintf("min(1,max(0,(t-%s)/%s))", formatSeconds(start), formatSeconds(dur))
+}
+
+// quoteFilterExpr single-quotes an option value when it contains characters
+// the filtergraph parser would otherwise split on. Plain arithmetic like
+// (W-w)/2 stays unquoted so pre-part-14 graphs remain byte-identical.
+func quoteFilterExpr(e string) string {
+	if strings.ContainsAny(e, ",") {
+		return "'" + e + "'"
+	}
+	return e
+}
+
+// wipeCropArg crops the entering clip to its revealed region, growing from the
+// named edge (= where the clip comes from). w/h/x/y are per-frame expressions;
+// the 2px floor keeps the frame valid at p≈0 (the first frame of the overlap).
+func wipeCropArg(vc StudioExportVideoSeg) string {
+	p := transitionProgressExpr(vc.TimelineStart, vc.TransitionDur)
+	switch vc.TransitionType {
+	case models.StudioTransitionWipeLeft:
+		return fmt.Sprintf("crop=w='max(2,iw*%s)':h=ih:x=0:y=0", p)
+	case models.StudioTransitionWipeRight:
+		return fmt.Sprintf("crop=w='max(2,iw*%s)':h=ih:x=iw-ow:y=0", p)
+	case models.StudioTransitionWipeUp:
+		return fmt.Sprintf("crop=w=iw:h='max(2,ih*%s)':x=0:y=0", p)
+	case models.StudioTransitionWipeDown:
+		return fmt.Sprintf("crop=w=iw:h='max(2,ih*%s)':x=0:y=ih-oh", p)
+	}
+	return ""
+}
+
+// overlayPosWithTransitions wraps overlayPos with the animated position terms:
+//   - the clip's own entrance: pushes/slides translate it in from its edge
+//     (offset W·(1−p) toward home), wipes anchor the shrinking crop to the
+//     canvas edge it reveals from while the transition runs;
+//   - the outgoing side: the NEXT clip's push translates this clip out by
+//     W·p over the overlap window (slides leave it static by design).
+//
+// The full-canvas anchoring assumes the clip fits the frame (the editing case
+// transitions exist for); letterboxed sources land within the same bounded
+// tolerance row — see transition_* in lib/studio/parityTolerances.ts.
+func overlayPosWithTransitions(vc StudioExportVideoSeg, width, height int) (string, string) {
+	x, y := overlayPos(vc, width, height)
+	if vc.TransitionDur > 0 {
+		p := transitionProgressExpr(vc.TimelineStart, vc.TransitionDur)
+		teStr := formatSeconds(vc.TimelineStart + vc.TransitionDur)
+		switch vc.TransitionType {
+		case models.StudioTransitionPushLeft, models.StudioTransitionSlideLeft:
+			x = fmt.Sprintf("%s-W*(1-%s)", x, p)
+		case models.StudioTransitionPushRight, models.StudioTransitionSlideRight:
+			x = fmt.Sprintf("%s+W*(1-%s)", x, p)
+		case models.StudioTransitionPushUp, models.StudioTransitionSlideUp:
+			y = fmt.Sprintf("%s-H*(1-%s)", y, p)
+		case models.StudioTransitionPushDown, models.StudioTransitionSlideDown:
+			y = fmt.Sprintf("%s+H*(1-%s)", y, p)
+		case models.StudioTransitionWipeLeft:
+			x = fmt.Sprintf("if(lt(t,%s),0,%s)", teStr, x)
+		case models.StudioTransitionWipeRight:
+			x = fmt.Sprintf("if(lt(t,%s),W-w,%s)", teStr, x)
+		case models.StudioTransitionWipeUp:
+			y = fmt.Sprintf("if(lt(t,%s),0,%s)", teStr, y)
+		case models.StudioTransitionWipeDown:
+			y = fmt.Sprintf("if(lt(t,%s),H-h,%s)", teStr, y)
+		}
+	}
+	if vc.TransOutDur > 0 {
+		po := transitionProgressExpr(vc.TransOutStart, vc.TransOutDur)
+		switch vc.TransOutType {
+		case models.StudioTransitionPushLeft:
+			x = fmt.Sprintf("%s+W*%s", x, po)
+		case models.StudioTransitionPushRight:
+			x = fmt.Sprintf("%s-W*%s", x, po)
+		case models.StudioTransitionPushUp:
+			y = fmt.Sprintf("%s+H*%s", y, po)
+		case models.StudioTransitionPushDown:
+			y = fmt.Sprintf("%s-H*%s", y, po)
+		}
+	}
+	return quoteFilterExpr(x), quoteFilterExpr(y)
+}
+
+// dipStatements layers the dip color quad over the freshly composited clip:
+// a full-canvas color source whose alpha fades in over the first half of the
+// overlap and out over the second (peak 1.0 at the midpoint, where the
+// entering clip's enable window begins).
+func dipStatements(vc StudioExportVideoSeg, k, width, height int, fpsStr, durStr, inLabel, outLabel string) []string {
+	col := "black"
+	if vc.TransitionType == models.StudioTransitionDipToWhite {
+		col = "white"
+	}
+	ts := vc.TimelineStart
+	half := vc.TransitionDur / 2
+	dip := fmt.Sprintf("dip%d", k)
+	return []string{
+		fmt.Sprintf(
+			"color=c=%s:s=%dx%d:r=%s:d=%s,format=yuva420p,fade=t=in:st=%s:d=%s:alpha=1,fade=t=out:st=%s:d=%s:alpha=1[%s]",
+			col, width, height, fpsStr, durStr,
+			formatSeconds(ts), formatSeconds(half), formatSeconds(ts+half), formatSeconds(half), dip,
+		),
+		fmt.Sprintf(
+			"[%s][%s]overlay=x=0:y=0:enable='between(t,%s,%s)':eof_action=pass[%s]",
+			inLabel, dip, formatSeconds(ts), formatSeconds(ts+vc.TransitionDur), outLabel,
+		),
+	}
 }
 
 // volumeExpr builds a piecewise-linear ffmpeg volume expression from clip-local
