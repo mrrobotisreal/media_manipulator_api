@@ -164,6 +164,7 @@ func TestBuildMultiTrackExportArgs_LegacyV1Regression(t *testing.T) {
 	for _, forbidden := range []string{
 		"crop=", "lut3d", "chromakey", "despill", "colorbalance", "colorchannelmixer=rr",
 		"vibrance", "stereotools", "sidechaincompress", "loudnorm", "ass=", "subtitles=", "rotate=", "blend=all_mode",
+		"alphaextract", "alphamerge",
 	} {
 		if strings.Contains(fc, forbidden) {
 			t.Errorf("v1-only plan unexpectedly emitted v2 filter %q\ngraph: %s", forbidden, fc)
@@ -212,10 +213,19 @@ func TestExportV2_MultiplyBlend(t *testing.T) {
 		Width: 1920, Height: 1080, FPS: 30, Duration: 5,
 	}
 	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+	// Alpha-correct blend path (part 12): RGB blend + layer-alpha composite, so
+	// export matches the shader's mix(backdrop, blendRGB(backdrop, src), alpha).
 	wantAll(t, fc,
 		"color=c=black@0:s=1920x1080:r=30:d=5.000,format=yuva420p[bg1]",
 		"[bg1][vc1]overlay=x=(W-w)/2:y=(H-h)/2[pos1]",
-		"blend=all_mode=multiply:enable='between(t,0.000,5.000)'[vout]",
+		"[pos1]split[posc1][posa1]",
+		"[posa1]alphaextract[mask1]",
+		"[posc1]format=gbrp[posc1r]",
+		"[vov0]split[bk1][bt1]",
+		"[bt1]format=gbrp[bt1r]",
+		"[bt1r][posc1r]blend=all_mode=multiply[bln1]",
+		"[bln1][mask1]alphamerge,format=yuva420p[lay1]",
+		"[bk1][lay1]overlay=x=0:y=0:enable='between(t,0.000,5.000)':eof_action=pass[vout]",
 	)
 }
 
@@ -261,12 +271,14 @@ func TestExportV2_Lut3dIntensity(t *testing.T) {
 	if strings.Contains(full, "split[") {
 		t.Errorf("full-intensity LUT should not split: %s", full)
 	}
-	// Partial → split + blend mix.
+	// Partial → split + blend mix. The GRADED stream is the top input: blend
+	// normal = top*opacity + bottom*(1-opacity), so intensity weights the grade
+	// (part 12 fixed the previously inverted orientation).
 	part := mk(0.5)
 	wantAll(t, part,
 		"split[vc0ax][vc0ay]",
 		"[vc0ay]lut3d=file='/tmp/look.cube':interp=trilinear[vc0al]",
-		"[vc0ax][vc0al]blend=all_mode=normal:all_opacity=0.500[vc0g]",
+		"[vc0al][vc0ax]blend=all_mode=normal:all_opacity=0.500[vc0g]",
 		"[vc0g]format=yuva420p",
 	)
 }

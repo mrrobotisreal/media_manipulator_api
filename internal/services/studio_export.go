@@ -295,13 +295,17 @@ func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, 
 			if intensity >= 1 {
 				chain = append(chain, lut3dPart(lutPath))
 			} else {
-				// split + blend to mix the graded result at `intensity`.
+				// split + blend to mix the graded result at `intensity`. blend
+				// normal computes top*opacity + bottom*(1-opacity) (vf_blend), so
+				// the GRADED stream is the TOP input — out = graded*intensity +
+				// ungraded*(1-intensity), the same linear mix as the preview
+				// shader's mix(c, graded, intensity) (parity closure, part 12).
 				pre := fmt.Sprintf("vc%da", k)
 				stmts = append(stmts, strings.Join(chain, ",")+"["+pre+"]")
 				stmts = append(stmts, fmt.Sprintf("[%s]split[%sx][%sy]", pre, pre, pre))
 				stmts = append(stmts, fmt.Sprintf("[%sy]%s[%sl]", pre, lut3dPart(lutPath), pre))
 				gLabel := fmt.Sprintf("vc%dg", k)
-				stmts = append(stmts, fmt.Sprintf("[%sx][%sl]blend=all_mode=normal:all_opacity=%s[%s]", pre, pre, formatGain(intensity), gLabel))
+				stmts = append(stmts, fmt.Sprintf("[%sl][%sx]blend=all_mode=normal:all_opacity=%s[%s]", pre, pre, formatGain(intensity), gLabel))
 				chain = nil
 				chainHead = "[" + gLabel + "]"
 			}
@@ -348,16 +352,39 @@ func compositeStep(last, clipLabel string, vc StudioExportVideoSeg, k, width, he
 		)}
 	}
 
-	// Non-normal blend: position the clip onto a full-frame transparent layer,
-	// then blend it against the running composite within the clip's window.
-	// CAVEAT: ffmpeg `blend` ignores source alpha for some modes, so the
-	// blend+dissolve interaction can differ slightly from the WebGL preview.
+	// Non-normal blend (parity closure, part 12): both pipelines state ONE
+	// semantic — out = mix(backdrop, blendRGB(backdrop, src), layerAlpha) —
+	// which the WebGL preview computes directly in its fragment shader.
+	// The graph expresses it exactly:
+	//   1. position the clip on a transparent full-frame layer ([pos], yuva420p;
+	//      its alpha carries the spatial window × clip opacity × dissolve fade ×
+	//      chroma key);
+	//   2. blend backdrop×clip per RGB channel in gbrp (vf_blend on planar RGB is
+	//      per-channel math identical to the shader; top input = backdrop so the
+	//      `overlay` mode conditions on the backdrop, like the shader);
+	//   3. give the blended frame the layer's alpha (alphamerge) and composite it
+	//      onto the untouched backdrop with plain straight-alpha overlay, gated
+	//      by the clip's enable window.
 	bg := fmt.Sprintf("bg%d", k)
 	pos := fmt.Sprintf("pos%d", k)
+	posc := fmt.Sprintf("posc%d", k)
+	posa := fmt.Sprintf("posa%d", k)
+	mask := fmt.Sprintf("mask%d", k)
+	bk := fmt.Sprintf("bk%d", k)   // backdrop copy for the final composite
+	bt := fmt.Sprintf("bt%d", k)   // backdrop copy fed to blend (as top input)
+	bln := fmt.Sprintf("bln%d", k) // RGB blend result
+	lay := fmt.Sprintf("lay%d", k) // blend result + layer alpha
 	return []string{
 		fmt.Sprintf("color=c=black@0:s=%dx%d:r=%s:d=%s,format=yuva420p[%s]", width, height, fpsStr, durStr, bg),
 		fmt.Sprintf("[%s][%s]overlay=x=%s:y=%s[%s]", bg, clipLabel, xExpr, yExpr, pos),
-		fmt.Sprintf("[%s][%s]blend=all_mode=%s:enable='between(t,%s,%s)'[%s]", last, pos, mode, tsStr, teStr, outL),
+		fmt.Sprintf("[%s]split[%s][%s]", pos, posc, posa),
+		fmt.Sprintf("[%s]alphaextract[%s]", posa, mask),
+		fmt.Sprintf("[%s]format=gbrp[%sr]", posc, posc),
+		fmt.Sprintf("[%s]split[%s][%s]", last, bk, bt),
+		fmt.Sprintf("[%s]format=gbrp[%sr]", bt, bt),
+		fmt.Sprintf("[%sr][%sr]blend=all_mode=%s[%s]", bt, posc, mode, bln),
+		fmt.Sprintf("[%s][%s]alphamerge,format=yuva420p[%s]", bln, mask, lay),
+		fmt.Sprintf("[%s][%s]overlay=x=0:y=0:enable='between(t,%s,%s)':eof_action=pass[%s]", bk, lay, tsStr, teStr, outL),
 	}
 }
 
@@ -539,9 +566,11 @@ func cropArg(c *models.StudioCrop) string {
 		formatGain(1-c.Left-c.Right), formatGain(1-c.Top-c.Bottom), formatGain(c.Left), formatGain(c.Top))
 }
 
-// lumetriArgs maps a lumetri effect onto ffmpeg filters. Order/constants are
-// documented to diverge slightly from the WebGL preview (colorbalance vs the
-// shader's linear temp/tint shift); both warm/cool the image.
+// lumetriArgs maps a lumetri effect onto ffmpeg filters. The WebGL preview
+// shader mirrors this chain stage-for-stage (exposure → colorbalance midtones →
+// vibrance → eq contrast/saturation), including colorbalance's midtone-weight
+// curve and vibrance's formula — see applyLumetri in lib/studio/glCompositor.ts
+// and the reference math in lib/studio/colorMath.ts (parity closure, part 12).
 func lumetriArgs(e *models.StudioEffect) []string {
 	var out []string
 	if exp := optF(e.Exposure, 0); exp != 0 {
