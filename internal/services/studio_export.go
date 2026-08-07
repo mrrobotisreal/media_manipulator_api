@@ -103,11 +103,46 @@ type StudioExportPlan struct {
 	CaptionsASSPath string
 }
 
+// StudioRenderStats describes a render for the part-10 server telemetry
+// (studio_render_completed/failed). Facts about the ffmpeg invocation only —
+// nothing content-derived.
+type StudioRenderStats struct {
+	// Encoder in the analytics vocabulary: "nvenc" | "x264".
+	Encoder string
+	// FilterCount is the number of statements in the -filter_complex graph,
+	// the proxy for compositing complexity.
+	FilterCount int
+}
+
 // RunExport renders the plan to outputPath, reporting progress on jobID.
-func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan StudioExportPlan, quality, outputPath string) error {
+// The returned stats are valid even when the render fails — the failure
+// telemetry wants the same encoder/complexity dimensions as success.
+func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan StudioExportPlan, quality, outputPath string) (StudioRenderStats, error) {
 	encoder := studioH264Encoder(s.cfg)
 	args := buildMultiTrackExportArgs(plan, encoder, quality, s.cfg.ContentStudioFontFile, outputPath)
-	return runStudioFFmpeg(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, plan.Duration, args...)
+	stats := StudioRenderStats{Encoder: encoderAnalyticsName(encoder), FilterCount: countFilterStatements(args)}
+	return stats, runStudioFFmpeg(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, plan.Duration, args...)
+}
+
+// encoderAnalyticsName maps the ffmpeg encoder id onto the two-value analytics
+// vocabulary the catalog documents.
+func encoderAnalyticsName(encoder string) string {
+	if encoder == "h264_nvenc" {
+		return "nvenc"
+	}
+	return "x264"
+}
+
+// countFilterStatements counts the ';'-joined statements in the arg slice's
+// -filter_complex value. Counting the built args (rather than re-deriving from
+// the plan) means the number can never disagree with what ffmpeg actually ran.
+func countFilterStatements(args []string) int {
+	for i, a := range args {
+		if a == "-filter_complex" && i+1 < len(args) {
+			return strings.Count(args[i+1], ";") + 1
+		}
+	}
+	return 0
 }
 
 // RunAudioMix renders the plan's audio to a timeline-aligned PCM WAV (no video),

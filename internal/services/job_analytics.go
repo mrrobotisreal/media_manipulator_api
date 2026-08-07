@@ -105,6 +105,56 @@ func (jm *JobManager) emitTerminal(
 	})
 }
 
+// EmitStudioRender reports the part-10 server render telemetry for a Content
+// Studio export: what the render actually cost (duration ratio), what encoded
+// it (nvenc/x264), how complex the filter graph was, and — on failure — the
+// coarse failure class. Fire-and-forget like its neighbours.
+//
+// Called by the export job runner BEFORE the terminal status update: the
+// terminal transition consumes the remembered owner (takeJobOwner), so this
+// peeks. All values are buckets/enums; the raw error text never leaves.
+func (jm *JobManager) EmitStudioRender(
+	jobID string,
+	stats StudioRenderStats,
+	renderSeconds, timelineSeconds float64,
+	renderErr error,
+) {
+	emitter := jm.analytics()
+	if emitter == nil {
+		return
+	}
+	ctx, ok := jm.peekJobOwner(jobID)
+	if !ok {
+		// No identity, no event — same rule as emitTerminal: synthesizing ids
+		// would fabricate visitors, and the emitter drops them anyway.
+		return
+	}
+
+	props := map[string]any{
+		"job_id":            jobID,
+		"encoder":           stats.Encoder,
+		"filterCountBucket": analyticsemit.FilterCountBucket(stats.FilterCount),
+	}
+	if timelineSeconds > 0 && renderSeconds >= 0 {
+		props["durationRatioBucket"] = analyticsemit.RatioBucket(renderSeconds / timelineSeconds)
+	}
+
+	name := analyticsemit.StudioRenderCompleted
+	if renderErr != nil {
+		name = analyticsemit.StudioRenderFailed
+		props["error_type"] = analyticsemit.ErrorType(renderErr.Error())
+	}
+
+	emitter.Emit(analyticsemit.Event{
+		EventName:  name,
+		EventTS:    time.Now().UTC(),
+		VisitorID:  ctx.owner.VisitorID,
+		SessionID:  ctx.owner.SessionID,
+		Context:    analyticsemit.Context(ctx.facts.Tool, ctx.facts.MediaKind, jobID, ctx.owner.Tier),
+		Properties: props,
+	})
+}
+
 // extensionOf reduces a filename to its extension, lowercased and without the dot.
 //
 // The extension is the ONLY part of a filename that may ever leave this process for

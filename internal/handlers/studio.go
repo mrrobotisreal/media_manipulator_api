@@ -1124,11 +1124,19 @@ func (h *StudioHandler) runExportJob(jobID string, refs []studioClipRef, exportC
 		}
 	}
 
-	if err := h.export.RunExport(ctx, jobID, plan, quality, outputPath); err != nil {
+	// Part 10 (ADR ws/0003): server render telemetry. Emitted BEFORE the
+	// terminal status update in both branches — the terminal transition
+	// consumes the job's remembered analytics identity.
+	renderStart := time.Now()
+	stats, err := h.export.RunExport(ctx, jobID, plan, quality, outputPath)
+	renderSeconds := time.Since(renderStart).Seconds()
+	if err != nil {
 		log.Printf("studio export: job %s failed: %v", jobID, err)
+		h.jobManager.EmitStudioRender(jobID, stats, renderSeconds, duration, err)
 		_ = h.jobManager.UpdateJobError(jobID, err.Error())
 		return
 	}
+	h.jobManager.EmitStudioRender(jobID, stats, renderSeconds, duration, nil)
 	if err := h.jobManager.UpdateJobResult(jobID, "/api/download/"+jobID); err != nil {
 		_ = h.jobManager.UpdateJobError(jobID, "Failed to update job result")
 		return

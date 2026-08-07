@@ -193,6 +193,20 @@ func (jm *JobManager) takeJobOwner(jobID string) (jobEmitContext, bool) {
 	return ctx, ok
 }
 
+// peekJobOwner reads a job's remembered identity WITHOUT consuming it. For
+// emissions that happen strictly before the terminal transition (the studio
+// render telemetry) — the terminal server_job_* event still needs the context,
+// so a peek must never disturb takeJobOwner's at-most-once behaviour.
+func (jm *JobManager) peekJobOwner(jobID string) (jobEmitContext, bool) {
+	if jm == nil || jobID == "" {
+		return jobEmitContext{}, false
+	}
+	jm.emitMu.RLock()
+	defer jm.emitMu.RUnlock()
+	ctx, ok := jm.emitOwners[jobID]
+	return ctx, ok
+}
+
 // drainRecords is the single consumer of recordCh.
 func (jm *JobManager) drainRecords() {
 	write := func(rec telemetry.JobUpsert) {

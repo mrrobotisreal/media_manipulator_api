@@ -32,4 +32,11 @@ const (
 	// existed, so the client under-reports on purpose. Account sync knows, because
 	// it either inserted an mm_users row or it did not.
 	ServerSignupCompleted = "server_signup_completed"
+
+	// StudioRenderCompleted / StudioRenderFailed are Darkroom v3 part 10's server
+	// render telemetry (ADR ws/0003): duration ratio, encoder, and filter-graph
+	// complexity for a Content Studio export — facts only the render host knows.
+	// They sit beside the client's studio_export_* pair and join on job_id.
+	StudioRenderCompleted = "studio_render_completed"
+	StudioRenderFailed    = "studio_render_failed"
 )
