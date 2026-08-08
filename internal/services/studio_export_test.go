@@ -487,3 +487,132 @@ func TestExportV3_CrossDissolveStaysOnLegacyFadePath(t *testing.T) {
 		}
 	}
 }
+
+// --- part 15: keyframed motion / opacity / volume / pan ---------------------
+
+func kfLane(points ...models.StudioKeyframe) []models.StudioKeyframe { return points }
+
+func TestBuildMultiTrackExportArgs_KeyframedMotionAndOpacity(t *testing.T) {
+	plan := StudioExportPlan{
+		Inputs: []string{"/a.mp4"},
+		Video: []StudioExportVideoSeg{
+			{
+				InputIndex: 0, SourceIn: 0, SourceOut: 4, TimelineStart: 1, Opacity: 1, TrackIndex: 0,
+				ClipKeyframes: &models.StudioClipKeyframes{
+					PositionX: kfLane(kf(0, -0.5, "linear"), kf(4, 0.5, "linear")),
+					Scale:     kfLane(kf(0, 0.5, "easeIn"), kf(4, 2, "linear")),
+					Rotation:  kfLane(kf(0, 0, "linear"), kf(4, 90, "linear")),
+					Opacity:   kfLane(kf(0, 0, "linear"), kf(4, 1, "linear")),
+				},
+			},
+		},
+		Width: 1920, Height: 1080, FPS: 30, Duration: 5,
+	}
+	args := buildMultiTrackExportArgs(plan, "libx264", "", "/font.ttf", "/out.mp4")
+	fc := filterComplex(t, args)
+
+	for _, want := range []string{
+		// The static fit targets the MAX keyframed scale (2 → 3840x2160 box).
+		"scale=3840:2160:force_original_aspect_ratio=decrease",
+		// Animated rotation: piecewise degrees × PI/180, constant diagonal box.
+		"rotate=a='(if(lt((t-1.000),0.000),0.000,if(lt((t-1.000),4.000),(0.000+(90.000)*((t-1.000)-0.000)/4.000),90.000)))*PI/180':c=black@0:ow='ceil(hypot(iw,ih))':oh='ceil(hypot(iw,ih))'",
+		// Animated scale: per-frame downscale by s(t)/sMax with even dims.
+		"scale=w='max(2,trunc(iw*(if(lt((t-1.000),0.000),0.500,if(lt((t-1.000),4.000),(0.500+(1.500)*pow(((t-1.000)-0.000)/4.000,2)),2.000)))/2.000/2)*2)':h='max(2,trunc(ih*(if(lt((t-1.000),0.000),0.500,if(lt((t-1.000),4.000),(0.500+(1.500)*pow(((t-1.000)-0.000)/4.000,2)),2.000)))/2.000/2)*2)':eval=frame",
+		// Keyframed opacity: instance-named mixer seeded with the lane's t=0 value.
+		"colorchannelmixer@op0=aa=0.000",
+		// Keyframed position: overlay x as a per-frame expression of timeline t.
+		"overlay=x='(W-w)/2+W*(if(lt((t-1.000),0.000),-0.500,if(lt((t-1.000),4.000),(-0.500+(1.000)*((t-1.000)-0.000)/4.000),0.500)))':y=(H-h)/2",
+	} {
+		if !strings.Contains(fc, want) {
+			t.Errorf("filter graph missing %q\n\ngraph: %s", want, fc)
+		}
+	}
+}
+
+func TestBuildMultiTrackExportArgs_SendCmdInsertion(t *testing.T) {
+	plan := StudioExportPlan{
+		Inputs:      []string{"/a.mp4"},
+		Video:       []StudioExportVideoSeg{{InputIndex: 0, SourceOut: 4, Opacity: 1}},
+		Width:       1920, Height: 1080, FPS: 30, Duration: 4,
+		SendCmdPath: "/tmp/job/keyframes.cmd",
+	}
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "", "", "/out.mp4"))
+	want := "color=c=black:s=1920x1080:r=30:d=4.000,format=yuv420p,sendcmd=f='/tmp/job/keyframes.cmd'[vbase]"
+	if !strings.Contains(fc, want) {
+		t.Errorf("missing sendcmd on vbase: %s", fc)
+	}
+
+	// Audio-only project: the sidecar rides an asendcmd on the mix output.
+	audioPlan := StudioExportPlan{
+		Inputs:      []string{"/a.mp3"},
+		Audio:       []StudioExportAudioSeg{{InputIndex: 0, SourceOut: 4, Volume: 1}},
+		Width:       1920, Height: 1080, FPS: 30, Duration: 4,
+		SendCmdPath: "/tmp/job/keyframes.cmd",
+	}
+	args := buildMultiTrackExportArgs(audioPlan, "libx264", "", "", "/out.mp4")
+	fc = filterComplex(t, args)
+	if !strings.Contains(fc, "[aout]asendcmd=f='/tmp/job/keyframes.cmd'[aoutsc]") {
+		t.Errorf("missing asendcmd fallback: %s", fc)
+	}
+	if idx := argIndex(args, "-map"); idx == -1 || args[idx+1] != "[aoutsc]" {
+		t.Errorf("audio map should target [aoutsc]: %v", args)
+	}
+}
+
+func TestAudioSegChain_V3VolumeAndPanKeyframes(t *testing.T) {
+	ac := StudioExportAudioSeg{
+		InputIndex: 0, SourceIn: 0, SourceOut: 4, TimelineStart: 0, Volume: 1, SegIndex: 3,
+		// Legacy lane present too: the v3 lane must win.
+		VolumeKeyframes: []models.StudioVolumeKeyframe{{T: 0, Gain: 0.1}, {T: 4, Gain: 0.1}},
+		Pan:             0,
+		ClipKeyframes: &models.StudioClipKeyframes{
+			Volume: kfLane(kf(0, 0, "easeOut"), kf(4, 2, "linear")),
+			Pan:    kfLane(kf(0, -1, "linear"), kf(4, 1, "linear")),
+		},
+	}
+	chain := audioSegChain(ac, "ac0")
+	if !strings.Contains(chain, "volume='if(lt(t,0.000),0.000,if(lt(t,4.000),(0.000+(2.000)*(1-pow(1-(t-0.000)/4.000,2))),2.000))':eval=frame") {
+		t.Errorf("v3 eased volume expression missing: %s", chain)
+	}
+	if strings.Contains(chain, "0.100") {
+		t.Errorf("legacy volume lane leaked into the chain: %s", chain)
+	}
+	// Pan keyframed: instance-named stereotools seeded from the lane at t=0.
+	if !strings.Contains(chain, "stereotools@pan3=balance_in=-1.000") {
+		t.Errorf("keyframed pan instance missing: %s", chain)
+	}
+}
+
+// Byte-stability: a clip with NO keyframes must compile to the exact pre-15
+// chain — no instance names, no extra stages.
+func TestBuildMultiTrackExportArgs_NoKeyframesByteStable(t *testing.T) {
+	seg := StudioExportVideoSeg{
+		InputIndex: 0, SourceIn: 0, SourceOut: 4, TimelineStart: 0, Opacity: 0.5, TrackIndex: 0,
+		Transform: &models.StudioTransform{X: 0.1, Y: 0, Scale: 0.5, RotationDeg: 45},
+		Effects: []models.StudioEffect{{
+			ID: "l1", Type: models.StudioEffectLumetri, Enabled: true,
+			Exposure: fp(1), Contrast: fp(1.2), Saturation: fp(1), Temperature: fp(0), Tint: fp(0), Vibrance: fp(0),
+		}},
+	}
+	plan := StudioExportPlan{Inputs: []string{"/a.mp4"}, Video: []StudioExportVideoSeg{seg}, Width: 1920, Height: 1080, FPS: 30, Duration: 4}
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "", "", "/out.mp4"))
+	for _, marker := range []string{"@op", "@lume", "@lumb", "@lumv", "@lumq", "@ck", "@dsp", "@pan"} {
+		if strings.Contains(fc, marker) {
+			t.Errorf("static plan must not emit instance names (%s): %s", marker, fc)
+		}
+	}
+	if strings.Contains(fc, "eval=frame") {
+		t.Errorf("static plan must not emit per-frame video expressions: %s", fc)
+	}
+	for _, want := range []string{
+		"scale=960:540:force_original_aspect_ratio=decrease",
+		"colorchannelmixer=rr=2.000:gg=2.000:bb=2.000",
+		"eq=contrast=1.200:saturation=1.000",
+		"colorchannelmixer=aa=0.500",
+		"rotate=a=0.785:c=black@0:ow=rotw(0.785):oh=roth(0.785)",
+	} {
+		if !strings.Contains(fc, want) {
+			t.Errorf("static chain missing %q: %s", want, fc)
+		}
+	}
+}

@@ -78,7 +78,8 @@ func CollectExportRefs(p *models.StudioProject, assets map[string]*models.Studio
 			if clip.Volume != nil {
 				volume = *clip.Volume
 			}
-			contributesAudio := !track.Muted && asset.HasAudio && (volume > 0 || len(clip.VolumeKeyframes) > 0)
+			contributesAudio := !track.Muted && asset.HasAudio &&
+				(volume > 0 || len(clip.VolumeKeyframes) > 0 || clipHasVolumeLane(clip))
 			if track.Kind != models.StudioTrackKindVideo && !contributesAudio {
 				continue // muted/silent audio clip — nothing to render
 			}
@@ -178,6 +179,7 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 				Adjustments: r.Clip.Adjustments, TextOverlays: r.Clip.TextOverlays,
 				Transform: r.Clip.Transform, Crop: r.Clip.Crop, BlendMode: r.Clip.BlendMode,
 				Effects: r.Clip.Effects, LutPaths: spec.LutPaths,
+				ClipKeyframes: r.Clip.Keyframes,
 			}
 			// Typed entrance transition (part 14): crossDissolve keeps the
 			// legacy linear-alpha FadeIn path (byte-stable v1/v2 graphs); every
@@ -198,7 +200,8 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 			seg.TransOutDur = r.TransOutDur
 			plan.Video = append(plan.Video, seg)
 		}
-		if !r.TrackMuted && r.Asset.HasAudio && (volume > 0 || len(r.Clip.VolumeKeyframes) > 0) {
+		if !r.TrackMuted && r.Asset.HasAudio &&
+			(volume > 0 || len(r.Clip.VolumeKeyframes) > 0 || clipHasVolumeLane(r.Clip)) {
 			pan := 0.0
 			if r.Clip.Pan != nil {
 				pan = *r.Clip.Pan
@@ -208,11 +211,19 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 				TimelineStart: r.Clip.TimelineStart, Volume: volume,
 				FadeIn: r.FadeIn, FadeOut: r.FadeOut,
 				VolumeKeyframes: r.Clip.VolumeKeyframes, Pan: pan,
-				Voice: spec.Ducking != nil && r.TrackID == spec.VoiceTrackID,
+				Voice:         spec.Ducking != nil && r.TrackID == spec.VoiceTrackID,
+				ClipKeyframes: r.Clip.Keyframes,
+				SegIndex:      len(plan.Audio),
 			})
 		}
 	}
 	return plan
+}
+
+// clipHasVolumeLane reports a non-empty v3 keyframes.volume lane (part 15) —
+// it makes a clip audible even at flat volume 0, like legacy VolumeKeyframes.
+func clipHasVolumeLane(c models.StudioClip) bool {
+	return c.Keyframes != nil && len(c.Keyframes.Volume) > 0
 }
 
 // clampFade keeps a transition no longer than the clip it applies to.

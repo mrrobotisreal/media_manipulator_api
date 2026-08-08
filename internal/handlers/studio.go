@@ -1091,6 +1091,19 @@ func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef
 		}
 	}
 
+	// Keyframe sidecar (part 15): the generated sendcmd script is written next
+	// to the output and referenced by the graph (sendcmd=f=…). Best-effort —
+	// a failed write drops the animation ramps, not the export.
+	if cmds := services.GenerateStudioSendCmd(plan); cmds != "" {
+		cmdPath := filepath.Join(filepath.Dir(outputPath), "keyframes.cmd")
+		if err := os.WriteFile(cmdPath, []byte(cmds), 0o644); err != nil {
+			log.Printf("studio export: write keyframe sidecar failed: %v", err)
+		} else {
+			plan.SendCmdPath = cmdPath
+			cleanup = append(cleanup, cmdPath)
+		}
+	}
+
 	// Part 10 (ADR ws/0003): server render telemetry. Emitted BEFORE the
 	// terminal status update in both branches — the terminal transition
 	// consumes the job's remembered analytics identity.

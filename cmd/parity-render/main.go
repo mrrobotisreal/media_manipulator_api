@@ -163,6 +163,15 @@ func renderVariant(id, leg string, p goldenProject, g *goldenFile, fixturesDir, 
 	if err := os.MkdirAll(legDir, 0o755); err != nil {
 		return err
 	}
+	// Keyframe sidecar (part 15): written the same way the export handler does,
+	// so animated goldens exercise the real sendcmd path.
+	if cmds := services.GenerateStudioSendCmd(plan); cmds != "" {
+		cmdPath := filepath.Join(legDir, "keyframes.cmd")
+		if err := os.WriteFile(cmdPath, []byte(cmds), 0o644); err != nil {
+			return fmt.Errorf("write keyframe sidecar: %w", err)
+		}
+		plan.SendCmdPath = cmdPath
+	}
 	renderPath := filepath.Join(legDir, "render.mp4")
 	if err := runFFmpeg(services.ParityExportArgs(plan, fontFile, renderPath)); err != nil {
 		return fmt.Errorf("render: %w", err)

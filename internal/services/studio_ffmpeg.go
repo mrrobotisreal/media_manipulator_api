@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"regexp"
@@ -38,7 +39,36 @@ func studioFFmpegEnv(gpuIndex int) []string {
 var (
 	studioNVENCOnce  sync.Once
 	studioNVENCWorks bool
+
+	studioSendCmdOnce sync.Once
 )
+
+// assertStudioSendCmdSupport logs (once, never hard-fails) when the installed
+// ffmpeg predates 4.4 — the floor for the part-15 keyframe sidecar (sendcmd
+// [expr] intervals + commandable eq/colorbalance/vibrance/colorchannelmixer/
+// chromakey/stereotools). On an old build the export still runs; animated
+// effect params / opacity / pan just stay at their initial values.
+func assertStudioSendCmdSupport() {
+	studioSendCmdOnce.Do(func() {
+		out, err := exec.Command("ffmpeg", "-version").Output()
+		if err != nil {
+			log.Printf("studio export: could not probe ffmpeg version (%v) — keyframed effect params require ffmpeg >= 4.4", err)
+			return
+		}
+		version := ""
+		if fields := strings.Fields(strings.SplitN(string(out), "\n", 2)[0]); len(fields) >= 3 {
+			version = fields[2]
+		}
+		major, minor := 0, 0
+		if n, _ := fmt.Sscanf(strings.TrimPrefix(version, "n"), "%d.%d", &major, &minor); n < 1 {
+			log.Printf("studio export: unrecognized ffmpeg version %q — keyframed effect params require ffmpeg >= 4.4", version)
+			return
+		}
+		if major < 4 || (major == 4 && minor < 4) {
+			log.Printf("studio export: ffmpeg %s is older than 4.4 — the keyframe sidecar (animated Lumetri/opacity/pan) will NOT apply; upgrade ffmpeg on the render host", version)
+		}
+	})
+}
 
 // studioH264Encoder returns "h264_nvenc" when an NVENC H.264 encode actually
 // succeeds on the configured GPU, otherwise "libx264". The probe runs a real

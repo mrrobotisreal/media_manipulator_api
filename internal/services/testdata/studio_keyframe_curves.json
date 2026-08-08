@@ -1,0 +1,61 @@
+{
+  "comment": "Shared keyframe-curve fixture (part 15). THE cross-side contract: lib/studio/ease.ts (valueAt) and internal/services/studio_keyframes.go (KeyframeValueAt) are both asserted against these exact values. A byte-identical copy lives at media_manipulator_api/internal/services/testdata/studio_keyframe_curves.json — change both or neither.",
+  "cases": [
+    {
+      "name": "multi-ease lane",
+      "keyframes": [
+        { "t": 0, "value": 0, "ease": "linear" },
+        { "t": 2, "value": 1, "ease": "hold" },
+        { "t": 3, "value": 0.5, "ease": "easeIn" },
+        { "t": 5, "value": 1.5, "ease": "easeOut" },
+        { "t": 7, "value": 0, "ease": "easeBoth" },
+        { "t": 8, "value": 1, "ease": "linear" }
+      ],
+      "samples": [
+        { "t": -1, "expected": 0 },
+        { "t": 0, "expected": 0 },
+        { "t": 0.5, "expected": 0.25 },
+        { "t": 1, "expected": 0.5 },
+        { "t": 2, "expected": 1 },
+        { "t": 2.5, "expected": 1 },
+        { "t": 2.999, "expected": 1 },
+        { "t": 3, "expected": 0.5 },
+        { "t": 3.5, "expected": 0.5625 },
+        { "t": 4, "expected": 0.75 },
+        { "t": 4.5, "expected": 1.0625 },
+        { "t": 5, "expected": 1.5 },
+        { "t": 5.5, "expected": 0.84375 },
+        { "t": 6, "expected": 0.375 },
+        { "t": 6.5, "expected": 0.09375 },
+        { "t": 7, "expected": 0 },
+        { "t": 7.25, "expected": 0.125 },
+        { "t": 7.5, "expected": 0.5 },
+        { "t": 7.75, "expected": 0.875 },
+        { "t": 8, "expected": 1 },
+        { "t": 9, "expected": 1 }
+      ]
+    },
+    {
+      "name": "single keyframe holds everywhere",
+      "keyframes": [{ "t": 1, "value": 0.7, "ease": "easeBoth" }],
+      "samples": [
+        { "t": 0, "expected": 0.7 },
+        { "t": 1, "expected": 0.7 },
+        { "t": 5, "expected": 0.7 }
+      ]
+    },
+    {
+      "name": "negative values interpolate (rotation-style range)",
+      "keyframes": [
+        { "t": 0, "value": -90, "ease": "easeOut" },
+        { "t": 4, "value": 90, "ease": "linear" }
+      ],
+      "samples": [
+        { "t": 1, "expected": -11.25 },
+        { "t": 2, "expected": 45 },
+        { "t": 3, "expected": 78.75 },
+        { "t": 4, "expected": 90 }
+      ]
+    }
+  ]
+}

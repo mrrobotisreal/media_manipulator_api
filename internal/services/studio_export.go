@@ -70,6 +70,12 @@ type StudioExportVideoSeg struct {
 	// LutPaths maps a lut effect's lutAssetId → local .cube path (downloaded by
 	// the export job). A missing entry means the LUT is skipped.
 	LutPaths map[string]string
+
+	// EDL v3 per-property keyframes (part 15). Motion/opacity lanes become
+	// per-frame filter expressions; effect-param lanes are driven by the
+	// sendcmd sidecar (GenerateStudioSendCmd), whose filter-instance names are
+	// derived from this seg's SORTED index (sortVideoSegs order).
+	ClipKeyframes *models.StudioClipKeyframes
 }
 
 // StudioExportAudioSeg is one audio-contributing clip (a video clip's embedded
@@ -90,6 +96,14 @@ type StudioExportAudioSeg struct {
 	Pan             float64
 	// Voice marks a seg on the ducking voice track (the sidechain key source).
 	Voice bool
+
+	// EDL v3 per-property keyframes (part 15): `keyframes.volume` (eased,
+	// wins over legacy VolumeKeyframes) and `keyframes.pan` (sendcmd-driven —
+	// stereotools has no expression support but is commandable).
+	ClipKeyframes *models.StudioClipKeyframes
+	// SegIndex is this seg's index within plan.Audio — the stable suffix for
+	// its stereotools@pan<i> instance name (chain labels vary with ducking).
+	SegIndex int
 }
 
 // StudioDucking is the resolved auto-ducking config for an export.
@@ -113,6 +127,11 @@ type StudioExportPlan struct {
 	Loudness string // '' | streaming | podcast | broadcast
 	// CaptionsASSPath, when set, is burned in as the final video filter (Phase 7).
 	CaptionsASSPath string
+	// SendCmdPath, when set, is the keyframe sidecar (part 15) written by the
+	// runner from GenerateStudioSendCmd. It rides ONE timeline-clocked sendcmd
+	// instance on [vbase] (asendcmd on the mix for audio-only projects) and
+	// addresses filters graph-wide by instance name.
+	SendCmdPath string
 }
 
 // StudioRenderStats describes a render for the part-10 server telemetry
@@ -130,6 +149,7 @@ type StudioRenderStats struct {
 // The returned stats are valid even when the render fails — the failure
 // telemetry wants the same encoder/complexity dimensions as success.
 func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan StudioExportPlan, quality, outputPath string) (StudioRenderStats, error) {
+	assertStudioSendCmdSupport() // one-time ffmpeg ≥ 4.4 check, log-only (part 15)
 	encoder := studioH264Encoder(s.cfg)
 	args := buildMultiTrackExportArgs(plan, encoder, quality, s.cfg.ContentStudioFontFile, outputPath)
 	stats := StudioRenderStats{Encoder: encoderAnalyticsName(encoder), FilterCount: countFilterStatements(args)}
@@ -217,7 +237,15 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 	videoOut := ""
 	if len(plan.Video) > 0 {
 		segs := sortVideoSegs(plan.Video)
-		stmts = append(stmts, fmt.Sprintf("color=c=black:s=%dx%d:r=%s:d=%s,format=yuv420p[vbase]", width, height, fpsStr, durStr))
+		// The keyframe sidecar rides the base color source: CFR at the project
+		// rate with PTS = timeline time, so its intervals fire deterministically
+		// and one instance drives every commandable filter in the graph
+		// (research ticket 01's design).
+		base := fmt.Sprintf("color=c=black:s=%dx%d:r=%s:d=%s,format=yuv420p", width, height, fpsStr, durStr)
+		if plan.SendCmdPath != "" {
+			base += fmt.Sprintf(",sendcmd=f='%s'", filterPathEscape(plan.SendCmdPath))
+		}
+		stmts = append(stmts, base+"[vbase]")
 		last := "vbase"
 		for k, vc := range segs {
 			clipStmts, clipLabel := buildVideoClipChain(vc, k, width, height, fpsStr, fontFile)
@@ -251,6 +279,13 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 	audioStmts, audioOut := buildAudioSection(plan, durStr)
 	stmts = append(stmts, audioStmts...)
 
+	// Audio-only project with keyframed pan: no [vbase] exists to carry the
+	// sidecar, so an asendcmd on the (timeline-clocked) mix output drives it.
+	if videoOut == "" && audioOut != "" && plan.SendCmdPath != "" {
+		stmts = append(stmts, fmt.Sprintf("[%s]asendcmd=f='%s'[aoutsc]", audioOut, filterPathEscape(plan.SendCmdPath)))
+		audioOut = "aoutsc"
+	}
+
 	args = append(args, "-filter_complex", strings.Join(stmts, ";"))
 	if videoOut != "" {
 		args = append(args, "-map", "["+videoOut+"]")
@@ -274,12 +309,22 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 // split/lut3d/blend sub-graph.
 func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, fontFile string) ([]string, string) {
 	tsStr := formatSeconds(vc.TimelineStart)
+	kf := keyframesOf(vc.ClipKeyframes)
 	scale := 1.0
 	if vc.Transform != nil && vc.Transform.Scale > 0 {
 		scale = vc.Transform.Scale
 	}
-	boxW := int(math.Round(float64(width) * scale))
-	boxH := int(math.Round(float64(height) * scale))
+	// Animated scale (part 15): the static fit targets the MAX keyframed scale
+	// (so this stage stays deterministic), and a per-frame eval=frame downscale
+	// after `rotate` animates s(t)/sMax. Uniform scale and rotation about the
+	// center commute, so the reordering matches the preview's quad math.
+	scaleLane := kf.Scale
+	sMax := scale
+	if hasLane(scaleLane) {
+		sMax = maxLaneValue(scaleLane, scale)
+	}
+	boxW := int(math.Round(float64(width) * sMax))
+	boxH := int(math.Round(float64(height) * sMax))
 
 	chain := []string{
 		fmt.Sprintf("[%d:v]trim=start=%s:end=%s", vc.InputIndex, formatSeconds(vc.SourceIn), formatSeconds(vc.SourceOut)),
@@ -299,7 +344,7 @@ func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, 
 
 	lumetri, lut, chroma := pickEffects(vc.Effects)
 	if lumetri != nil {
-		chain = append(chain, lumetriArgs(lumetri)...)
+		chain = append(chain, lumetriChainArgs(lumetri, k, vc.ClipKeyframes)...)
 	}
 
 	var stmts []string
@@ -335,9 +380,15 @@ func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, 
 
 	chain = append(chain, "format=yuva420p")
 	if chroma != nil {
-		chain = append(chain, chromaArgs(chroma)...)
+		chain = append(chain, chromaChainArgs(chroma, k, vc.ClipKeyframes)...)
 	}
-	if vc.Opacity > 0 && vc.Opacity < 1 {
+	if hasLane(kf.Opacity) {
+		// Keyframed opacity keeps the part-12 alpha path (colorchannelmixer aa,
+		// not expression-capable but commandable): the instance-named filter is
+		// seeded with the lane's value at clip start and driven per frame by
+		// the sendcmd sidecar.
+		chain = append(chain, fmt.Sprintf("colorchannelmixer@op%d=aa=%s", k, formatGain(clamp01(KeyframeValueAt(kf.Opacity, 0, vc.Opacity)))))
+	} else if vc.Opacity > 0 && vc.Opacity < 1 {
 		chain = append(chain, fmt.Sprintf("colorchannelmixer=aa=%s", formatGain(vc.Opacity)))
 	}
 	for _, ov := range vc.TextOverlays {
@@ -353,6 +404,18 @@ func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, 
 	}
 	if r := rotateArg(vc); r != "" {
 		chain = append(chain, r)
+	}
+	if hasLane(scaleLane) {
+		// Per-frame downscale by s(t)/sMax (≤ 1 by construction). The only
+		// consumer of the varying frame size is `overlay`, which already
+		// handles per-frame sizes (part 14's wipe crops rely on the same).
+		// trunc(x/2)*2 keeps subsampled dimensions even.
+		r := fmt.Sprintf("(%s)/%s", KeyframeExpr(scaleLane, videoClipTimeExpr(vc.TimelineStart)), formatGain(sMax))
+		chain = append(chain, fmt.Sprintf(
+			"scale=w=%s:h=%s:eval=frame",
+			quoteChainExpr(fmt.Sprintf("max(2,trunc(iw*%s/2)*2)", r)),
+			quoteChainExpr(fmt.Sprintf("max(2,trunc(ih*%s/2)*2)", r)),
+		))
 	}
 	if isWipeTransition(vc.TransitionType) && vc.TransitionDur > 0 {
 		// Wipe (part 14): animated crop reveals the entering clip from its
@@ -501,7 +564,12 @@ func audioSegChain(ac StudioExportAudioSeg, label string) string {
 		"asetpts=PTS-STARTPTS",
 		"aformat=sample_rates=48000:channel_layouts=stereo",
 	}
-	if len(ac.VolumeKeyframes) > 0 {
+	if v3vol := keyframesOf(ac.ClipKeyframes).Volume; hasLane(v3vol) {
+		// v3 lane (part 15): eased piecewise expression; wins over the legacy
+		// linear lane (the client keeps both mirrored). t is post-asetpts
+		// clip-local time, matching the keyframe times.
+		parts = append(parts, fmt.Sprintf("volume='%s':eval=frame", KeyframeExpr(v3vol, "t")))
+	} else if len(ac.VolumeKeyframes) > 0 {
 		// t is post-asetpts clip-local time, matching the keyframe times.
 		parts = append(parts, fmt.Sprintf("volume='%s':eval=frame", volumeExpr(ac.VolumeKeyframes)))
 	} else {
@@ -514,7 +582,12 @@ func audioSegChain(ac StudioExportAudioSeg, label string) string {
 	if ac.FadeOut > 0 && dur > ac.FadeOut {
 		parts = append(parts, fmt.Sprintf("afade=t=out:st=%s:d=%s:curve=qsin", formatSeconds(dur-ac.FadeOut), formatSeconds(ac.FadeOut)))
 	}
-	if ac.Pan != 0 {
+	if panLane := keyframesOf(ac.ClipKeyframes).Pan; hasLane(panLane) {
+		// Keyframed pan (part 15): stereotools is not expression-capable but IS
+		// commandable — the instance-named filter is seeded with the lane's
+		// value at clip start and driven by the sendcmd sidecar.
+		parts = append(parts, fmt.Sprintf("stereotools@pan%d=balance_in=%s", ac.SegIndex, formatGain(KeyframeValueAt(panLane, 0, ac.Pan))))
+	} else if ac.Pan != 0 {
 		parts = append(parts, fmt.Sprintf("stereotools=balance_in=%s", formatGain(ac.Pan)))
 	}
 	parts = append(parts, fmt.Sprintf("adelay=%d|%d", delayMs, delayMs))
@@ -600,26 +673,51 @@ func cropArg(c *models.StudioCrop) string {
 		formatGain(1-c.Left-c.Right), formatGain(1-c.Top-c.Bottom), formatGain(c.Left), formatGain(c.Top))
 }
 
-// lumetriArgs maps a lumetri effect onto ffmpeg filters. The WebGL preview
-// shader mirrors this chain stage-for-stage (exposure → colorbalance midtones →
-// vibrance → eq contrast/saturation), including colorbalance's midtone-weight
-// curve and vibrance's formula — see applyLumetri in lib/studio/glCompositor.ts
-// and the reference math in lib/studio/colorMath.ts (parity closure, part 12).
-func lumetriArgs(e *models.StudioEffect) []string {
+// lumetriChainArgs maps a lumetri effect onto ffmpeg filters. The WebGL
+// preview shader mirrors this chain stage-for-stage (exposure → colorbalance
+// midtones → vibrance → eq contrast/saturation), including colorbalance's
+// midtone-weight curve and vibrance's formula — see applyLumetri in
+// lib/studio/glCompositor.ts and the reference math in lib/studio/colorMath.ts
+// (parity closure, part 12).
+//
+// Part 15: a stage with any KEYFRAMED param is always emitted, carries an
+// instance name derived from the seg's sorted index k (the sendcmd sidecar's
+// command target), and is seeded with the lane's value at clip start. Stages
+// without keyframes keep the pre-15 byte-identical static emission.
+func lumetriChainArgs(e *models.StudioEffect, k int, clipKfs *models.StudioClipKeyframes) []string {
 	var out []string
-	if exp := optF(e.Exposure, 0); exp != 0 {
+	expLane := effectLane(clipKfs, e.ID, "exposure")
+	exp := KeyframeValueAt(expLane, 0, optF(e.Exposure, 0))
+	if hasLane(expLane) {
+		g := math.Pow(2, exp)
+		out = append(out, fmt.Sprintf("colorchannelmixer@lume%d=rr=%s:gg=%s:bb=%s", k, formatGain(g), formatGain(g), formatGain(g)))
+	} else if exp != 0 {
 		g := math.Pow(2, exp) // matches the shader's c *= 2^exposure
 		out = append(out, fmt.Sprintf("colorchannelmixer=rr=%s:gg=%s:bb=%s", formatGain(g), formatGain(g), formatGain(g)))
 	}
-	temp, tint := optF(e.Temperature, 0), optF(e.Tint, 0)
-	if temp != 0 || tint != 0 {
+	tempLane := effectLane(clipKfs, e.ID, "temperature")
+	tintLane := effectLane(clipKfs, e.ID, "tint")
+	temp := KeyframeValueAt(tempLane, 0, optF(e.Temperature, 0))
+	tint := KeyframeValueAt(tintLane, 0, optF(e.Tint, 0))
+	if hasLane(tempLane) || hasLane(tintLane) {
+		out = append(out, fmt.Sprintf("colorbalance@lumb%d=rm=%s:gm=%s:bm=%s", k, formatGain(temp/100), formatGain(-tint/100), formatGain(-temp/100)))
+	} else if temp != 0 || tint != 0 {
 		out = append(out, fmt.Sprintf("colorbalance=rm=%s:gm=%s:bm=%s", formatGain(temp/100), formatGain(-tint/100), formatGain(-temp/100)))
 	}
-	if vib := optF(e.Vibrance, 0); vib != 0 {
+	vibLane := effectLane(clipKfs, e.ID, "vibrance")
+	vib := KeyframeValueAt(vibLane, 0, optF(e.Vibrance, 0))
+	if hasLane(vibLane) {
+		out = append(out, fmt.Sprintf("vibrance@lumv%d=intensity=%s", k, formatGain(vib)))
+	} else if vib != 0 {
 		out = append(out, fmt.Sprintf("vibrance=intensity=%s", formatGain(vib)))
 	}
-	con, sat := optF(e.Contrast, 1), optF(e.Saturation, 1)
-	if con != 1 || sat != 1 {
+	conLane := effectLane(clipKfs, e.ID, "contrast")
+	satLane := effectLane(clipKfs, e.ID, "saturation")
+	con := KeyframeValueAt(conLane, 0, optF(e.Contrast, 1))
+	sat := KeyframeValueAt(satLane, 0, optF(e.Saturation, 1))
+	if hasLane(conLane) || hasLane(satLane) {
+		out = append(out, fmt.Sprintf("eq@lumq%d=contrast=%s:saturation=%s", k, formatGain(con), formatGain(sat)))
+	} else if con != 1 || sat != 1 {
 		out = append(out, fmt.Sprintf("eq=contrast=%s:saturation=%s", formatGain(con), formatGain(sat)))
 	}
 	return out
@@ -629,18 +727,31 @@ func lut3dPart(localPath string) string {
 	return fmt.Sprintf("lut3d=file='%s':interp=trilinear", filterPathEscape(localPath))
 }
 
-// chromaArgs emits chromakey + despill (despill type chosen by the dominant
-// channel of the key color).
-func chromaArgs(e *models.StudioEffect) []string {
+// chromaChainArgs emits chromakey + despill (despill type chosen by the
+// dominant channel of the key color). Part 15: keyframed params (backend
+// capability only — the UI deliberately doesn't expose them, ramping a key
+// mid-shot causes edge crawl) get instance names + sidecar-driven values,
+// mirroring lumetriChainArgs.
+func chromaChainArgs(e *models.StudioEffect, k int, clipKfs *models.StudioClipKeyframes) []string {
 	key := "#00FF00"
 	if e.KeyColor != nil {
 		key = *e.KeyColor
 	}
-	sim := optF(e.Similarity, 0.1)
-	blend := optF(e.Blend, 0.1)
-	despill := optF(e.Despill, 0.5)
-	out := []string{fmt.Sprintf("chromakey=color=%s:similarity=%s:blend=%s", hexToFFColor(key), formatGain(sim), formatGain(blend))}
-	if despill > 0 {
+	simLane := effectLane(clipKfs, e.ID, "similarity")
+	blendLane := effectLane(clipKfs, e.ID, "blend")
+	despillLane := effectLane(clipKfs, e.ID, "despill")
+	sim := KeyframeValueAt(simLane, 0, optF(e.Similarity, 0.1))
+	blend := KeyframeValueAt(blendLane, 0, optF(e.Blend, 0.1))
+	despill := KeyframeValueAt(despillLane, 0, optF(e.Despill, 0.5))
+	var out []string
+	if hasLane(simLane) || hasLane(blendLane) {
+		out = append(out, fmt.Sprintf("chromakey@ck%d=color=%s:similarity=%s:blend=%s", k, hexToFFColor(key), formatGain(sim), formatGain(blend)))
+	} else {
+		out = append(out, fmt.Sprintf("chromakey=color=%s:similarity=%s:blend=%s", hexToFFColor(key), formatGain(sim), formatGain(blend)))
+	}
+	if hasLane(despillLane) {
+		out = append(out, fmt.Sprintf("despill@dsp%d=type=%s:mix=%s", k, despillType(key), formatGain(despill)))
+	} else if despill > 0 {
 		out = append(out, fmt.Sprintf("despill=type=%s:mix=%s", despillType(key), formatGain(despill)))
 	}
 	return out
@@ -657,8 +768,18 @@ func despillType(hex string) string {
 }
 
 // rotateArg rotates the alpha-padded clip clockwise (matching the shader's
-// clockwise convention); transparent corners via c=black@0.
+// clockwise convention); transparent corners via c=black@0. A keyframed
+// rotation animates the angle per frame; the output stays a CONSTANT bounding
+// box (the diagonal — the max over any angle) so every downstream filter but
+// overlay sees a fixed frame size, and (W-w)/2 keeps the center in place.
 func rotateArg(vc StudioExportVideoSeg) string {
+	rotLane := keyframesOf(vc.ClipKeyframes).Rotation
+	if hasLane(rotLane) {
+		deg := KeyframeExpr(rotLane, videoClipTimeExpr(vc.TimelineStart))
+		diag := "ceil(hypot(iw,ih))"
+		return fmt.Sprintf("rotate=a=%s:c=black@0:ow=%s:oh=%s",
+			quoteChainExpr(fmt.Sprintf("(%s)*PI/180", deg)), quoteChainExpr(diag), quoteChainExpr(diag))
+	}
 	if vc.Transform == nil || vc.Transform.RotationDeg == 0 {
 		return ""
 	}
@@ -667,12 +788,22 @@ func rotateArg(vc StudioExportVideoSeg) string {
 }
 
 // overlayPos returns the overlay x/y expressions, centered + transform offset.
+// Keyframed position lanes (part 15) become per-frame expressions of the
+// normalized offset × frame size; overlay re-evaluates x/y per frame, so
+// (W-w)/2 recentering also tracks an animated-scale clip's varying w/h.
 func overlayPos(vc StudioExportVideoSeg, width, height int) (string, string) {
+	kf := keyframesOf(vc.ClipKeyframes)
 	x, y := "(W-w)/2", "(H-h)/2"
-	if vc.Transform != nil {
+	if hasLane(kf.PositionX) {
+		x = fmt.Sprintf("(W-w)/2+W*(%s)", KeyframeExpr(kf.PositionX, videoClipTimeExpr(vc.TimelineStart)))
+	} else if vc.Transform != nil {
 		if dx := vc.Transform.X * float64(width); dx != 0 {
 			x = fmt.Sprintf("(W-w)/2+(%s)", formatGain(dx))
 		}
+	}
+	if hasLane(kf.PositionY) {
+		y = fmt.Sprintf("(H-h)/2+H*(%s)", KeyframeExpr(kf.PositionY, videoClipTimeExpr(vc.TimelineStart)))
+	} else if vc.Transform != nil {
 		if dy := vc.Transform.Y * float64(height); dy != 0 {
 			y = fmt.Sprintf("(H-h)/2+(%s)", formatGain(dy))
 		}
