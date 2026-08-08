@@ -59,6 +59,7 @@ func main() {
 	outDir := flag.String("out", "", "harness output directory (frames land in <out>/<scenario>/ffmpeg[_ref]/)")
 	scenarios := flag.String("scenarios", "", "optional comma-separated scenario-id filter")
 	fontFile := flag.String("font", "", "font file for drawtext overlays (goldens don't use any by default)")
+	fontsDir := flag.String("fontsdir", "assets/fonts/studio", "directory of curated title-clip fonts (part 16)")
 	flag.Parse()
 	if *goldensDir == "" || *fixturesDir == "" || *outDir == "" {
 		flag.Usage()
@@ -101,11 +102,11 @@ func main() {
 		if err := json.Unmarshal(data, &g); err != nil {
 			fatal("parse %s: %v", name, err)
 		}
-		if err := renderVariant(id, "ffmpeg", g.Project, &g, *fixturesDir, *outDir, *fontFile); err != nil {
+		if err := renderVariant(id, "ffmpeg", g.Project, &g, *fixturesDir, *outDir, *fontFile, *fontsDir); err != nil {
 			fatal("%s: %v", id, err)
 		}
 		if g.ProjectRef != nil {
-			if err := renderVariant(id, "ffmpeg_ref", *g.ProjectRef, &g, *fixturesDir, *outDir, *fontFile); err != nil {
+			if err := renderVariant(id, "ffmpeg_ref", *g.ProjectRef, &g, *fixturesDir, *outDir, *fontFile, *fontsDir); err != nil {
 				fatal("%s (ref): %v", id, err)
 			}
 		}
@@ -117,7 +118,7 @@ func main() {
 	fmt.Printf("parity-render: %d scenario(s) rendered\n", ran)
 }
 
-func renderVariant(id, leg string, p goldenProject, g *goldenFile, fixturesDir, outDir, fontFile string) error {
+func renderVariant(id, leg string, p goldenProject, g *goldenFile, fixturesDir, outDir, fontFile, fontsDir string) error {
 	// Fixture files stand in for ingested assets: S3KeyOriginal doubles as the
 	// LocalByKey lookup key, resolved straight into the fixtures directory.
 	assetByID := make(map[string]*models.StudioAsset, len(g.Assets))
@@ -173,7 +174,7 @@ func renderVariant(id, leg string, p goldenProject, g *goldenFile, fixturesDir, 
 		plan.SendCmdPath = cmdPath
 	}
 	renderPath := filepath.Join(legDir, "render.mp4")
-	if err := runFFmpeg(services.ParityExportArgs(plan, fontFile, renderPath)); err != nil {
+	if err := runFFmpeg(services.ParityExportArgs(plan, fontFile, fontsDir, renderPath)); err != nil {
 		return fmt.Errorf("render: %w", err)
 	}
 

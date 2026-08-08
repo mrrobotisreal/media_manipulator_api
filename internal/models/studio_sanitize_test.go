@@ -440,6 +440,39 @@ func TestSanitizeTracks_TitleClips(t *testing.T) {
 			t.Errorf("text defaults: weight=%d font=%q", *got.FontWeight, *got.FontFamily)
 		}
 	})
+
+	// Part 16: fontFamily is an enum against the shipped registry — never a
+	// path ingredient. Unknown names (including traversal attempts) fall back
+	// to the default; 400-only families clamp bold away.
+	t.Run("fontFamily enum check", func(t *testing.T) {
+		for _, bad := range []string{"Comic Sans MS", "../../etc/passwd", "Inter'; rm -rf"} {
+			l := textLayer()
+			l.FontFamily = strp(bad)
+			out := SanitizeTracks(mk(StudioClip{ID: "t1", SourceOut: 5, Title: &StudioTitle{Layers: []StudioTitleLayer{l}}}))
+			if got := *out[0].Clips[0].Title.Layers[0].FontFamily; got != StudioTitleFontDefault {
+				t.Errorf("family %q: got %q want default", bad, got)
+			}
+		}
+		known := textLayer()
+		known.FontFamily = strp("Playfair Display")
+		known.FontWeight = intp(700)
+		out := SanitizeTracks(mk(StudioClip{ID: "t1", SourceOut: 5, Title: &StudioTitle{Layers: []StudioTitleLayer{known}}}))
+		got := out[0].Clips[0].Title.Layers[0]
+		if *got.FontFamily != "Playfair Display" || *got.FontWeight != 700 {
+			t.Errorf("known family kept: font=%q weight=%d", *got.FontFamily, *got.FontWeight)
+		}
+	})
+
+	t.Run("bold clamps to 400 for 400-only families", func(t *testing.T) {
+		l := textLayer()
+		l.FontFamily = strp("Bebas Neue")
+		l.FontWeight = intp(700)
+		out := SanitizeTracks(mk(StudioClip{ID: "t1", SourceOut: 5, Title: &StudioTitle{Layers: []StudioTitleLayer{l}}}))
+		got := out[0].Clips[0].Title.Layers[0]
+		if *got.FontFamily != "Bebas Neue" || *got.FontWeight != 400 {
+			t.Errorf("400-only clamp: font=%q weight=%d", *got.FontFamily, *got.FontWeight)
+		}
+	})
 }
 
 func TestSanitizeTracks_SpeedAndFreeze(t *testing.T) {

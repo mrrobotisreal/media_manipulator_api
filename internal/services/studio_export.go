@@ -76,6 +76,13 @@ type StudioExportVideoSeg struct {
 	// sendcmd sidecar (GenerateStudioSendCmd), whose filter-instance names are
 	// derived from this seg's SORTED index (sortVideoSegs order).
 	ClipKeyframes *models.StudioClipKeyframes
+
+	// EDL v3 title clip (part 16): when set, InputIndex is -1 and the chain
+	// starts from a transparent color= source carrying the drawbox/drawtext
+	// layer stack instead of an input trim. Adjustments/effects are NOT
+	// emitted for title segs (ffmpeg's eq/colorbalance stages destroy alpha;
+	// the inspector hides them for title clips).
+	Title *models.StudioTitle
 }
 
 // StudioExportAudioSeg is one audio-contributing clip (a video clip's embedded
@@ -151,7 +158,7 @@ type StudioRenderStats struct {
 func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan StudioExportPlan, quality, outputPath string) (StudioRenderStats, error) {
 	assertStudioSendCmdSupport() // one-time ffmpeg ≥ 4.4 check, log-only (part 15)
 	encoder := studioH264Encoder(s.cfg)
-	args := buildMultiTrackExportArgs(plan, encoder, quality, s.cfg.ContentStudioFontFile, outputPath)
+	args := buildMultiTrackExportArgs(plan, encoder, quality, s.cfg.ContentStudioFontFile, s.cfg.ContentStudioFontsDir, outputPath)
 	stats := StudioRenderStats{Encoder: encoderAnalyticsName(encoder), FilterCount: countFilterStatements(args)}
 	return stats, runStudioFFmpeg(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, plan.Duration, args...)
 }
@@ -211,8 +218,10 @@ func buildAudioMixArgs(plan StudioExportPlan, outputPath string) (args []string,
 }
 
 // buildMultiTrackExportArgs constructs the ffmpeg arg slice for the full EDL.
-// Pure + deterministic so the graph is unit-testable without invoking ffmpeg.
-func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile, outputPath string) []string {
+// Pure + deterministic so the graph is unit-testable without invoking ffmpeg
+// (title font resolution consults the fonts directory on disk, falling back to
+// fontFile — pass a fixed fontsDir in tests).
+func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile, fontsDir, outputPath string) []string {
 	width, height := plan.Width, plan.Height
 	if width <= 0 {
 		width = 1920
@@ -248,7 +257,7 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 		stmts = append(stmts, base+"[vbase]")
 		last := "vbase"
 		for k, vc := range segs {
-			clipStmts, clipLabel := buildVideoClipChain(vc, k, width, height, fpsStr, fontFile)
+			clipStmts, clipLabel := buildVideoClipChain(vc, k, width, height, fpsStr, fontFile, fontsDir)
 			stmts = append(stmts, clipStmts...)
 
 			outL := "vout"
@@ -306,8 +315,10 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 // buildVideoClipChain builds the filter statements for one video clip and
 // returns them plus the final label (vc<k>). The common case is a single
 // comma-joined statement; a LUT with intensity < 1 expands into a
-// split/lut3d/blend sub-graph.
-func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, fontFile string) ([]string, string) {
+// split/lut3d/blend sub-graph. Title clips (part 16) swap the input trim for a
+// transparent color= source carrying the drawbox/drawtext layer stack, then
+// ride the identical downstream chain (crop/scale/opacity/fade/rotate/wipe).
+func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, fontFile, fontsDir string) ([]string, string) {
 	tsStr := formatSeconds(vc.TimelineStart)
 	kf := keyframesOf(vc.ClipKeyframes)
 	scale := 1.0
@@ -326,9 +337,22 @@ func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, 
 	boxW := int(math.Round(float64(width) * sMax))
 	boxH := int(math.Round(float64(height) * sMax))
 
-	chain := []string{
-		fmt.Sprintf("[%d:v]trim=start=%s:end=%s", vc.InputIndex, formatSeconds(vc.SourceIn), formatSeconds(vc.SourceOut)),
-		fmt.Sprintf("setpts=PTS-STARTPTS+%s/TB", tsStr),
+	var chain []string
+	if vc.Title != nil {
+		// Transparent full-frame source at the clip's duration; the layer
+		// stack draws onto it (bottom → top, same order as the raster), then
+		// the standard setpts shifts it onto the timeline.
+		chain = append(chain,
+			fmt.Sprintf("color=c=black@0:s=%dx%d:r=%s:d=%s", width, height, fpsStr, formatSeconds(clampDurExport(vc.SourceIn, vc.SourceOut))),
+			"format=yuva420p",
+		)
+		chain = append(chain, titleLayerParts(vc.Title, width, height, fontsDir, fontFile)...)
+		chain = append(chain, fmt.Sprintf("setpts=PTS-STARTPTS+%s/TB", tsStr))
+	} else {
+		chain = append(chain,
+			fmt.Sprintf("[%d:v]trim=start=%s:end=%s", vc.InputIndex, formatSeconds(vc.SourceIn), formatSeconds(vc.SourceOut)),
+			fmt.Sprintf("setpts=PTS-STARTPTS+%s/TB", tsStr),
+		)
 	}
 	if c := cropArg(vc.Crop); c != "" {
 		chain = append(chain, c)
@@ -338,11 +362,17 @@ func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, 
 		"setsar=1",
 		fmt.Sprintf("fps=%s", fpsStr),
 	)
-	if vc.Adjustments != nil {
+	// Adjustments/effects are skipped for title segs: eq/colorbalance/vibrance
+	// have no alpha-capable pixel formats, so ffmpeg would silently convert
+	// away the title's transparency. The inspector hides these for title clips.
+	if vc.Adjustments != nil && vc.Title == nil {
 		chain = append(chain, eqArg(vc.Adjustments))
 	}
 
 	lumetri, lut, chroma := pickEffects(vc.Effects)
+	if vc.Title != nil {
+		lumetri, lut, chroma = nil, nil, nil
+	}
 	if lumetri != nil {
 		chain = append(chain, lumetriChainArgs(lumetri, k, vc.ClipKeyframes)...)
 	}
@@ -1003,6 +1033,197 @@ func drawtextArg(ov models.StudioTextOverlay, fontFile string) string {
 		"drawtext=fontfile='%s':text='%s':x=(w-text_w)*%s:y=(h-text_h)*%s:fontsize=%d:fontcolor=%s:box=1:boxcolor=black@0.4:boxborderw=8",
 		drawtextEscape(fontFile), drawtextEscape(ov.Text), formatGain(clamp01(ov.X)), formatGain(clamp01(ov.Y)), size, hexToFFColor(ov.Color),
 	)
+}
+
+// --- title clips (part 16) ---------------------------------------------------
+//
+// titleLayerParts renders a title's layer stack as comma-chain filter parts on
+// the transparent color source — array order = bottom → top, the same order
+// the browser raster paints (SHARED TITLE LAYOUT SPEC in
+// lib/studio/titleRaster.ts; change both or neither):
+//   - text splits into lines on '\n' (no auto-wrap); one drawtext per line;
+//   - the anchor is (x·W, y·H); line i centers at
+//     anchorY − blockH/2 + (i+0.5)·lineH with lineH = lineHeight·fontSize;
+//   - align hangs the line off the anchor X (left = starts at, center =
+//     centered on, right = ends at) via x/text_w expressions;
+//   - stroke = borderw/bordercolor, shadow = shadowx/y/color, background =
+//     per-line box=1 with uniform boxborderw.
+//
+// KNOWN BOUNDED DIVERGENCES from the preview raster (title_* tolerance rows in
+// lib/studio/parityTolerances.ts): letter-spacing (no drawtext knob), shadow
+// blur (drawtext shadows are hard), background corner radius + distinct X/Y
+// padding (drawbox/boxborderw limitations), and diagonal lines (staircase of
+// drawbox segments vs an antialiased canvas stroke).
+
+// titleStaircaseSegments bounds the drawbox staircase for diagonal lines.
+const titleStaircaseSegments = 24
+
+func titleLayerParts(title *models.StudioTitle, width, height int, fontsDir, fallbackFont string) []string {
+	var parts []string
+	for _, l := range title.Layers {
+		switch l.Type {
+		case models.StudioTitleLayerRect:
+			parts = append(parts, titleRectPart(l, width, height))
+		case models.StudioTitleLayerLine:
+			parts = append(parts, titleLinePartsFor(l, width, height)...)
+		case models.StudioTitleLayerText:
+			parts = append(parts, titleTextParts(l, width, height, fontsDir, fallbackFont)...)
+		}
+	}
+	return parts
+}
+
+// ffColorAlpha renders "#RRGGBB"+opacity as ffmpeg's 0xRRGGBB@a.aaa form.
+func ffColorAlpha(hex string, alpha float64) string {
+	return fmt.Sprintf("%s@%s", hexToFFColor(hex), formatGain(clamp01(alpha)))
+}
+
+func titleRectPart(l models.StudioTitleLayer, width, height int) string {
+	x := int(math.Round(optF(l.X, 0) * float64(width)))
+	y := int(math.Round(optF(l.Y, 0) * float64(height)))
+	w := int(math.Round(optF(l.W, 0) * float64(width)))
+	h := int(math.Round(optF(l.H, 0) * float64(height)))
+	if w < 1 {
+		w = 1
+	}
+	if h < 1 {
+		h = 1
+	}
+	color := "#FFFFFF"
+	if l.Color != nil {
+		color = *l.Color
+	}
+	// replace=1 writes color+alpha instead of blending — the source is
+	// transparent, so a plate must REPLACE the empty pixels. Corner radius is
+	// dropped here (preview-only; bounded tolerance).
+	return fmt.Sprintf("drawbox=x=%d:y=%d:w=%d:h=%d:color=%s:t=fill:replace=1",
+		x, y, w, h, ffColorAlpha(color, optF(l.Opacity, 1)))
+}
+
+// titleLinePartsFor draws a line layer. Axis-aligned lines are one exact
+// drawbox; diagonals approximate with a bounded staircase of segments.
+func titleLinePartsFor(l models.StudioTitleLayer, width, height int) []string {
+	x1 := optF(l.X1, 0) * float64(width)
+	y1 := optF(l.Y1, 0) * float64(height)
+	x2 := optF(l.X2, 1) * float64(width)
+	y2 := optF(l.Y2, 1) * float64(height)
+	th := optF(l.ThicknessPx, 4)
+	color := "#FFFFFF"
+	if l.Color != nil {
+		color = *l.Color
+	}
+	col := ffColorAlpha(color, 1)
+	box := func(cx, cy, w, h float64) string {
+		bw := int(math.Max(1, math.Round(w)))
+		bh := int(math.Max(1, math.Round(h)))
+		return fmt.Sprintf("drawbox=x=%d:y=%d:w=%d:h=%d:color=%s:t=fill:replace=1",
+			int(math.Round(cx-w/2)), int(math.Round(cy-h/2)), bw, bh, col)
+	}
+	dx := x2 - x1
+	dy := y2 - y1
+	if math.Abs(dy) < 0.5 { // horizontal
+		return []string{box((x1+x2)/2, y1, math.Abs(dx), th)}
+	}
+	if math.Abs(dx) < 0.5 { // vertical
+		return []string{box(x1, (y1+y2)/2, th, math.Abs(dy))}
+	}
+	out := make([]string, 0, titleStaircaseSegments)
+	for i := 0; i < titleStaircaseSegments; i++ {
+		f := (float64(i) + 0.5) / titleStaircaseSegments
+		segW := math.Max(math.Abs(dx)/titleStaircaseSegments, th)
+		segH := math.Max(math.Abs(dy)/titleStaircaseSegments, th)
+		out = append(out, box(x1+dx*f, y1+dy*f, segW, segH))
+	}
+	return out
+}
+
+func titleTextParts(l models.StudioTitleLayer, width, height int, fontsDir, fallbackFont string) []string {
+	text := ""
+	if l.Text != nil {
+		text = *l.Text
+	}
+	if strings.TrimSpace(text) == "" {
+		return nil
+	}
+	family := models.StudioTitleFontDefault
+	if l.FontFamily != nil {
+		family = *l.FontFamily
+	}
+	weight := 400
+	if l.FontWeight != nil {
+		weight = *l.FontWeight
+	}
+	fontPath := resolveTitleFontFile(fontsDir, family, weight, fallbackFont)
+	fontSize := optF(l.FontSizePx, 64)
+	fill := "#FFFFFF"
+	if l.FillColor != nil {
+		fill = *l.FillColor
+	}
+	align := "center"
+	if l.Align != nil {
+		align = *l.Align
+	}
+	anchorX := optF(l.X, 0.5) * float64(width)
+	anchorY := optF(l.Y, 0.5) * float64(height)
+	lineH := optF(l.LineHeight, 1.2) * fontSize
+	lines := strings.Split(text, "\n")
+	blockH := float64(len(lines)) * lineH
+
+	styled := []string{
+		fmt.Sprintf("fontfile='%s'", drawtextEscape(fontPath)),
+		"", // text placeholder — filled per line below (kept second for readability)
+		fmt.Sprintf("fontsize=%d", int(math.Round(fontSize))),
+		fmt.Sprintf("fontcolor=%s", hexToFFColor(fill)),
+	}
+	if l.StrokeColor != nil && optF(l.StrokeWidthPx, 0) > 0 {
+		styled = append(styled,
+			fmt.Sprintf("borderw=%d", int(math.Round(optF(l.StrokeWidthPx, 0)))),
+			fmt.Sprintf("bordercolor=%s", hexToFFColor(*l.StrokeColor)),
+		)
+	}
+	if l.Shadow != nil {
+		// Blur has no drawtext equivalent — offset + color only (tolerance).
+		styled = append(styled,
+			fmt.Sprintf("shadowx=%d", int(math.Round(l.Shadow.XPx))),
+			fmt.Sprintf("shadowy=%d", int(math.Round(l.Shadow.YPx))),
+			fmt.Sprintf("shadowcolor=%s", hexToFFColor(l.Shadow.Color)),
+		)
+	}
+	if l.Background != nil && l.Background.Opacity > 0 {
+		// One uniform boxborderw (older-ffmpeg-safe): the mean of the X/Y
+		// paddings; radius is dropped (both bounded tolerances).
+		pad := int(math.Round((l.Background.PaddingXPx + l.Background.PaddingYPx) / 2))
+		styled = append(styled,
+			"box=1",
+			fmt.Sprintf("boxcolor=%s", ffColorAlpha(l.Background.Color, l.Background.Opacity)),
+			fmt.Sprintf("boxborderw=%d", pad),
+		)
+	}
+
+	out := make([]string, 0, len(lines))
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		lineCenterY := anchorY - blockH/2 + (float64(i)+0.5)*lineH
+		var xExpr string
+		switch align {
+		case "left":
+			xExpr = formatGain(anchorX)
+		case "right":
+			xExpr = fmt.Sprintf("%s-text_w", formatGain(anchorX))
+		default:
+			xExpr = fmt.Sprintf("%s-text_w/2", formatGain(anchorX))
+		}
+		opts := append([]string(nil), styled...)
+		opts[1] = fmt.Sprintf("text='%s'", drawtextEscape(line))
+		opts = append(opts,
+			fmt.Sprintf("x=%s", xExpr),
+			fmt.Sprintf("y=%s-text_h/2", formatGain(lineCenterY)),
+		)
+		out = append(out, "drawtext="+strings.Join(opts, ":"))
+	}
+	return out
 }
 
 // drawtextEscape escapes a value for use inside a single-quoted drawtext field.

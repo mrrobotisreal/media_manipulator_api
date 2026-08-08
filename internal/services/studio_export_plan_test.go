@@ -64,7 +64,7 @@ func TestCollectExportRefs_AudioCrossfadeFromOverlap(t *testing.T) {
 		Width: 1920, Height: 1080, FPS: 30, Duration: duration,
 		LocalByKey: map[string]string{"orig/A": "/a.mp4", "orig/B": "/b.mp4"},
 	})
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	for _, want := range []string{
 		"afade=t=out:st=4.000:d=1.000:curve=qsin", // c1 tail over the overlap
 		"afade=t=in:st=0:d=1.000:curve=qsin",      // c2 head over the overlap

@@ -484,12 +484,15 @@ func sanitizeTitleTextLayer(l StudioTitleLayer) StudioTitleLayer {
 	if l.Text != nil {
 		text = truncateRunes(*l.Text, studioMaxTitleTextLen)
 	}
+	// Part 16: fontFamily is an ENUM against the shipped registry — an unknown
+	// name silently becomes the default so no user text can ever influence the
+	// export's font-file resolution.
 	font := studioDefaultFontFamily
-	if l.FontFamily != nil && strings.TrimSpace(*l.FontFamily) != "" {
+	if l.FontFamily != nil && IsKnownStudioTitleFont(strings.TrimSpace(*l.FontFamily)) {
 		font = strings.TrimSpace(*l.FontFamily)
 	}
 	weight := 400
-	if l.FontWeight != nil && *l.FontWeight == 700 {
+	if l.FontWeight != nil && *l.FontWeight == 700 && StudioTitleFontSupportsBold(font) {
 		weight = 700
 	}
 	fill := "#FFFFFF"

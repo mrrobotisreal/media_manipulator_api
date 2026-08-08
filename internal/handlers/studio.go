@@ -1042,6 +1042,9 @@ func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef
 		}
 	}()
 	for _, r := range refs {
+		if r.Clip.Title != nil {
+			continue // assetless title clip (part 16) — no source to download
+		}
 		key := r.Asset.S3KeyOriginal
 		if _, done := localByKey[key]; done {
 			continue

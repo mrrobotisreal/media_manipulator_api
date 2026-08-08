@@ -70,9 +70,16 @@ func CollectExportRefs(p *models.StudioProject, assets map[string]*models.Studio
 			if end := clip.TimelineStart + dur; end > duration {
 				duration = end
 			}
+			// Title clips (part 16) are assetless (AssetID "" XOR Title,
+			// sanitizer-enforced): they render on video tracks from their layer
+			// stack. A synthetic inert asset keeps every downstream r.Asset
+			// deref safe (HasAudio false, no S3 key → no download, no input).
 			asset, ok := assets[clip.AssetID]
 			if !ok {
-				continue
+				if clip.Title == nil || track.Kind != models.StudioTrackKindVideo {
+					continue
+				}
+				asset = &models.StudioAsset{ID: clip.ID, MediaKind: models.StudioMediaKindVideo}
 			}
 			volume := 1.0
 			if clip.Volume != nil {
@@ -162,8 +169,13 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 		Ducking: spec.Ducking, Loudness: spec.Loudness,
 	}
 	for _, r := range refs {
-		idx := len(plan.Inputs)
-		plan.Inputs = append(plan.Inputs, spec.LocalByKey[r.Asset.S3KeyOriginal])
+		// Title clips consume no ffmpeg input — their chain starts from a
+		// color= source (buildVideoClipChain); InputIndex -1 marks that.
+		idx := -1
+		if r.Clip.Title == nil {
+			idx = len(plan.Inputs)
+			plan.Inputs = append(plan.Inputs, spec.LocalByKey[r.Asset.S3KeyOriginal])
+		}
 		opacity := 1.0
 		if r.Clip.Opacity != nil {
 			opacity = *r.Clip.Opacity
@@ -180,6 +192,7 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 				Transform: r.Clip.Transform, Crop: r.Clip.Crop, BlendMode: r.Clip.BlendMode,
 				Effects: r.Clip.Effects, LutPaths: spec.LutPaths,
 				ClipKeyframes: r.Clip.Keyframes,
+				Title:         r.Clip.Title,
 			}
 			// Typed entrance transition (part 14): crossDissolve keeps the
 			// legacy linear-alpha FadeIn path (byte-stable v1/v2 graphs); every

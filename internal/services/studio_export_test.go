@@ -39,7 +39,7 @@ func TestBuildMultiTrackExportArgs_OverlayAndMix(t *testing.T) {
 		},
 		Width: 1920, Height: 1080, FPS: 30, Duration: 10,
 	}
-	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/font.ttf", "/out.mp4")
+	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/font.ttf", "/fontsdir", "/out.mp4")
 
 	// One -i per input.
 	inputs := 0
@@ -88,7 +88,7 @@ func TestBuildMultiTrackExportArgs_SingleVideoClipNoExtraAudio(t *testing.T) {
 		Audio:  []StudioExportAudioSeg{{InputIndex: 0, SourceIn: 2, SourceOut: 8, TimelineStart: 0, Volume: 1}},
 		Width:  1280, Height: 720, FPS: 24, Duration: 6,
 	}
-	args := buildMultiTrackExportArgs(plan, "libx264", "medium", "/font.ttf", "/out.mp4")
+	args := buildMultiTrackExportArgs(plan, "libx264", "medium", "/font.ttf", "/fontsdir", "/out.mp4")
 	fc := filterComplex(t, args)
 
 	if strings.Contains(fc, "amix") {
@@ -120,7 +120,7 @@ func TestBuildMultiTrackExportArgs_Effects(t *testing.T) {
 		},
 		Width: 1920, Height: 1080, FPS: 30, Duration: 10,
 	}
-	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/usr/share/fonts/x.ttf", "/out.mp4")
+	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/usr/share/fonts/x.ttf", "/fontsdir", "/out.mp4")
 	fc := filterComplex(t, args)
 
 	for _, want := range []string{
@@ -154,7 +154,7 @@ func TestBuildMultiTrackExportArgs_LegacyV1Regression(t *testing.T) {
 		},
 		Width: 1920, Height: 1080, FPS: 30, Duration: 6,
 	}
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/font.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/font.ttf", "/fontsdir", "/out.mp4"))
 
 	// Classic v1 chain still present.
 	if !strings.Contains(fc, "eq=brightness=0.100:contrast=1.200:saturation=0.800") {
@@ -194,7 +194,7 @@ func TestExportV2_TransformAndCrop(t *testing.T) {
 		}},
 		Width: 1920, Height: 1080, FPS: 30, Duration: 5,
 	}
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	wantAll(t, fc,
 		"crop=w=max(16\\,iw*0.800):h=max(16\\,ih*0.900):x=iw*0.050:y=ih*0.050",
 		"scale=960:540:force_original_aspect_ratio=decrease",
@@ -212,7 +212,7 @@ func TestExportV2_MultiplyBlend(t *testing.T) {
 		},
 		Width: 1920, Height: 1080, FPS: 30, Duration: 5,
 	}
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	// Alpha-correct blend path (part 12): RGB blend + layer-alpha composite, so
 	// export matches the shader's mix(backdrop, blendRGB(backdrop, src), alpha).
 	wantAll(t, fc,
@@ -241,7 +241,7 @@ func TestExportV2_Lumetri(t *testing.T) {
 		}},
 		Width: 1920, Height: 1080, FPS: 30, Duration: 5,
 	}
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	wantAll(t, fc,
 		"colorchannelmixer=rr=2.000:gg=2.000:bb=2.000",
 		"colorbalance=rm=0.200:gm=0.100:bm=-0.200",
@@ -261,7 +261,7 @@ func TestExportV2_Lut3dIntensity(t *testing.T) {
 			}},
 			Width: 1920, Height: 1080, FPS: 30, Duration: 5,
 		}
-		return filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+		return filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	}
 	// Full strength → plain inline lut3d, no split.
 	full := mk(1)
@@ -292,7 +292,7 @@ func TestExportV2_ChromaKey(t *testing.T) {
 		}},
 		Width: 1920, Height: 1080, FPS: 30, Duration: 5,
 	}
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	wantAll(t, fc,
 		"format=yuva420p,chromakey=color=0x00FF00:similarity=0.200:blend=0.100",
 		"despill=type=green:mix=0.600",
@@ -308,7 +308,7 @@ func TestExportV2_VolumeKeyframesAndPan(t *testing.T) {
 		}},
 		Width: 1920, Height: 1080, FPS: 30, Duration: 4,
 	}
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	wantAll(t, fc,
 		"volume='if(lt(t,0.000),0.500,if(lt(t,2.000),(0.500+(1.000)*(t-0.000)/(2.000)),if(lt(t,4.000),(1.500+(-0.500)*(t-2.000)/(2.000)),1.000)))':eval=frame",
 		"stereotools=balance_in=0.500",
@@ -321,7 +321,7 @@ func TestExportV2_QsinFades(t *testing.T) {
 		Audio:  []StudioExportAudioSeg{{InputIndex: 0, SourceIn: 0, SourceOut: 6, TimelineStart: 0, Volume: 1, FadeIn: 1.5, FadeOut: 1.5}},
 		Width:  1920, Height: 1080, FPS: 30, Duration: 6,
 	}
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	wantAll(t, fc, "afade=t=in:st=0:d=1.500:curve=qsin", "afade=t=out:st=4.500:d=1.500:curve=qsin")
 }
 
@@ -335,7 +335,7 @@ func TestExportV2_DuckingGraph(t *testing.T) {
 		Ducking: &StudioDucking{AmountDb: 9, AttackMs: 120, ReleaseMs: 400},
 		Width:   1920, Height: 1080, FPS: 30, Duration: 10,
 	}
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	wantAll(t, fc,
 		"[voice]asplit[voicemix][voicesc]",
 		"[bed][voicesc]sidechaincompress=threshold=0.02:ratio=10.000:attack=120.000:release=400.000:makeup=1[duckedbed]",
@@ -350,7 +350,7 @@ func TestExportV2_LoudnessPreset(t *testing.T) {
 		Loudness: "streaming",
 		Width:    1920, Height: 1080, FPS: 30, Duration: 4,
 	}
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	wantAll(t, fc, "[apm]", "[apm]loudnorm=I=-14:TP=-1.5:LRA=11[aout]")
 }
 
@@ -370,7 +370,7 @@ func TestBuildMultiTrackExportArgs_AudioOnly(t *testing.T) {
 		Audio:  []StudioExportAudioSeg{{InputIndex: 0, SourceIn: 0, SourceOut: 4, TimelineStart: 1, Volume: 0.8}},
 		Width:  1920, Height: 1080, FPS: 30, Duration: 5,
 	}
-	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/font.ttf", "/out.mp4")
+	args := buildMultiTrackExportArgs(plan, "h264_nvenc", "high", "/font.ttf", "/fontsdir", "/out.mp4")
 	if argIndex(args, "-c:v") != -1 {
 		t.Errorf("audio-only export should not set -c:v: %v", args)
 	}
@@ -402,7 +402,7 @@ func twoClipPlan(transitionType string) StudioExportPlan {
 }
 
 func TestExportV3_DipToBlack(t *testing.T) {
-	fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(models.StudioTransitionDipToBlack), "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(models.StudioTransitionDipToBlack), "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	wantAll(t, fc,
 		// The color quad: full canvas, alpha peaking at the overlap midpoint.
 		"color=c=black:s=1920x1080:r=30:d=4.000,format=yuva420p,fade=t=in:st=1.500:d=0.500:alpha=1,fade=t=out:st=2.000:d=0.500:alpha=1[dip1]",
@@ -417,12 +417,12 @@ func TestExportV3_DipToBlack(t *testing.T) {
 }
 
 func TestExportV3_DipToWhite(t *testing.T) {
-	fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(models.StudioTransitionDipToWhite), "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(models.StudioTransitionDipToWhite), "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	wantAll(t, fc, "color=c=white:s=1920x1080")
 }
 
 func TestExportV3_WipeLeft(t *testing.T) {
-	fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(models.StudioTransitionWipeLeft), "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(models.StudioTransitionWipeLeft), "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	wantAll(t, fc,
 		// Animated crop on B: revealed width grows with progress p.
 		"crop=w='max(2,iw*min(1,max(0,(t-1.500)/1.000)))':h=ih:x=0:y=0",
@@ -443,13 +443,13 @@ func TestExportV3_WipeDirections(t *testing.T) {
 		models.StudioTransitionWipeDown:  {"crop=w=iw:h='max(2,ih*min(1,max(0,(t-1.500)/1.000)))':x=0:y=ih-oh", "y='if(lt(t,2.500),H-h,(H-h)/2)'"},
 	}
 	for ty, wants := range cases {
-		fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(ty), "libx264", "medium", "/f.ttf", "/out.mp4"))
+		fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(ty), "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 		wantAll(t, fc, wants...)
 	}
 }
 
 func TestExportV3_PushLeft(t *testing.T) {
-	fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(models.StudioTransitionPushLeft), "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(models.StudioTransitionPushLeft), "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	wantAll(t, fc,
 		// B translates in from the left: offset −W·(1−p) toward home.
 		"overlay=x='(W-w)/2-W*(1-min(1,max(0,(t-1.500)/1.000)))':y=(H-h)/2:enable='between(t,1.500,4.000)'",
@@ -469,7 +469,7 @@ func TestExportV3_PushAndSlideDirections(t *testing.T) {
 		models.StudioTransitionSlideUp:   {b: "y='(H-h)/2-H*(1-min(1,max(0,(t-1.500)/1.000)))'", a: "overlay=x=(W-w)/2:y=(H-h)/2:enable='between(t,0.000,2.500)'"},
 	}
 	for ty, w := range cases {
-		fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(ty), "libx264", "medium", "/f.ttf", "/out.mp4"))
+		fc := filterComplex(t, buildMultiTrackExportArgs(twoClipPlan(ty), "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 		wantAll(t, fc, w.b, w.a)
 	}
 }
@@ -479,7 +479,7 @@ func TestExportV3_CrossDissolveStaysOnLegacyFadePath(t *testing.T) {
 	// the graph is byte-identical to the pre-part-14 dissolve.
 	plan := twoClipPlan("")
 	plan.Video[1].FadeIn = 1
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "medium", "/f.ttf", "/fontsdir", "/out.mp4"))
 	wantAll(t, fc, "fade=t=in:st=1.500:d=1.000:alpha=1")
 	for _, forbidden := range []string{"color=c=black:s=1920x1080,format=yuva420p,fade", "crop=w='max(2", "W*(1-min", "[dip"} {
 		if strings.Contains(fc, forbidden) {
@@ -508,7 +508,7 @@ func TestBuildMultiTrackExportArgs_KeyframedMotionAndOpacity(t *testing.T) {
 		},
 		Width: 1920, Height: 1080, FPS: 30, Duration: 5,
 	}
-	args := buildMultiTrackExportArgs(plan, "libx264", "", "/font.ttf", "/out.mp4")
+	args := buildMultiTrackExportArgs(plan, "libx264", "", "/font.ttf", "/fontsdir", "/out.mp4")
 	fc := filterComplex(t, args)
 
 	for _, want := range []string{
@@ -536,7 +536,7 @@ func TestBuildMultiTrackExportArgs_SendCmdInsertion(t *testing.T) {
 		Width:       1920, Height: 1080, FPS: 30, Duration: 4,
 		SendCmdPath: "/tmp/job/keyframes.cmd",
 	}
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "", "", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "", "", "/fontsdir", "/out.mp4"))
 	want := "color=c=black:s=1920x1080:r=30:d=4.000,format=yuv420p,sendcmd=f='/tmp/job/keyframes.cmd'[vbase]"
 	if !strings.Contains(fc, want) {
 		t.Errorf("missing sendcmd on vbase: %s", fc)
@@ -549,7 +549,7 @@ func TestBuildMultiTrackExportArgs_SendCmdInsertion(t *testing.T) {
 		Width:       1920, Height: 1080, FPS: 30, Duration: 4,
 		SendCmdPath: "/tmp/job/keyframes.cmd",
 	}
-	args := buildMultiTrackExportArgs(audioPlan, "libx264", "", "", "/out.mp4")
+	args := buildMultiTrackExportArgs(audioPlan, "libx264", "", "", "/fontsdir", "/out.mp4")
 	fc = filterComplex(t, args)
 	if !strings.Contains(fc, "[aout]asendcmd=f='/tmp/job/keyframes.cmd'[aoutsc]") {
 		t.Errorf("missing asendcmd fallback: %s", fc)
@@ -595,7 +595,7 @@ func TestBuildMultiTrackExportArgs_NoKeyframesByteStable(t *testing.T) {
 		}},
 	}
 	plan := StudioExportPlan{Inputs: []string{"/a.mp4"}, Video: []StudioExportVideoSeg{seg}, Width: 1920, Height: 1080, FPS: 30, Duration: 4}
-	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "", "", "/out.mp4"))
+	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "", "", "/fontsdir", "/out.mp4"))
 	for _, marker := range []string{"@op", "@lume", "@lumb", "@lumv", "@lumq", "@ck", "@dsp", "@pan"} {
 		if strings.Contains(fc, marker) {
 			t.Errorf("static plan must not emit instance names (%s): %s", marker, fc)

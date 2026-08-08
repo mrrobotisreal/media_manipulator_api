@@ -320,6 +320,12 @@ type Config struct {
 	// ContentStudioFontFile is the TTF used by ffmpeg drawtext for text/location
 	// overlays. drawtext needs a real font file on the GPU host.
 	ContentStudioFontFile string
+	// ContentStudioFontsDir is the directory of curated title-clip fonts
+	// (part 16), committed at assets/fonts/studio and mirrored by the UI's
+	// public/fonts/studio set — see docs/content-studio/design/04-title-fonts.md.
+	// Family names resolve to files ONLY through the fixed map in
+	// services/studio_fonts.go; user text never forms a path.
+	ContentStudioFontsDir string
 
 	// AI Document Scan — scanned printed documents AND handwritten field notes
 	// → searchable PDF + optional structured/transcribed DOCX. Printed pages use
@@ -671,6 +677,7 @@ func Load() *Config {
 		ContentStudioProxyHeight: getEnvInt("CONTENT_STUDIO_PROXY_HEIGHT", 720),
 		ContentStudioS3Prefix:    getEnv("CONTENT_STUDIO_S3_PREFIX", "studio"),
 		ContentStudioFontFile:    getEnv("CONTENT_STUDIO_FONT_FILE", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+		ContentStudioFontsDir:    getEnv("CONTENT_STUDIO_FONTS_DIR", "assets/fonts/studio"),
 
 		// AI Document Scan
 		DocumentScanEnabled:                    getEnvBool("DOCUMENT_SCAN_ENABLED", true),
