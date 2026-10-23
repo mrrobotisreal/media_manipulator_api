@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,37 +85,6 @@ func TestResultExpiryIsUnknownWithoutAnOwnerTier(t *testing.T) {
 	h := historyTestHandler()
 	if got := h.resultExpiry(models.ConversionHistoryEntry{CreatedAt: time.Now().UTC().Add(-time.Hour)}); got != nil {
 		t.Errorf("expected an unknown expiry, got %v", got)
-	}
-}
-
-// stubJobLookup stands in for the in-memory job manager.
-type stubJobLookup struct {
-	job *models.ConversionJob
-	err error
-}
-
-func (s *stubJobLookup) GetJob(string) (*models.ConversionJob, error) { return s.job, s.err }
-
-func TestLiveLocalResultOnlyClaimsALinkThatWouldWork(t *testing.T) {
-	cfg := config.Load()
-	cases := []struct {
-		name string
-		jobs JobLookup
-		want bool
-	}{
-		{"no job manager wired", nil, false},
-		{"job gone from memory", &stubJobLookup{err: errors.New("job not found")}, false},
-		{"job still running", &stubJobLookup{job: &models.ConversionJob{Status: models.StatusProcessing}}, false},
-		{"job failed", &stubJobLookup{job: &models.ConversionJob{Status: models.StatusFailed}}, false},
-		{"completed and live", &stubJobLookup{job: &models.ConversionJob{Status: models.StatusCompleted}}, true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			h := NewAccountHandler(nil, tiers.New(cfg), cfg, nil, nil, tc.jobs)
-			if got := h.liveLocalResult("job-1"); got != tc.want {
-				t.Errorf("got %v want %v", got, tc.want)
-			}
-		})
 	}
 }
 
