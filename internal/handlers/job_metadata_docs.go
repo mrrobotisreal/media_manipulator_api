@@ -366,3 +366,82 @@ func (h *ConversionHandler) resultDoc(ctx context.Context, job *models.Conversio
 	}
 	return v.(*metadata.MetadataDocument), true, nil
 }
+
+// ---- job JSON fields ----
+
+// withMetadataFields returns a copy of job decorated with metadataAvailable.
+// It only stats files; documents are never read here.
+func (h *ConversionHandler) withMetadataFields(job *models.ConversionJob) *models.ConversionJob {
+	if job == nil || h.cfg == nil || h.cfg.OutputDir == "" {
+		return job
+	}
+	cp := *job
+	avail := &models.MetadataAvailability{}
+	dir := h.jobOutputDir(job)
+	if st, err := os.Stat(filepath.Join(dir, originalMetadataFile)); err == nil && !st.IsDir() {
+		avail.Original = true
+	}
+	if job.Status == models.StatusCompleted && !isTranscribeMode(job) && specializedMode(job) == "" {
+		path := h.outputPath(job, dir)
+		switch resultKindByExt(path) {
+		case "", "archive":
+		default:
+			if st, err := os.Stat(path); err == nil && !st.IsDir() {
+				avail.Result = true
+			}
+		}
+	}
+	cp.MetadataAvailable = avail
+	return &cp
+}
+
+// stripRequested reports whether a job's options ask for metadata removal.
+func stripRequested(job *models.ConversionJob) bool {
+	if job == nil || job.Options == nil {
+		return false
+	}
+	if mode, _ := job.Options["metadataMode"].(string); strings.EqualFold(strings.TrimSpace(mode), "strip") {
+		return true
+	}
+	if rm, _ := job.Options["removeMetadata"].(bool); rm {
+		return models.GetFileType(job.OriginalFile.Type) == models.FileTypeImage
+	}
+	return false
+}
+
+// recordStripped computes strippedCount for a finished strip job and, as a side
+// effect, caches the result document so the first Compare is instant. Failure
+// is logged and leaves the count at 0; it never fails the job.
+func (h *ConversionHandler) recordStripped(job *models.ConversionJob) {
+	if !stripRequested(job) || h.cfg == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*jobProbeTimeout)
+	defer cancel()
+	orig, err := h.originalDoc(ctx, job)
+	if err != nil {
+		fmt.Printf("strippedCount: original metadata for job %s: %v\n", job.ID, err)
+		return
+	}
+	res, inspectable, err := h.resultDoc(ctx, job)
+	if err != nil || !inspectable {
+		fmt.Printf("strippedCount: result metadata for job %s unavailable: %v\n", job.ID, err)
+		return
+	}
+	n := countStripped(metadata.Diff(orig, res))
+	if err := h.jobManager.SetStrippedCount(job.ID, n); err != nil {
+		fmt.Printf("strippedCount: job %s: %v\n", job.ID, err)
+	}
+}
+
+// countStripped is len(removed) without the rows that change on every
+// conversion (file name/size/dates/type, image size).
+func countStripped(d metadata.DiffResult) int {
+	n := 0
+	for _, e := range d.Removed {
+		if !metadata.IsExpectedChange(e.ID) {
+			n++
+		}
+	}
+	return n
+}

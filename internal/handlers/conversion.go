@@ -260,7 +260,7 @@ func (h *ConversionHandler) GetJobStatus(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
 		return
 	}
-	c.JSON(http.StatusOK, job)
+	c.JSON(http.StatusOK, h.withMetadataFields(job))
 }
 
 // resolveCompletedResult is the shared lookup behind /download/:jobId and
@@ -466,6 +466,7 @@ func (h *ConversionHandler) processConversion(job *models.ConversionJob, inputPa
 		return
 	}
 	h.ensureResultMime(job, outputPath)
+	h.recordStripped(job)
 	if err := h.jobManager.UpdateJobResult(job.ID, "/api/download/"+job.ID); err != nil {
 		log.Printf("failed to update job %s result: %v", job.ID, err)
 		_ = h.jobManager.UpdateJobError(job.ID, "Failed to update job result")

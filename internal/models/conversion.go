@@ -47,6 +47,18 @@ type ConversionJob struct {
 	ResultMime      string              `json:"resultMime,omitempty"`
 	ExpiresAt       *time.Time          `json:"expiresAt,omitempty"`
 	TranscodeReport *VideoProbeResponse `json:"transcodeReport,omitempty"`
+	// MetadataAvailable tells the UI which metadata documents exist for the job.
+	// Filled at response time by a cheap stat; never stored.
+	MetadataAvailable *MetadataAvailability `json:"metadataAvailable,omitempty"`
+	// StrippedCount is the number of metadata entries a strip job removed (the
+	// expected File/Composite changes excluded). 0 and omitted when unknown.
+	StrippedCount int `json:"strippedCount,omitempty"`
+}
+
+// MetadataAvailability reports which metadata documents can be requested.
+type MetadataAvailability struct {
+	Original bool `json:"original"`
+	Result   bool `json:"result"`
 }
 
 type OriginalFileInfo struct {
