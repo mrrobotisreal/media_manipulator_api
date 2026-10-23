@@ -250,6 +250,10 @@ type Config struct {
 	// StripeAPIVersion optionally overrides the API version the SDK sends
 	// (default: the stripe-go constant). Empty = use the SDK's.
 	StripeAPIVersion string
+	// StripeAutomaticTax adds Stripe Tax on top of the price at Checkout
+	// (STRIPE_AUTOMATIC_TAX, default true). Turn it off if Stripe rejects sessions
+	// because Stripe Tax is not activated in the Dashboard yet.
+	StripeAutomaticTax bool
 	// BillingGraceDays is how long Premium survives a failed payment.
 	BillingGraceDays int
 	// BillingPublicBaseURL prefixes Checkout success/cancel and Portal return URLs.
@@ -651,6 +655,7 @@ func Load() *Config {
 		StripePricePremiumMonthly: strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_MONTHLY", "")),
 		StripePricePremiumYearly:  strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_YEARLY", "")),
 		StripeAPIVersion:          strings.TrimSpace(getEnv("STRIPE_API_VERSION", "")),
+		StripeAutomaticTax:        getEnvBool("STRIPE_AUTOMATIC_TAX", true),
 		BillingGraceDays:          getEnvInt("BILLING_GRACE_DAYS", 7),
 		BillingPublicBaseURL:      strings.TrimRight(strings.TrimSpace(getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com")), "/"),
 		BillingPriceMonthlyUSD:    getEnvInt("BILLING_PRICE_MONTHLY_USD", 7),
