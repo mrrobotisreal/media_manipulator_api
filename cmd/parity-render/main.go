@@ -140,9 +140,13 @@ func renderVariant(id, leg string, p goldenProject, g *goldenFile, fixturesDir, 
 	}
 
 	// The same pipeline the export handler runs: sanitize → refs → plan.
+	kinds := make(map[string]models.StudioMediaKind, len(assetByID))
+	for id, a := range assetByID {
+		kinds[id] = a.MediaKind
+	}
 	project := &models.StudioProject{
 		FPS: p.FPS, Width: p.Width, Height: p.Height,
-		Tracks: models.SanitizeTracks(p.Tracks), Audio: p.Audio,
+		Tracks: models.SanitizeTracksForAssets(models.SanitizeTracks(p.Tracks), kinds), Audio: p.Audio,
 	}
 	refs, duration, ok := services.CollectExportRefs(project, assetByID)
 	if !ok {

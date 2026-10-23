@@ -163,3 +163,62 @@ func TestStudioClipSpeedReverseFreezeNeverReadByCompiler(t *testing.T) {
 		t.Errorf("speed/reverse/freeze changed the image compile:\n%s\n%s", a, b)
 	}
 }
+
+// A 7200 s hold sanitizes (no upper bound) and compiles end to end.
+func TestImageHold7200SanitizesAndCompiles(t *testing.T) {
+	tracks := models.SanitizeTracks([]models.StudioTrack{{ID: "v", Kind: models.StudioTrackKindVideo, Index: 0, Clips: []models.StudioClip{
+		{ID: "c", AssetID: "i", SourceIn: 0, SourceOut: 7200, TimelineStart: 0},
+	}}})
+	assets := map[string]*models.StudioAsset{"i": {ID: "i", S3KeyOriginal: "k.png", MediaKind: models.StudioMediaKindImage}}
+	refs, dur, ok := CollectExportRefs(&models.StudioProject{Tracks: tracks}, assets)
+	if !ok || dur != 7200 {
+		t.Fatalf("refs ok=%v dur=%v", ok, dur)
+	}
+	plan := AssembleExportPlan(refs, StudioPlanSpec{Width: 1920, Height: 1080, FPS: 30, Duration: dur, LocalByKey: map[string]string{"k.png": "/k.png"}})
+	args := strings.Join(buildMultiTrackExportArgs(plan, "libx264", "", "", "/fontsdir", "/o.mp4"), " ")
+	if !strings.Contains(args, "-loop 1 -framerate 30 -t 7200.033 -i /k.png") {
+		t.Errorf("args: %s", args)
+	}
+}
+
+// Image + music: the captions handler builds an audio-only plan from refs
+// that have audio (handlers/studio.go, runCaptions). Mirror that selection and
+// assert the image never becomes an audio-mix input, and that the audio
+// section equals the music-only project's.
+func TestAudioMixSkipsImageInput(t *testing.T) {
+	assets := map[string]*models.StudioAsset{
+		"i": {ID: "i", S3KeyOriginal: "k.png", MediaKind: models.StudioMediaKindImage},
+		"m": {ID: "m", S3KeyOriginal: "m.mp3", MediaKind: models.StudioMediaKindAudio, HasAudio: true},
+	}
+	musicTrack := models.StudioTrack{ID: "a", Kind: models.StudioTrackKindAudio, Index: 1, Clips: []models.StudioClip{{ID: "c2", AssetID: "m", SourceOut: 6}}}
+	imgTrack := models.StudioTrack{ID: "v", Kind: models.StudioTrackKindVideo, Index: 0, Clips: []models.StudioClip{{ID: "c1", AssetID: "i", SourceOut: 6}}}
+	mix := func(tracks ...models.StudioTrack) string {
+		refs, dur, ok := CollectExportRefs(&models.StudioProject{Tracks: tracks}, assets)
+		if !ok {
+			t.Fatal("no refs")
+		}
+		plan := StudioExportPlan{Duration: dur}
+		for _, r := range refs {
+			if r.TrackMuted || !r.Asset.HasAudio {
+				continue
+			}
+			plan.Inputs = append(plan.Inputs, ExportInput{Path: "/" + r.Asset.S3KeyOriginal})
+			plan.Audio = append(plan.Audio, StudioExportAudioSeg{
+				InputIndex: len(plan.Inputs) - 1, SourceIn: r.Clip.SourceIn, SourceOut: r.Clip.SourceOut,
+				Volume: 1, SegIndex: len(plan.Audio),
+			})
+		}
+		args, ok := buildAudioMixArgs(plan, "/mix.wav")
+		if !ok {
+			t.Fatal("expected an audio mix")
+		}
+		return strings.Join(args, " ")
+	}
+	with := mix(imgTrack, musicTrack)
+	if strings.Contains(with, "k.png") || strings.Contains(with, "-loop") {
+		t.Errorf("image leaked into audio mix: %s", with)
+	}
+	if with != mix(musicTrack) {
+		t.Errorf("audio mix changed by the image clip:\n%s\n%s", with, mix(musicTrack))
+	}
+}

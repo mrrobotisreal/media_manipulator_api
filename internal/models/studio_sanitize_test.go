@@ -567,3 +567,37 @@ func TestSanitizeMarkers(t *testing.T) {
 		t.Errorf("nil markers stay nil (omitempty)")
 	}
 }
+
+func TestSanitizeTracksForAssets_ClearsImageSpeedReverseFreeze(t *testing.T) {
+	sp := 2.0
+	tracks := []StudioTrack{{ID: "v", Kind: StudioTrackKindVideo, Clips: []StudioClip{
+		{ID: "img", AssetID: "i", SourceOut: 5, Speed: &sp, Reverse: true},
+		{ID: "imgf", AssetID: "i", SourceOut: 5, Freeze: &StudioFreeze{SourceTime: 1}},
+		{ID: "vid", AssetID: "m", SourceOut: 5, Speed: &sp, Reverse: true},
+	}}}
+	kinds := map[string]StudioMediaKind{"i": StudioMediaKindImage, "m": StudioMediaKindVideo}
+	got := SanitizeTracksForAssets(tracks, kinds)
+	c := got[0].Clips
+	if c[0].Speed != nil || c[0].Reverse || c[1].Freeze != nil {
+		t.Errorf("image clips not cleared: %+v %+v", c[0], c[1])
+	}
+	if c[2].Speed == nil || *c[2].Speed != 2 || !c[2].Reverse {
+		t.Errorf("video clip must be untouched: %+v", c[2])
+	}
+	if tracks[0].Clips[0].Speed == nil {
+		t.Errorf("input mutated")
+	}
+	again := SanitizeTracksForAssets(got, kinds)
+	if again[0].Clips[0].Speed != nil || again[0].Clips[2].Speed == nil {
+		t.Errorf("not idempotent")
+	}
+}
+
+func TestSanitizeTracks_ImageHoldUnbounded7200(t *testing.T) {
+	got := SanitizeTracks([]StudioTrack{{ID: "v", Kind: StudioTrackKindVideo, Clips: []StudioClip{
+		{ID: "img", AssetID: "i", SourceIn: 0, SourceOut: 7200},
+	}}})
+	if got[0].Clips[0].SourceOut != 7200 {
+		t.Errorf("sourceOut clamped: %v", got[0].Clips[0].SourceOut)
+	}
+}

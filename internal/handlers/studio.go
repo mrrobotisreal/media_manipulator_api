@@ -269,6 +269,17 @@ func (h *StudioHandler) SaveProject(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
+	// Image clips carry no speed/reverse/freeze (Go is authoritative; the UI
+	// mirrors it). A failed asset lookup must not block the save.
+	if assets, aerr := h.repo.ListAssets(ctx, strings.TrimSpace(c.Param("id"))); aerr != nil {
+		log.Printf("studio: save project: list assets failed (image sanitize skipped): %v", aerr)
+	} else {
+		byID := make(map[string]*models.StudioAsset, len(assets))
+		for _, a := range assets {
+			byID[a.ID] = a
+		}
+		req.Tracks = models.SanitizeTracksForAssets(req.Tracks, studioAssetKinds(byID))
+	}
 	project, err := h.repo.SaveProject(ctx, strings.TrimSpace(c.Param("id")), req)
 	if err != nil {
 		if err == services.ErrStudioNotFound {
@@ -299,6 +310,17 @@ func studioRevisionConflictBody(e *services.StudioRevisionConflictError) gin.H {
 		"currentRevision": e.CurrentRevision,
 		"updatedAt":       e.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
+}
+
+// studioAssetKinds maps asset id -> media kind for SanitizeTracksForAssets.
+func studioAssetKinds(assets map[string]*models.StudioAsset) map[string]models.StudioMediaKind {
+	out := make(map[string]models.StudioMediaKind, len(assets))
+	for id, a := range assets {
+		if a != nil {
+			out[id] = a.MediaKind
+		}
+	}
+	return out
 }
 
 func (h *StudioHandler) ListAssets(c *gin.Context) {
@@ -1050,7 +1072,7 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	}
 	// Sanitize the (possibly pre-v2 or hand-edited) EDL before building the
 	// render plan so the export compiler can trust every value.
-	project.Tracks = models.SanitizeTracks(project.Tracks)
+	project.Tracks = models.SanitizeTracksForAssets(models.SanitizeTracks(project.Tracks), studioAssetKinds(assetByID))
 	refs, duration, ok := services.CollectExportRefs(project, assetByID)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no clip to export"})
@@ -1242,7 +1264,7 @@ func (h *StudioHandler) GenerateCaptions(c *gin.Context) {
 	for _, a := range assets {
 		assetByID[a.ID] = a
 	}
-	project.Tracks = models.SanitizeTracks(project.Tracks)
+	project.Tracks = models.SanitizeTracksForAssets(models.SanitizeTracks(project.Tracks), studioAssetKinds(assetByID))
 	refs, duration, ok := services.CollectExportRefs(project, assetByID)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no media to transcribe"})

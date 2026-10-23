@@ -160,6 +160,30 @@ func SanitizeTracks(tracks []StudioTrack) []StudioTrack {
 	return out
 }
 
+// SanitizeTracksForAssets is the asset-aware companion to SanitizeTracks
+// (which has no asset knowledge). A still image has no time axis to remap, so
+// clips whose asset is an image lose speed/reverse/freeze. Idempotent; returns
+// a copy and never mutates the input. Unknown assets are left untouched. The
+// hold length is unbounded by design: only sourceIn >= 0 and
+// sourceOut >= sourceIn are enforced (SanitizeTracks).
+func SanitizeTracksForAssets(tracks []StudioTrack, assetKinds map[string]StudioMediaKind) []StudioTrack {
+	out := make([]StudioTrack, len(tracks))
+	for i, t := range tracks {
+		clips := make([]StudioClip, len(t.Clips))
+		for j, c := range t.Clips {
+			if assetKinds[c.AssetID] == StudioMediaKindImage && c.AssetID != "" {
+				c.Speed = nil
+				c.Reverse = false
+				c.Freeze = nil
+			}
+			clips[j] = c
+		}
+		t.Clips = clips
+		out[i] = t
+	}
+	return out
+}
+
 func sanitizeClip(c StudioClip) StudioClip {
 	if c.SourceIn < 0 {
 		c.SourceIn = 0
