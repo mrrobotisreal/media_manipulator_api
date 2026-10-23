@@ -449,6 +449,39 @@ Migration `20261023001_add_operator_owner_tier` widens the
 anyone else's (history + retention); apply it with the usual
 `go run migrate.go up` before setting the variable.
 
+#### Tier promises enforced (MM18)
+
+What `/pricing` sells is what the server delivers:
+
+- **Export has its own daily allowance.** `export` (a Content Studio render) is a
+  **separate counter** from `ops`; an export does not consume ops and ops do not
+  consume exports. Each tier's allowance is tunable and defaults to that tier's
+  `*_OPS_PER_DAY`, so default behaviour is unchanged. `GET /api/tiers` exposes it
+  as `exportsPerDay`. Operator stays uncounted.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `TIER_ANON_EXPORTS_PER_DAY` | `TIER_ANON_OPS_PER_DAY` (5) | Studio exports per UTC day, anonymous. |
+| `TIER_FREE_EXPORTS_PER_DAY` | `TIER_FREE_OPS_PER_DAY` (30) | Same, free accounts. |
+| `TIER_PREMIUM_EXPORTS_PER_DAY` | `TIER_PREMIUM_OPS_PER_DAY` (300) | Same, Premium. |
+| `GPU_SCHED_AGING_MINUTES` | `10` | A GPU-queue waiter older than this is promoted ahead of every un-aged waiter, so Premium cannot starve free jobs. `0` disables aging (strict precedence). |
+
+- **Output height.** A request whose rendered height exceeds the tier's
+  `MaxOutputHeight` (1080 anonymous / 1440 free / 2160 Premium; operator uncapped
+  to the 4320 deployment ceiling) is refused with HTTP 403:
+  `{"error":"output_height_limited","message":...,"limit":<px>,"requested":<px>,"upgradePath":"signup"|"premium"}`
+  (`upgradePath` is omitted for Premium, which has nothing higher to buy).
+  Enforced on Studio export (read from the **persisted** project height, checked
+  before the export allowance is spent, so a refused export costs nothing) and on
+  conversion requests that carry an explicit `height` (`POST /api/upload`,
+  `POST /api/video-upload/complete`). Project create/save still clamp to 4320 and
+  never refuse: a free user may author a 4K project and is told at export.
+- **Batch is removed.** There is no batch feature; `batchEnabled` is gone from
+  `/api/tiers`.
+- **GPU aging.** Premium still goes first, but a waiter that has waited
+  `GPU_SCHED_AGING_MINUTES` is promoted above Premium (oldest aged waiter first).
+  Aging is per waiter and logged once (`gpu-scheduler: waiter ... aged`).
+
 #### Billing add-on (Stripe, MM17) - ships dark
 
 Billing is **off** until `BILLING_ENABLED=true` AND all four values below are set

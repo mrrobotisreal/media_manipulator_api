@@ -88,7 +88,8 @@ func (q QuotaConfig) resolveSubject(c *gin.Context, user *models.User) quotaSubj
 	return quotaSubject{models.UsageSubjectIP, base64.RawURLEncoding.EncodeToString(h.Sum(nil))[:32]}
 }
 
-// limitFor returns the daily allowance for a metric under a tier. bytes_in is
+// limitFor returns the daily allowance for a metric under a tier. ops, ai_ops
+// and export are three independent counters. bytes_in is
 // not a counted metric — it is enforced by MaxBytesReader at the handler — so
 // it reports no limit here.
 func limitFor(l tiers.Limits, metric string) int64 {

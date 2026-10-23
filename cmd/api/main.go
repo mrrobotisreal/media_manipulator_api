@@ -591,7 +591,9 @@ var quotaRoutes = []quotaRoute{
 		},
 	},
 
-	// `export` — a Content Studio render, counted against the ops allowance.
+	// `export` — a Content Studio render. Its own daily allowance
+	// (TIER_*_EXPORTS_PER_DAY, defaulting to the ops numbers), counted
+	// separately from `ops`: an export does not consume ops.
 	{
 		metric: models.MetricExport,
 		matches: func(path string) bool {
