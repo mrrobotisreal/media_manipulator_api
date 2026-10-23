@@ -514,53 +514,81 @@ func (h *StudioHandler) CompleteAsset(c *gin.Context) {
 	}
 
 	fileType, _ := h.inspector.DetectFile(ctx, uploadPath, contentType)
-	var kind models.StudioMediaKind
-	switch fileType {
-	case models.FileTypeVideo:
-		kind = models.StudioMediaKindVideo
-	case models.FileTypeAudio:
-		kind = models.StudioMediaKindAudio
-	default:
+	kind, supported := studioKindForFileType(fileType)
+	if !supported {
 		h.jobManager.UpdateJobError(job.ID, "Unsupported media type")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Uploaded object is not a supported video or audio file"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Uploaded object is not a supported video, audio, or image file"})
 		return
 	}
 
-	probe, probeErr := services.ProbeVideoReport(ctx, uploadPath)
-	if probeErr != nil || probe == nil {
-		log.Printf("studio: probe failed for %s: %v", key, probeErr)
-		probe = &models.VideoProbeResponse{}
-	}
-
-	asset := &models.StudioAsset{
-		ProjectID:        projectID,
-		OriginalFileName: fileName,
-		S3KeyOriginal:    key,
-		MediaKind:        kind,
-		DurationSeconds:  probe.DurationSeconds,
-		VideoCodec:       probe.VideoCodec,
-		AudioCodec:       probe.AudioCodec,
-		HasAudio:         probe.HasAudio,
-		ProbeJSON:        probe,
-	}
-	if probe.Width > 0 {
-		w := probe.Width
-		asset.Width = &w
-	}
-	if probe.Height > 0 {
-		hh := probe.Height
-		asset.Height = &hh
-	}
-	if probe.FPS > 0 {
-		f := probe.FPS
-		asset.FPS = &f
-	}
-	if sr, ch := studioAudioParams(probe); sr > 0 || ch > 0 {
-		if sr > 0 {
-			asset.SampleRate = &sr
+	var asset *models.StudioAsset
+	var totalSeconds float64
+	if kind == models.StudioMediaKindImage {
+		meta, probeErr := h.inspector.ProbeFile(ctx, uploadPath, models.FileTypeImage)
+		var iw, ih int
+		if probeErr == nil && meta != nil {
+			iw, ih, _ = studioImageDimensions(meta.Details)
 		}
-		if ch > 0 {
-			asset.Channels = &ch
+		if probeErr != nil || iw <= 0 || ih <= 0 {
+			log.Printf("studio: image probe failed for %s: %v", key, probeErr)
+			h.jobManager.UpdateJobError(job.ID, "Uploaded image could not be read")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Uploaded image could not be read"})
+			return
+		}
+		if int64(iw)*int64(ih) > studioMaxImagePixels {
+			h.jobManager.UpdateJobError(job.ID, "Image dimensions are too large")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Image dimensions are too large"})
+			return
+		}
+		asset = &models.StudioAsset{
+			ProjectID:        projectID,
+			OriginalFileName: fileName,
+			S3KeyOriginal:    key,
+			MediaKind:        kind,
+			DurationSeconds:  0,
+			HasAudio:         false,
+			ProbeJSON:        meta.Details,
+			Width:            &iw,
+			Height:           &ih,
+		}
+	} else {
+		probe, probeErr := services.ProbeVideoReport(ctx, uploadPath)
+		if probeErr != nil || probe == nil {
+			log.Printf("studio: probe failed for %s: %v", key, probeErr)
+			probe = &models.VideoProbeResponse{}
+		}
+		totalSeconds = probe.DurationSeconds
+
+		asset = &models.StudioAsset{
+			ProjectID:        projectID,
+			OriginalFileName: fileName,
+			S3KeyOriginal:    key,
+			MediaKind:        kind,
+			DurationSeconds:  probe.DurationSeconds,
+			VideoCodec:       probe.VideoCodec,
+			AudioCodec:       probe.AudioCodec,
+			HasAudio:         probe.HasAudio,
+			ProbeJSON:        probe,
+		}
+		if probe.Width > 0 {
+			w := probe.Width
+			asset.Width = &w
+		}
+		if probe.Height > 0 {
+			hh := probe.Height
+			asset.Height = &hh
+		}
+		if probe.FPS > 0 {
+			f := probe.FPS
+			asset.FPS = &f
+		}
+		if sr, ch := studioAudioParams(probe); sr > 0 || ch > 0 {
+			if sr > 0 {
+				asset.SampleRate = &sr
+			}
+			if ch > 0 {
+				asset.Channels = &ch
+			}
 		}
 	}
 
@@ -572,7 +600,7 @@ func (h *StudioHandler) CompleteAsset(c *gin.Context) {
 		return
 	}
 
-	go h.runIngestJob(job.ID, created, key, kind, uploadPath, probe.DurationSeconds)
+	go h.runIngestJob(job.ID, created, key, kind, uploadPath, totalSeconds)
 
 	c.JSON(http.StatusOK, models.StudioAssetCompleteResponse{Asset: created, JobID: job.ID})
 }
