@@ -106,6 +106,12 @@ type JobManager struct {
 	emitMu     sync.RWMutex
 	emitter    JobAnalytics
 	emitOwners map[string]jobEmitContext
+
+	// ownerByJob is the durable-in-memory owner used for result authorization.
+	// Unlike emitOwners it is NOT consumed at the terminal event; it lives
+	// exactly as long as the job in jm.jobs (swept by CleanupOldJobs). Guarded
+	// by emitMu.
+	ownerByJob map[string]JobOwner
 }
 
 func NewJobManager() *JobManager {
@@ -116,6 +122,7 @@ func NewJobManager() *JobManager {
 		recordCh:    make(chan telemetry.JobUpsert, 256),
 		recFlush:    make(chan chan struct{}, 4),
 		emitOwners:  make(map[string]jobEmitContext),
+		ownerByJob:  make(map[string]JobOwner),
 	}
 	go jm.handleProgressUpdates()
 	return jm
@@ -174,6 +181,32 @@ func (jm *JobManager) rememberJobOwner(jobID string, owner JobOwner, facts JobFa
 	}
 	jm.emitOwners[jobID] = jobEmitContext{owner: owner, facts: facts}
 	jm.emitMu.Unlock()
+	jm.SetJobOwner(jobID, owner)
+}
+
+// SetJobOwner remembers who owns a job for later result authorization.
+func (jm *JobManager) SetJobOwner(jobID string, owner JobOwner) {
+	if jm == nil || jobID == "" {
+		return
+	}
+	jm.emitMu.Lock()
+	if jm.ownerByJob == nil {
+		jm.ownerByJob = make(map[string]JobOwner)
+	}
+	jm.ownerByJob[jobID] = owner
+	jm.emitMu.Unlock()
+}
+
+// JobOwnerOf returns the recorded owner of a job; ok is false when none was
+// recorded (job created before the tier system, or with it switched off).
+func (jm *JobManager) JobOwnerOf(jobID string) (JobOwner, bool) {
+	if jm == nil || jobID == "" {
+		return JobOwner{}, false
+	}
+	jm.emitMu.RLock()
+	defer jm.emitMu.RUnlock()
+	o, ok := jm.ownerByJob[jobID]
+	return o, ok
 }
 
 // takeJobOwner reads and removes a job's remembered identity. Removing on read is
@@ -715,6 +748,11 @@ func (jm *JobManager) CleanupOldJobs(maxAge time.Duration) {
 	for jobID := range jm.emitOwners {
 		if _, ok := live[jobID]; !ok {
 			delete(jm.emitOwners, jobID)
+		}
+	}
+	for jobID := range jm.ownerByJob {
+		if _, ok := live[jobID]; !ok {
+			delete(jm.ownerByJob, jobID)
 		}
 	}
 	jm.emitMu.Unlock()

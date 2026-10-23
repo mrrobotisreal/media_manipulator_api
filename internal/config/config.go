@@ -165,6 +165,11 @@ type Config struct {
 	// friction, and "convert one file" is the job that brings them.
 	TierQuotaEnabled bool
 
+	// ResultOwnershipEnforce (RESULT_OWNERSHIP_ENFORCE, default true) makes
+	// result/download routes 404 for callers who do not own the job. False logs
+	// would-be denials and allows them (rollout mode).
+	ResultOwnershipEnforce bool
+
 	TierAnonOpsPerDay       int
 	TierAnonAIOpsPerDay     int
 	TierAnonMaxFileBytes    int64
@@ -551,6 +556,8 @@ func Load() *Config {
 		// transcode ladder and the Studio project cap all fall back to the
 		// pre-tier global-config behaviour exactly.
 		TierQuotaEnabled: getEnvBool("TIER_QUOTA_ENABLED", true),
+
+		ResultOwnershipEnforce: getEnvBool("RESULT_OWNERSHIP_ENFORCE", true),
 
 		TierAnonOpsPerDay:             getEnvInt("TIER_ANON_OPS_PER_DAY", 5),
 		TierAnonAIOpsPerDay:           getEnvInt("TIER_ANON_AI_OPS_PER_DAY", 1),
