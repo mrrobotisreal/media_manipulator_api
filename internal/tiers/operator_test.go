@@ -131,3 +131,26 @@ func TestAllExcludesOperator(t *testing.T) {
 		}
 	}
 }
+
+// Eligibility is the explanation behind IsOperator, for the account page.
+func TestEligibility(t *testing.T) {
+	r := operatorRegistry(t)
+	cases := []struct {
+		email    string
+		verified bool
+		want     OperatorEligibility
+	}{
+		{"owner@example.com", true, OperatorEligibilityGranted},
+		{"OWNER@example.com", false, OperatorEligibilityUnverified},
+		{"stranger@example.com", true, OperatorEligibilityNone},
+		{"", true, OperatorEligibilityNone},
+	}
+	for _, tc := range cases {
+		if got := r.Eligibility(tc.email, tc.verified); got != tc.want {
+			t.Errorf("Eligibility(%q, %v) = %q, want %q", tc.email, tc.verified, got, tc.want)
+		}
+	}
+	if got := New(config.Load()).Eligibility("owner@example.com", true); got != OperatorEligibilityNone {
+		t.Errorf("empty allowlist: got %q, want none", got)
+	}
+}

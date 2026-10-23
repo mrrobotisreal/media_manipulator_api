@@ -188,6 +188,45 @@ func (r *Registry) IsOperator(email string, emailVerified bool) bool {
 	return ok
 }
 
+// OperatorEligibility explains, for ONE identity, where it stands with the
+// allowlist. It exists so the account page can say "you are on the list but
+// your email is not verified" instead of silently showing the free tier — the
+// failure mode that is otherwise indistinguishable from "the variable was not
+// set". It is safe to return to the caller: it only ever describes the
+// caller's own verified-token email, never the list.
+type OperatorEligibility string
+
+const (
+	// OperatorEligibilityNone: not on the allowlist (or no allowlist).
+	OperatorEligibilityNone OperatorEligibility = "none"
+	// OperatorEligibilityUnverified: on the allowlist, but the token's
+	// email_verified claim is false. Verifying the address is all that is
+	// missing.
+	OperatorEligibilityUnverified OperatorEligibility = "unverified"
+	// OperatorEligibilityGranted: on the allowlist and verified — the request
+	// resolved to TierOperator.
+	OperatorEligibilityGranted OperatorEligibility = "granted"
+)
+
+// Eligibility is IsOperator with the reason attached. Same inputs, same
+// trust requirements (a verified token's claims, never a request header).
+func (r *Registry) Eligibility(email string, emailVerified bool) OperatorEligibility {
+	if r == nil || len(r.operators) == 0 {
+		return OperatorEligibilityNone
+	}
+	e := strings.ToLower(strings.TrimSpace(email))
+	if e == "" {
+		return OperatorEligibilityNone
+	}
+	if _, listed := r.operators[e]; !listed {
+		return OperatorEligibilityNone
+	}
+	if !emailVerified {
+		return OperatorEligibilityUnverified
+	}
+	return OperatorEligibilityGranted
+}
+
 // OperatorCount is how many addresses are on the allowlist, for the startup
 // log. The addresses themselves are never logged.
 func (r *Registry) OperatorCount() int {

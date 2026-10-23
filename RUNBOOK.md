@@ -422,7 +422,27 @@ guard still applies** — it is DoS protection, not an allowance.
 
 Sign-in note: Google sign-in always yields a verified email. An email/password
 account must complete Firebase email verification before the allowlist honours
-it — until then it is an ordinary free account.
+it — until then it is an ordinary free account. **This is the usual reason "I
+set the variable and nothing changed"**: the account page shows an "Operator
+access is waiting on email verification" notice with a *Send verification
+email* button when the signed-in address is listed but unverified; after
+clicking the link, *I've verified* (or a sign-out/in) picks up the new claim.
+
+`/api/account/me` and `/usage` return `emailVerified` (the token's own claim)
+and `operatorEligibility` (`none` | `unverified` | `granted`) so the state is
+visible from a browser's network tab too.
+
+To check every listed address server-side without touching the UI:
+
+```bash
+go run ./cmd/operator-check            # reads OPERATOR_EMAILS from .env
+go run ./cmd/operator-check -emails a@b.c,d@e.f
+```
+
+It prints, per address, whether a Firebase account exists, which providers it
+uses and whether it is verified. It needs a service account with the
+**Firebase Authentication Admin** role (`GOOGLE_APPLICATION_CREDENTIALS`); a
+key scoped only to token verification answers `INSUFFICIENT_PERMISSION`.
 
 Migration `20261023001_add_operator_owner_tier` widens the
 `mm_conversion_jobs.owner_tier` CHECK so an operator's jobs are recorded like

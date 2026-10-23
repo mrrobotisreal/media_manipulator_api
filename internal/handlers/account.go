@@ -79,6 +79,13 @@ type usageResponse struct {
 	ResetsAt  string           `json:"resetsAt"`
 	User      *models.User     `json:"user,omitempty"`
 	Anonymous bool             `json:"anonymous"`
+	// EmailVerified is the verified token's own claim (not the mm_users copy,
+	// which only updates on /sync). The account page uses it with
+	// OperatorEligibility to explain why an allowlisted address is still free.
+	EmailVerified bool `json:"emailVerified"`
+	// OperatorEligibility is "none" | "unverified" | "granted" for the
+	// caller's own address. Omitted for anonymous callers.
+	OperatorEligibility string `json:"operatorEligibility,omitempty"`
 }
 
 func nextUTCMidnight(now time.Time) time.Time {
@@ -145,14 +152,19 @@ func (h *AccountHandler) buildUsageResponse(c *gin.Context, user *models.User, s
 		}
 	}
 
-	return usageResponse{
-		Tier:      string(tier),
-		Limits:    h.registry.For(tier),
-		Usage:     usage,
-		ResetsAt:  nextUTCMidnight(now).Format(time.RFC3339),
-		User:      user,
-		Anonymous: !signedIn,
+	out := usageResponse{
+		Tier:          string(tier),
+		Limits:        h.registry.For(tier),
+		Usage:         usage,
+		ResetsAt:      nextUTCMidnight(now).Format(time.RFC3339),
+		User:          user,
+		Anonymous:     !signedIn,
+		EmailVerified: verified,
 	}
+	if signedIn {
+		out.OperatorEligibility = string(h.registry.Eligibility(email, verified))
+	}
+	return out
 }
 
 // Sync upserts mm_users from the verified token. Called by the UI immediately
