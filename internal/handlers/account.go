@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -328,6 +330,29 @@ type historyEntry struct {
 	// public origin from a client-supplied Host header; the client resolves it
 	// against the API base it already knows.
 	DownloadPath string `json:"downloadPath,omitempty"`
+	// MetadataAvailable says which cached metadata documents (MM07/MM08) still exist
+	// for the job. Additive and omitted when neither exists. It stays true after the
+	// media itself has expired: the routes read the cached JSON, not the file.
+	MetadataAvailable *models.MetadataAvailability `json:"metadataAvailable,omitempty"`
+}
+
+// historyMetadataAvailable stats outputs/<jobId>/metadata.json and
+// metadata.result.json; it never reads a document. A job directory the sweeper
+// already removed, or an unsafe job id, yields nil.
+func historyMetadataAvailable(outputDir, jobID string) *models.MetadataAvailability {
+	if outputDir == "" || jobID == "" || jobID != filepath.Base(jobID) || jobID == "." || jobID == ".." {
+		return nil
+	}
+	dir := filepath.Join(outputDir, jobID)
+	has := func(name string) bool {
+		st, err := os.Stat(filepath.Join(dir, name))
+		return err == nil && !st.IsDir()
+	}
+	avail := &models.MetadataAvailability{Original: has(originalMetadataFile), Result: has(resultMetadataFile)}
+	if !avail.Original && !avail.Result {
+		return nil
+	}
+	return avail
 }
 
 type historyResponse struct {
@@ -482,6 +507,9 @@ func (h *AccountHandler) History(c *gin.Context) {
 			} else if h.liveLocalResult(r.JobID) {
 				out.DownloadPath = "/download/" + r.JobID
 			}
+		}
+		if h.cfg != nil {
+			out.MetadataAvailable = historyMetadataAvailable(h.cfg.OutputDir, r.JobID)
 		}
 		entries = append(entries, out)
 	}
