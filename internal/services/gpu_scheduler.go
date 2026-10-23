@@ -69,6 +69,12 @@ type GPUScheduler struct {
 
 	// probe is injectable for tests; production callers use ProbeGPUSnapshots.
 	probe func(context.Context) ([]GPUSnapshot, error)
+
+	// now is the scheduler's clock, injectable so aging tests need no sleeps.
+	now func() time.Time
+	// agingAfter is how long a waiter may wait before it is promoted past
+	// every un-aged waiter (GPU_SCHED_AGING_MINUTES). Zero disables aging.
+	agingAfter time.Duration
 }
 
 // gpuWaiter is one in-flight Acquire.
@@ -80,6 +86,26 @@ type gpuWaiter struct {
 	// impossible Premium request would wedge the whole scheduler rather than
 	// simply failing to find a home.
 	blocking bool
+
+	// enqueued is when the waiter registered, on the scheduler's clock. Age is
+	// measured from here and is monotonic: once aged, always aged.
+	enqueued time.Time
+	aged     bool
+	// impossible is set when the probe shows no card could ever hold the
+	// request; such a waiter never blocks anyone, aged or not.
+	impossible bool
+}
+
+// blocksOthers reports whether lower-ranked callers must stand aside for w.
+func (w *gpuWaiter) blocksOthers() bool { return (w.blocking || w.aged) && !w.impossible }
+
+// rank is the waiter's effective priority. An aged waiter ranks one level above
+// Premium, so it outranks every un-aged waiter regardless of tier.
+func (w *gpuWaiter) rank() int {
+	if w.aged {
+		return GPUPriorityPremium + 1
+	}
+	return w.priority
 }
 
 var (
@@ -114,22 +140,66 @@ func SharedGPUScheduler() *GPUScheduler {
 }
 
 func newGPUScheduler(probe func(context.Context) ([]GPUSnapshot, error)) *GPUScheduler {
-	s := &GPUScheduler{inUse: make(map[int]int), waiters: map[*gpuWaiter]struct{}{}, probe: probe}
+	s := &GPUScheduler{
+		inUse:      make(map[int]int),
+		waiters:    map[*gpuWaiter]struct{}{},
+		probe:      probe,
+		now:        time.Now,
+		agingAfter: gpuAgingFromEnv(),
+	}
 	s.cond = sync.NewCond(&s.mu)
 	return s
+}
+
+// gpuAgingFromEnv reads GPU_SCHED_AGING_MINUTES: default 10, 0 disables aging,
+// negative or unparsable values fall back to the default.
+func gpuAgingFromEnv() time.Duration {
+	const defaultMinutes = 10
+	raw := strings.TrimSpace(os.Getenv("GPU_SCHED_AGING_MINUTES"))
+	if raw == "" {
+		return defaultMinutes * time.Minute
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return defaultMinutes * time.Minute
+	}
+	return time.Duration(n) * time.Minute
+}
+
+// refreshAging promotes every waiter that has waited past agingAfter. Callers
+// must hold s.mu. Promotion is logged once per waiter and never reverted.
+func (s *GPUScheduler) refreshAging() {
+	if s.agingAfter <= 0 {
+		return
+	}
+	now := s.now()
+	for w := range s.waiters {
+		if !w.aged && now.Sub(w.enqueued) >= s.agingAfter {
+			w.aged = true
+			log.Printf("gpu-scheduler: waiter (priority %d) aged after %s; promoted ahead of un-aged jobs",
+				w.priority, now.Sub(w.enqueued).Round(time.Second))
+		}
+	}
 }
 
 // blockedByHigherPriority reports whether a caller must stand aside because a
 // more important one is queued. Callers must hold s.mu.
 //
-// FOLLOW-UP: this is strict precedence with no aging, so a continuous stream of
-// Premium jobs can starve the standard queue indefinitely. That is acceptable
-// at current volume — Premium is not purchasable yet and concurrency is single
-// digits — but a fair scheduler wants either priority aging or a reserved
-// standard-queue share before Premium goes on sale.
+// Aging contract: priority is strict (Premium before standard) until a waiter
+// has waited GPU_SCHED_AGING_MINUTES (default 10; 0 disables aging). From then
+// on it is "aged" and ranks one level above Premium, so a continuous stream of
+// Premium jobs cannot starve the standard queue. Aged waiters order among
+// themselves by arrival (oldest first). Aging is per waiter and monotonic, and
+// an aged waiter that no card could ever hold still blocks nobody.
 func (s *GPUScheduler) blockedByHigherPriority(w *gpuWaiter) bool {
 	for other := range s.waiters {
-		if other != w && other.blocking && other.priority > w.priority {
+		if other == w || !other.blocksOthers() {
+			continue
+		}
+		if other.rank() > w.rank() {
+			return true
+		}
+		if other.aged && w.aged && other.enqueued.Before(w.enqueued) {
 			return true
 		}
 	}
@@ -165,12 +235,12 @@ func (s *GPUScheduler) Acquire(ctx context.Context, req GPURequest) (int, func()
 
 	// Register before the first probe so a Premium caller starts deterring
 	// standard callers immediately, not only once it has already lost a race.
-	w := &gpuWaiter{priority: req.Priority, blocking: req.Priority > GPUPriorityStandard}
+	w := &gpuWaiter{priority: req.Priority, blocking: req.Priority > GPUPriorityStandard, enqueued: s.now()}
 	s.waiters[w] = struct{}{}
 	defer func() {
 		delete(s.waiters, w)
 		// Whoever was standing aside for this caller can stop now.
-		if w.blocking {
+		if w.blocksOthers() {
 			s.cond.Broadcast()
 		}
 	}()
@@ -198,10 +268,14 @@ func (s *GPUScheduler) Acquire(ctx context.Context, req GPURequest) (int, func()
 
 		cands := s.buildCandidateOrder(req, snaps, gpuByIdx)
 
-		// A prioritised request that no card could ever hold — not "is busy",
-		// but "is too small even when idle" — stops deterring everyone else.
-		if w.blocking && !fitsAnyCard(required, cands, gpuByIdx) {
+		s.refreshAging()
+
+		// A prioritised (or aged) request that no card could ever hold — not
+		// "is busy", but "is too small even when idle" — stops deterring
+		// everyone else.
+		if !w.impossible && (w.blocking || w.aged) && !fitsAnyCard(required, cands, gpuByIdx) {
 			w.blocking = false
+			w.impossible = true
 			s.cond.Broadcast()
 			log.Printf("gpu-scheduler: %s requires %dMiB, which exceeds every card; dropping its queue priority",
 				req.Kind, required)
@@ -254,7 +328,7 @@ func (s *GPUScheduler) Acquire(ctx context.Context, req GPURequest) (int, func()
 			waitStarted = time.Now()
 			log.Printf("gpu-scheduler: %s queued (required=%dMiB+%dMiB safety); waiting for GPU", req.Kind, req.VRAMRequiredMiB, safety)
 		}
-		if err := s.waitOrCtx(ctx); err != nil {
+		if err := s.waitOrCtx(ctx, s.agingWake(w)); err != nil {
 			return -1, nil, err
 		}
 	}
@@ -304,10 +378,25 @@ func (s *GPUScheduler) buildCandidateOrder(req GPURequest, snaps []GPUSnapshot, 
 	return cands
 }
 
-// waitOrCtx parks on the condition variable until either ctx cancels or
-// another goroutine broadcasts. Releases s.mu while waiting per sync.Cond
-// contract.
-func (s *GPUScheduler) waitOrCtx(ctx context.Context) error {
+// agingWake is how long until w ages, or 0 when there is nothing to schedule
+// (aging disabled or already aged). Callers must hold s.mu.
+func (s *GPUScheduler) agingWake(w *gpuWaiter) time.Duration {
+	if s.agingAfter <= 0 || w.aged {
+		return 0
+	}
+	remaining := s.agingAfter - s.now().Sub(w.enqueued)
+	if remaining <= 0 {
+		// Aged by the clock but not yet marked; the next loop marks it.
+		return time.Millisecond
+	}
+	return remaining
+}
+
+// waitOrCtx parks on the condition variable until ctx cancels, another
+// goroutine broadcasts, or (when wakeAfter > 0) the waiter is due to age. The
+// timer and the ctx watcher are both torn down on return, so nothing leaks.
+// Releases s.mu while waiting per sync.Cond contract.
+func (s *GPUScheduler) waitOrCtx(ctx context.Context, wakeAfter time.Duration) error {
 	done := make(chan struct{})
 	// Wake the cond when ctx fires.
 	go func() {
@@ -319,6 +408,14 @@ func (s *GPUScheduler) waitOrCtx(ctx context.Context) error {
 		case <-done:
 		}
 	}()
+	if wakeAfter > 0 {
+		timer := time.AfterFunc(wakeAfter, func() {
+			s.mu.Lock()
+			s.cond.Broadcast()
+			s.mu.Unlock()
+		})
+		defer timer.Stop()
+	}
 	s.cond.Wait()
 	close(done)
 	return ctx.Err()

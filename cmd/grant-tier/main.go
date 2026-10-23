@@ -22,6 +22,7 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/db"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/logger"
@@ -95,6 +96,13 @@ func main() {
 		source = "default"
 	}
 
+	// The tier before the change, for server_tier_changed {from}. A failed lookup
+	// only costs the event its "from"; it never blocks the grant.
+	fromTier := "unknown"
+	if prior, err := store.UserByFirebaseUID(ctx, *uid); err == nil && prior != nil {
+		fromTier = string(tiers.Resolve(true, prior))
+	}
+
 	updated, err := store.SetUserTier(ctx, *uid, *tier, source, *grantedBy, *reason, expiresAt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "grant failed: %v\n", err)
@@ -102,10 +110,36 @@ func main() {
 		os.Exit(1)
 	}
 
+	emitTierChanged(cfg, logging, updated.FirebaseUID, fromTier, string(tiers.Resolve(true, updated)), source)
+
 	expiry := "never"
 	if updated.TierExpiresAt != nil {
 		expiry = updated.TierExpiresAt.UTC().Format(time.RFC3339)
 	}
 	fmt.Printf("%s (%s)\n  tier:    %s\n  source:  %s\n  expires: %s\n  by:      %s\n",
 		updated.FirebaseUID, updated.Email, updated.Tier, updated.TierSource, expiry, *grantedBy)
+}
+
+// emitTierChanged sends server_tier_changed through internal/analyticsemit. It is
+// a no-op when ANALYTICS_SERVER_KEY / ANALYTICS_INGEST_URL are unset.
+//
+// KNOWN LIMIT: this process has no browser, hence no visitor/session UUIDs, and
+// analyticsemit.Emit deliberately drops events without them (it refuses to mint
+// synthetic visitors). So today this event is counted as skipped_no_identity and
+// not delivered; mm_tier_grants remains the audit record. It is wired anyway so
+// that if the analytics side ever accepts a server identity the call site is
+// already correct. See the MM17 session log.
+func emitTierChanged(cfg *config.Config, log *slog.Logger, firebaseUID, from, to, source string) {
+	em := analyticsemit.New(cfg, log, nil)
+	if !em.Enabled() {
+		return
+	}
+	em.Emit(analyticsemit.Event{
+		EventName:  analyticsemit.ServerTierChanged,
+		EventTS:    time.Now().UTC(),
+		PersonHint: &analyticsemit.PersonHint{FirebaseUID: firebaseUID, Tier: to},
+		Context:    analyticsemit.Context("", "", "", to),
+		Properties: map[string]any{"from": from, "to": to, "source": source},
+	})
+	em.Close(5 * time.Second)
 }

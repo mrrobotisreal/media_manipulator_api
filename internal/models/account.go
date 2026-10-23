@@ -18,6 +18,14 @@ type User struct {
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
 	LastSeenAt    *time.Time `json:"lastSeenAt,omitempty"`
+
+	// Billing mirror (MM17). Stripe ids never leave the API (json:"-"); the
+	// status endpoint exposes only the derived, non-identifying fields.
+	StripeCustomerID     string `json:"-"`
+	StripeSubscriptionID string `json:"-"`
+	SubscriptionStatus   string `json:"subscriptionStatus,omitempty"`
+	BillingInterval      string `json:"billingInterval,omitempty"`
+	CancelAtPeriodEnd    bool   `json:"cancelAtPeriodEnd"`
 }
 
 // UsageSubjectKind identifies what a quota counter is keyed on. Preference

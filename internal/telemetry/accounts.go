@@ -23,7 +23,9 @@ var ErrNoStore = errors.New("telemetry: no database pool")
 
 const userColumns = `id::text, firebase_uid, coalesce(email, ''), email_verified,
 	tier, tier_source, tier_expires_at, coalesce(display_name, ''),
-	coalesce(signup_source, ''), created_at, updated_at, last_seen_at`
+	coalesce(signup_source, ''), created_at, updated_at, last_seen_at,
+	coalesce(stripe_customer_id, ''), coalesce(stripe_subscription_id, ''),
+	coalesce(subscription_status, ''), coalesce(billing_interval, ''), cancel_at_period_end`
 
 func scanUser(row pgx.Row) (*models.User, error) {
 	var u models.User
@@ -31,6 +33,8 @@ func scanUser(row pgx.Row) (*models.User, error) {
 		&u.ID, &u.FirebaseUID, &u.Email, &u.EmailVerified,
 		&u.Tier, &u.TierSource, &u.TierExpiresAt, &u.DisplayName,
 		&u.SignupSource, &u.CreatedAt, &u.UpdatedAt, &u.LastSeenAt,
+		&u.StripeCustomerID, &u.StripeSubscriptionID, &u.SubscriptionStatus,
+		&u.BillingInterval, &u.CancelAtPeriodEnd,
 	)
 	if err != nil {
 		return nil, err
@@ -52,6 +56,8 @@ func scanUserWithCreated(row pgx.Row) (*models.User, bool, error) {
 		&u.ID, &u.FirebaseUID, &u.Email, &u.EmailVerified,
 		&u.Tier, &u.TierSource, &u.TierExpiresAt, &u.DisplayName,
 		&u.SignupSource, &u.CreatedAt, &u.UpdatedAt, &u.LastSeenAt,
+		&u.StripeCustomerID, &u.StripeSubscriptionID, &u.SubscriptionStatus,
+		&u.BillingInterval, &u.CancelAtPeriodEnd,
 	)
 	if err != nil {
 		return nil, false, err

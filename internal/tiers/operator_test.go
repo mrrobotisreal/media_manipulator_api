@@ -118,7 +118,7 @@ func TestOperatorLimits(t *testing.T) {
 		t.Errorf("operator MaxVideoSeconds = %d, want the deployment ceiling %d", op.MaxVideoSeconds, cfg.MaxVideoDurationSeconds)
 	}
 	if op.MaxOutputHeight < premium.MaxOutputHeight || op.MaxLadderHeight < premium.MaxLadderHeight ||
-		op.ResultRetentionHours < premium.ResultRetentionHours || !op.AdsRemoved || !op.PriorityGPU || !op.BatchEnabled {
+		op.ResultRetentionHours < premium.ResultRetentionHours || !op.AdsRemoved || !op.PriorityGPU {
 		t.Errorf("operator must inherit every premium capability, got %+v", op)
 	}
 }

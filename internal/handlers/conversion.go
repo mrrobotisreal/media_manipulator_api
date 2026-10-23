@@ -136,6 +136,11 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
+	// MM18: refuse an explicit over-cap output height before anything is saved.
+	if refuseOutputHeight(c, requestedOutputHeight(options)) {
+		return
+	}
+
 	incomingPath := filepath.Join(h.cfg.UploadDir, fmt.Sprintf("incoming_%d_%s", time.Now().UnixNano(), safeFilename(fileHeader.Filename)))
 	if err := h.saveUploadedFile(file, incomingPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})

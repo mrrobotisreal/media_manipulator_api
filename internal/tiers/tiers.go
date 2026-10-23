@@ -53,6 +53,9 @@ func Valid(t Tier) bool {
 type Limits struct {
 	OpsPerDay   int `json:"opsPerDay"`
 	AIOpsPerDay int `json:"aiOpsPerDay"`
+	// ExportsPerDay is the Content Studio export allowance: its own counter,
+	// NOT drawn from OpsPerDay. Defaults equal OpsPerDay per tier.
+	ExportsPerDay int `json:"exportsPerDay"`
 	// MaxFileBytes caps a single upload.
 	MaxFileBytes int64 `json:"maxFileBytes"`
 	// MaxVideoSeconds caps source duration.
@@ -67,7 +70,6 @@ type Limits struct {
 	// are retained per project (manual versions are never pruned). Uniform
 	// across tiers today; a possible future monetization lever (ADR ws/0001).
 	StudioVersionAutoKeep int  `json:"studioVersionAutoKeep"`
-	BatchEnabled          bool `json:"batchEnabled"`
 	PriorityGPU           bool `json:"priorityGpu"`
 	ResultRetentionHours  int  `json:"resultRetentionHours"`
 	AdsRemoved            bool `json:"adsRemoved"`
@@ -105,13 +107,13 @@ func New(cfg *config.Config) *Registry {
 		TierAnonymous: {
 			OpsPerDay:             cfg.TierAnonOpsPerDay,
 			AIOpsPerDay:           cfg.TierAnonAIOpsPerDay,
+			ExportsPerDay:         cfg.TierAnonExportsPerDay,
 			MaxFileBytes:          cfg.TierAnonMaxFileBytes,
 			MaxVideoSeconds:       cfg.TierAnonMaxVideoSeconds,
 			MaxOutputHeight:       cfg.TierAnonMaxOutputHeight,
 			MaxLadderHeight:       cfg.TierAnonMaxLadderHeight,
 			StudioProjects:        cfg.TierAnonStudioProjects,
 			StudioVersionAutoKeep: cfg.TierAnonStudioVersionAutoKeep,
-			BatchEnabled:          false,
 			PriorityGPU:           false,
 			ResultRetentionHours:  cfg.TierAnonRetentionHours,
 			AdsRemoved:            false,
@@ -119,13 +121,13 @@ func New(cfg *config.Config) *Registry {
 		TierFree: {
 			OpsPerDay:             cfg.TierFreeOpsPerDay,
 			AIOpsPerDay:           cfg.TierFreeAIOpsPerDay,
+			ExportsPerDay:         cfg.TierFreeExportsPerDay,
 			MaxFileBytes:          cfg.TierFreeMaxFileBytes,
 			MaxVideoSeconds:       cfg.TierFreeMaxVideoSeconds,
 			MaxOutputHeight:       cfg.TierFreeMaxOutputHeight,
 			MaxLadderHeight:       cfg.TierFreeMaxLadderHeight,
 			StudioProjects:        cfg.TierFreeStudioProjects,
 			StudioVersionAutoKeep: cfg.TierFreeStudioVersionAutoKeep,
-			BatchEnabled:          false,
 			PriorityGPU:           false,
 			ResultRetentionHours:  cfg.TierFreeRetentionHours,
 			// Free accounts still see ads. Only Premium removes them — that is
@@ -136,13 +138,13 @@ func New(cfg *config.Config) *Registry {
 		TierPremium: {
 			OpsPerDay:             cfg.TierPremiumOpsPerDay,
 			AIOpsPerDay:           cfg.TierPremiumAIOpsPerDay,
+			ExportsPerDay:         cfg.TierPremiumExportsPerDay,
 			MaxFileBytes:          cfg.TierPremiumMaxFileBytes,
 			MaxVideoSeconds:       cfg.TierPremiumMaxVideoSeconds,
 			MaxOutputHeight:       cfg.TierPremiumMaxOutputHeight,
 			MaxLadderHeight:       cfg.TierPremiumMaxLadderHeight,
 			StudioProjects:        cfg.TierPremiumStudioProjects,
 			StudioVersionAutoKeep: cfg.TierPremiumStudioVersionAutoKeep,
-			BatchEnabled:          true,
 			PriorityGPU:           true,
 			ResultRetentionHours:  cfg.TierPremiumRetentionHours,
 			AdsRemoved:            true,
@@ -156,6 +158,8 @@ func New(cfg *config.Config) *Registry {
 	operator := r.limits[TierPremium]
 	operator.OpsPerDay = Unlimited
 	operator.AIOpsPerDay = Unlimited
+	operator.ExportsPerDay = Unlimited
+	operator.MaxOutputHeight = DeploymentMaxOutputHeight
 	operator.MaxFileBytes = cfg.MaxFileSize
 	operator.MaxVideoSeconds = cfg.MaxVideoDurationSeconds
 	operator.StudioProjects = Unlimited

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -105,4 +106,88 @@ func ladderAccessFor(c *gin.Context, registry *tiers.Registry) services.LadderAc
 		return services.AnonymousLadderAccess()
 	}
 	return services.LadderAccessFor(res.Tier, registry)
+}
+
+// outputHeightRefusal is the single handler-side entry to the output-height
+// rule (tiers.EnforceOutputHeight). It returns nil when the caller may render
+// requestedHeight, or when no tier has been resolved (tier system off, or a
+// route outside /api): the same "no tier-derived limit" fallback as every other
+// helper here.
+func outputHeightRefusal(c *gin.Context, requestedHeight int) *tiers.Refusal {
+	res, ok := middleware.ResolveTier(c)
+	if !ok {
+		return nil
+	}
+	return tiers.EnforceOutputHeight(res.Tier, res.Limits, requestedHeight)
+}
+
+// refuseOutputHeight writes the 403 output_height_limited body and reports
+// whether it did. Callers return immediately when it is true.
+func refuseOutputHeight(c *gin.Context, requestedHeight int) bool {
+	refusal := outputHeightRefusal(c, requestedHeight)
+	if refusal == nil {
+		return false
+	}
+	c.AbortWithStatusJSON(http.StatusForbidden, refusal)
+	return true
+}
+
+// requestedOutputHeight derives the rendered height a conversion request asks
+// for, from its raw options map (JSON numbers arrive as float64), BEFORE any
+// work starts. Rules, documented once here:
+//
+//   - An explicit height wins (video/image `height`, waveform `waveform.height`,
+//     AI frame interpolation `ai.frameInterpolation.maxHeight`); the max of the
+//     explicit values present is used.
+//   - A width-only request has no knowable height before probing (a portrait
+//     photo and a 16:9 video differ), so it is NOT enforced: guessing an aspect
+//     ratio would wrongly refuse e.g. a Premium 3840-wide portrait image.
+//     Video width is independently capped at 4096 by validateVideoOptions, so a
+//     width-only video can exceed the Premium cap by at most 2304-2160 lines.
+//   - Nothing requested (source passthrough) yields 0 and is never refused.
+func requestedOutputHeight(options map[string]interface{}) int {
+	if options == nil {
+		return 0
+	}
+	best := 0
+	consider := func(h int) {
+		if h > best {
+			best = h
+		}
+	}
+	consider(optionInt(options, "height"))
+	if nested, ok := options["waveform"].(map[string]interface{}); ok {
+		consider(optionInt(nested, "height"))
+	}
+	if ai, ok := options["ai"].(map[string]interface{}); ok {
+		if fi, ok := ai["frameInterpolation"].(map[string]interface{}); ok {
+			consider(optionInt(fi, "maxHeight"))
+		}
+	}
+	return best
+}
+
+func optionInt(options map[string]interface{}, key string) int {
+	switch v := options[key].(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case int64:
+		return int(v)
+	}
+	return 0
+}
+
+// ExportHeightGate is the pre-quota half of the Studio export height rule. The
+// quota dispatcher runs it BEFORE RequireQuota, so a refused export never
+// spends the export allowance. lookup returns the persisted project height for
+// the request (ok=false when it cannot be determined, in which case the gate
+// stays out of the way and ExportProject itself decides).
+func ExportHeightGate(lookup func(c *gin.Context) (int, bool)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if height, ok := lookup(c); ok {
+			refuseOutputHeight(c, height)
+		}
+	}
 }

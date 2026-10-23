@@ -170,7 +170,10 @@ type Config struct {
 	// would-be denials and allows them (rollout mode).
 	ResultOwnershipEnforce bool
 
-	TierAnonOpsPerDay       int
+	TierAnonOpsPerDay int
+	// *ExportsPerDay is the Content Studio export allowance, a separate counter
+	// from ops. Each defaults to the matching *OpsPerDay value.
+	TierAnonExportsPerDay   int
 	TierAnonAIOpsPerDay     int
 	TierAnonMaxFileBytes    int64
 	TierAnonMaxVideoSeconds int
@@ -184,6 +187,7 @@ type Config struct {
 	TierAnonStudioVersionAutoKeep int
 
 	TierFreeOpsPerDay             int
+	TierFreeExportsPerDay         int
 	TierFreeAIOpsPerDay           int
 	TierFreeMaxFileBytes          int64
 	TierFreeMaxVideoSeconds       int
@@ -194,6 +198,7 @@ type Config struct {
 	TierFreeStudioVersionAutoKeep int
 
 	TierPremiumOpsPerDay       int
+	TierPremiumExportsPerDay   int
 	TierPremiumAIOpsPerDay     int
 	TierPremiumMaxFileBytes    int64
 	TierPremiumMaxVideoSeconds int
@@ -217,6 +222,26 @@ type Config struct {
 	// a client-side flag or an mm_users row can never produce the tier.
 	// Empty (the default) disables the tier entirely.
 	OperatorEmails []string
+
+	// Billing (MM17). Ships dark: BillingEnabled defaults to false, and
+	// BillingConfigured() additionally demands every secret/id below, so a
+	// half-filled env can never expose a broken checkout. StripeSecretKey and
+	// StripeWebhookSecret are SECRETS: never log them.
+	BillingEnabled            bool
+	StripeSecretKey           string
+	StripeWebhookSecret       string
+	StripePricePremiumMonthly string
+	StripePricePremiumYearly  string
+	// StripeAPIVersion optionally overrides the API version the SDK sends
+	// (default: the stripe-go constant). Empty = use the SDK's.
+	StripeAPIVersion string
+	// BillingGraceDays is how long Premium survives a failed payment.
+	BillingGraceDays int
+	// BillingPublicBaseURL prefixes Checkout success/cancel and Portal return URLs.
+	BillingPublicBaseURL string
+	// Display-only prices for GET /api/tiers; the charged amount is the Stripe Price.
+	BillingPriceMonthlyUSD int
+	BillingPriceYearlyUSD  int
 
 	// FFmpeg validation
 	MaxVideoDurationSeconds int
@@ -438,6 +463,9 @@ type Config struct {
 
 func Load() *Config {
 	maxFileSize := getEnvInt64("MAX_FILE_SIZE_BYTES", 10000*1024*1024)
+	anonOps := getEnvInt("TIER_ANON_OPS_PER_DAY", 5)
+	freeOps := getEnvInt("TIER_FREE_OPS_PER_DAY", 30)
+	premiumOps := getEnvInt("TIER_PREMIUM_OPS_PER_DAY", 300)
 	return &Config{
 		Port:               DefaultPort,
 		UploadDir:          getEnv("UPLOAD_DIR", "uploads"),
@@ -559,7 +587,8 @@ func Load() *Config {
 
 		ResultOwnershipEnforce: getEnvBool("RESULT_OWNERSHIP_ENFORCE", true),
 
-		TierAnonOpsPerDay:             getEnvInt("TIER_ANON_OPS_PER_DAY", 5),
+		TierAnonOpsPerDay:             anonOps,
+		TierAnonExportsPerDay:         getEnvInt("TIER_ANON_EXPORTS_PER_DAY", anonOps),
 		TierAnonAIOpsPerDay:           getEnvInt("TIER_ANON_AI_OPS_PER_DAY", 1),
 		TierAnonMaxFileBytes:          getEnvInt64("TIER_ANON_MAX_FILE_BYTES", 200*1024*1024),
 		TierAnonMaxVideoSeconds:       getEnvInt("TIER_ANON_MAX_VIDEO_SECONDS", 5*60),
@@ -569,7 +598,8 @@ func Load() *Config {
 		TierAnonRetentionHours:        getEnvInt("TIER_ANON_RETENTION_HOURS", 24),
 		TierAnonStudioVersionAutoKeep: getEnvInt("TIER_ANON_STUDIO_VERSION_AUTO_KEEP", 20),
 
-		TierFreeOpsPerDay:             getEnvInt("TIER_FREE_OPS_PER_DAY", 30),
+		TierFreeOpsPerDay:             freeOps,
+		TierFreeExportsPerDay:         getEnvInt("TIER_FREE_EXPORTS_PER_DAY", freeOps),
 		TierFreeAIOpsPerDay:           getEnvInt("TIER_FREE_AI_OPS_PER_DAY", 5),
 		TierFreeMaxFileBytes:          getEnvInt64("TIER_FREE_MAX_FILE_BYTES", 1024*1024*1024),
 		TierFreeMaxVideoSeconds:       getEnvInt("TIER_FREE_MAX_VIDEO_SECONDS", 20*60),
@@ -579,7 +609,8 @@ func Load() *Config {
 		TierFreeRetentionHours:        getEnvInt("TIER_FREE_RETENTION_HOURS", 7*24),
 		TierFreeStudioVersionAutoKeep: getEnvInt("TIER_FREE_STUDIO_VERSION_AUTO_KEEP", 20),
 
-		TierPremiumOpsPerDay:             getEnvInt("TIER_PREMIUM_OPS_PER_DAY", 300),
+		TierPremiumOpsPerDay:             premiumOps,
+		TierPremiumExportsPerDay:         getEnvInt("TIER_PREMIUM_EXPORTS_PER_DAY", premiumOps),
 		TierPremiumAIOpsPerDay:           getEnvInt("TIER_PREMIUM_AI_OPS_PER_DAY", 60),
 		TierPremiumMaxFileBytes:          getEnvInt64("TIER_PREMIUM_MAX_FILE_BYTES", 5*1024*1024*1024),
 		TierPremiumMaxVideoSeconds:       getEnvInt("TIER_PREMIUM_MAX_VIDEO_SECONDS", 2*60*60),
@@ -592,6 +623,18 @@ func Load() *Config {
 		// Operator allowlist — see the struct doc. Same loader as
 		// DR_ALLOWED_EMAILS so membership is a plain lowercase compare.
 		OperatorEmails: splitCSVLower(getEnv("OPERATOR_EMAILS", "")),
+
+		// Billing — see the struct doc. Dark by default.
+		BillingEnabled:            getEnvBool("BILLING_ENABLED", false),
+		StripeSecretKey:           strings.TrimSpace(getEnv("STRIPE_SECRET_KEY", "")),
+		StripeWebhookSecret:       strings.TrimSpace(getEnv("STRIPE_WEBHOOK_SECRET", "")),
+		StripePricePremiumMonthly: strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_MONTHLY", "")),
+		StripePricePremiumYearly:  strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_YEARLY", "")),
+		StripeAPIVersion:          strings.TrimSpace(getEnv("STRIPE_API_VERSION", "")),
+		BillingGraceDays:          getEnvInt("BILLING_GRACE_DAYS", 7),
+		BillingPublicBaseURL:      strings.TrimRight(strings.TrimSpace(getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com")), "/"),
+		BillingPriceMonthlyUSD:    getEnvInt("BILLING_PRICE_MONTHLY_USD", 7),
+		BillingPriceYearlyUSD:     getEnvInt("BILLING_PRICE_YEARLY_USD", 70),
 
 		// FFmpeg validation
 		MaxVideoDurationSeconds: getEnvInt("MAX_VIDEO_DURATION_SECONDS", 7200),

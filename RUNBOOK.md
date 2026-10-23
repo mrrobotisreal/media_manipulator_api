@@ -448,6 +448,72 @@ Migration `20261023001_add_operator_owner_tier` widens the
 anyone else's (history + retention); apply it with the usual
 `go run migrate.go up` before setting the variable.
 
+#### Tier promises enforced (MM18)
+
+What `/pricing` sells is what the server delivers:
+
+- **Export has its own daily allowance.** `export` (a Content Studio render) is a
+  **separate counter** from `ops`; an export does not consume ops and ops do not
+  consume exports. Each tier's allowance is tunable and defaults to that tier's
+  `*_OPS_PER_DAY`, so default behaviour is unchanged. `GET /api/tiers` exposes it
+  as `exportsPerDay`. Operator stays uncounted.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `TIER_ANON_EXPORTS_PER_DAY` | `TIER_ANON_OPS_PER_DAY` (5) | Studio exports per UTC day, anonymous. |
+| `TIER_FREE_EXPORTS_PER_DAY` | `TIER_FREE_OPS_PER_DAY` (30) | Same, free accounts. |
+| `TIER_PREMIUM_EXPORTS_PER_DAY` | `TIER_PREMIUM_OPS_PER_DAY` (300) | Same, Premium. |
+| `GPU_SCHED_AGING_MINUTES` | `10` | A GPU-queue waiter older than this is promoted ahead of every un-aged waiter, so Premium cannot starve free jobs. `0` disables aging (strict precedence). |
+
+- **Output height.** A request whose rendered height exceeds the tier's
+  `MaxOutputHeight` (1080 anonymous / 1440 free / 2160 Premium; operator uncapped
+  to the 4320 deployment ceiling) is refused with HTTP 403:
+  `{"error":"output_height_limited","message":...,"limit":<px>,"requested":<px>,"upgradePath":"signup"|"premium"}`
+  (`upgradePath` is omitted for Premium, which has nothing higher to buy).
+  Enforced on Studio export (read from the **persisted** project height, checked
+  before the export allowance is spent, so a refused export costs nothing) and on
+  conversion requests that carry an explicit `height` (`POST /api/upload`,
+  `POST /api/video-upload/complete`). Project create/save still clamp to 4320 and
+  never refuse: a free user may author a 4K project and is told at export.
+- **Batch is removed.** There is no batch feature; `batchEnabled` is gone from
+  `/api/tiers`.
+- **GPU aging.** Premium still goes first, but a waiter that has waited
+  `GPU_SCHED_AGING_MINUTES` is promoted above Premium (oldest aged waiter first).
+  Aging is per waiter and logged once (`gpu-scheduler: waiter ... aged`).
+
+#### Billing add-on (Stripe, MM17) - ships dark
+
+Billing is **off** until `BILLING_ENABLED=true` AND all four values below are set
+(`Config.BillingConfigured()`); until then every `/api/billing/*` route answers 503
+`billing_unavailable` (except `GET /billing/status`, which reports
+`purchasable:false`) and `/api/tiers` reports `premiumPurchasable:false`.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `BILLING_ENABLED` | `false` | Master switch. |
+| `STRIPE_SECRET_KEY` | - | Secret API key (`sk_test_...` / `sk_live_...`). Secret; never logged. |
+| `STRIPE_WEBHOOK_SECRET` | - | Signing secret of the webhook endpoint (`whsec_...`). Secret. |
+| `STRIPE_PRICE_PREMIUM_MONTHLY` | - | Stripe Price id for the monthly plan. The client never sends a price id. |
+| `STRIPE_PRICE_PREMIUM_YEARLY` | - | Stripe Price id for the yearly plan. |
+| `STRIPE_API_VERSION` | SDK constant | Optional override of the `Stripe-Version` header. Leave unset. |
+| `BILLING_GRACE_DAYS` | `7` | How long Premium survives `past_due` / `invoice.payment_failed`. |
+| `BILLING_PUBLIC_BASE_URL` | `https://media-manipulator.com` | Prefix for Checkout success/cancel and Portal return URLs. |
+| `BILLING_PRICE_MONTHLY_USD` / `BILLING_PRICE_YEARLY_USD` | `7` / `70` | Display-only numbers for `/api/tiers`; the charge is whatever the Stripe Price says. |
+
+* Pinned Stripe API version (stripe-go v87.0.0): `2026-09-30.endive`. Create the
+  webhook endpoint at that version. The API still verifies events from another
+  release train (see `internal/billing/stripe_client.go`), because it re-fetches the
+  Subscription instead of trusting the event body.
+* Webhook: `POST /api/billing/webhook` (no Firebase auth; signature only, 5 minute
+  tolerance, 1 MiB cap). Events: `checkout.session.completed`,
+  `customer.subscription.created|updated|deleted`, `invoice.paid`,
+  `invoice.payment_failed`. Local test: `stripe listen --forward-to localhost:59997/api/billing/webhook`.
+* Migration `20261023003_add_billing` adds the Stripe columns to `mm_users` and the
+  `mm_billing_events` idempotency table; apply with `go run migrate.go up` BEFORE
+  enabling billing. Subscription tier changes are audited in `mm_tier_grants` with
+  `granted_by='stripe'`.
+* Go-live (live keys, endpoint, Portal config, taxes) is **section 4.13**, written in MM21.
+
 ### 4.12 Product-analytics emission (media_manipulator_analytics)
 
 The API emits a small set of **server-truth** product-analytics events to the
@@ -524,6 +590,12 @@ analytics events during an analytics outage is the designed trade, and `mm_*`
 remains the complete record. Do not add retries, a durable outbox, or blocking
 behaviour to make it lossless — an analytics problem must never be able to slow or
 fail a conversion.
+
+### 4.13 Billing go-live (Stripe)
+
+Stub: the live-mode switch, webhook endpoint creation and Portal configuration
+checklist is written in MM21. Env vars and behaviour are in the section 4.11
+"Billing add-on" above.
 
 ---
 

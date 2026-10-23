@@ -126,7 +126,6 @@ func TestLimitsAreMonotonic(t *testing.T) {
 		name     string
 		a, fr, p bool
 	}{
-		{"BatchEnabled", anon.BatchEnabled, free.BatchEnabled, premium.BatchEnabled},
 		{"PriorityGPU", anon.PriorityGPU, free.PriorityGPU, premium.PriorityGPU},
 		{"AdsRemoved", anon.AdsRemoved, free.AdsRemoved, premium.AdsRemoved},
 	}
@@ -144,24 +143,24 @@ func TestPublishedMatrix(t *testing.T) {
 
 	want := map[Tier]Limits{
 		TierAnonymous: {
-			OpsPerDay: 5, AIOpsPerDay: 1,
+			OpsPerDay: 5, AIOpsPerDay: 1, ExportsPerDay: 5,
 			MaxFileBytes: 200 * 1024 * 1024, MaxVideoSeconds: 300,
 			MaxOutputHeight: 1080, MaxLadderHeight: 720,
-			StudioProjects: 1, StudioVersionAutoKeep: 20, BatchEnabled: false, PriorityGPU: false,
+			StudioProjects: 1, StudioVersionAutoKeep: 20, PriorityGPU: false,
 			ResultRetentionHours: 24, AdsRemoved: false,
 		},
 		TierFree: {
-			OpsPerDay: 30, AIOpsPerDay: 5,
+			OpsPerDay: 30, AIOpsPerDay: 5, ExportsPerDay: 30,
 			MaxFileBytes: 1024 * 1024 * 1024, MaxVideoSeconds: 1200,
 			MaxOutputHeight: 1440, MaxLadderHeight: 1080,
-			StudioProjects: 5, StudioVersionAutoKeep: 20, BatchEnabled: false, PriorityGPU: false,
+			StudioProjects: 5, StudioVersionAutoKeep: 20, PriorityGPU: false,
 			ResultRetentionHours: 168, AdsRemoved: false,
 		},
 		TierPremium: {
-			OpsPerDay: 300, AIOpsPerDay: 60,
+			OpsPerDay: 300, AIOpsPerDay: 60, ExportsPerDay: 300,
 			MaxFileBytes: 5 * 1024 * 1024 * 1024, MaxVideoSeconds: 7200,
 			MaxOutputHeight: 2160, MaxLadderHeight: 2160,
-			StudioProjects: Unlimited, StudioVersionAutoKeep: 20, BatchEnabled: true, PriorityGPU: true,
+			StudioProjects: Unlimited, StudioVersionAutoKeep: 20, PriorityGPU: true,
 			ResultRetentionHours: 720, AdsRemoved: true,
 		},
 	}
@@ -180,5 +179,36 @@ func TestForUnknownTierFallsBackToAnonymous(t *testing.T) {
 	r := testRegistry(t)
 	if got, want := r.For(Tier("nonsense")), r.For(TierAnonymous); got != want {
 		t.Fatalf("For(unknown) = %+v, want the anonymous limits %+v", got, want)
+	}
+}
+
+// By default export's allowance equals ops for every tier, so adding the
+// explicit knob changed no behaviour.
+func TestExportsPerDayDefaultsToOps(t *testing.T) {
+	r := testRegistry(t)
+	for _, tier := range All() {
+		l := r.For(tier)
+		if l.ExportsPerDay != l.OpsPerDay {
+			t.Errorf("%s: exportsPerDay=%d, want opsPerDay=%d", tier, l.ExportsPerDay, l.OpsPerDay)
+		}
+	}
+	if op := r.For(TierOperator); op.ExportsPerDay != Unlimited {
+		t.Errorf("operator exportsPerDay = %d, want Unlimited", op.ExportsPerDay)
+	}
+}
+
+func TestExportsPerDayOverride(t *testing.T) {
+	t.Setenv("TIER_FREE_EXPORTS_PER_DAY", "3")
+	t.Setenv("TIER_ANON_EXPORTS_PER_DAY", "2")
+	t.Setenv("TIER_PREMIUM_EXPORTS_PER_DAY", "99")
+	r := testRegistry(t)
+	if got := r.For(TierFree); got.ExportsPerDay != 3 || got.OpsPerDay != 30 {
+		t.Errorf("free: %+v", got)
+	}
+	if got := r.For(TierAnonymous).ExportsPerDay; got != 2 {
+		t.Errorf("anon exports = %d", got)
+	}
+	if got := r.For(TierPremium).ExportsPerDay; got != 99 {
+		t.Errorf("premium exports = %d", got)
 	}
 }
