@@ -1511,6 +1511,18 @@ go vet ./...                        # should be silent
 go test ./internal/services/ -v     # should be all PASS
 ```
 
+#### 12.6.1 Metadata inspector (MM07)
+
+`POST /api/metadata/inspect` (multipart `file`) returns the canonical `MetadataDocument` (package `internal/metadata`; `/details` is unchanged). Binaries: `exiftool` (runs for every kind, two passes: print-converted and `-n`) and `ffprobe` (video/audio only, folded into `Format`, `Stream:<n>`, `Chapter:<n>`, `SideData` entries). Each invocation is capped at 20 s. Tool failure never yields a 5xx: the document returns 200 with a `warnings[]` entry. The API logs `metadata inspector tools exiftool=<ver|missing> ffprobe=<ver|missing>` at startup. Regenerate the classifier with `go generate ./internal/metadata` (reads `docs/design/research/METADATA_TAG_CATALOG.md`).
+
+| `warnings[]` string | Trigger |
+| --- | --- |
+| `exiftool unavailable` / `ffprobe unavailable` | Binary not on PATH |
+| `exiftool timed out after 20s` / `ffprobe timed out after 20s` | 20 s cap exceeded (partial document) |
+| `exiftool failed: <first stderr line>` / `ffprobe failed: <first stderr line>` | Non-zero exit |
+| `exiftool output could not be parsed` / `ffprobe output could not be parsed` | JSON decode error |
+| `exiftool numeric pass failed: <reason>` | The `-n` pass failed; entries kept, only `rawValue` is missing |
+
 ### 12.7 Quick health summary one-liner
 
 ```bash
