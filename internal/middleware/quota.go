@@ -93,8 +93,11 @@ func (q QuotaConfig) resolveSubject(c *gin.Context, user *models.User) quotaSubj
 // it reports no limit here.
 func limitFor(l tiers.Limits, metric string) int64 {
 	switch metric {
-	case models.MetricOps, models.MetricExport:
+	case models.MetricOps:
 		return int64(l.OpsPerDay)
+	case models.MetricExport:
+		// Its own allowance (TIER_*_EXPORTS_PER_DAY), counted separately from ops.
+		return int64(l.ExportsPerDay)
 	case models.MetricAIOps:
 		return int64(l.AIOpsPerDay)
 	default:

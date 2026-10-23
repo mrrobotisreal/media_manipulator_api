@@ -53,6 +53,9 @@ func Valid(t Tier) bool {
 type Limits struct {
 	OpsPerDay   int `json:"opsPerDay"`
 	AIOpsPerDay int `json:"aiOpsPerDay"`
+	// ExportsPerDay is the Content Studio export allowance: its own counter,
+	// NOT drawn from OpsPerDay. Defaults equal OpsPerDay per tier.
+	ExportsPerDay int `json:"exportsPerDay"`
 	// MaxFileBytes caps a single upload.
 	MaxFileBytes int64 `json:"maxFileBytes"`
 	// MaxVideoSeconds caps source duration.
@@ -105,6 +108,7 @@ func New(cfg *config.Config) *Registry {
 		TierAnonymous: {
 			OpsPerDay:             cfg.TierAnonOpsPerDay,
 			AIOpsPerDay:           cfg.TierAnonAIOpsPerDay,
+			ExportsPerDay:         cfg.TierAnonExportsPerDay,
 			MaxFileBytes:          cfg.TierAnonMaxFileBytes,
 			MaxVideoSeconds:       cfg.TierAnonMaxVideoSeconds,
 			MaxOutputHeight:       cfg.TierAnonMaxOutputHeight,
@@ -119,6 +123,7 @@ func New(cfg *config.Config) *Registry {
 		TierFree: {
 			OpsPerDay:             cfg.TierFreeOpsPerDay,
 			AIOpsPerDay:           cfg.TierFreeAIOpsPerDay,
+			ExportsPerDay:         cfg.TierFreeExportsPerDay,
 			MaxFileBytes:          cfg.TierFreeMaxFileBytes,
 			MaxVideoSeconds:       cfg.TierFreeMaxVideoSeconds,
 			MaxOutputHeight:       cfg.TierFreeMaxOutputHeight,
@@ -136,6 +141,7 @@ func New(cfg *config.Config) *Registry {
 		TierPremium: {
 			OpsPerDay:             cfg.TierPremiumOpsPerDay,
 			AIOpsPerDay:           cfg.TierPremiumAIOpsPerDay,
+			ExportsPerDay:         cfg.TierPremiumExportsPerDay,
 			MaxFileBytes:          cfg.TierPremiumMaxFileBytes,
 			MaxVideoSeconds:       cfg.TierPremiumMaxVideoSeconds,
 			MaxOutputHeight:       cfg.TierPremiumMaxOutputHeight,
@@ -156,6 +162,7 @@ func New(cfg *config.Config) *Registry {
 	operator := r.limits[TierPremium]
 	operator.OpsPerDay = Unlimited
 	operator.AIOpsPerDay = Unlimited
+	operator.ExportsPerDay = Unlimited
 	operator.MaxFileBytes = cfg.MaxFileSize
 	operator.MaxVideoSeconds = cfg.MaxVideoDurationSeconds
 	operator.StudioProjects = Unlimited

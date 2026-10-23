@@ -170,7 +170,10 @@ type Config struct {
 	// would-be denials and allows them (rollout mode).
 	ResultOwnershipEnforce bool
 
-	TierAnonOpsPerDay       int
+	TierAnonOpsPerDay int
+	// *ExportsPerDay is the Content Studio export allowance, a separate counter
+	// from ops. Each defaults to the matching *OpsPerDay value.
+	TierAnonExportsPerDay   int
 	TierAnonAIOpsPerDay     int
 	TierAnonMaxFileBytes    int64
 	TierAnonMaxVideoSeconds int
@@ -184,6 +187,7 @@ type Config struct {
 	TierAnonStudioVersionAutoKeep int
 
 	TierFreeOpsPerDay             int
+	TierFreeExportsPerDay         int
 	TierFreeAIOpsPerDay           int
 	TierFreeMaxFileBytes          int64
 	TierFreeMaxVideoSeconds       int
@@ -194,6 +198,7 @@ type Config struct {
 	TierFreeStudioVersionAutoKeep int
 
 	TierPremiumOpsPerDay       int
+	TierPremiumExportsPerDay   int
 	TierPremiumAIOpsPerDay     int
 	TierPremiumMaxFileBytes    int64
 	TierPremiumMaxVideoSeconds int
@@ -458,6 +463,9 @@ type Config struct {
 
 func Load() *Config {
 	maxFileSize := getEnvInt64("MAX_FILE_SIZE_BYTES", 10000*1024*1024)
+	anonOps := getEnvInt("TIER_ANON_OPS_PER_DAY", 5)
+	freeOps := getEnvInt("TIER_FREE_OPS_PER_DAY", 30)
+	premiumOps := getEnvInt("TIER_PREMIUM_OPS_PER_DAY", 300)
 	return &Config{
 		Port:               DefaultPort,
 		UploadDir:          getEnv("UPLOAD_DIR", "uploads"),
@@ -579,7 +587,8 @@ func Load() *Config {
 
 		ResultOwnershipEnforce: getEnvBool("RESULT_OWNERSHIP_ENFORCE", true),
 
-		TierAnonOpsPerDay:             getEnvInt("TIER_ANON_OPS_PER_DAY", 5),
+		TierAnonOpsPerDay:             anonOps,
+		TierAnonExportsPerDay:         getEnvInt("TIER_ANON_EXPORTS_PER_DAY", anonOps),
 		TierAnonAIOpsPerDay:           getEnvInt("TIER_ANON_AI_OPS_PER_DAY", 1),
 		TierAnonMaxFileBytes:          getEnvInt64("TIER_ANON_MAX_FILE_BYTES", 200*1024*1024),
 		TierAnonMaxVideoSeconds:       getEnvInt("TIER_ANON_MAX_VIDEO_SECONDS", 5*60),
@@ -589,7 +598,8 @@ func Load() *Config {
 		TierAnonRetentionHours:        getEnvInt("TIER_ANON_RETENTION_HOURS", 24),
 		TierAnonStudioVersionAutoKeep: getEnvInt("TIER_ANON_STUDIO_VERSION_AUTO_KEEP", 20),
 
-		TierFreeOpsPerDay:             getEnvInt("TIER_FREE_OPS_PER_DAY", 30),
+		TierFreeOpsPerDay:             freeOps,
+		TierFreeExportsPerDay:         getEnvInt("TIER_FREE_EXPORTS_PER_DAY", freeOps),
 		TierFreeAIOpsPerDay:           getEnvInt("TIER_FREE_AI_OPS_PER_DAY", 5),
 		TierFreeMaxFileBytes:          getEnvInt64("TIER_FREE_MAX_FILE_BYTES", 1024*1024*1024),
 		TierFreeMaxVideoSeconds:       getEnvInt("TIER_FREE_MAX_VIDEO_SECONDS", 20*60),
@@ -599,7 +609,8 @@ func Load() *Config {
 		TierFreeRetentionHours:        getEnvInt("TIER_FREE_RETENTION_HOURS", 7*24),
 		TierFreeStudioVersionAutoKeep: getEnvInt("TIER_FREE_STUDIO_VERSION_AUTO_KEEP", 20),
 
-		TierPremiumOpsPerDay:             getEnvInt("TIER_PREMIUM_OPS_PER_DAY", 300),
+		TierPremiumOpsPerDay:             premiumOps,
+		TierPremiumExportsPerDay:         getEnvInt("TIER_PREMIUM_EXPORTS_PER_DAY", premiumOps),
 		TierPremiumAIOpsPerDay:           getEnvInt("TIER_PREMIUM_AI_OPS_PER_DAY", 60),
 		TierPremiumMaxFileBytes:          getEnvInt64("TIER_PREMIUM_MAX_FILE_BYTES", 5*1024*1024*1024),
 		TierPremiumMaxVideoSeconds:       getEnvInt("TIER_PREMIUM_MAX_VIDEO_SECONDS", 2*60*60),
