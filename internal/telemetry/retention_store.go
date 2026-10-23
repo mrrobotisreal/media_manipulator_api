@@ -11,9 +11,11 @@ import (
 
 // MM22: per-user retention settings and the retained-objects ledger.
 //
-// Nothing here deletes anything. mm_retained_objects.expires_at is written by
-// producers (internal/retention.Register) and re-stamped by the settings API;
-// the sweeper that acts on it is MM23.
+// Nothing in this file deletes anything. mm_retained_objects.expires_at is
+// written by producers (internal/retention.Register) and re-stamped by the
+// settings API; the sweeper that acts on it (MM23) lives in
+// internal/retention and its queries in sweeper_store.go. Re-stamps skip
+// keep_with_account rows (metadata reports parked until account deletion).
 
 // Settings enum domains. Mirrored by CHECK constraints in 20261023004.
 const (
@@ -148,7 +150,7 @@ RETURNING ` + settingsColumns
 const restampOwnerQuery = `
 UPDATE mm_retained_objects
 SET expires_at = GREATEST(created_at + make_interval(hours => $2), $3::timestamptz)
-WHERE owner_user_id = $1 AND deleted_at IS NULL`
+WHERE owner_user_id = $1 AND deleted_at IS NULL AND NOT keep_with_account`
 
 // ApplyUserSettings updates the settings and, when the window changed, re-stamps
 // every live ledger row of the user, in one transaction. Returns the new
@@ -268,7 +270,7 @@ WHERE session_id::text = $2 AND user_id IS NULL`
 UPDATE mm_retained_objects
 SET owner_user_id = $1,
     expires_at    = GREATEST(created_at + make_interval(hours => $3), $4::timestamptz)
-WHERE owner_session_id = $2 AND owner_user_id IS NULL AND deleted_at IS NULL`
+WHERE owner_session_id = $2 AND owner_user_id IS NULL AND deleted_at IS NULL AND NOT keep_with_account`
 )
 
 // ClaimSessionForUser attaches everything a visitor created while signed out to
