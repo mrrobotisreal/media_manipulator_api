@@ -1548,6 +1548,18 @@ go test ./internal/services/ -v     # should be all PASS
 | `exiftool output could not be parsed` / `ffprobe output could not be parsed` | JSON decode error |
 | `exiftool numeric pass failed: <reason>` | The `-n` pass failed; entries kept, only `rawValue` is missing |
 
+#### 12.6.2 Job metadata routes (MM08)
+
+All four are owner-gated by `authorizeJobAccess` (session header `X-MM-Session-ID`, owning user token, or operator; a stranger gets the same 404 as a missing job; `?sid=` is not accepted). Documents never expose server paths or temp names: `System:FileName` and `file.name` carry the job's user-facing file name.
+
+| Route | Result |
+| --- | --- |
+| `GET /api/job/:jobId/metadata?side=original\|result` | `MetadataDocument`. `original` (default) reads `outputs/<job>/metadata.json`; a legacy file is migrated on read (re-inspect the stored upload, else a degraded `Legacy` document with warning `legacy metadata; re-inspect unavailable`) and rewritten atomically. `result` needs a completed job (else 409), probes lazily, caches `outputs/<job>/metadata.result.json` (keyed by result mtime+size, singleflight per job); archives return an empty document with warning `result is an archive; metadata not applicable`. Other `side` values: 400. |
+| `GET /api/job/:jobId/metadata/diff` | `{removed[], added[], changed[{id,before,after}], unchanged, byCategory{cat:{removed,added,changed,unchanged}}}`. 409 `{error}` when the job is not completed, the result file is gone, or the result is an archive. |
+| `GET /api/job/:jobId/metadata/binary/:entryId?side=&inline=1` | Raw bytes of one `binary: true` entry via `exiftool -b -<Group>:<Tag> -- <path>` (20 s, 8 MiB cap -> 413). `entryId` must match `Group:Tag` (letters, digits, `_ . -`, no leading `-`, no `..`); `#n` duplicates are 422. Always `nosniff`; `attachment` unless the bytes sniff as JPEG/PNG and `inline=1`. Original side needs the stored upload (404 once expired). |
+
+Job JSON gains `metadataAvailable: {original, result}` (stat-based) and `strippedCount` (strip jobs only). Video/audio options accept `metadataMode: keep|strip` (`custom` rejected); strip adds `-map_metadata -1 -map_chapters -1` and, for mp4/mov/m4a/m4v, an `exiftool -all= -overwrite_original -- <out>` pass that needs free temp space about the size of the output (best effort, logged on failure).
+
 ### 12.7 Quick health summary one-liner
 
 ```bash
