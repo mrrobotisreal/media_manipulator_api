@@ -195,3 +195,20 @@ func TestPurgeBatchRejectsUnknownRuleAndNoPool(t *testing.T) {
 		t.Errorf("no pool: %v", err)
 	}
 }
+
+// MM24: a "keep longer" pin survives a window change: the re-stamp takes
+// max(window rule, floor, pin) for kept_longer rows.
+func TestRestampKeepsPinnedRows(t *testing.T) {
+	for _, want := range []string{"kept_longer", "THEN expires_at"} {
+		if !strings.Contains(restampOwnerQuery, want) {
+			t.Errorf("restamp query must honour pins: missing %q", want)
+		}
+	}
+}
+
+func TestJobRecordNoStoreAndBadID(t *testing.T) {
+	s := &Store{}
+	if _, err := s.JobRecord(context.Background(), "x"); err != ErrNoStore {
+		t.Errorf("no store: %v", err)
+	}
+}

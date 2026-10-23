@@ -146,10 +146,12 @@ RETURNING ` + settingsColumns
 // restampOwnerQuery moves the expiry of every LIVE row of one user to
 // max(created_at + window, floor). It touches only owner_user_id = $1 and only
 // rows with deleted_at IS NULL, so it can never reach another account's rows or
-// resurrect a deleted one.
+// resurrect a deleted one. A row the user pinned with "keep longer" (MM24)
+// keeps max(window rule, pin): shrinking the window never shortens a pin.
 const restampOwnerQuery = `
 UPDATE mm_retained_objects
-SET expires_at = GREATEST(created_at + make_interval(hours => $2), $3::timestamptz)
+SET expires_at = GREATEST(created_at + make_interval(hours => $2), $3::timestamptz,
+                          CASE WHEN kept_longer THEN expires_at ELSE $3::timestamptz END)
 WHERE owner_user_id = $1 AND deleted_at IS NULL AND NOT keep_with_account`
 
 // ApplyUserSettings updates the settings and, when the window changed, re-stamps
