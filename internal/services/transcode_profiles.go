@@ -137,7 +137,7 @@ func tierLabel(t tiers.Tier) string {
 func (a LadderAccess) lockedReason(label string) string {
 	if unlock, ok := a.unlockedBy[label]; ok {
 		if unlock == tiers.TierPremium {
-			return fmt.Sprintf("%s — Premium (sign-up coming soon)", label)
+			return fmt.Sprintf("%s — Premium", label)
 		}
 		return fmt.Sprintf("%s — %s", label, tierLabel(unlock))
 	}
