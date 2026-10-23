@@ -473,3 +473,70 @@ func TestRestoreResolutionBucket(t *testing.T) {
 		}
 	}
 }
+
+// TestKeepRestoreResultsSurvivesStageCleanupAndIsReapedWithJobDir proves the
+// per-model MP4s are moved out of stage/ (which the pipeline deletes), are
+// listed/resolved from the kept manifest only, and vanish with the job dir the
+// retention worker removes whole (cleanup.sweepRoot -> os.RemoveAll).
+func TestKeepRestoreResultsSurvivesStageCleanupAndIsReapedWithJobDir(t *testing.T) {
+	root := t.TempDir()
+	jobDir := filepath.Join(root, "job-1")
+	stage := filepath.Join(jobDir, "stage")
+	mk := func(rel, body string) {
+		p := filepath.Join(stage, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("restoration_results/original/clip.mp4", "orig")
+	mk("restoration_results/realesrgan/realesrgan_x4.mp4", "enhanced-bytes")
+	manifest := restoreManifest{
+		JobID:  "job-1",
+		Source: restoreManifestSource{Width: 640, Height: 480},
+		Models: []restoreModelOutcome{
+			{ID: "realesrgan", Group: "frame", Status: "completed", DurationSeconds: 12, OutputWidth: 2560, OutputHeight: 1920, OutputFile: "restoration_results/realesrgan/realesrgan_x4.mp4"},
+			{ID: "vrt", Group: "video", Status: "failed", Error: "timed out", OutputFile: "restoration_results/vrt/vrt_x4.mp4"},
+		},
+	}
+	if err := keepRestoreResults(stage, jobDir, manifest); err != nil {
+		t.Fatalf("keepRestoreResults: %v", err)
+	}
+	// The pipeline's deferred cleanup.
+	if err := os.RemoveAll(stage); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := ReadRestoreResults(root, "job-1")
+	if err != nil {
+		t.Fatalf("ReadRestoreResults: %v", err)
+	}
+	if resp.Original.SizeBytes != 4 || resp.Original.Width != 640 {
+		t.Fatalf("original: %+v", resp.Original)
+	}
+	if len(resp.Models) != 2 || resp.Models[0].FileName != "realesrgan_x4.mp4" || resp.Models[0].SizeBytes != 14 || resp.Models[0].Width != 2560 {
+		t.Fatalf("models: %+v", resp.Models)
+	}
+	if resp.Models[1].FileName != "" || resp.Models[1].Error == "" {
+		t.Fatalf("failed model must have no fileName: %+v", resp.Models[1])
+	}
+	for name, ok := range map[string]bool{"original": true, "realesrgan": true, "vrt": false, "../x": false, "": false, "hat": false} {
+		_, err := RestoreResultPath(root, "job-1", name)
+		if (err == nil) != ok {
+			t.Errorf("RestoreResultPath(%q) err=%v want ok=%v", name, err, ok)
+		}
+	}
+	if _, err := RestoreResultPath(root, "../job-1", "original"); err == nil {
+		t.Error("job id traversal must fail")
+	}
+
+	// Retention reaps the whole job dir (sweepRoot uses os.RemoveAll on it).
+	if err := os.RemoveAll(jobDir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadRestoreResults(root, "job-1"); err == nil {
+		t.Fatal("results must be gone with the job dir")
+	}
+}

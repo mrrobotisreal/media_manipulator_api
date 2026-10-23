@@ -141,3 +141,38 @@ type RestoreCapabilitiesResponse struct {
 	ResultLinkTTLSeconds   int                `json:"resultLinkTtlSeconds"`
 	Models                 []RestoreModelInfo `json:"models"`
 }
+
+// RestoreResultOriginal is the reference clip entry of GET
+// /api/video-restore/:jobId/results. Its id is always "original".
+type RestoreResultOriginal struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Width     int    `json:"width"`
+	Height    int    `json:"height"`
+	FileName  string `json:"fileName"`
+	SizeBytes int64  `json:"sizeBytes"`
+	Mime      string `json:"mime"`
+}
+
+// RestoreResultModel is one model entry. Only completed models carry fileName,
+// sizeBytes, width/height and mime; failed ones carry error.
+type RestoreResultModel struct {
+	ID              string  `json:"id"`
+	Group           string  `json:"group"`
+	Status          string  `json:"status"` // completed | failed
+	DurationSeconds float64 `json:"durationSeconds"`
+	Width           int     `json:"width,omitempty"`
+	Height          int     `json:"height,omitempty"`
+	FileName        string  `json:"fileName,omitempty"`
+	SizeBytes       int64   `json:"sizeBytes,omitempty"`
+	Mime            string  `json:"mime,omitempty"`
+	Note            string  `json:"note,omitempty"`
+	Error           string  `json:"error,omitempty"`
+}
+
+// RestoreResultsResponse is the body of GET /api/video-restore/:jobId/results.
+type RestoreResultsResponse struct {
+	JobID    string                `json:"jobId"`
+	Original RestoreResultOriginal `json:"original"`
+	Models   []RestoreResultModel  `json:"models"`
+}
