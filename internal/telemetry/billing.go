@@ -45,8 +45,8 @@ ON CONFLICT (event_id) DO NOTHING`
 
 	markBillingEventQuery = `
 UPDATE mm_billing_events
-SET processed_at = CASE WHEN $2 = '' THEN now() ELSE NULL END,
-    error = nullif($2, '')
+SET processed_at = CASE WHEN $2 THEN now() ELSE NULL END,
+    error = nullif($3, '')
 WHERE event_id = $1`
 )
 
@@ -113,14 +113,15 @@ func (s *Store) InsertBillingEvent(ctx context.Context, eventID, eventType strin
 	return alreadyProcessed, err
 }
 
-// MarkBillingEventProcessed stamps processed_at on success (errMsg == "") or
-// stores the error and leaves processed_at NULL so a Stripe retry reprocesses it.
-func (s *Store) MarkBillingEventProcessed(ctx context.Context, eventID, errMsg string) error {
+// MarkBillingEvent finishes an event. processed=true stamps processed_at (note
+// may carry a short explanation such as "manual_grant_precedence"); processed=false
+// stores the error text and leaves processed_at NULL so a Stripe retry reprocesses.
+func (s *Store) MarkBillingEvent(ctx context.Context, eventID string, processed bool, note string) error {
 	if !s.Enabled() {
 		return ErrNoStore
 	}
 	ctx, cancel := s.ctx(ctx)
 	defer cancel()
-	_, err := s.Pool.Exec(ctx, markBillingEventQuery, eventID, errMsg)
+	_, err := s.Pool.Exec(ctx, markBillingEventQuery, eventID, processed, note)
 	return err
 }

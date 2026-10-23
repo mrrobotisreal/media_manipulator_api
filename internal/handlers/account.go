@@ -39,6 +39,16 @@ type AccountHandler struct {
 	// analytics receives `server_signup_completed`. Attached by a setter; nil is a
 	// supported configuration.
 	analytics *analyticsemit.Emitter
+	// billing, when attached, has its /billing/* routes mounted by
+	// RegisterAccountRoutes (MM17). Kept here so cmd/api wiring stays one line.
+	billing *BillingHandler
+}
+
+// SetBilling attaches the billing routes (nil = none mounted).
+func (h *AccountHandler) SetBilling(b *BillingHandler) {
+	if h != nil {
+		h.billing = b
+	}
 }
 
 // SetAnalyticsEmitter attaches the server-truth analytics feed.
@@ -502,10 +512,12 @@ func (h *AccountHandler) Tiers(c *gin.Context) {
 	c.Header("Cache-Control", "public, max-age=300")
 	c.JSON(http.StatusOK, gin.H{
 		"tiers": out,
-		// Payments are not built yet. The UI shows "Coming soon" for Premium
-		// rather than a checkout button, and this flag is how it knows.
-		"premiumPurchasable": false,
-		"premiumPriceUSD":    7,
+		// Config-driven (MM17): true only when BILLING_ENABLED and every Stripe
+		// secret/price id is set. Prices are display-only; the amount charged is
+		// whatever the Stripe Price says.
+		"premiumPurchasable":    h.cfg.BillingConfigured(),
+		"premiumPriceUSD":       h.cfg.BillingPriceMonthlyUSD,
+		"premiumPriceYearlyUSD": h.cfg.BillingPriceYearlyUSD,
 	})
 }
 
@@ -530,4 +542,8 @@ func RegisterAccountRoutes(rg *gin.RouterGroup, h *AccountHandler, cfg *config.C
 	authed.POST("/sync", h.Sync)
 	authed.GET("/me", h.Me)
 	authed.GET("/history", h.History)
+
+	if h.billing != nil {
+		RegisterBillingRoutes(rg, h.billing, verifier)
+	}
 }

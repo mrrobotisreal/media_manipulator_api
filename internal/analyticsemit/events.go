@@ -40,3 +40,14 @@ const (
 	StudioRenderCompleted = "studio_render_completed"
 	StudioRenderFailed    = "studio_render_failed"
 )
+
+// Billing (MM17). Emitted by the Stripe webhook processor and cmd/grant-tier.
+// The analytics-side catalog entries belong to MM20; until they land the
+// analytics service stores these as is_unknown=true, which is acceptable.
+const (
+	ServerTierChanged               = "server_tier_changed"
+	ServerSubscriptionCreated       = "server_subscription_created"
+	ServerSubscriptionRenewed       = "server_subscription_renewed"
+	ServerSubscriptionCancelled     = "server_subscription_cancelled"
+	ServerSubscriptionPaymentFailed = "server_subscription_payment_failed"
+)
