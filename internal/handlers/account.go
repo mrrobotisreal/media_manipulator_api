@@ -543,7 +543,7 @@ func RegisterAccountRoutes(rg *gin.RouterGroup, h *AccountHandler, cfg *config.C
 	authed.GET("/me", h.Me)
 	authed.GET("/history", h.History)
 
-	if h.billing != nil {
+	if h != nil && h.billing != nil {
 		RegisterBillingRoutes(rg, h.billing, verifier)
 	}
 }
