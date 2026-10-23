@@ -20,7 +20,7 @@ func TestRestampQueryIsScopedToOwnerLiveRowsWithFloor(t *testing.T) {
 
 func TestPreviewQueryIsReadOnlyAndScoped(t *testing.T) {
 	q := strings.ToUpper(previewShrinkQuery)
-	if strings.Contains(q, "UPDATE") || strings.Contains(q, "DELETE") || strings.Contains(q, "INSERT") {
+	if strings.Contains(q, "UPDATE ") || strings.Contains(q, "DELETE FROM") || strings.Contains(q, "INSERT ") {
 		t.Error("preview must not write")
 	}
 	if !strings.Contains(previewShrinkQuery, "owner_user_id = $1") || !strings.Contains(previewShrinkQuery, "deleted_at IS NULL") {
