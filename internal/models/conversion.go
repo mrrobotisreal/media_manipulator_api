@@ -509,6 +509,8 @@ type VideoConversionOptions struct {
 	Advanced            *AdvancedProcessing `json:"advanced,omitempty"`
 	GIF                 *GIFOptions         `json:"gif,omitempty"`
 	AI                  *AIVideoOptions     `json:"ai,omitempty"`
+	// MetadataMode is "keep" (default) or "strip". "custom" is image-only.
+	MetadataMode string `json:"metadataMode,omitempty"`
 
 	// --- Compression controls (optional; used by the video-compressor /
 	// compress-mp4 utility pages). When set they refine the codec selection
@@ -579,6 +581,8 @@ type AudioConversionOptions struct {
 	Restoration      *Restoration      `json:"restoration,omitempty"`
 	Advanced         *AdvancedAudio    `json:"advanced,omitempty"`
 	AI               *AIAudioOptions   `json:"ai,omitempty"`
+	// MetadataMode is "keep" (default) or "strip". "custom" is image-only.
+	MetadataMode string `json:"metadataMode,omitempty"`
 }
 
 // AIAudioOptions selects a Phase 1 AI audio operation. Only one operation runs
