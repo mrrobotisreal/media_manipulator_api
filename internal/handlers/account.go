@@ -17,6 +17,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
@@ -210,13 +211,7 @@ func (h *AccountHandler) Sync(c *gin.Context) {
 	// it here means the anonymous editor's work survives making an account
 	// instead of silently becoming unreachable once ownership is by user id.
 	if session := c.GetHeader("X-MM-Session-ID"); session != "" && user != nil {
-		if moved, claimErr := h.store.ClaimStudioProjectsForUser(c.Request.Context(), user.ID, session); claimErr != nil {
-			// Never fail the sync over this: the account exists either way, and
-			// the next sync retries.
-			h.logger.Warn("account: claiming studio projects failed", "error", claimErr.Error())
-		} else if moved > 0 {
-			h.logger.Info("account: claimed studio projects on sign-in", "count", moved)
-		}
+		claimOnSignIn(c.Request.Context(), h.store, h.logger, user, session, time.Now().UTC())
 	}
 
 	c.JSON(http.StatusOK, h.buildUsageResponse(c, user, true))
@@ -538,4 +533,25 @@ func RegisterAccountRoutes(rg *gin.RouterGroup, h *AccountHandler, cfg *config.C
 		authed.PATCH("/settings", settings.Patch)
 		authed.GET("/settings/preview", settings.Preview)
 	}
+}
+
+// SessionClaimer is the store slice the sign-in claim needs (fake in tests).
+type SessionClaimer interface {
+	ClaimSessionForUser(ctx context.Context, userID, sessionID string, defaultHours int, now time.Time) (telemetry.ClaimResult, error)
+}
+
+// claimOnSignIn moves everything the visitor's session owns onto the account:
+// Darkroom projects, conversion jobs and retained-object ledger rows (re-stamped
+// with the user's window). Failure is logged, never fatal: the account exists
+// either way and the next sync retries.
+func claimOnSignIn(ctx context.Context, store SessionClaimer, logger *slog.Logger, user *models.User, session string, now time.Time) telemetry.ClaimResult {
+	res, err := store.ClaimSessionForUser(ctx, user.ID, session, retention.DefaultHours(user.Tier), now)
+	if err != nil {
+		logger.Warn("account: claiming session data failed", "error", err.Error())
+		return res
+	}
+	if res.Projects+res.Jobs+res.Objects > 0 {
+		logger.Info("account: claimed session data on sign-in", "projects", res.Projects, "jobs", res.Jobs, "objects", res.Objects)
+	}
+	return res
 }

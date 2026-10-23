@@ -250,3 +250,72 @@ func (s *Store) UpsertRetainedObject(ctx context.Context, o RetainedObject) erro
 		o.SizeBytes, o.CreatedAt, o.ExpiresAt)
 	return err
 }
+
+// Claim statements (MM22). Each only moves rows that have no user yet, so a
+// claim can never take another account's rows and a second call moves nothing.
+const (
+	claimStudioProjectsQuery = `
+UPDATE studio_projects SET user_id = $1, updated_at = now()
+WHERE session_id = $2 AND user_id IS NULL`
+
+	// session_id is uuid here but the header is free text: compare as text so a
+	// non-uuid session id yields zero rows instead of a cast error.
+	claimJobsQuery = `
+UPDATE mm_conversion_jobs SET user_id = $1
+WHERE session_id::text = $2 AND user_id IS NULL`
+
+	claimObjectsQuery = `
+UPDATE mm_retained_objects
+SET owner_user_id = $1,
+    expires_at    = GREATEST(created_at + make_interval(hours => $3), $4::timestamptz)
+WHERE owner_session_id = $2 AND owner_user_id IS NULL AND deleted_at IS NULL`
+)
+
+// ClaimSessionForUser attaches everything a visitor created while signed out to
+// the account they have just signed into: Darkroom projects, conversion jobs and
+// ledger rows, the last re-stamped with the user's window (floor now + 1 h).
+// defaultHours is used when the user has no settings row yet. One transaction;
+// idempotent; unclaimed rows only.
+func (s *Store) ClaimSessionForUser(ctx context.Context, userID, sessionID string, defaultHours int, now time.Time) (ClaimResult, error) {
+	var out ClaimResult
+	if !s.Enabled() {
+		return out, ErrNoStore
+	}
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(sessionID) == "" {
+		return out, nil
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return out, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx, claimStudioProjectsQuery, userID, sessionID)
+	if err != nil {
+		return out, err
+	}
+	out.Projects = tag.RowsAffected()
+
+	if tag, err = tx.Exec(ctx, claimJobsQuery, userID, sessionID); err != nil {
+		return out, err
+	}
+	out.Jobs = tag.RowsAffected()
+
+	hours := defaultHours
+	var stored int
+	switch err := tx.QueryRow(ctx, `SELECT retention_hours FROM mm_user_settings WHERE user_id = $1`, userID).Scan(&stored); {
+	case err == nil:
+		hours = stored
+	case !errors.Is(err, pgx.ErrNoRows):
+		return out, err
+	}
+	if tag, err = tx.Exec(ctx, claimObjectsQuery, userID, sessionID, hours, now.Add(time.Hour)); err != nil {
+		return out, err
+	}
+	out.Objects = tag.RowsAffected()
+
+	return out, tx.Commit(ctx)
+}

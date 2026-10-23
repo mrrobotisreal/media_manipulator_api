@@ -57,3 +57,21 @@ func TestRetentionStoreNoOpWithoutPool(t *testing.T) {
 		t.Errorf("preview: %v", err)
 	}
 }
+
+func TestClaimStatementsOnlyTakeUnclaimedRows(t *testing.T) {
+	for name, q := range map[string]string{
+		"projects": claimStudioProjectsQuery, "jobs": claimJobsQuery,
+	} {
+		if !strings.Contains(q, "user_id IS NULL") || !strings.Contains(q, "session_id") {
+			t.Errorf("%s claim must be scoped to the session and unclaimed rows: %s", name, q)
+		}
+	}
+	for _, want := range []string{"owner_user_id IS NULL", "owner_session_id = $2", "deleted_at IS NULL", "GREATEST(", "make_interval(hours => $3)"} {
+		if !strings.Contains(claimObjectsQuery, want) {
+			t.Errorf("ledger claim missing %q", want)
+		}
+	}
+	if _, err := (&Store{}).ClaimSessionForUser(context.Background(), "u", "s", 4320, time.Now()); err != ErrNoStore {
+		t.Errorf("no pool: %v", err)
+	}
+}
