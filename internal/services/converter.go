@@ -484,36 +484,6 @@ func imageTextOverlayArgs(overlay *models.ImageTextOverlay) []string {
 	return args
 }
 
-func imageMetadataArgs(options *models.ImageConversionOptions) []string {
-	mode := strings.TrimSpace(options.MetadataMode)
-	if options.RemoveMetadata {
-		mode = "strip"
-	}
-	var args []string
-	if mode == "strip" || mode == "custom" {
-		args = append(args, "-strip")
-	}
-	if mode != "custom" || options.Metadata == nil {
-		return args
-	}
-	fields := map[string]string{
-		"title":       options.Metadata.Title,
-		"author":      options.Metadata.Author,
-		"description": options.Metadata.Description,
-		"copyright":   options.Metadata.Copyright,
-		"comment":     options.Metadata.Comment,
-		"keywords":    options.Metadata.Keywords,
-	}
-	for key, value := range fields {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		args = append(args, "-set", key, value)
-	}
-	return args
-}
-
 func applyImageMetadataOptions(inputPath, outputPath string, options *models.ImageConversionOptions) error {
 	mode := strings.TrimSpace(options.MetadataMode)
 	if options.RemoveMetadata {

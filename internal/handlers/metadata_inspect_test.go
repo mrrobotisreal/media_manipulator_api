@@ -152,20 +152,24 @@ func TestInspectMetadataOversizedIs400(t *testing.T) {
 	}
 }
 
-func TestDetailsRouteStillRegistered(t *testing.T) {
+func TestDetailsRouteRemoved(t *testing.T) {
 	engine, _ := metadataTestRouter(t, stubRunner(func(string, []string) (string, string, error) { return "[]", "", nil }))
 	have := map[string]bool{}
 	for _, r := range engine.Routes() {
 		have[r.Method+" "+r.Path] = true
 	}
-	for _, want := range []string{"POST /api/details", "POST /api/metadata/inspect"} {
-		if !have[want] {
-			t.Errorf("route %s missing", want)
-		}
+	if have["POST /api/details"] {
+		t.Error("POST /api/details must not be registered")
 	}
-	// /details without a file keeps its old 400 contract.
-	body, ct := multipartBody(t, "other", "a.jpg", []byte("x"))
-	if rec := post(engine, "/api/details", body, ct); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "no file provided") {
+	if !have["POST /api/metadata/inspect"] {
+		t.Error("route POST /api/metadata/inspect missing")
+	}
+	body, ct := multipartBody(t, "file", "a.jpg", []byte("x"))
+	if rec := post(engine, "/api/details", body, ct); rec.Code != http.StatusNotFound {
 		t.Fatalf("details: %d %s", rec.Code, rec.Body.String())
+	}
+	body, ct = multipartBody(t, "file", "a.jpg", []byte("x"))
+	if rec := post(engine, "/api/metadata/inspect", body, ct); rec.Code != http.StatusOK {
+		t.Fatalf("inspect: %d %s", rec.Code, rec.Body.String())
 	}
 }

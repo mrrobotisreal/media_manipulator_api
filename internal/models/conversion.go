@@ -638,18 +638,6 @@ type ProgressUpdate struct {
 	Progress int    `json:"progress"`
 }
 
-// File identification response
-type FileIdentificationResponse struct {
-	FileName      string                   `json:"fileName"`
-	FileSize      int64                    `json:"fileSize"`
-	FileType      FileType                 `json:"fileType"`
-	MimeType      string                   `json:"mimeType"`
-	Details       map[string]interface{}   `json:"details"`
-	ImageMetadata *StructuredImageMetadata `json:"imageMetadata,omitempty"`
-	Tool          string                   `json:"tool"`      // Which tool was used for identification
-	RawOutput     string                   `json:"rawOutput"` // Raw command output for debugging
-}
-
 // Helper function to determine file type from MIME type
 func GetFileType(mimeType string) FileType {
 	mimeType = strings.ToLower(strings.TrimSpace(mimeType))

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -52,16 +53,15 @@ func tierValidationLimits(c *gin.Context) *validation.Limits {
 	return &validation.Limits{MaxVideoSeconds: res.Limits.MaxVideoSeconds}
 }
 
-// rejectOverLimit checks a freshly-probed upload against the duration and
-// resolution caps, reusing the ffprobe JSON MediaInspector already captured.
-// Returns nil when the upload is acceptable — and also when the probe output
-// cannot be read, because a malformed probe is not evidence of an oversized
-// file and must not block a conversion.
-func rejectOverLimit(c *gin.Context, cfg *config.Config, fileType models.FileType, metadata *services.MediaMetadata) *validation.Rejection {
-	if metadata == nil || (fileType != models.FileTypeVideo && fileType != models.FileTypeAudio) {
+// rejectOverLimit checks a freshly-stored upload against the duration and
+// resolution caps with one ffprobe run. Returns nil when the upload is
+// acceptable, and also when the probe fails or cannot be read, because a failed
+// probe is not evidence of an oversized file and must not block a conversion.
+func rejectOverLimit(ctx context.Context, c *gin.Context, cfg *config.Config, fileType models.FileType, path string) *validation.Rejection {
+	if fileType != models.FileTypeVideo && fileType != models.FileTypeAudio {
 		return nil
 	}
-	report, err := validation.ParseProbeJSON([]byte(metadata.Raw))
+	report, err := validation.Probe(ctx, "ffprobe", path, cfg.CommandTimeout)
 	if err != nil || report == nil {
 		return nil
 	}
