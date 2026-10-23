@@ -135,6 +135,29 @@ func (h *StudioHandler) owner(c *gin.Context) services.StudioOwner {
 	return out
 }
 
+// ExportHeightLookup returns the persisted height of the project an export
+// request targets, for ExportHeightGate. ok=false (no DB, unknown project, not
+// the caller's) leaves the decision to ExportProject, which 404s as usual.
+func (h *StudioHandler) ExportHeightLookup(c *gin.Context) (int, bool) {
+	if h == nil || h.repo == nil || !h.repo.Enabled() {
+		return 0, false
+	}
+	projectID := strings.TrimSpace(c.Param("id"))
+	if projectID == "" {
+		return 0, false
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+	if ok, err := h.repo.OwnsProject(ctx, projectID, h.owner(c)); err != nil || !ok {
+		return 0, false
+	}
+	project, err := h.repo.GetProject(ctx, projectID)
+	if err != nil || project == nil {
+		return 0, false
+	}
+	return project.Height, true
+}
+
 // requireProjectAccess is the gate on every project-scoped endpoint. It answers
 // 404 rather than 403 on a miss: telling a stranger that a project id exists
 // but is not theirs is a disclosure in itself.
@@ -977,6 +1000,12 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	assetByID := make(map[string]*models.StudioAsset, len(assets))
 	for _, a := range assets {
 		assetByID[a.ID] = a
+	}
+	// Plan output height: read from the PERSISTED project (never the request).
+	// The quota dispatcher already ran ExportHeightGate; this is the
+	// authoritative check, before the checkpoint and before any job exists.
+	if refuseOutputHeight(c, project.Height) {
+		return
 	}
 	// Sanitize the (possibly pre-v2 or hand-edited) EDL before building the
 	// render plan so the export compiler can trust every value.

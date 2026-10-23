@@ -159,6 +159,7 @@ func New(cfg *config.Config) *Registry {
 	operator.OpsPerDay = Unlimited
 	operator.AIOpsPerDay = Unlimited
 	operator.ExportsPerDay = Unlimited
+	operator.MaxOutputHeight = DeploymentMaxOutputHeight
 	operator.MaxFileBytes = cfg.MaxFileSize
 	operator.MaxVideoSeconds = cfg.MaxVideoDurationSeconds
 	operator.StudioProjects = Unlimited

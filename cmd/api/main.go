@@ -473,6 +473,11 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 			// Every 429 also becomes a `server_quota_rejected` product-analytics
 			// event. Nil when analytics is unconfigured, which is a no-op.
 			Analytics: analyticsEmitter,
+			// MM18: an export whose project is taller than the plan's
+			// MaxOutputHeight is refused (403 output_height_limited) before
+			// the export allowance is spent.
+		}, map[string]gin.HandlerFunc{
+			models.MetricExport: handlers.ExportHeightGate(studioHandler.ExportHeightLookup),
 		}))
 
 		api.GET("/health", func(c *gin.Context) {
@@ -595,16 +600,39 @@ var quotaRoutes = []quotaRoute{
 	},
 }
 
+// gateThenQuota runs a refusal BEFORE the allowance is spent, so a request that
+// was never going to run does not cost a unit. A gate that aborts ends the
+// chain; one that does not falls through to RequireQuota.
+func gateThenQuota(gate, quota gin.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		gate(c)
+		if c.IsAborted() {
+			return
+		}
+		quota(c)
+	}
+}
+
 // quotaDispatcher applies RequireQuota to the paths in quotaRoutes.
 //
 // It is installed on the /api group before any route is registered, so it is
 // genuinely part of each route's handler chain. The per-metric handlers are
 // built once at startup rather than per request.
-func quotaDispatcher(cfg middleware.QuotaConfig) gin.HandlerFunc {
+func quotaDispatcher(cfg middleware.QuotaConfig, preQuotaGates ...map[string]gin.HandlerFunc) gin.HandlerFunc {
+	gates := map[string]gin.HandlerFunc{}
+	for _, g := range preQuotaGates {
+		for k, v := range g {
+			gates[k] = v
+		}
+	}
 	byMetric := map[string]gin.HandlerFunc{}
 	for _, r := range quotaRoutes {
 		if _, ok := byMetric[r.metric]; !ok {
-			byMetric[r.metric] = middleware.RequireQuota(cfg, r.metric)
+			quota := middleware.RequireQuota(cfg, r.metric)
+			if gate := gates[r.metric]; gate != nil {
+				quota = gateThenQuota(gate, quota)
+			}
+			byMetric[r.metric] = quota
 		}
 	}
 

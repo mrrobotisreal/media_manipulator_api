@@ -99,6 +99,11 @@ func (h *ConversionHandler) CompleteVideoUpload(c *gin.Context) {
 		return
 	}
 
+	// MM18: refuse an explicit over-cap output height before touching S3.
+	if refuseOutputHeight(c, requestedOutputHeight(req.Options)) {
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(c.Request.Context(), h.cfg.CommandTimeout)
 	defer cancel()
 
