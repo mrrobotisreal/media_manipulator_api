@@ -550,9 +550,12 @@ All routes live under `/api/` except `/healthz`.
 | POST | `/api/image-restore/start` | Multipart (`image` + `options` JSON) → multi-model image restoration job. Returns 202 `{jobId}`. | Yes (goroutine, queued behind `IMAGE_RESTORE_MAX_CONCURRENT_JOBS`) |
 | GET | `/api/image-restore/:jobId/results` | Manifest-derived results listing for a completed image-restore job (no fs paths). | No |
 | GET | `/api/image-restore/:jobId/result/:resultId` | Stream one result PNG inline (id resolved from the manifest only). | No |
+| GET | `/api/video-restore/:jobId/results` | Listing for a completed restore job: `{jobId, original, models[]}` (failed models carry no `fileName`). | No |
+| GET | `/api/video-restore/:jobId/result/:name` | Stream one kept MP4 inline with range; `:name` is `original` or a completed model id from the manifest only. Accepts `?sid=`. | No |
 | GET | `/api/job/:jobId` | Poll a job's full JSON state. | No |
 | GET | `/api/job/:jobId/events` | SSE event stream of job state changes. Closes on completed/failed. | Yes (open connection) |
 | GET | `/api/download/:jobId` | Stream the converted output file for jobs that produced one locally (image/audio/video convert + transcribe). | No |
+| GET | `/api/result/:jobId` | Same file as `/download`, served inline with its sniffed MIME and HTTP range (`206`/`416`); unsafe types fall back to an octet-stream attachment. Accepts `?sid=`. | No |
 | GET | `/api/transcript/:jobId` | Serve the `transcribe_result.json` for a transcribe job. | No |
 | GET | `/api/analysis/:jobId` | Serve the `analysis.json` (transcript summary + safety review) for a transcribe job. | No |
 
@@ -1089,6 +1092,28 @@ For transcode jobs: don't use `/api/download/:jobId` — the
 **presigned S3 GET URL** in `job.resultUrl` is the canonical download. The
 `resultUrl` field returned from `GET /api/job/:id` is what the UI should
 follow.
+
+**Inline results and ownership (MM05).** `GET /api/result/:jobId` serves the
+same file as `/download` with the real MIME (`job.resultMime`, sniffed with
+`mimetype` plus an extension table for srt/vtt/m3u8/mpd/tar.gz/zip), `Accept-Ranges:
+bytes`, `Cache-Control: private, max-age=300` and `X-Content-Type-Options:
+nosniff`. Only image (not svg), video, audio, pdf, text/plain, json, vtt and srt
+are `inline`; everything else is an octet-stream attachment. `/download` stays an
+attachment. Video restoration keeps its per-model MP4s under
+`OUTPUT_DIR/<jobID>/results/<modelId>/` with `results/manifest.json`; the
+retention worker removes the whole job dir (tarball and `results/` together).
+
+Ownership: `/download`, `/result`, `/transcript`, `/analysis`, the
+`/video-restore/:id/results|result/:name`, `/image-restore/:id/results|result/:id`
+and `/document-scan/:id/results|result` routes answer **404 `{"error":"Job not
+found"}`** (identical to a missing job) unless the caller is an operator, the
+signed-in owner (`mm_users.id`), or sends the owner's `X-MM-Session-ID`. Inline
+media routes (`/result/:jobId`, `/video-restore/:id/result/:name`,
+`/image-restore/:id/result/:resultId`, `/document-scan/:id/result`) also accept
+`?sid=<session id>` for `<video>`/`<img>`/`<iframe>`. Jobs with no recorded
+owner stay open. Owners live in memory with the job. `RESULT_OWNERSHIP_ENFORCE`
+(default `true`; `false` logs would-be denials and allows them) is the rollout
+switch.
 
 **Failure modes:**
 

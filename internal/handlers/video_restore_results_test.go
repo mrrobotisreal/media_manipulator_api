@@ -151,3 +151,36 @@ func TestVideoRestoreResultsOwnership(t *testing.T) {
 		t.Errorf("manifest ?sid must be rejected: %d", w.Code)
 	}
 }
+
+// Image restore and document scan share the helper; a stranger is rejected
+// before any service call, so nil services are safe in this test.
+func TestImageRestoreAndDocumentScanDenyStrangers(t *testing.T) {
+	SetResultOwnershipEnforce(true)
+	gin.SetMode(gin.TestMode)
+	jm := services.NewJobManager()
+	img := jm.CreateJob(models.OriginalFileInfo{Name: "a.png"}, map[string]interface{}{})
+	_ = jm.SetMode(img.ID, "image_restore")
+	jm.SetJobOwner(img.ID, services.JobOwner{SessionID: "owner"})
+	_ = jm.UpdateJobStatus(img.ID, models.StatusCompleted)
+	doc := jm.CreateJob(models.OriginalFileInfo{Name: "a.png"}, map[string]interface{}{})
+	_ = jm.SetMode(doc.ID, "document_scan")
+	jm.SetJobOwner(doc.ID, services.JobOwner{SessionID: "owner"})
+	_ = jm.UpdateJobStatus(doc.ID, models.StatusCompleted)
+
+	r := gin.New()
+	r.Use(middleware.TierContext(middleware.TierConfig{Store: &jobRecordStore{}, Registry: tiers.New(&config.Config{})}, true))
+	RegisterImageRestoreRoutes(r, &ImageRestoreHandler{jobManager: jm})
+	RegisterDocumentScanRoutes(r, &DocumentScanHandler{jobManager: jm})
+	missing := doGet(r, "/image-restore/nope/results", nil)
+	for _, u := range []string{
+		"/image-restore/" + img.ID + "/results",
+		"/image-restore/" + img.ID + "/result/r1",
+		"/document-scan/" + doc.ID + "/results",
+		"/document-scan/" + doc.ID + "/result",
+	} {
+		w := doGet(r, u, map[string]string{"X-MM-Session-ID": "stranger"})
+		if w.Code != 404 || w.Body.String() != missing.Body.String() {
+			t.Errorf("%s stranger: %d %q", u, w.Code, w.Body.String())
+		}
+	}
+}

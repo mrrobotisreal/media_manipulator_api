@@ -284,6 +284,10 @@ func (h *DocumentScanHandler) GetResults(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
 		return
 	}
+	if !authorizeJobAccess(c, h.jobManager, job) {
+		denyJobAccess(c)
+		return
+	}
 	if job.Status != models.StatusCompleted {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Job not completed"})
 		return
@@ -303,6 +307,11 @@ func (h *DocumentScanHandler) GetResultFile(c *gin.Context) {
 	job, err := h.jobManager.GetJob(jobID)
 	if err != nil || job.Mode != "document_scan" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+	// The PDF renders in an <iframe>, which cannot send headers: ?sid= allowed.
+	if !authorizeJobAccessSID(c, h.jobManager, job, true) {
+		denyJobAccess(c)
 		return
 	}
 	format := strings.TrimSpace(c.Query("format"))

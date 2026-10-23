@@ -404,6 +404,15 @@ func (h *ConversionHandler) GetTranscriptResult(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Job ID is required"})
 		return
 	}
+	job, err := h.jobManager.GetJob(jobID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
+		return
+	}
+	if !authorizeJobAccess(c, h.jobManager, job) {
+		denyJobAccess(c)
+		return
+	}
 	resultPath := filepath.Join(h.cfg.OutputDir, jobID, "transcribe_result.json")
 	if _, err := os.Stat(resultPath); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Transcript result not found"})
@@ -416,6 +425,15 @@ func (h *ConversionHandler) GetAnalysisResult(c *gin.Context) {
 	jobID := strings.TrimSpace(c.Param("jobId"))
 	if jobID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Job ID is required"})
+		return
+	}
+	job, err := h.jobManager.GetJob(jobID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
+		return
+	}
+	if !authorizeJobAccess(c, h.jobManager, job) {
+		denyJobAccess(c)
 		return
 	}
 	resultPath := filepath.Join(h.cfg.OutputDir, jobID, "analysis.json")

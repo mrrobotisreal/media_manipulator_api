@@ -44,6 +44,11 @@ func resultFixture(t *testing.T, owner *services.JobOwner, name string, body []b
 	if err := os.WriteFile(out, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	for _, side := range []string{"transcribe_result.json", "analysis.json"} {
+		if err := os.WriteFile(filepath.Join(dir, job.ID, side), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if owner != nil {
 		jm.SetJobOwner(job.ID, *owner)
 	}
@@ -196,4 +201,24 @@ func mustJSON(t *testing.T, v any) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+func TestTranscriptAndAnalysisOwnership(t *testing.T) {
+	SetResultOwnershipEnforce(true)
+	owner := &services.JobOwner{SessionID: "sess-owner"}
+	r, jm, job := resultFixture(t, owner, "", pngBody())
+	_ = jm
+	missing := doGet(r, "/transcript/does-not-exist", nil)
+	for _, route := range []string{"/transcript/", "/analysis/"} {
+		if w := doGet(r, route+job.ID, map[string]string{"X-MM-Session-ID": "sess-owner"}); w.Code != 200 {
+			t.Errorf("%s owner: %d", route, w.Code)
+		}
+		w := doGet(r, route+job.ID, map[string]string{"X-MM-Session-ID": "stranger"})
+		if w.Code != 404 || w.Body.String() != missing.Body.String() {
+			t.Errorf("%s stranger: %d %q", route, w.Code, w.Body.String())
+		}
+		if w := doGet(r, route+job.ID+"?sid=sess-owner", nil); w.Code != 404 {
+			t.Errorf("%s ?sid must be rejected: %d", route, w.Code)
+		}
+	}
 }
