@@ -360,3 +360,78 @@ func TestInvalidAndStaleSignaturesRejected(t *testing.T) {
 		t.Fatal("tampered body accepted")
 	}
 }
+
+func (r *rig) props(name string) map[string]any {
+	for _, e := range r.em.events {
+		if e.EventName == name {
+			return e.Properties
+		}
+	}
+	return nil
+}
+
+func cents(n int64) *int64 { return &n }
+
+// MM17 follow-up: amount_cents + currency on the four subscription events,
+// from data already in hand (re-fetched subscription price, or the invoice in
+// the event), omitted when unknown.
+func TestSubscriptionEventsCarryAmountAndCurrency(t *testing.T) {
+	inv := `{"id":"in_1","customer":"cus_1","billing_reason":"subscription_cycle","amount_paid":700,"amount_due":700,"currency":"USD","parent":{"subscription_details":{"subscription":"sub_1","metadata":{"user_id":"u1"}}}}`
+
+	// created: from the subscription price.
+	r := newRig(freeUser())
+	sub := activeSub(t0.Add(30 * 24 * time.Hour))
+	sub.UnitAmountCents, sub.Currency = cents(700), "usd"
+	r.fc.PutSubscription(sub)
+	if err := r.deliver(t, "evt_c", EventSubscriptionCreated, subObj); err != nil {
+		t.Fatal(err)
+	}
+	if p := r.props(analyticsemit.ServerSubscriptionCreated); p["amount_cents"] != int64(700) || p["currency"] != "usd" || p["interval"] != "monthly" {
+		t.Fatalf("created props = %v", p)
+	}
+
+	// renewed: invoice amount_paid wins, currency lowercased.
+	if err := r.deliver(t, "evt_r", EventInvoicePaid, inv); err != nil {
+		t.Fatal(err)
+	}
+	if p := r.props(analyticsemit.ServerSubscriptionRenewed); p["amount_cents"] != int64(700) || p["currency"] != "usd" {
+		t.Fatalf("renewed props = %v", p)
+	}
+
+	// payment_failed: invoice amount_due.
+	if err := r.deliver(t, "evt_f", EventInvoicePaymentFailed, `{"id":"in_2","customer":"cus_1","amount_due":7000,"currency":"usd","parent":{"subscription_details":{"subscription":"sub_1","metadata":{"user_id":"u1"}}}}`); err != nil {
+		t.Fatal(err)
+	}
+	if p := r.props(analyticsemit.ServerSubscriptionPaymentFailed); p["amount_cents"] != int64(7000) || p["currency"] != "usd" {
+		t.Fatalf("payment_failed props = %v", p)
+	}
+
+	// cancelled: from the subscription price.
+	sub2 := *sub
+	sub2.Status = StatusCanceled
+	r.fc.PutSubscription(&sub2)
+	if err := r.deliver(t, "evt_d", EventSubscriptionDeleted, subObj); err != nil {
+		t.Fatal(err)
+	}
+	if p := r.props(analyticsemit.ServerSubscriptionCancelled); p["amount_cents"] != int64(700) || p["currency"] != "usd" {
+		t.Fatalf("cancelled props = %v", p)
+	}
+}
+
+func TestSubscriptionEventAmountOmittedWhenUnknown(t *testing.T) {
+	r := newRig(freeUser())
+	r.fc.PutSubscription(activeSub(t0.Add(30 * 24 * time.Hour))) // no price amount
+	if err := r.deliver(t, "evt_u", EventSubscriptionCreated, subObj); err != nil {
+		t.Fatal(err)
+	}
+	p := r.props(analyticsemit.ServerSubscriptionCreated)
+	if _, has := p["amount_cents"]; has {
+		t.Fatalf("amount_cents must be omitted when unknown: %v", p)
+	}
+	if _, has := p["currency"]; has {
+		t.Fatalf("currency must be omitted when unknown: %v", p)
+	}
+	if p["interval"] != "monthly" {
+		t.Fatalf("interval lost: %v", p)
+	}
+}

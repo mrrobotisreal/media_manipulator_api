@@ -172,15 +172,15 @@ func (p *Processor) apply(ctx context.Context, ev Event) (note string, err error
 	// change cannot double count.
 	switch {
 	case adopted && !sub.IsTerminal() && sub.Status != StatusIncomplete:
-		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionCreated, map[string]any{"interval": sub.Interval}, "")
+		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionCreated, subProps(sub, ev, ""), "")
 	case ev.Type == EventInvoicePaid && ev.BillingReason == "subscription_cycle":
-		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionRenewed, map[string]any{"interval": sub.Interval}, "")
+		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionRenewed, subProps(sub, ev, "paid"), "")
 	}
 	if sub.IsTerminal() && !wasTerminal && prevStatus != "" && !adopted {
-		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionCancelled, map[string]any{"interval": sub.Interval}, "")
+		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionCancelled, subProps(sub, ev, ""), "")
 	}
 	if ev.Type == EventInvoicePaymentFailed {
-		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionPaymentFailed, map[string]any{"interval": sub.Interval}, "")
+		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionPaymentFailed, subProps(sub, ev, "due"), "")
 	}
 	return note, nil
 }
@@ -243,6 +243,34 @@ func sameTierState(u *models.User, d Decision) bool {
 		return false
 	}
 	return u.TierExpiresAt.Equal(*d.ExpiresAt)
+}
+
+// subProps builds the properties of a server_subscription_* event: interval,
+// plus amount_cents and currency (lowercase ISO 4217) when known. Renewed uses
+// the invoice's amount_paid and payment_failed its amount_due (kind "paid" /
+// "due"); everything else, and any invoice without the amount, falls back to
+// the re-fetched subscription's price unit_amount. No extra Stripe call is made.
+// Unknown values are omitted, never zeroed.
+func subProps(sub *Subscription, ev Event, kind string) map[string]any {
+	props := map[string]any{"interval": sub.Interval}
+	var amount *int64
+	currency := ""
+	switch kind {
+	case "paid":
+		amount = ev.AmountPaidCents
+	case "due":
+		amount = ev.AmountDueCents
+	}
+	if amount != nil && ev.Currency != "" {
+		currency = ev.Currency
+	} else {
+		amount, currency = sub.UnitAmountCents, sub.Currency
+	}
+	if amount != nil && currency != "" {
+		props["amount_cents"] = *amount
+		props["currency"] = currency
+	}
+	return props
 }
 
 func (p *Processor) emit(ev Event, sub *Subscription, user *models.User, name string, props map[string]any, tier string) {

@@ -37,6 +37,9 @@ type rawObject struct {
 	Subscription      idRef             `json:"subscription"`
 	ClientReferenceID string            `json:"client_reference_id"`
 	BillingReason     string            `json:"billing_reason"`
+	AmountPaid        *int64            `json:"amount_paid"`
+	AmountDue         *int64            `json:"amount_due"`
+	Currency          string            `json:"currency"`
 	Metadata          map[string]string `json:"metadata"`
 	Parent            *struct {
 		SubscriptionDetails *struct {
@@ -110,6 +113,9 @@ func parseEvent(id, typ string, raw json.RawMessage) (Event, error) {
 		}
 	case EventInvoicePaid, EventInvoicePaymentFailed:
 		ev.SubscriptionID = string(obj.Subscription)
+		ev.AmountPaidCents = obj.AmountPaid
+		ev.AmountDueCents = obj.AmountDue
+		ev.Currency = strings.ToLower(strings.TrimSpace(obj.Currency))
 		if obj.Parent != nil && obj.Parent.SubscriptionDetails != nil {
 			if s := string(obj.Parent.SubscriptionDetails.Subscription); s != "" {
 				ev.SubscriptionID = s

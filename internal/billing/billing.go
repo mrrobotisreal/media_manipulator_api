@@ -50,6 +50,10 @@ type Subscription struct {
 	CurrentPeriodEnd time.Time
 	// Interval is "monthly" or "yearly" ("" when the price is neither).
 	Interval string
+	// UnitAmountCents / Currency are the first item's Price unit_amount and
+	// currency (lowercase ISO 4217, as Stripe returns it). Nil / "" = unknown.
+	UnitAmountCents *int64
+	Currency        string
 	// UserID is subscription metadata user_id (set by Checkout), if present.
 	UserID string
 	// VisitorID / SessionID are the browser analytics ids stamped by Checkout.
@@ -86,6 +90,11 @@ type Event struct {
 	// metadata user_id, else client_reference_id.
 	UserID        string
 	BillingReason string
+	// Invoice events only: amount_paid / amount_due (minor units) and currency
+	// from the invoice object in the event. Nil / "" when absent.
+	AmountPaidCents *int64
+	AmountDueCents  *int64
+	Currency        string
 }
 
 // CheckoutRequest is everything needed to open a Checkout Session. PriceID

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/stripe/stripe-go/v87"
@@ -133,6 +134,13 @@ func (c *stripeClient) GetSubscription(ctx context.Context, id string) (*Subscri
 		item := s.Items.Data[0]
 		if item.CurrentPeriodEnd > 0 {
 			out.CurrentPeriodEnd = time.Unix(item.CurrentPeriodEnd, 0).UTC()
+		}
+		if item.Price != nil {
+			if item.Price.Currency != "" {
+				out.Currency = strings.ToLower(string(item.Price.Currency))
+				amt := item.Price.UnitAmount
+				out.UnitAmountCents = &amt
+			}
 		}
 		if item.Price != nil && item.Price.Recurring != nil {
 			switch item.Price.Recurring.Interval {
