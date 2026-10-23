@@ -287,6 +287,14 @@ func (h *BillingHandler) Session(c *gin.Context) {
 		return
 	}
 	applied := sess.Paid && tiers.Resolve(true, user) == tiers.TierPremium && user.TierSource == "subscription"
+	if sess.Paid && !applied && h.processor != nil {
+		// Don't make a buyer wait on the webhook: apply the paid subscription now.
+		if err := h.processor.ApplyCheckout(c.Request.Context(), sess); err != nil {
+			h.logger.Warn("billing: applying paid checkout on return failed", "error", err.Error())
+		} else if refreshed, err := h.store.UserByID(c.Request.Context(), user.ID); err == nil && refreshed != nil {
+			applied = tiers.Resolve(true, refreshed) == tiers.TierPremium && refreshed.TierSource == "subscription"
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{"belongsToUser": true, "paid": sess.Paid, "tierApplied": applied})
 }
 

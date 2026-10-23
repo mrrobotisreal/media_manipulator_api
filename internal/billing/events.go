@@ -86,18 +86,22 @@ func parseEvent(id, typ string, raw json.RawMessage) (Event, error) {
 	if len(raw) == 0 {
 		return ev, nil
 	}
+	// stripe-go's Event.Data.Raw is data.object itself, whose own "object" field
+	// is the type string ("subscription", "invoice", ...). Decode it directly;
+	// only a payload wrapped as {"object":{...}} is unwrapped first.
+	var obj rawObject
 	var wrapper struct {
-		Object rawObject `json:"object"`
+		Object json.RawMessage `json:"object"`
 	}
-	// Event.Data.Raw is the data.object payload itself in stripe-go; accept both.
 	if err := json.Unmarshal(raw, &wrapper); err != nil {
 		return ev, err
 	}
-	obj := wrapper.Object
-	if obj.ID == "" {
-		if err := json.Unmarshal(raw, &obj); err != nil {
-			return ev, err
-		}
+	body := []byte(raw)
+	if w := strings.TrimSpace(string(wrapper.Object)); strings.HasPrefix(w, "{") {
+		body = wrapper.Object
+	}
+	if err := json.Unmarshal(body, &obj); err != nil {
+		return ev, err
 	}
 	ev.CustomerID = string(obj.Customer)
 	ev.BillingReason = obj.BillingReason

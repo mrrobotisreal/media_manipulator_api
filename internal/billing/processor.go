@@ -87,6 +87,26 @@ func (p *Processor) Handle(ctx context.Context, ev Event) error {
 	return nil
 }
 
+// ApplyCheckout applies a paid Checkout Session's subscription directly, the
+// same way a checkout.session.completed webhook would. The success page calls
+// it so a buyer is never left on Free waiting for a delayed (or failing)
+// webhook. It is idempotent: the webhook arriving later finds the same state
+// and records tier_unchanged. It bypasses mm_billing_events on purpose, so the
+// real event is still recorded when it arrives.
+func (p *Processor) ApplyCheckout(ctx context.Context, sess *CheckoutSession) error {
+	if sess == nil || !sess.Paid || sess.SubscriptionID == "" {
+		return nil
+	}
+	_, err := p.apply(ctx, Event{
+		ID:             "checkout-return:" + sess.ID,
+		Type:           EventCheckoutCompleted,
+		CustomerID:     sess.CustomerID,
+		SubscriptionID: sess.SubscriptionID,
+		UserID:         sess.UserID,
+	})
+	return err
+}
+
 func (p *Processor) logger() *slog.Logger {
 	if p.Log != nil {
 		return p.Log

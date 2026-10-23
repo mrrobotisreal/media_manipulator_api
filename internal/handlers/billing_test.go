@@ -292,7 +292,7 @@ func TestSessionVerification(t *testing.T) {
 	if m["belongsToUser"] != false || m["paid"] != false || m["tierApplied"] != false {
 		t.Fatalf("other: %v", m)
 	}
-	// Paid but webhook has not landed yet.
+	// Paid, no subscription id on the session: nothing to apply yet.
 	m = jsonBody(t, b.do("GET", "/api/billing/session/cs_other", "tok-u2", ""))
 	if m["belongsToUser"] != true || m["paid"] != true || m["tierApplied"] != false {
 		t.Fatalf("pending: %v", m)
@@ -402,5 +402,33 @@ func TestTiersResponseIsConfigDriven(t *testing.T) {
 	}
 	if m := get(billingCfg(false)); m["premiumPurchasable"] != false || m["premiumPriceYearlyUSD"] != float64(70) {
 		t.Fatalf("off: %v", m)
+	}
+}
+
+// The success page upgrades the buyer even when no webhook has arrived.
+func TestSessionReturnAppliesPaidCheckoutWithoutWebhook(t *testing.T) {
+	b := newBillingRig(t, billingCfg(true), bUser("u2", "fb2"))
+	end := time.Now().Add(30 * 24 * time.Hour)
+	b.fc.PutSubscription(&billing.Subscription{ID: "sub_9", CustomerID: "cus_9", Status: billing.StatusActive,
+		CurrentPeriodEnd: end, Interval: billing.IntervalMonthly, UserID: "u2"})
+	b.fc.PutSession(&billing.CheckoutSession{ID: "cs_paid", UserID: "u2", CustomerID: "cus_9", SubscriptionID: "sub_9", Paid: true})
+
+	m := jsonBody(t, b.do("GET", "/api/billing/session/cs_paid", "tok-u2", ""))
+	if m["tierApplied"] != true {
+		t.Fatalf("not applied on return: %v", m)
+	}
+	u, _ := b.store.UserByID(context.Background(), "u2")
+	if u.Tier != "premium" || u.TierSource != "subscription" || u.StripeCustomerID != "cus_9" || u.StripeSubscriptionID != "sub_9" {
+		t.Fatalf("user after return: %+v", u)
+	}
+
+	// The real webhook arriving afterwards is accepted and changes nothing.
+	body, sig := signedWebhook(t, "evt_late", billing.EventCheckoutCompleted,
+		`{"id":"cs_paid","object":"checkout.session","customer":"cus_9","subscription":"sub_9","client_reference_id":"u2"}`, billingTestSecret, time.Now())
+	if w := b.webhook(body, sig); w.Code != 200 {
+		t.Fatalf("late webhook: %d %s", w.Code, w.Body)
+	}
+	if again, _ := b.store.UserByID(context.Background(), "u2"); again.Tier != "premium" {
+		t.Fatalf("late webhook changed tier: %+v", again)
 	}
 }
