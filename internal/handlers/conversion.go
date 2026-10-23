@@ -106,6 +106,7 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.GET("/job/:jobId", h.GetJobStatus)
 	r.GET("/job/:jobId/events", h.StreamJobEvents)
 	r.GET("/download/:jobId", h.DownloadFile)
+	r.GET("/result/:jobId", h.InlineResult)
 	r.GET("/transcript/:jobId", h.GetTranscriptResult)
 	r.GET("/analysis/:jobId", h.GetAnalysisResult)
 
@@ -260,28 +261,74 @@ func (h *ConversionHandler) GetJobStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, job)
 }
 
-func (h *ConversionHandler) DownloadFile(c *gin.Context) {
+// resolveCompletedResult is the shared lookup behind /download/:jobId and
+// /result/:jobId: it finds the job, enforces ownership, requires completion and
+// locates the output file. On failure it has already written the response.
+// allowQuerySID lets the inline route accept ?sid= for media elements.
+func (h *ConversionHandler) resolveCompletedResult(c *gin.Context, allowQuerySID bool) (job *models.ConversionJob, path string, info os.FileInfo, ok bool) {
 	jobID := strings.TrimSpace(c.Param("jobId"))
 	if jobID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Job ID is required"})
-		return
+		return nil, "", nil, false
 	}
 	job, err := h.jobManager.GetJob(jobID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
-		return
+		return nil, "", nil, false
+	}
+	if !authorizeJobAccessSID(c, h.jobManager, job, allowQuerySID) {
+		denyJobAccess(c)
+		return nil, "", nil, false
 	}
 	if job.Status != models.StatusCompleted {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Job not completed"})
+		return nil, "", nil, false
+	}
+	path = h.outputPath(job, filepath.Join(h.cfg.OutputDir, job.ID))
+	info, err = os.Stat(path)
+	if err != nil || info.IsDir() {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Converted file not found"})
+		return nil, "", nil, false
+	}
+	return job, path, info, true
+}
+
+// InlineResult serves a completed job's result with its real MIME type, HTTP
+// range support and an inline disposition when the type is safe to render.
+// Unsafe types (svg, html, archives, unknown) fall back to an octet-stream
+// attachment.
+func (h *ConversionHandler) InlineResult(c *gin.Context) {
+	job, outputPath, info, ok := h.resolveCompletedResult(c, true)
+	if !ok {
 		return
 	}
-
-	outputPath := h.outputPath(job, filepath.Join(h.cfg.OutputDir, job.ID))
-	info, err := os.Stat(outputPath)
+	mime := h.ensureResultMime(job, outputPath)
+	file, err := os.Open(outputPath)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Converted file not found"})
 		return
 	}
+	defer file.Close()
+	name := h.getOutputFilename(job)
+	if inlineSafeMime(mime) {
+		c.Header("Content-Type", mime)
+		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%q", name))
+	} else {
+		c.Header("Content-Type", "application/octet-stream")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
+	}
+	c.Header("Accept-Ranges", "bytes")
+	c.Header("Cache-Control", "private, max-age=300")
+	c.Header("X-Content-Type-Options", "nosniff")
+	http.ServeContent(c.Writer, c.Request, name, info.ModTime(), file)
+}
+
+func (h *ConversionHandler) DownloadFile(c *gin.Context) {
+	job, outputPath, info, ok := h.resolveCompletedResult(c, false)
+	if !ok {
+		return
+	}
+	h.ensureResultMime(job, outputPath)
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", h.getOutputFilename(job)))
 	c.Header("Content-Type", "application/octet-stream")
 	c.File(outputPath)
