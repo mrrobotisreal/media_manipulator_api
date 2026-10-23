@@ -27,3 +27,10 @@ gfpgan/
 
 # Stray directory created by internal/services tests (pre-existing test-hygiene issue).
 internal/services/job-*/
+
+# Compiled command binaries. `go build ./cmd/<name>` drops <name> in the repo
+# root; none of them is ever committed. (`main` above covers `go build .`.)
+/api
+/grant-tier
+/operator-check
+/parity-render
