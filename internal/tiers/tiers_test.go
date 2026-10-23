@@ -126,7 +126,6 @@ func TestLimitsAreMonotonic(t *testing.T) {
 		name     string
 		a, fr, p bool
 	}{
-		{"BatchEnabled", anon.BatchEnabled, free.BatchEnabled, premium.BatchEnabled},
 		{"PriorityGPU", anon.PriorityGPU, free.PriorityGPU, premium.PriorityGPU},
 		{"AdsRemoved", anon.AdsRemoved, free.AdsRemoved, premium.AdsRemoved},
 	}
@@ -147,21 +146,21 @@ func TestPublishedMatrix(t *testing.T) {
 			OpsPerDay: 5, AIOpsPerDay: 1, ExportsPerDay: 5,
 			MaxFileBytes: 200 * 1024 * 1024, MaxVideoSeconds: 300,
 			MaxOutputHeight: 1080, MaxLadderHeight: 720,
-			StudioProjects: 1, StudioVersionAutoKeep: 20, BatchEnabled: false, PriorityGPU: false,
+			StudioProjects: 1, StudioVersionAutoKeep: 20, PriorityGPU: false,
 			ResultRetentionHours: 24, AdsRemoved: false,
 		},
 		TierFree: {
 			OpsPerDay: 30, AIOpsPerDay: 5, ExportsPerDay: 30,
 			MaxFileBytes: 1024 * 1024 * 1024, MaxVideoSeconds: 1200,
 			MaxOutputHeight: 1440, MaxLadderHeight: 1080,
-			StudioProjects: 5, StudioVersionAutoKeep: 20, BatchEnabled: false, PriorityGPU: false,
+			StudioProjects: 5, StudioVersionAutoKeep: 20, PriorityGPU: false,
 			ResultRetentionHours: 168, AdsRemoved: false,
 		},
 		TierPremium: {
 			OpsPerDay: 300, AIOpsPerDay: 60, ExportsPerDay: 300,
 			MaxFileBytes: 5 * 1024 * 1024 * 1024, MaxVideoSeconds: 7200,
 			MaxOutputHeight: 2160, MaxLadderHeight: 2160,
-			StudioProjects: Unlimited, StudioVersionAutoKeep: 20, BatchEnabled: true, PriorityGPU: true,
+			StudioProjects: Unlimited, StudioVersionAutoKeep: 20, PriorityGPU: true,
 			ResultRetentionHours: 720, AdsRemoved: true,
 		},
 	}

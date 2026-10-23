@@ -70,7 +70,6 @@ type Limits struct {
 	// are retained per project (manual versions are never pruned). Uniform
 	// across tiers today; a possible future monetization lever (ADR ws/0001).
 	StudioVersionAutoKeep int  `json:"studioVersionAutoKeep"`
-	BatchEnabled          bool `json:"batchEnabled"`
 	PriorityGPU           bool `json:"priorityGpu"`
 	ResultRetentionHours  int  `json:"resultRetentionHours"`
 	AdsRemoved            bool `json:"adsRemoved"`
@@ -115,7 +114,6 @@ func New(cfg *config.Config) *Registry {
 			MaxLadderHeight:       cfg.TierAnonMaxLadderHeight,
 			StudioProjects:        cfg.TierAnonStudioProjects,
 			StudioVersionAutoKeep: cfg.TierAnonStudioVersionAutoKeep,
-			BatchEnabled:          false,
 			PriorityGPU:           false,
 			ResultRetentionHours:  cfg.TierAnonRetentionHours,
 			AdsRemoved:            false,
@@ -130,7 +128,6 @@ func New(cfg *config.Config) *Registry {
 			MaxLadderHeight:       cfg.TierFreeMaxLadderHeight,
 			StudioProjects:        cfg.TierFreeStudioProjects,
 			StudioVersionAutoKeep: cfg.TierFreeStudioVersionAutoKeep,
-			BatchEnabled:          false,
 			PriorityGPU:           false,
 			ResultRetentionHours:  cfg.TierFreeRetentionHours,
 			// Free accounts still see ads. Only Premium removes them — that is
@@ -148,7 +145,6 @@ func New(cfg *config.Config) *Registry {
 			MaxLadderHeight:       cfg.TierPremiumMaxLadderHeight,
 			StudioProjects:        cfg.TierPremiumStudioProjects,
 			StudioVersionAutoKeep: cfg.TierPremiumStudioVersionAutoKeep,
-			BatchEnabled:          true,
 			PriorityGPU:           true,
 			ResultRetentionHours:  cfg.TierPremiumRetentionHours,
 			AdsRemoved:            true,
