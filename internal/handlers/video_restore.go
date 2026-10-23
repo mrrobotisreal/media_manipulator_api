@@ -18,6 +18,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/gpu"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 )
@@ -238,7 +239,14 @@ func (h *VideoRestoreHandler) StartVideoRestore(c *gin.Context) {
 	stages := h.restore.BuildStages(selected)
 	_ = h.jobManager.ReplaceStages(job.ID, stages, "queued")
 
-	go h.restore.Process(context.Background(), services.RestoreRequest{
+	// Ledger: the job's directories (the per-model MP4s live in the output dir)
+	// and the browser-uploaded source object. The result tarball is registered
+	// by the pipeline once it exists. Process gets the owner via the context.
+	registerJobDirs(c, job.ID, true, true)
+	registerS3Object(c, key, "", job.ID, "", objectSize)
+	restoreCtx := retention.WithScope(context.Background(), retentionScopeFor(c, job.ID, ""))
+
+	go h.restore.Process(restoreCtx, services.RestoreRequest{
 		JobID:            job.ID,
 		S3Key:            key,
 		FileName:         fileName,

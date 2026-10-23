@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 )
 
@@ -212,7 +213,8 @@ func (h *ConversionHandler) StartVideoTranscode(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare output"})
 		return
 	}
-	markRetention(c, jobUploadDir, jobOutputDir)
+	registerJobDirs(c, job.ID, true, true)
+	registerS3Object(c, key, "", job.ID, "", size)
 
 	uploadPath := filepath.Join(jobUploadDir, "original_"+fileName)
 	if err := h.downloadS3Object(ctx, key, uploadPath); err != nil {
@@ -270,7 +272,7 @@ func (h *ConversionHandler) StartVideoTranscode(c *gin.Context) {
 		ResultBucket:        h.cfg.S3Bucket,
 		LadderAccess:        access,
 	}
-	go h.transcode.Process(context.Background(), pipelineReq)
+	go h.transcode.Process(retention.WithScope(context.Background(), retentionScopeFor(c, job.ID, "")), pipelineReq)
 
 	c.JSON(http.StatusOK, models.TranscodeStartResponse{
 		JobID:         job.ID,

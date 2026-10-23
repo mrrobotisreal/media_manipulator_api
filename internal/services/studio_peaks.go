@@ -11,6 +11,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 )
 
 // Audio waveform peaks for the Content Studio timeline. We decode each
@@ -137,5 +139,7 @@ func (s *StudioIngestService) UploadPeaks(ctx context.Context, originalKey, asse
 	}); err != nil {
 		return "", err
 	}
+	// Ledger (MM22): peaks JSON, a child of the original.
+	retention.RegisterS3FromContext(ctx, key, originalKey, int64(len(data)))
 	return key, nil
 }

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -86,7 +85,8 @@ func (h *ConversionHandler) CaptionTranslatorUpload(c *gin.Context) {
 
 	// Stage the file on disk so the translator can stream it without keeping
 	// the multipart body in memory for the lifetime of the job.
-	incomingPath := filepath.Join(h.cfg.UploadDir, fmt.Sprintf("caption_%d_%s", time.Now().UnixNano(), cleanName))
+	jobID := newJobID()
+	incomingPath := stagedUploadPath(h.cfg.UploadDir, jobID, "caption", cleanName)
 	if err := h.saveUploadedFile(file, incomingPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save caption file"})
 		return
@@ -104,7 +104,7 @@ func (h *ConversionHandler) CaptionTranslatorUpload(c *gin.Context) {
 		"sourceLanguage": sourceLanguage,
 		"targetLanguage": targetLanguage,
 	}
-	job := h.jobManager.CreateJob(originalFile, jobOptions)
+	job := h.jobManager.CreateJobWithID(jobID, originalFile, jobOptions)
 	recordJobCreated(c, h.jobManager, job, services.JobFacts{
 		Tool:         "caption_translator",
 		Mode:         "caption_translator",
@@ -126,7 +126,7 @@ func (h *ConversionHandler) CaptionTranslatorUpload(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare output"})
 		return
 	}
-	markRetention(c, jobUploadDir, jobOutputDir)
+	registerJobDirs(c, job.ID, true, true)
 	uploadPath := filepath.Join(jobUploadDir, "original_"+cleanName)
 	if err := os.Rename(incomingPath, uploadPath); err != nil {
 		h.jobManager.UpdateJobError(job.ID, "failed to finalize caption upload")
@@ -230,7 +230,8 @@ func (h *ConversionHandler) StitchAudioToVideoUpload(c *gin.Context) {
 	// expected use case is short voiceovers/music mixes rather than huge raw
 	// captures; multipart-direct keeps the client simpler.
 	cleanVideoName := safeFilename(videoHeader.Filename)
-	incomingVideoPath := filepath.Join(h.cfg.UploadDir, fmt.Sprintf("stitch_video_%d_%s", time.Now().UnixNano(), cleanVideoName))
+	jobID := newJobID()
+	incomingVideoPath := stagedUploadPath(h.cfg.UploadDir, jobID, "stitch_video", cleanVideoName)
 	if err := h.saveUploadedFile(videoFile, incomingVideoPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save base video"})
 		return
@@ -286,7 +287,7 @@ func (h *ConversionHandler) StitchAudioToVideoUpload(c *gin.Context) {
 		}
 		loop := strings.EqualFold(strings.TrimSpace(c.Request.FormValue(fmt.Sprintf("loop_%d", i))), "true")
 		cleanAudioName := safeFilename(audioHeader.Filename)
-		audioPath := filepath.Join(h.cfg.UploadDir, fmt.Sprintf("stitch_audio_%d_%d_%s", time.Now().UnixNano(), i, cleanAudioName))
+		audioPath := stagedUploadPath(h.cfg.UploadDir, jobID, fmt.Sprintf("stitch_audio_%d", i), cleanAudioName)
 		if err := h.saveUploadedFile(audioFile, audioPath); err != nil {
 			audioFile.Close()
 			_ = os.Remove(incomingVideoPath)
@@ -313,7 +314,7 @@ func (h *ConversionHandler) StitchAudioToVideoUpload(c *gin.Context) {
 		"trimToVideoDuration": trimToVideo,
 		"trackCount":         trackCount,
 	}
-	job := h.jobManager.CreateJob(originalFile, jobOptions)
+	job := h.jobManager.CreateJobWithID(jobID, originalFile, jobOptions)
 	recordJobCreated(c, h.jobManager, job, services.JobFacts{
 		Tool:         "stitch_audio_to_video",
 		Mode:         "stitch_audio_to_video",
@@ -341,7 +342,7 @@ func (h *ConversionHandler) StitchAudioToVideoUpload(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare output"})
 		return
 	}
-	markRetention(c, jobUploadDir, jobOutputDir)
+	registerJobDirs(c, job.ID, true, true)
 	finalVideoPath := filepath.Join(jobUploadDir, "original_"+cleanVideoName)
 	if err := os.Rename(incomingVideoPath, finalVideoPath); err != nil {
 		h.jobManager.UpdateJobError(job.ID, "failed to finalize video upload")

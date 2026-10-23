@@ -141,7 +141,10 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
-	incomingPath := filepath.Join(h.cfg.UploadDir, fmt.Sprintf("incoming_%d_%s", time.Now().UnixNano(), safeFilename(fileHeader.Filename)))
+	// The job id is chosen up front so the upload lands inside its job directory
+	// (uploads/<jobId>/) from the first byte; a directory is the retention unit.
+	jobID := newJobID()
+	incomingPath := stagedUploadPath(h.cfg.UploadDir, jobID, "incoming", safeFilename(fileHeader.Filename))
 	if err := h.saveUploadedFile(file, incomingPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
 		return
@@ -151,13 +154,13 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 	defer cancel()
 	fileType, mimeType := h.inspector.DetectFile(ctx, incomingPath, fileHeader.GetHeader("Content-Type"))
 	if fileType == models.FileTypeUnknown {
-		_ = os.Remove(incomingPath)
+		discardStaged(incomingPath)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported file type"})
 		return
 	}
 
 	originalFile := models.OriginalFileInfo{Name: fileHeader.Filename, Size: fileHeader.Size, Type: mimeType}
-	job := h.jobManager.CreateJob(originalFile, options)
+	job := h.jobManager.CreateJobWithID(jobID, originalFile, options)
 	recordJobCreated(c, h.jobManager, job, h.conversionJobFacts(job, fileType))
 
 	jobUploadDir := filepath.Join(h.cfg.UploadDir, job.ID)
@@ -172,7 +175,7 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare output"})
 		return
 	}
-	markRetention(c, jobUploadDir, jobOutputDir)
+	registerJobDirs(c, job.ID, true, true)
 
 	uploadPath := filepath.Join(jobUploadDir, "original_"+safeFilename(fileHeader.Filename))
 	if err := os.Rename(incomingPath, uploadPath); err != nil {

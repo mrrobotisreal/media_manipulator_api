@@ -144,7 +144,7 @@ func (s *StudioIngestService) generateImage(ctx context.Context, jobID, original
 	}
 	var res StudioIngestResult
 	res.ProxyKey = keyDir + "/" + assetID + "_proxy." + ext
-	if err := s.uploadFile(ctx, proxyLocal, res.ProxyKey, studioImageContentType(alpha)); err != nil {
+	if err := s.uploadFile(ctx, proxyLocal, res.ProxyKey, originalKey, studioImageContentType(alpha)); err != nil {
 		return StudioIngestResult{}, fmt.Errorf("upload image proxy: %w", err)
 	}
 	if s.jobManager != nil {
@@ -156,7 +156,7 @@ func (s *StudioIngestService) generateImage(ctx context.Context, jobID, original
 		log.Printf("studio ingest: thumbnail failed for asset %s: %v", assetID, err)
 	} else if st, statErr := os.Stat(thumbLocal); statErr == nil && st.Size() > 0 {
 		key := keyDir + "/" + assetID + "_thumb." + ext
-		if upErr := s.uploadFile(ctx, thumbLocal, key, studioImageContentType(alpha)); upErr != nil {
+		if upErr := s.uploadFile(ctx, thumbLocal, key, originalKey, studioImageContentType(alpha)); upErr != nil {
 			log.Printf("studio ingest: thumbnail upload failed for asset %s: %v", assetID, upErr)
 		} else {
 			res.SpriteKey = key

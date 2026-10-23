@@ -136,7 +136,8 @@ func (h *ConversionHandler) CompleteVideoUpload(c *gin.Context) {
 		fileName = "video_" + filepath.Base(key)
 	}
 
-	incomingPath := filepath.Join(h.cfg.UploadDir, fmt.Sprintf("s3_incoming_%d_%s", time.Now().UnixNano(), fileName))
+	jobID := newJobID()
+	incomingPath := stagedUploadPath(h.cfg.UploadDir, jobID, "s3_incoming", fileName)
 	if err := h.downloadS3Object(ctx, key, incomingPath); err != nil {
 		log.Printf("failed to download uploaded video %s: %v", key, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to download uploaded video"})
@@ -145,7 +146,7 @@ func (h *ConversionHandler) CompleteVideoUpload(c *gin.Context) {
 
 	fileType, mimeType := h.inspector.DetectFile(ctx, incomingPath, contentType)
 	if fileType != models.FileTypeVideo {
-		_ = os.Remove(incomingPath)
+		discardStaged(incomingPath)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Uploaded object is not a supported video"})
 		return
 	}
@@ -155,7 +156,7 @@ func (h *ConversionHandler) CompleteVideoUpload(c *gin.Context) {
 		options = map[string]interface{}{}
 	}
 	originalFile := models.OriginalFileInfo{Name: fileName, Size: objectSize, Type: mimeType}
-	job := h.jobManager.CreateJob(originalFile, options)
+	job := h.jobManager.CreateJobWithID(jobID, originalFile, options)
 	recordJobCreated(c, h.jobManager, job, h.conversionJobFacts(job, fileType))
 
 	jobUploadDir := filepath.Join(h.cfg.UploadDir, job.ID)
@@ -172,7 +173,10 @@ func (h *ConversionHandler) CompleteVideoUpload(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare output"})
 		return
 	}
-	markRetention(c, jobUploadDir, jobOutputDir)
+	registerJobDirs(c, job.ID, true, true)
+	// The browser-uploaded source object is durable too; it is the parent of
+	// nothing but is deleted with the job.
+	registerS3Object(c, key, "", job.ID, "", objectSize)
 
 	uploadPath := filepath.Join(jobUploadDir, "original_"+fileName)
 	if err := os.Rename(incomingPath, uploadPath); err != nil {

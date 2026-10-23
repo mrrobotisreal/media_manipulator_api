@@ -33,6 +33,7 @@ type Registry struct {
 	sseSubscribers          prometheus.Gauge
 	analyticsEmitEvents     *prometheus.CounterVec
 	analyticsEmitBatches    *prometheus.CounterVec
+	retentionRegisterFailed prometheus.Counter
 }
 
 // New creates a fresh Registry with all metrics registered.
@@ -129,6 +130,11 @@ func New() *Registry {
 		Help: "Server-truth analytics batches POSTed to the analytics service, by status.",
 	}, []string{"status"})
 
+	r.retentionRegisterFailed = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "mm_retention_register_failed_total",
+		Help: "Retained-object ledger writes that failed (MM22); the request still succeeded.",
+	})
+
 	reg.MustRegister(
 		r.httpDuration, r.httpStatus, r.conversionJobs, r.toolUsage,
 		r.commandDuration, r.commandFailures, r.ffmpegValidationRejects,
@@ -136,6 +142,7 @@ func New() *Registry {
 		r.cleanupDeletedFiles, r.cleanupDeletedBytes, r.cleanupErrors,
 		r.activeJobs, r.sseSubscribers,
 		r.analyticsEmitEvents, r.analyticsEmitBatches,
+		r.retentionRegisterFailed,
 	)
 	return r
 }
@@ -304,4 +311,12 @@ func classifyStatus(status int) string {
 	default:
 		return "1xx"
 	}
+}
+
+// RetentionRegisterFailed counts a failed retained-objects ledger write.
+func (r *Registry) RetentionRegisterFailed() {
+	if r == nil {
+		return
+	}
+	r.retentionRegisterFailed.Inc()
 }

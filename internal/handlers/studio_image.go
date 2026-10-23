@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/metadata"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 )
 
@@ -29,7 +30,7 @@ func studioKindForFileType(ft models.FileType) (models.StudioMediaKind, bool) {
 var studioGeometryRe = regexp.MustCompile(`(\d+)\s*x\s*(\d+)`)
 
 // studioImageDimensions extracts the DISPLAYED width/height and EXIF
-// orientation (1-8) from MediaInspector.ProbeFile image Details. It reads the
+// orientation (1-8) from a flat tag map (see studioImageDetails). It reads the
 // ImageMagick `Geometry: WxH+0+0` line first, then exiftool keys; orientations
 // 5-8 swap width/height. Garbage input yields 0,0,1.
 func studioImageDimensions(details map[string]any) (w, h, orientation int) {
@@ -141,4 +142,23 @@ func validOrientation(n int) int {
 		return n
 	}
 	return 0
+}
+
+// studioImageDetails flattens a metadata document into the tag -> value map
+// studioImageDimensions reads. The first entry for a tag wins, which keeps
+// exiftool's File-group pixel size ahead of the EXIF copies.
+func studioImageDetails(doc *metadata.MetadataDocument) map[string]any {
+	details := map[string]any{}
+	if doc == nil {
+		return details
+	}
+	for _, e := range doc.Entries {
+		if e.Binary {
+			continue
+		}
+		if _, seen := details[e.Tag]; !seen {
+			details[e.Tag] = e.Value
+		}
+	}
+	return details
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/cmdaudit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/gpu"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 )
 
@@ -314,6 +315,9 @@ func (s *RestoreService) Process(ctx context.Context, req RestoreRequest) {
 	if err := keepRestoreResults(stageRoot, jobOutputDir, manifest); err != nil {
 		log.Printf("video-restore job %s: keeping per-model results failed: %v", req.JobID, err)
 	}
+	// Ledger: the output dir now holds the tarball plus the kept per-model MP4s
+	// (MM05 comparison viewer); record its real size for the storage meter.
+	retention.RegisterOutputDirFromContext(ctx, req.JobID, retention.DirSize(jobOutputDir))
 	advance("package", models.StageStatusCompleted, restoreProgressPackage, "")
 
 	// --- upload_result ----------------------------------------------------
@@ -760,6 +764,8 @@ func (s *RestoreService) uploadRestoreResult(ctx context.Context, req RestoreReq
 	if err := s.uploadLargeFileToS3(ctx, req, localPath, resultKey, "application/gzip"); err != nil {
 		return "", "", time.Time{}, err
 	}
+	// Ledger (MM22): the tarball object, owned via the scope Process was given.
+	retention.RegisterS3FromContext(ctx, resultKey, "", fileSizeOrZero(localPath))
 	ttl := s.cfg.RestoreResultPresignTTL
 	if ttl <= 0 {
 		ttl = 6 * time.Hour
