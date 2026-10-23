@@ -269,6 +269,17 @@ func (h *StudioHandler) SaveProject(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
+	// Image clips carry no speed/reverse/freeze (Go is authoritative; the UI
+	// mirrors it). A failed asset lookup must not block the save.
+	if assets, aerr := h.repo.ListAssets(ctx, strings.TrimSpace(c.Param("id"))); aerr != nil {
+		log.Printf("studio: save project: list assets failed (image sanitize skipped): %v", aerr)
+	} else {
+		byID := make(map[string]*models.StudioAsset, len(assets))
+		for _, a := range assets {
+			byID[a.ID] = a
+		}
+		req.Tracks = models.SanitizeTracksForAssets(req.Tracks, studioAssetKinds(byID))
+	}
 	project, err := h.repo.SaveProject(ctx, strings.TrimSpace(c.Param("id")), req)
 	if err != nil {
 		if err == services.ErrStudioNotFound {
@@ -299,6 +310,17 @@ func studioRevisionConflictBody(e *services.StudioRevisionConflictError) gin.H {
 		"currentRevision": e.CurrentRevision,
 		"updatedAt":       e.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
+}
+
+// studioAssetKinds maps asset id -> media kind for SanitizeTracksForAssets.
+func studioAssetKinds(assets map[string]*models.StudioAsset) map[string]models.StudioMediaKind {
+	out := make(map[string]models.StudioMediaKind, len(assets))
+	for id, a := range assets {
+		if a != nil {
+			out[id] = a.MediaKind
+		}
+	}
+	return out
 }
 
 func (h *StudioHandler) ListAssets(c *gin.Context) {
@@ -344,6 +366,12 @@ func (h *StudioHandler) PresignAsset(c *gin.Context) {
 		return
 	}
 	contentType := normalizeUploadContentType(req.ContentType, ext)
+	if isStudioImageExtension(ext) {
+		// Browsers often send HEIC/AVIF/SVG as octet-stream or empty.
+		if lc := strings.ToLower(strings.TrimSpace(contentType)); lc == "" || lc == "application/octet-stream" {
+			contentType = studioImageMIMEForExt(ext)
+		}
+	}
 	if ext == "cube" {
 		// LUT asset: small, non-AV content type.
 		if req.FileSizeBytes > studioMaxLUTBytes {
@@ -357,8 +385,15 @@ func (h *StudioHandler) PresignAsset(c *gin.Context) {
 			return
 		}
 		lower := strings.ToLower(contentType)
-		if !strings.HasPrefix(lower, "video/") && !strings.HasPrefix(lower, "audio/") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "contentType must be a video or audio MIME type"})
+		isImage := strings.HasPrefix(lower, "image/")
+		if isStudioImageExtension(ext) {
+			// Image extensions only accept image/* (no video/audio smuggling).
+			if !isImage {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "contentType must be a video, audio, or image MIME type"})
+				return
+			}
+		} else if !strings.HasPrefix(lower, "video/") && !strings.HasPrefix(lower, "audio/") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "contentType must be a video, audio, or image MIME type"})
 			return
 		}
 	}
@@ -501,53 +536,81 @@ func (h *StudioHandler) CompleteAsset(c *gin.Context) {
 	}
 
 	fileType, _ := h.inspector.DetectFile(ctx, uploadPath, contentType)
-	var kind models.StudioMediaKind
-	switch fileType {
-	case models.FileTypeVideo:
-		kind = models.StudioMediaKindVideo
-	case models.FileTypeAudio:
-		kind = models.StudioMediaKindAudio
-	default:
+	kind, supported := studioKindForFileType(fileType)
+	if !supported {
 		h.jobManager.UpdateJobError(job.ID, "Unsupported media type")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Uploaded object is not a supported video or audio file"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Uploaded object is not a supported video, audio, or image file"})
 		return
 	}
 
-	probe, probeErr := services.ProbeVideoReport(ctx, uploadPath)
-	if probeErr != nil || probe == nil {
-		log.Printf("studio: probe failed for %s: %v", key, probeErr)
-		probe = &models.VideoProbeResponse{}
-	}
-
-	asset := &models.StudioAsset{
-		ProjectID:        projectID,
-		OriginalFileName: fileName,
-		S3KeyOriginal:    key,
-		MediaKind:        kind,
-		DurationSeconds:  probe.DurationSeconds,
-		VideoCodec:       probe.VideoCodec,
-		AudioCodec:       probe.AudioCodec,
-		HasAudio:         probe.HasAudio,
-		ProbeJSON:        probe,
-	}
-	if probe.Width > 0 {
-		w := probe.Width
-		asset.Width = &w
-	}
-	if probe.Height > 0 {
-		hh := probe.Height
-		asset.Height = &hh
-	}
-	if probe.FPS > 0 {
-		f := probe.FPS
-		asset.FPS = &f
-	}
-	if sr, ch := studioAudioParams(probe); sr > 0 || ch > 0 {
-		if sr > 0 {
-			asset.SampleRate = &sr
+	var asset *models.StudioAsset
+	var totalSeconds float64
+	if kind == models.StudioMediaKindImage {
+		meta, probeErr := h.inspector.ProbeFile(ctx, uploadPath, models.FileTypeImage)
+		var iw, ih int
+		if probeErr == nil && meta != nil {
+			iw, ih, _ = studioImageDimensions(meta.Details)
 		}
-		if ch > 0 {
-			asset.Channels = &ch
+		if probeErr != nil || iw <= 0 || ih <= 0 {
+			log.Printf("studio: image probe failed for %s: %v", key, probeErr)
+			h.jobManager.UpdateJobError(job.ID, "Uploaded image could not be read")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Uploaded image could not be read"})
+			return
+		}
+		if int64(iw)*int64(ih) > studioMaxImagePixels {
+			h.jobManager.UpdateJobError(job.ID, "Image dimensions are too large")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Image dimensions are too large"})
+			return
+		}
+		asset = &models.StudioAsset{
+			ProjectID:        projectID,
+			OriginalFileName: fileName,
+			S3KeyOriginal:    key,
+			MediaKind:        kind,
+			DurationSeconds:  0,
+			HasAudio:         false,
+			ProbeJSON:        meta.Details,
+			Width:            &iw,
+			Height:           &ih,
+		}
+	} else {
+		probe, probeErr := services.ProbeVideoReport(ctx, uploadPath)
+		if probeErr != nil || probe == nil {
+			log.Printf("studio: probe failed for %s: %v", key, probeErr)
+			probe = &models.VideoProbeResponse{}
+		}
+		totalSeconds = probe.DurationSeconds
+
+		asset = &models.StudioAsset{
+			ProjectID:        projectID,
+			OriginalFileName: fileName,
+			S3KeyOriginal:    key,
+			MediaKind:        kind,
+			DurationSeconds:  probe.DurationSeconds,
+			VideoCodec:       probe.VideoCodec,
+			AudioCodec:       probe.AudioCodec,
+			HasAudio:         probe.HasAudio,
+			ProbeJSON:        probe,
+		}
+		if probe.Width > 0 {
+			w := probe.Width
+			asset.Width = &w
+		}
+		if probe.Height > 0 {
+			hh := probe.Height
+			asset.Height = &hh
+		}
+		if probe.FPS > 0 {
+			f := probe.FPS
+			asset.FPS = &f
+		}
+		if sr, ch := studioAudioParams(probe); sr > 0 || ch > 0 {
+			if sr > 0 {
+				asset.SampleRate = &sr
+			}
+			if ch > 0 {
+				asset.Channels = &ch
+			}
 		}
 	}
 
@@ -559,7 +622,7 @@ func (h *StudioHandler) CompleteAsset(c *gin.Context) {
 		return
 	}
 
-	go h.runIngestJob(job.ID, created, key, kind, uploadPath, probe.DurationSeconds)
+	go h.runIngestJob(job.ID, created, key, kind, uploadPath, totalSeconds)
 
 	c.JSON(http.StatusOK, models.StudioAssetCompleteResponse{Asset: created, JobID: job.ID})
 }
@@ -800,21 +863,16 @@ func (h *StudioHandler) serveAssetDerivative(c *gin.Context, which string) {
 		return
 	}
 
-	var key, contentType string
+	var key string
 	switch which {
 	case "sprite":
 		key = asset.ThumbnailSpriteURL // stores the sprite's S3 key
-		contentType = "image/jpeg"
 	case "file":
 		key = asset.S3KeyOriginal
-		contentType = "application/octet-stream"
 	default:
 		key = asset.S3KeyProxy
-		contentType = "video/mp4"
-		if asset.MediaKind == models.StudioMediaKindAudio {
-			contentType = "audio/mp4"
-		}
 	}
+	contentType := studioDerivativeContentType(asset, which, key)
 	if key == "" {
 		c.JSON(http.StatusNotFound, gin.H{"error": which + " is not ready yet"})
 		return
@@ -835,6 +893,10 @@ func (h *StudioHandler) serveAssetDerivative(c *gin.Context, which string) {
 	if out.ContentType != nil && *out.ContentType != "" {
 		contentType = *out.ContentType
 	}
+	if which == "file" && asset.MediaKind == models.StudioMediaKindImage && strings.EqualFold(sanitizeExtension(filepath.Ext(key)), "svg") {
+		// Never let an uploaded SVG render as a document on the API origin.
+		contentType = "application/octet-stream"
+	}
 	c.Header("Content-Type", contentType)
 	c.Header("Accept-Ranges", "bytes")
 	c.Header("Cache-Control", "private, max-age=3600")
@@ -849,6 +911,36 @@ func (h *StudioHandler) serveAssetDerivative(c *gin.Context, which string) {
 	c.Status(status)
 	if _, err := io.Copy(c.Writer, out.Body); err != nil {
 		log.Printf("studio: stream %s for asset %s interrupted: %v", which, asset.ID, err)
+	}
+}
+
+// studioDerivativeContentType is the default Content-Type for an asset
+// derivative ("proxy", "sprite", "file") before S3's stored type is applied.
+func studioDerivativeContentType(asset *models.StudioAsset, which, key string) string {
+	ext := strings.ToLower(sanitizeExtension(filepath.Ext(key)))
+	isImage := asset != nil && asset.MediaKind == models.StudioMediaKindImage
+	switch which {
+	case "sprite":
+		if isImage && ext == "png" {
+			return "image/png"
+		}
+		return "image/jpeg"
+	case "file":
+		if isImage {
+			return studioImageMIMEForExt(ext)
+		}
+		return "application/octet-stream"
+	default:
+		if isImage {
+			if ext == "png" {
+				return "image/png"
+			}
+			return "image/jpeg"
+		}
+		if asset != nil && asset.MediaKind == models.StudioMediaKindAudio {
+			return "audio/mp4"
+		}
+		return "video/mp4"
 	}
 }
 
@@ -980,7 +1072,7 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	}
 	// Sanitize the (possibly pre-v2 or hand-edited) EDL before building the
 	// render plan so the export compiler can trust every value.
-	project.Tracks = models.SanitizeTracks(project.Tracks)
+	project.Tracks = models.SanitizeTracksForAssets(models.SanitizeTracks(project.Tracks), studioAssetKinds(assetByID))
 	refs, duration, ok := services.CollectExportRefs(project, assetByID)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no clip to export"})
@@ -1172,7 +1264,7 @@ func (h *StudioHandler) GenerateCaptions(c *gin.Context) {
 	for _, a := range assets {
 		assetByID[a.ID] = a
 	}
-	project.Tracks = models.SanitizeTracks(project.Tracks)
+	project.Tracks = models.SanitizeTracksForAssets(models.SanitizeTracks(project.Tracks), studioAssetKinds(assetByID))
 	refs, duration, ok := services.CollectExportRefs(project, assetByID)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no media to transcribe"})
@@ -1258,7 +1350,7 @@ func (h *StudioHandler) runCaptionsJob(job *models.ConversionJob, projectID stri
 			pan = *r.Clip.Pan
 		}
 		idx := len(plan.Inputs)
-		plan.Inputs = append(plan.Inputs, localByKey[r.Asset.S3KeyOriginal])
+		plan.Inputs = append(plan.Inputs, services.ExportInput{Path: localByKey[r.Asset.S3KeyOriginal]})
 		plan.Audio = append(plan.Audio, services.StudioExportAudioSeg{
 			InputIndex: idx, SourceIn: r.Clip.SourceIn, SourceOut: r.Clip.SourceOut,
 			TimelineStart: r.Clip.TimelineStart, Volume: volume,
@@ -1361,8 +1453,30 @@ func isSupportedStudioExtension(ext string) bool {
 		"cube": // 3D LUT asset
 		return true
 	default:
-		return false
+		return isStudioImageExtension(ext)
 	}
+}
+
+// studioImageMIMEs maps still-image extensions to their canonical MIME type.
+var studioImageMIMEs = map[string]string{
+	"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+	"webp": "image/webp", "gif": "image/gif", "bmp": "image/bmp",
+	"tif": "image/tiff", "tiff": "image/tiff", "heic": "image/heic",
+	"heif": "image/heif", "avif": "image/avif", "svg": "image/svg+xml",
+}
+
+func isStudioImageExtension(ext string) bool {
+	_, ok := studioImageMIMEs[strings.ToLower(ext)]
+	return ok
+}
+
+// studioImageMIMEForExt returns the image MIME for ext, or
+// application/octet-stream when ext is not a still-image extension.
+func studioImageMIMEForExt(ext string) string {
+	if m, ok := studioImageMIMEs[strings.ToLower(ext)]; ok {
+		return m
+	}
+	return "application/octet-stream"
 }
 
 // studioMaxLUTBytes caps .cube uploads (LUTs are tiny; an 8MB ceiling is

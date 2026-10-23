@@ -63,6 +63,10 @@ func (s *StudioIngestService) Generate(ctx context.Context, jobID, originalKey, 
 	keyDir := s3KeyDir(originalKey)
 	var res StudioIngestResult
 
+	if mediaKind == models.StudioMediaKindImage {
+		return s.generateImage(ctx, jobID, originalKey, assetID, inputPath, workDir)
+	}
+
 	if mediaKind == models.StudioMediaKindAudio {
 		proxyLocal := filepath.Join(workDir, "proxy.m4a")
 		args := []string{"-y", "-i", inputPath, "-vn", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", proxyLocal}

@@ -18,6 +18,9 @@ const (
 	// StudioMediaKindLUT is a .cube 3D LUT asset (no proxy/sprite/peaks; served
 	// raw via /file and applied by the lut effect).
 	StudioMediaKindLUT StudioMediaKind = "lut"
+	// StudioMediaKindImage is a still image (JPG/PNG/WebP/...). Ingest produces
+	// a display proxy (proxy.jpg|png) and a 320px thumbnail; no peaks/sprite.
+	StudioMediaKindImage StudioMediaKind = "image"
 )
 
 // StudioTrackKind is the lane type a clip lives on. Video tracks composite

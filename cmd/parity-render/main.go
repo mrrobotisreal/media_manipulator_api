@@ -140,9 +140,13 @@ func renderVariant(id, leg string, p goldenProject, g *goldenFile, fixturesDir, 
 	}
 
 	// The same pipeline the export handler runs: sanitize → refs → plan.
+	kinds := make(map[string]models.StudioMediaKind, len(assetByID))
+	for id, a := range assetByID {
+		kinds[id] = a.MediaKind
+	}
 	project := &models.StudioProject{
 		FPS: p.FPS, Width: p.Width, Height: p.Height,
-		Tracks: models.SanitizeTracks(p.Tracks), Audio: p.Audio,
+		Tracks: models.SanitizeTracksForAssets(models.SanitizeTracks(p.Tracks), kinds), Audio: p.Audio,
 	}
 	refs, duration, ok := services.CollectExportRefs(project, assetByID)
 	if !ok {
@@ -172,6 +176,11 @@ func renderVariant(id, leg string, p goldenProject, g *goldenFile, fixturesDir, 
 			return fmt.Errorf("write keyframe sidecar: %w", err)
 		}
 		plan.SendCmdPath = cmdPath
+	}
+	for i, in := range plan.Inputs {
+		if len(in.Pre) > 0 {
+			fmt.Printf("  [%s/%s] input %d pre-options: %s\n", id, leg, i, strings.Join(in.Pre, " "))
+		}
 	}
 	renderPath := filepath.Join(legDir, "render.mp4")
 	if err := runFFmpeg(services.ParityExportArgs(plan, fontFile, fontsDir, renderPath)); err != nil {
