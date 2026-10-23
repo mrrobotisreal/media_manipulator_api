@@ -228,7 +228,7 @@ WHERE deleted_at IS NULL AND expires_at < now() AND attempts >= 10;
 
 Metrics: `mm_retention_swept_total{kind}`, `mm_retention_would_delete_total{kind}`, `mm_retention_sweep_errors_total{kind}`, `mm_retention_gave_up_total{kind}`, `mm_retention_backlog{state="due"|"gave_up"}`. The server analytics event `server_retention_swept {kind, countBucket}` is emitted once per kind per tick that deleted something (never in dry run); it is dropped today for lack of a visitor id, like the billing events.
 
-**Forcing a sweep.** There is no endpoint (MM24 adds inline sweeps for user deletes). To run one now: `sudo systemctl restart media-manipulator-api` (the worker runs a tick immediately at boot), or lower `CLEANUP_INTERVAL_SECONDS`. To make one row due: `UPDATE mm_retained_objects SET expires_at = now() - interval '1 minute', next_attempt_at = NULL WHERE id = '...';` then wait for a tick. To retry a given-up row: `UPDATE mm_retained_objects SET attempts = 0, next_attempt_at = NULL WHERE id = '...';`.
+**Forcing a sweep.** There is no endpoint for the ticker (MM24's user-delete routes run an inline sweep of just the caller's rows, 4.2.2). To run one now: `sudo systemctl restart media-manipulator-api` (the worker runs a tick immediately at boot), or lower `CLEANUP_INTERVAL_SECONDS`. To make one row due: `UPDATE mm_retained_objects SET expires_at = now() - interval '1 minute', next_attempt_at = NULL WHERE id = '...';` then wait for a tick. To retry a given-up row: `UPDATE mm_retained_objects SET attempts = 0, next_attempt_at = NULL WHERE id = '...';`.
 
 **First deploy / rollout (read this before enabling).**
 
@@ -279,6 +279,22 @@ Equivalent JSON (`aws s3api put-bucket-lifecycle-configuration --bucket "$S3_BUC
 ```
 
 Note: the earliest this rule deletes anything is 737 days after the oldest object, so it cannot hurt a recent upload; and because a user's maximum window is 2 years, it can only ever remove objects the ledger has already forgotten.
+
+#### 4.2.2 User deletion, account deletion and export (MM24)
+
+**Deploy first:** run migration `20261023006_add_deletion_and_export` (adds `mm_retained_objects.kept_longer` and the `mm_account_deletions` table; deletes nothing). Until it runs, "keep longer", account deletion's tombstone and the sign-in tombstone check fail (the sign-in check fails closed: no session claim, logged as `tombstone lookup failed`).
+
+**Inline sweep.** `DELETE /api/jobs/:jobId`, `DELETE /api/studio/projects/:id`, `POST /api/account/data/delete-all` and `DELETE /api/account` mark the matching ledger rows due and run the same per-kind deleters the ticker uses, synchronously for at most 30 s (`pending: N` in the response is what is left; the ticker finishes it). User deletes ignore `RETENTION_SWEEP_DRY_RUN` and `CLEANUP_ENABLED`: they act only on rows the caller just asked to delete. They also delete parked metadata reports and the whole output directory (no "keep metadata" exception). Stuck row: same SQL as 4.2.1.
+
+**Account deletion** (`DELETE /api/account`, body `{"confirm":"DELETE MY ACCOUNT"}`, Firebase `auth_time` < 5 min else `401 reauth_required`). Order: Stripe cancel, sweep (halts with files pending: it never orphans files), projects, settings + grants, job anonymize, analytics DSR, tombstone, `mm_users` row, Firebase user. A halted run returns 502 with `retryable: true` and per-step status; the same signed-in user calls again and it resumes (an already-removed `mm_users` row skips the data steps). Metric: `mm_account_deleted_total{result="completed|incomplete|files_pending"}`; `mm_data_deleted_total{scope="item|project|all"}`.
+
+**Analytics DSR dependency.** Step "analytics" does `POST $ANALYTICS_INGEST_URL/v1/dsr/delete` with the caller's own Firebase ID token (person scope; the analytics service verifies it against the same Firebase project; 5 req/min/IP there). A failure is reported as `analytics: "failed"` in the response and does NOT block deletion; finish it by hand with the analytics admin DSR tool. `ANALYTICS_INGEST_URL` empty reports `not_configured`. Stripe: with billing not configured the step reports `skipped`.
+
+**Tombstone.** `mm_account_deletions(firebase_uid_hash, deleted_at)` holds sha256(salt:uid) for 30 days (purge rule `account_deletions`, hourly with the other purges). A sign-in with that uid inside 30 days still gets its account, but `/account/sync` claims no prior session rows.
+
+**Export** (`GET /api/account/data/export`): streamed zip (history, projects, files, account, metadata reports, README), 3 per hour per user (Redis when `RATE_LIMIT_ENABLED`, plus an in-process floor).
+
+**Download after restart.** `GET /api/download/:jobId` and `/api/result/:jobId` fall back to Postgres + the ledger when the in-memory job is gone, with the MM05 ownership rules; a job with no live ledger row is 404 even if a file lingers.
 
 ### 4.3 Whisper / transcription
 
