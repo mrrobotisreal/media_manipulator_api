@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 )
 
 // TranscodeService orchestrates the full HLS/DASH pipeline for a job. It owns
@@ -426,6 +427,9 @@ func (s *TranscodeService) uploadAndPresign(ctx context.Context, req TranscodeRe
 	if putErr != nil {
 		return "", "", time.Time{}, fmt.Errorf("s3 upload: %w", putErr)
 	}
+	// Ledger (MM22): the result bundle object, owned via the scope the handler
+	// attached to the pipeline context.
+	retention.RegisterS3FromContext(ctx, resultKey, "", fileSizeOrZero(localPath))
 	ttl := s.cfg.S3ResultPresignTTL
 	if ttl <= 0 {
 		ttl = 30 * time.Minute
@@ -442,6 +446,14 @@ func (s *TranscodeService) uploadAndPresign(ctx context.Context, req TranscodeRe
 		return "", "", time.Time{}, fmt.Errorf("presign: %w", err)
 	}
 	return resultKey, presigned.URL, time.Now().UTC().Add(ttl), nil
+}
+
+// fileSizeOrZero is a file's size, or 0 when it cannot be statted.
+func fileSizeOrZero(path string) int64 {
+	if st, err := os.Stat(path); err == nil {
+		return st.Size()
+	}
+	return 0
 }
 
 func (s *TranscodeService) fail(jobID string, stages []models.TranscodeJobStage, err error) {

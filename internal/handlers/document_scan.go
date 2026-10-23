@@ -214,7 +214,7 @@ func (h *DocumentScanHandler) Start(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare upload"})
 		return
 	}
-	markRetention(c, filepath.Join(h.cfg.UploadDir, job.ID), filepath.Join(h.cfg.OutputDir, job.ID))
+	registerJobDirs(c, job.ID, true, true)
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), h.cfg.CommandTimeout)
 	defer cancel()

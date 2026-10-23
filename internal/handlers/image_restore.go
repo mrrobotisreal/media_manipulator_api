@@ -3,13 +3,11 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -133,7 +131,8 @@ func (h *ImageRestoreHandler) StartImageRestore(c *gin.Context) {
 	}
 
 	// --- save + verify the upload is actually an image --------------------
-	incomingPath := filepath.Join(h.cfg.UploadDir, fmt.Sprintf("image_restore_incoming_%d_%s", time.Now().UnixNano(), safeFilename(fileHeader.Filename)))
+	jobID := newJobID()
+	incomingPath := stagedUploadPath(h.cfg.UploadDir, jobID, "image_restore_incoming", safeFilename(fileHeader.Filename))
 	if err := os.MkdirAll(filepath.Dir(incomingPath), 0o755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare upload"})
 		return
@@ -147,7 +146,7 @@ func (h *ImageRestoreHandler) StartImageRestore(c *gin.Context) {
 	defer cancel()
 	fileType, contentType := h.inspector.DetectFile(ctx, incomingPath, fileHeader.Header.Get("Content-Type"))
 	if fileType != models.FileTypeImage {
-		_ = os.Remove(incomingPath)
+		discardStaged(incomingPath)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "The uploaded file is not a supported image"})
 		return
 	}
@@ -163,7 +162,7 @@ func (h *ImageRestoreHandler) StartImageRestore(c *gin.Context) {
 		"chain":      opts.Chain,
 		"scale":      opts.Scale,
 	}
-	job := h.jobManager.CreateJob(originalFile, options)
+	job := h.jobManager.CreateJobWithID(jobID, originalFile, options)
 	_ = h.jobManager.SetMode(job.ID, "image_restore")
 	recordJobCreated(c, h.jobManager, job, services.JobFacts{
 		Tool:         "image_restore",
@@ -180,7 +179,7 @@ func (h *ImageRestoreHandler) StartImageRestore(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare upload"})
 		return
 	}
-	markRetention(c, jobUploadDir, filepath.Join(h.cfg.OutputDir, job.ID))
+	registerJobDirs(c, job.ID, true, true)
 	ext := strings.ToLower(filepath.Ext(fileName))
 	if ext == "" {
 		ext = ".img"

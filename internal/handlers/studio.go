@@ -23,6 +23,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 )
 
@@ -210,6 +211,7 @@ func (h *StudioHandler) CreateProject(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create project"})
 		return
 	}
+	h.registerRow(c, retention.KindStudioProject, project.ID, project.ID, 0)
 	c.JSON(http.StatusCreated, project)
 }
 
@@ -374,6 +376,12 @@ func (h *StudioHandler) PresignAsset(c *gin.Context) {
 		Key:         aws.String(key),
 		ContentType: aws.String(contentType),
 	}, func(o *s3.PresignOptions) { o.Expires = h.cfg.S3PresignTTL })
+	if err == nil {
+		// Ledger: the browser is about to PUT this key. Register it now (size
+		// unknown, fixed up by CompleteAsset); an abandoned upload is then still
+		// reaped on schedule instead of living until the S3 lifecycle backstop.
+		h.registerKey(c, sessionID, key, "", "", req.FileSizeBytes)
+	}
 	if err != nil {
 		log.Printf("studio: failed to presign asset upload: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload URL"})
@@ -469,6 +477,8 @@ func (h *StudioHandler) CompleteAsset(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record asset"})
 			return
 		}
+		h.registerKey(c, "", key, "", projectID, objectSize)
+		h.registerRow(c, retention.KindStudioAsset, created.ID, projectID, objectSize)
 		job := h.jobManager.CreateJob(
 			models.OriginalFileInfo{Name: fileName, Size: objectSize, Type: "application/octet-stream"},
 			map[string]interface{}{"mode": "studio_lut"},
@@ -492,6 +502,7 @@ func (h *StudioHandler) CompleteAsset(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare upload"})
 		return
 	}
+	registerJobDirs(c, job.ID, true, false) // the ingest job's staged original
 	uploadPath := filepath.Join(jobUploadDir, "original_"+fileName)
 	if err := h.downloadS3Object(ctx, key, uploadPath); err != nil {
 		log.Printf("studio: failed to download uploaded asset %s: %v", key, err)
@@ -559,17 +570,20 @@ func (h *StudioHandler) CompleteAsset(c *gin.Context) {
 		return
 	}
 
-	go h.runIngestJob(job.ID, created, key, kind, uploadPath, probe.DurationSeconds)
+	h.registerKey(c, "", key, "", projectID, objectSize)
+	h.registerRow(c, retention.KindStudioAsset, created.ID, projectID, objectSize)
+
+	go h.runIngestJob(retentionScopeFor(c, job.ID, projectID), job.ID, created, key, kind, uploadPath, probe.DurationSeconds)
 
 	c.JSON(http.StatusOK, models.StudioAssetCompleteResponse{Asset: created, JobID: job.ID})
 }
 
-func (h *StudioHandler) runIngestJob(jobID string, asset *models.StudioAsset, originalKey string, kind models.StudioMediaKind, inputPath string, totalSeconds float64) {
+func (h *StudioHandler) runIngestJob(scope retention.Scope, jobID string, asset *models.StudioAsset, originalKey string, kind models.StudioMediaKind, inputPath string, totalSeconds float64) {
 	if err := h.jobManager.UpdateJobStatus(jobID, models.StatusProcessing); err != nil {
 		log.Printf("studio ingest: failed to mark job %s processing: %v", jobID, err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), h.cfg.CommandTimeout)
+	ctx, cancel := context.WithTimeout(retention.WithScope(context.Background(), scope), h.cfg.CommandTimeout)
 	defer cancel()
 
 	res, err := h.ingest.Generate(ctx, jobID, originalKey, asset.ID, kind, asset.HasAudio, inputPath, totalSeconds)
@@ -673,19 +687,22 @@ func (h *StudioHandler) DeriveAsset(c *gin.Context) {
 		TargetFormat: "wav",
 	})
 
-	go h.runDeriveJob(job.ID, created, src.S3KeyOriginal, derivedKey, op)
+	registerJobDirs(c, job.ID, true, false) // derive work dir lives under uploads/<jobId>/
+	h.registerKey(c, sessionID, derivedKey, "", src.ProjectID, 0)
+	h.registerRow(c, retention.KindStudioAsset, created.ID, src.ProjectID, 0)
+	go h.runDeriveJob(retentionScopeFor(c, job.ID, src.ProjectID), job.ID, created, src.S3KeyOriginal, derivedKey, op)
 	c.JSON(http.StatusOK, models.StudioAssetCompleteResponse{Asset: created, JobID: job.ID})
 }
 
-func (h *StudioHandler) runDeriveJob(jobID string, asset *models.StudioAsset, srcKey, derivedKey, op string) {
+func (h *StudioHandler) runDeriveJob(scope retention.Scope, jobID string, asset *models.StudioAsset, srcKey, derivedKey, op string) {
 	if err := h.jobManager.UpdateJobStatus(jobID, models.StatusProcessing); err != nil {
 		log.Printf("studio derive: failed to mark job %s processing: %v", jobID, err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), h.cfg.CommandTimeout)
+	ctx, cancel := context.WithTimeout(retention.WithScope(context.Background(), scope), h.cfg.CommandTimeout)
 	defer cancel()
 
-	workDir := filepath.Join(h.cfg.UploadDir, "studio_derive_"+jobID)
+	workDir := filepath.Join(h.cfg.UploadDir, jobID, "derive")
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		_ = h.jobManager.UpdateJobError(jobID, "Failed to prepare workspace")
 		return
@@ -753,6 +770,14 @@ func (h *StudioHandler) uploadLocalToS3(ctx context.Context, localPath, key, con
 		Body:        f,
 		ContentType: aws.String(contentType),
 	})
+	if err == nil {
+		// Ledger: the derived .wav (real size now known).
+		var size int64
+		if st, statErr := f.Stat(); statErr == nil {
+			size = st.Size()
+		}
+		retention.RegisterS3FromContext(ctx, key, "", size)
+	}
 	return err
 }
 
@@ -878,7 +903,7 @@ func (h *StudioHandler) ServePeaks(c *gin.Context) {
 
 	key := asset.S3KeyPeaks
 	if key == "" {
-		generated, gerr := h.backfillPeaks(ctx, asset)
+		generated, gerr := h.backfillPeaks(ctx, asset, h.retentionOwner(c, ""))
 		if gerr != nil {
 			log.Printf("studio: peaks backfill failed for asset %s: %v", assetID, gerr)
 			c.JSON(http.StatusNotFound, gin.H{"error": "Waveform is not available"})
@@ -907,7 +932,7 @@ func (h *StudioHandler) ServePeaks(c *gin.Context) {
 
 // backfillPeaks generates + persists peaks for an asset that has none, deduping
 // concurrent requests per asset id via peaksMu.
-func (h *StudioHandler) backfillPeaks(ctx context.Context, asset *models.StudioAsset) (string, error) {
+func (h *StudioHandler) backfillPeaks(ctx context.Context, asset *models.StudioAsset, backfillOwner retention.Owner) (string, error) {
 	muIface, _ := h.peaksMu.LoadOrStore(asset.ID, &sync.Mutex{})
 	mu := muIface.(*sync.Mutex)
 	mu.Lock()
@@ -920,8 +945,10 @@ func (h *StudioHandler) backfillPeaks(ctx context.Context, asset *models.StudioA
 
 	genCtx, cancel := context.WithTimeout(ctx, h.cfg.CommandTimeout)
 	defer cancel()
+	genCtx = retention.WithScope(genCtx, retention.Scope{Owner: backfillOwner, ProjectID: asset.ProjectID})
 
-	tmp := filepath.Join(h.cfg.UploadDir, fmt.Sprintf("studio_peaks_%s%s", asset.ID, strings.ToLower(filepath.Ext(asset.S3KeyOriginal))))
+	// Disposable scratch, removed below: TempDir, not a loose file in UPLOAD_DIR.
+	tmp := filepath.Join(h.cfg.TempDir, fmt.Sprintf("studio_peaks_%s%s", asset.ID, strings.ToLower(filepath.Ext(asset.S3KeyOriginal))))
 	if err := h.downloadS3Object(genCtx, asset.S3KeyOriginal, tmp); err != nil {
 		return "", fmt.Errorf("download original: %w", err)
 	}
@@ -1015,6 +1042,7 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare export"})
 		return
 	}
+	registerJobDirs(c, job.ID, true, true) // output + the downloaded sources under uploads/<jobId>/
 	// converted.mp4 is what ConversionHandler.DownloadFile resolves for a
 	// default video job, so /api/download/:jobId serves it unchanged.
 	outputPath := filepath.Join(jobOutputDir, "converted.mp4")
@@ -1049,7 +1077,7 @@ func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef
 		if _, done := localByKey[key]; done {
 			continue
 		}
-		local := filepath.Join(h.cfg.UploadDir, fmt.Sprintf("studio_export_%s_%d%s", jobID, len(localByKey), strings.ToLower(filepath.Ext(key))))
+		local := filepath.Join(h.cfg.UploadDir, jobID, fmt.Sprintf("export_%d%s", len(localByKey), strings.ToLower(filepath.Ext(key))))
 		if err := h.downloadS3Object(ctx, key, local); err != nil {
 			log.Printf("studio export: download original failed: %v", err)
 			_ = h.jobManager.UpdateJobError(jobID, "Failed to download source media")
@@ -1062,7 +1090,7 @@ func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef
 	// Download each referenced LUT (.cube) once, keyed by lut asset id.
 	lutLocalByAssetID := make(map[string]string, len(exportCfg.lutKeys))
 	for assetID, key := range exportCfg.lutKeys {
-		local := filepath.Join(h.cfg.UploadDir, fmt.Sprintf("studio_export_%s_lut_%s.cube", jobID, sanitizeS3PathSegment(assetID)))
+		local := filepath.Join(h.cfg.UploadDir, jobID, fmt.Sprintf("export_lut_%s.cube", sanitizeS3PathSegment(assetID)))
 		if err := h.downloadS3Object(ctx, key, local); err != nil {
 			log.Printf("studio export: download LUT %s failed: %v", assetID, err)
 			continue // a missing LUT just skips that effect
@@ -1201,6 +1229,7 @@ func (h *StudioHandler) GenerateCaptions(c *gin.Context) {
 		MediaKind:    string(models.FileTypeAudio),
 		TargetFormat: "vtt",
 	})
+	registerJobDirs(c, job.ID, true, false) // caption work dir under uploads/<jobId>/
 	go h.runCaptionsJob(job, projectID, refs, duration, strings.TrimSpace(req.Language))
 	c.JSON(http.StatusOK, gin.H{"jobId": job.ID})
 }
@@ -1214,7 +1243,7 @@ func (h *StudioHandler) runCaptionsJob(job *models.ConversionJob, projectID stri
 	ctx, cancel := context.WithTimeout(context.Background(), h.cfg.CommandTimeout)
 	defer cancel()
 
-	workDir := filepath.Join(h.cfg.UploadDir, "studio_captions_"+jobID)
+	workDir := filepath.Join(h.cfg.UploadDir, jobID, "captions")
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		_ = h.jobManager.UpdateJobError(jobID, "Failed to prepare workspace")
 		return
@@ -1490,4 +1519,29 @@ func clampDim(v, fallback, max int) int {
 		return max
 	}
 	return v
+}
+
+// --- retention ledger (MM22) ------------------------------------------------
+
+// retentionOwner is the ledger owner for a Darkroom request. The studio always
+// has a session (h.sessionID invents one when the header is missing), and a
+// signed-in caller is the account, so rows move with the user on claim.
+func (h *StudioHandler) retentionOwner(c *gin.Context, sessionID string) retention.Owner {
+	o := retentionOwnerFor(c)
+	if o.SessionID == "" {
+		o.SessionID = firstNonEmpty(sessionID, h.sessionID(c))
+	}
+	return o
+}
+
+// registerRow records a studio_project / studio_asset row.
+func (h *StudioHandler) registerRow(c *gin.Context, kind, id, projectID string, size int64) {
+	retention.Default().Register(detachedCtx(c), retention.RegisterInput{
+		Kind: kind, Locator: id, Owner: h.retentionOwner(c, ""), ProjectID: projectID, SizeBytes: size,
+	})
+}
+
+// registerKey records a Darkroom source S3 object.
+func (h *StudioHandler) registerKey(c *gin.Context, sessionID, key, parent, projectID string, size int64) {
+	retention.Default().RegisterS3(detachedCtx(c), h.retentionOwner(c, sessionID), key, parent, "", projectID, size)
 }

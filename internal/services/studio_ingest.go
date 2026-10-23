@@ -14,6 +14,7 @@ import (
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 )
 
 // StudioFilmstripTiles is how many thumbnails the filmstrip sprite packs into a
@@ -70,7 +71,7 @@ func (s *StudioIngestService) Generate(ctx context.Context, jobID, originalKey, 
 			return StudioIngestResult{}, fmt.Errorf("audio proxy: %w", err)
 		}
 		res.ProxyKey = keyDir + "/" + assetID + "_proxy.m4a"
-		if err := s.uploadFile(ctx, proxyLocal, res.ProxyKey, "audio/mp4"); err != nil {
+		if err := s.uploadFile(ctx, proxyLocal, res.ProxyKey, originalKey, "audio/mp4"); err != nil {
 			return StudioIngestResult{}, fmt.Errorf("upload audio proxy: %w", err)
 		}
 		s.maybePeaks(ctx, jobID, originalKey, assetID, hasAudio, inputPath, totalSeconds, &res)
@@ -90,7 +91,7 @@ func (s *StudioIngestService) Generate(ctx context.Context, jobID, originalKey, 
 		return StudioIngestResult{}, fmt.Errorf("video proxy: %w", err)
 	}
 	res.ProxyKey = keyDir + "/" + assetID + "_proxy.mp4"
-	if err := s.uploadFile(ctx, proxyLocal, res.ProxyKey, "video/mp4"); err != nil {
+	if err := s.uploadFile(ctx, proxyLocal, res.ProxyKey, originalKey, "video/mp4"); err != nil {
 		return StudioIngestResult{}, fmt.Errorf("upload video proxy: %w", err)
 	}
 
@@ -107,7 +108,7 @@ func (s *StudioIngestService) Generate(ctx context.Context, jobID, originalKey, 
 	if err := runStudioFFmpeg(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, 0, spriteArgs...); err == nil {
 		if st, statErr := os.Stat(spriteLocal); statErr == nil && st.Size() > 0 {
 			res.SpriteKey = keyDir + "/" + assetID + "_sprite.jpg"
-			if upErr := s.uploadFile(ctx, spriteLocal, res.SpriteKey, "image/jpeg"); upErr != nil {
+			if upErr := s.uploadFile(ctx, spriteLocal, res.SpriteKey, originalKey, "image/jpeg"); upErr != nil {
 				res.SpriteKey = ""
 			}
 		}
@@ -138,7 +139,7 @@ func (s *StudioIngestService) maybePeaks(ctx context.Context, jobID, originalKey
 	res.PeaksKey = key
 }
 
-func (s *StudioIngestService) uploadFile(ctx context.Context, localPath, key, contentType string) error {
+func (s *StudioIngestService) uploadFile(ctx context.Context, localPath, key, parentKey, contentType string) error {
 	f, err := os.Open(localPath)
 	if err != nil {
 		return err
@@ -150,6 +151,15 @@ func (s *StudioIngestService) uploadFile(ctx context.Context, localPath, key, co
 		Body:        f,
 		ContentType: aws.String(contentType),
 	})
+	if err == nil {
+		// Ledger (MM22): proxy / sprite. The parent is the original, so MM23 can
+		// delete derivatives together with it.
+		var size int64
+		if st, statErr := f.Stat(); statErr == nil {
+			size = st.Size()
+		}
+		retention.RegisterS3FromContext(ctx, key, parentKey, size)
+	}
 	return err
 }
 

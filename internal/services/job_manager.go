@@ -483,13 +483,24 @@ func (jm *JobManager) notifySubscribers(jobID string) {
 }
 
 func (jm *JobManager) CreateJob(originalFile models.OriginalFileInfo, options map[string]interface{}) *models.ConversionJob {
+	return jm.CreateJobWithID(uuid.New().String(), originalFile, options)
+}
+
+// CreateJobWithID is CreateJob for a caller that had to pick the id first: the
+// upload is saved under uploads/<jobId>/ before the job exists (it needs the
+// file to detect its type), so a directory is the unit from the first byte
+// (MM22). An empty id falls back to a fresh uuid.
+func (jm *JobManager) CreateJobWithID(id string, originalFile models.OriginalFileInfo, options map[string]interface{}) *models.ConversionJob {
 	jm.mu.Lock()
 	defer jm.mu.Unlock()
 	if options == nil {
 		options = map[string]interface{}{}
 	}
+	if id == "" {
+		id = uuid.New().String()
+	}
 	job := &models.ConversionJob{
-		ID:           uuid.New().String(),
+		ID:           id,
 		Status:       models.StatusPending,
 		Progress:     0,
 		OriginalFile: originalFile,

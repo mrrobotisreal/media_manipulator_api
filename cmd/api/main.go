@@ -44,6 +44,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/redisx"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
@@ -124,6 +125,10 @@ func main() {
 
 	// Metrics + GPU + rate limiter
 	metricsReg := metrics.New()
+
+	// MM22: the retained-objects ledger every producer of durable data writes to.
+	// A no-op when the database is unavailable; a failed write never fails a request.
+	retention.SetDefault(retention.NewLedger(store, metricsReg, logging))
 
 	// Server-truth product analytics. A SECOND, non-authoritative consumer that
 	// runs alongside the mm_* telemetry above and never replaces it: mm_* is the

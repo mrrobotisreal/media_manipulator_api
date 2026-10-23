@@ -2,14 +2,12 @@ package handlers
 
 import (
 	"errors"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
-	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/validation"
@@ -79,21 +77,6 @@ func gpuPriorityFor(c *gin.Context) int {
 		return services.GPUPriorityPremium
 	}
 	return services.GPUPriorityStandard
-}
-
-// markRetention records the caller's result-retention window alongside the job
-// artifacts, so the cleanup sweeper keeps a Premium result for 30 days and an
-// anonymous one for 24 hours. Silent on failure: a missing marker falls back to
-// the global retention, which never deletes anything early.
-func markRetention(c *gin.Context, dirs ...string) {
-	res, ok := middleware.ResolveTier(c)
-	if !ok || res.Limits.ResultRetentionHours <= 0 {
-		return
-	}
-	window := time.Duration(res.Limits.ResultRetentionHours) * time.Hour
-	for _, dir := range dirs {
-		retention.WriteQuietly(dir, window)
-	}
 }
 
 // ladderAccessFor is the transcode-ladder slice this caller may select from.
