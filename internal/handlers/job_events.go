@@ -48,7 +48,7 @@ func (h *ConversionHandler) StreamJobEvents(c *gin.Context) {
 	// Send the current snapshot immediately so the client renders without
 	// waiting for the next pipeline tick.
 	if snap, err := h.jobManager.GetJob(jobID); err == nil {
-		_ = writeSSEEvent(c.Writer, "update", snap)
+		_ = writeSSEEvent(c.Writer, "update", h.withMetadataFields(snap))
 		c.Writer.Flush()
 	}
 
@@ -72,7 +72,7 @@ func (h *ConversionHandler) StreamJobEvents(c *gin.Context) {
 			if snapshot == nil {
 				continue
 			}
-			if err := writeSSEEvent(c.Writer, "update", snapshot); err != nil {
+			if err := writeSSEEvent(c.Writer, "update", h.withMetadataFields(snapshot)); err != nil {
 				return
 			}
 			c.Writer.Flush()

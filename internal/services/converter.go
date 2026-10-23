@@ -484,36 +484,6 @@ func imageTextOverlayArgs(overlay *models.ImageTextOverlay) []string {
 	return args
 }
 
-func imageMetadataArgs(options *models.ImageConversionOptions) []string {
-	mode := strings.TrimSpace(options.MetadataMode)
-	if options.RemoveMetadata {
-		mode = "strip"
-	}
-	var args []string
-	if mode == "strip" || mode == "custom" {
-		args = append(args, "-strip")
-	}
-	if mode != "custom" || options.Metadata == nil {
-		return args
-	}
-	fields := map[string]string{
-		"title":       options.Metadata.Title,
-		"author":      options.Metadata.Author,
-		"description": options.Metadata.Description,
-		"copyright":   options.Metadata.Copyright,
-		"comment":     options.Metadata.Comment,
-		"keywords":    options.Metadata.Keywords,
-	}
-	for key, value := range fields {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		args = append(args, "-set", key, value)
-	}
-	return args
-}
-
 func applyImageMetadataOptions(inputPath, outputPath string, options *models.ImageConversionOptions) error {
 	mode := strings.TrimSpace(options.MetadataMode)
 	if options.RemoveMetadata {
@@ -543,6 +513,56 @@ func copyImageMetadata(inputPath, outputPath string) error {
 		return fmt.Errorf("copy metadata with exiftool: %s", strings.TrimSpace(stderr))
 	}
 	return nil
+}
+
+// metadataStripArgs are the ffmpeg output options that drop global/stream
+// metadata and chapters for metadataMode "strip"; keep/empty adds nothing.
+func metadataStripArgs(mode string) []string {
+	if strings.EqualFold(strings.TrimSpace(mode), "strip") {
+		return []string{"-map_metadata", "-1", "-map_chapters", "-1"}
+	}
+	return nil
+}
+
+// validateAVMetadataMode accepts keep|strip (empty allowed); custom is image-only.
+func validateAVMetadataMode(mode string) error {
+	switch strings.TrimSpace(mode) {
+	case "", "keep", "strip":
+		return nil
+	case "custom":
+		return fmt.Errorf("custom metadata is not supported for video/audio")
+	}
+	return fmt.Errorf("unsupported metadata mode: %s", strings.TrimSpace(mode))
+}
+
+// exiftoolStripContainers are outputs where ffmpeg leaves QuickTime keys or XMP
+// behind, so an exiftool pass follows.
+var exiftoolStripContainers = map[string]bool{".mp4": true, ".mov": true, ".m4a": true, ".m4v": true}
+
+// exiftoolStripArgs is the argument list of the post-ffmpeg strip pass: the
+// output path comes after "--" so it can never be read as an option.
+func exiftoolStripArgs(outputPath string) []string {
+	return []string{"-all=", "-overwrite_original", "--", outputPath}
+}
+
+// runExiftool is swapped by tests.
+var runExiftool = func(ctx context.Context, args ...string) (string, error) {
+	_, stderr, err := runCommand(ctx, "exiftool", args...)
+	return stderr, err
+}
+
+// stripAVContainerMetadata runs exiftool -all= over an mp4/mov/m4a/m4v output
+// when the job asked for strip. Best effort: failure is logged, never returned
+// (it needs free temp space about the size of the file).
+func stripAVContainerMetadata(jobID, mode, outputPath string) {
+	if !strings.EqualFold(strings.TrimSpace(mode), "strip") || !exiftoolStripContainers[strings.ToLower(filepath.Ext(outputPath))] {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	if stderr, err := runExiftool(ctx, exiftoolStripArgs(outputPath)...); err != nil {
+		fmt.Printf("[WARN] metadata strip pass failed for job %s (output kept as ffmpeg wrote it): %v %s\n", jobID, err, strings.TrimSpace(stderr))
+	}
 }
 
 func stripImageMetadata(outputPath string) error {
@@ -748,7 +768,11 @@ func (c *Converter) convertVideo(job *models.ConversionJob, inputPath, outputPat
 	if c.ai != nil && options.AI != nil && options.AI.Enabled && isActiveAIOp(options.AI.Operation) {
 		ctx, cancel := context.WithTimeout(context.Background(), c.cfg.CommandTimeout)
 		defer cancel()
-		return c.runVideoAI(ctx, job, &options, inputPath, outputPath)
+		if err := c.runVideoAI(ctx, job, &options, inputPath, outputPath); err != nil {
+			return err
+		}
+		stripAVContainerMetadata(job.ID, options.MetadataMode, outputPath)
+		return nil
 	}
 
 	// Animated GIF is a two-stage pipeline (ffmpeg + gifsicle) that does not
@@ -1072,11 +1096,16 @@ func (c *Converter) convertVideo(job *models.ConversionJob, inputPath, outputPat
 		WebMVP9:      webmVP9,
 	})...)
 
+	args = append(args, metadataStripArgs(options.MetadataMode)...)
 	args = append(args, "-y", outputPath)
 
 	fmt.Printf("[DEBUG] Complete FFmpeg command: ffmpeg %s\n", strings.Join(args, " "))
 
-	return c.runFFmpegWithProgress(job.ID, "ffmpeg", args...)
+	if err := c.runFFmpegWithProgress(job.ID, "ffmpeg", args...); err != nil {
+		return err
+	}
+	stripAVContainerMetadata(job.ID, options.MetadataMode, outputPath)
+	return nil
 }
 
 // videoCRF maps the quality preset to an x264 / VPx CRF value (lower = higher
@@ -1256,6 +1285,9 @@ func ffmpegSupportsWebMVP9() bool {
 }
 
 func (c *Converter) validateVideoOptions(options *models.VideoConversionOptions) error {
+	if err := validateAVMetadataMode(options.MetadataMode); err != nil {
+		return err
+	}
 	// Validate dimensions
 	if options.Width != nil && *options.Width <= 0 {
 		return fmt.Errorf("width must be positive, got %d", *options.Width)
@@ -1500,7 +1532,9 @@ func (c *Converter) convertVideoToGIF(job *models.ConversionJob, options *models
 	// codecs prefer even dimensions); pix_fmt rgb8 + low fps keep the file
 	// small before gifsicle quantizes the palette.
 	vf := fmt.Sprintf("scale=%d:-4", gifWidth)
-	ffArgs = append(ffArgs, "-vf", vf, "-pix_fmt", "rgb8", "-r", strconv.Itoa(gifFPS), "-f", "gif", rawGIFPath)
+	ffArgs = append(ffArgs, "-vf", vf, "-pix_fmt", "rgb8", "-r", strconv.Itoa(gifFPS))
+	ffArgs = append(ffArgs, metadataStripArgs(options.MetadataMode)...)
+	ffArgs = append(ffArgs, "-f", "gif", rawGIFPath)
 	fmt.Printf("[DEBUG] GIF stage 1 (ffmpeg): ffmpeg %s\n", strings.Join(ffArgs, " "))
 	if err := c.runFFmpegWithProgress(job.ID, "ffmpeg", ffArgs...); err != nil {
 		return fmt.Errorf("ffmpeg gif stage failed: %v", err)
@@ -1554,7 +1588,11 @@ func (c *Converter) convertAudio(job *models.ConversionJob, inputPath, outputPat
 	if c.ai != nil && options.AI != nil && options.AI.Enabled && isActiveAIOp(options.AI.Operation) {
 		ctx, cancel := context.WithTimeout(context.Background(), c.cfg.CommandTimeout)
 		defer cancel()
-		return c.runAudioAI(ctx, job, &options, inputPath, outputPath)
+		if err := c.runAudioAI(ctx, job, &options, inputPath, outputPath); err != nil {
+			return err
+		}
+		stripAVContainerMetadata(job.ID, options.MetadataMode, outputPath)
+		return nil
 	}
 
 	// Update progress
@@ -1952,14 +1990,22 @@ func (c *Converter) convertAudio(job *models.ConversionJob, inputPath, outputPat
 		args = append(args, "-b:a", options.Bitrate+"k")
 	}
 
+	args = append(args, metadataStripArgs(options.MetadataMode)...)
 	args = append(args, "-y", outputPath)
 
 	fmt.Printf("[DEBUG] Complete FFmpeg command: ffmpeg %s\n", strings.Join(args, " "))
 
-	return c.runFFmpegWithProgress(job.ID, "ffmpeg", args...)
+	if err := c.runFFmpegWithProgress(job.ID, "ffmpeg", args...); err != nil {
+		return err
+	}
+	stripAVContainerMetadata(job.ID, options.MetadataMode, outputPath)
+	return nil
 }
 
 func (c *Converter) validateAudioOptions(options *models.AudioConversionOptions) error {
+	if err := validateAVMetadataMode(options.MetadataMode); err != nil {
+		return err
+	}
 	// Validate speed
 	if options.Speed < 0.25 || options.Speed > 4.0 {
 		return fmt.Errorf("speed must be between 0.25 and 4.0, got %.2f", options.Speed)

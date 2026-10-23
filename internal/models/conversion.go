@@ -47,6 +47,18 @@ type ConversionJob struct {
 	ResultMime      string              `json:"resultMime,omitempty"`
 	ExpiresAt       *time.Time          `json:"expiresAt,omitempty"`
 	TranscodeReport *VideoProbeResponse `json:"transcodeReport,omitempty"`
+	// MetadataAvailable tells the UI which metadata documents exist for the job.
+	// Filled at response time by a cheap stat; never stored.
+	MetadataAvailable *MetadataAvailability `json:"metadataAvailable,omitempty"`
+	// StrippedCount is the number of metadata entries a strip job removed (the
+	// expected File/Composite changes excluded). 0 and omitted when unknown.
+	StrippedCount int `json:"strippedCount,omitempty"`
+}
+
+// MetadataAvailability reports which metadata documents can be requested.
+type MetadataAvailability struct {
+	Original bool `json:"original"`
+	Result   bool `json:"result"`
 }
 
 type OriginalFileInfo struct {
@@ -497,6 +509,8 @@ type VideoConversionOptions struct {
 	Advanced            *AdvancedProcessing `json:"advanced,omitempty"`
 	GIF                 *GIFOptions         `json:"gif,omitempty"`
 	AI                  *AIVideoOptions     `json:"ai,omitempty"`
+	// MetadataMode is "keep" (default) or "strip". "custom" is image-only.
+	MetadataMode string `json:"metadataMode,omitempty"`
 
 	// --- Compression controls (optional; used by the video-compressor /
 	// compress-mp4 utility pages). When set they refine the codec selection
@@ -567,6 +581,8 @@ type AudioConversionOptions struct {
 	Restoration      *Restoration      `json:"restoration,omitempty"`
 	Advanced         *AdvancedAudio    `json:"advanced,omitempty"`
 	AI               *AIAudioOptions   `json:"ai,omitempty"`
+	// MetadataMode is "keep" (default) or "strip". "custom" is image-only.
+	MetadataMode string `json:"metadataMode,omitempty"`
 }
 
 // AIAudioOptions selects a Phase 1 AI audio operation. Only one operation runs
@@ -620,18 +636,6 @@ type StructuredImageMetadata struct {
 type ProgressUpdate struct {
 	JobID    string `json:"jobId"`
 	Progress int    `json:"progress"`
-}
-
-// File identification response
-type FileIdentificationResponse struct {
-	FileName      string                   `json:"fileName"`
-	FileSize      int64                    `json:"fileSize"`
-	FileType      FileType                 `json:"fileType"`
-	MimeType      string                   `json:"mimeType"`
-	Details       map[string]interface{}   `json:"details"`
-	ImageMetadata *StructuredImageMetadata `json:"imageMetadata,omitempty"`
-	Tool          string                   `json:"tool"`      // Which tool was used for identification
-	RawOutput     string                   `json:"rawOutput"` // Raw command output for debugging
 }
 
 // Helper function to determine file type from MIME type

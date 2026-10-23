@@ -1,6 +1,6 @@
 # Media Manipulator API
 
-A Go backend service for converting images, videos, and audio files. Built to work seamlessly with the frontend UI counterpart. Uses powerful CLI conversion tools such as `ffmpeg` and ImageMagick (`magick` on ImageMagick 7, or `convert`/`identify` on ImageMagick 6 — the API auto-detects which is installed) to perform async conversions, and then the API stores the finished file and tracks job progress.
+A Go backend service for converting images, videos, and audio files. Built to work seamlessly with the frontend UI counterpart. Uses powerful CLI conversion tools such as `ffmpeg`, `exiftool` and ImageMagick (`magick` on ImageMagick 7, or `convert`/`identify` on ImageMagick 6 — the API auto-detects which is installed) to perform async conversions, and then the API stores the finished file and tracks job progress.
 
 ## Features
 
@@ -66,6 +66,7 @@ media_manipulator_api/
 - FFmpeg (required for all video conversion and audio extraction)
 - **gifsicle** (required for optimized animated-GIF output — the video → GIF pipeline)
 - ImageMagick (for advanced image processing and as the WebP→PDF rasterization fallback)
+- **exiftool** (`libimage-exiftool-perl` on Debian/Ubuntu, `brew install exiftool` on macOS): required for the metadata inspector and for strip/keep/custom metadata modes. `ffprobe` (part of FFmpeg) feeds video/audio metadata.
 - **poppler-utils** (for PDF conversion — provides `pdftoppm` and `pdfinfo`)
 - **zip** is not required: ZIP archives are produced by Go's standard library
 
@@ -76,13 +77,13 @@ media_manipulator_api/
 Install the PDF tooling on Ubuntu/Debian:
 
 ```bash
-sudo apt update && sudo apt install poppler-utils
+sudo apt update && sudo apt install poppler-utils libimage-exiftool-perl
 ```
 
 On macOS:
 
 ```bash
-brew install poppler
+brew install poppler exiftool
 ```
 
 > Without `poppler-utils`, PDF → image conversions return a clear "PDF
@@ -241,27 +242,15 @@ docker run -p 8080:8080 -v $(pwd)/uploads:/app/uploads -v $(pwd)/outputs:/app/ou
 
 ## API Endpoints
 
-### POST /api/details
-Analyze a file and get the details.
+### POST /api/metadata/inspect
+Inspect a file's metadata (exiftool, plus ffprobe for video/audio). No job is created.
 
 **Request:**
 - Content-Type: `multipart/form-data`
 - Form fields:
-  - `file`: The file to convert
-  - `options`: JSON string with conversion options
+  - `file`: The file to inspect
 
-**Response:**
-```json
-{
-  "fileName": "example.png",
-  "fileSize": "1.4MB",
-  "fileType": "image",
-  "mimeType": "image/png",
-  "details": {...details},
-  "tool": "ImageMagick identify",
-  "rawOutput": "...output"
-}
-```
+**Response:** a `MetadataDocument` (`schemaVersion`, `file`, `tools`, `entries[]`, `warnings[]`). Tool failures return 200 with a `warnings[]` entry.
 
 ### POST /api/upload
 Upload a file and start conversion process.

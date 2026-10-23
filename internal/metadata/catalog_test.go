@@ -56,6 +56,12 @@ func TestClassifyTable(t *testing.T) {
 		{"ICC-header", "ProfileCMMType", "color", ""},
 		{"ICC_Profile", "ProfileDescription", "color", ""},
 		{"File", "FileType", "file", ""},
+		{"System", "FileName", "file", PrivacyIdentity},
+		{"System", "FileSize", "file", ""},
+		{"System", "FileModifyDate", "file", ""},
+		{"System", "FilePermissions", "file", ""},
+		{"System", "FileInodeChangeDate", "file", ""},
+		{"ExifTool", "Warning", "other", ""},
 		{"Composite", "ImageSize", "composite", ""},
 		{"Format", "duration", "container", ""},
 		{"Stream:0", "StreamType", "container", ""},
@@ -129,17 +135,33 @@ func TestCatalogJSONRoundTrip(t *testing.T) {
 	}
 }
 
-func TestUnverifiedSectionsFlagged(t *testing.T) {
+// MM12 verified 2.1 and 2.12 against fetched pages, so whole sections are no
+// longer flagged; only dagger rows (dynamic ffprobe tags, SEI strings, ...) are.
+func TestUnverifiedFlagsOnlyDaggerRows(t *testing.T) {
 	n := 0
 	for _, r := range catalogRows {
 		if r.Unverified {
 			n++
 		}
-		if (r.Section == "2.1" || r.Section == "2.12") && !r.Unverified {
-			t.Errorf("%s should be unverified", r.Tag)
+		if r.Section == "2.1" && r.Unverified {
+			t.Errorf("2.1 row %s should be verified", r.Tag)
 		}
 	}
-	if n == 0 {
-		t.Fatal("no unverified rows flagged")
+	if n == 0 || n > 60 {
+		t.Fatalf("unverified rows = %d, want 1..60", n)
+	}
+	for _, tag := range []string{"language", "handler_name", "encoder"} {
+		found := false
+		for _, r := range catalogRows {
+			if r.Section == "2.12" && r.Group == "Stream" && r.Tag == tag {
+				found = true
+				if !r.Unverified {
+					t.Errorf("Stream:%s is a dagger row and must stay unverified", tag)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("Stream:%s row missing", tag)
+		}
 	}
 }

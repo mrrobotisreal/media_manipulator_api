@@ -1,7 +1,11 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,5 +125,58 @@ func TestPresignResultWithoutAnS3ClientYieldsNoLink(t *testing.T) {
 	h := historyTestHandler()
 	if url := h.presignResult(t.Context(), "results/2026/a.tar.gz", "a.tar.gz"); url != "" {
 		t.Errorf("expected no download url, got %q", url)
+	}
+}
+
+func TestHistoryMetadataAvailableStatsCachedDocuments(t *testing.T) {
+	out := t.TempDir()
+	write := func(job, name string) {
+		dir := filepath.Join(out, job)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("both", originalMetadataFile)
+	write("both", resultMetadataFile)
+	write("orig-only", originalMetadataFile)
+	write("result-only", resultMetadataFile)
+	if err := os.MkdirAll(filepath.Join(out, "empty"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		job  string
+		want *models.MetadataAvailability
+	}{
+		{"both", &models.MetadataAvailability{Original: true, Result: true}},
+		{"orig-only", &models.MetadataAvailability{Original: true}},
+		{"result-only", &models.MetadataAvailability{Result: true}},
+		{"empty", nil},
+		{"swept-away", nil},
+		{"../both", nil},
+		{"", nil},
+	}
+	for _, tc := range cases {
+		got := historyMetadataAvailable(out, tc.job)
+		if (got == nil) != (tc.want == nil) || (got != nil && *got != *tc.want) {
+			t.Errorf("job %q: got %+v want %+v", tc.job, got, tc.want)
+		}
+	}
+	if historyMetadataAvailable("", "both") != nil {
+		t.Error("no output dir configured must yield nil")
+	}
+}
+
+func TestHistoryEntryMetadataAvailableIsAdditive(t *testing.T) {
+	b, _ := json.Marshal(historyEntry{JobID: "j", Status: "completed"})
+	if strings.Contains(string(b), "metadataAvailable") {
+		t.Errorf("field must be omitted when nil: %s", b)
+	}
+	b, _ = json.Marshal(historyEntry{JobID: "j", Expired: true, MetadataAvailable: &models.MetadataAvailability{Result: true}})
+	if !strings.Contains(string(b), `"metadataAvailable":{"original":false,"result":true}`) {
+		t.Errorf("unexpected JSON: %s", b)
 	}
 }

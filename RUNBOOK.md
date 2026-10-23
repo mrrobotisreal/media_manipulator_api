@@ -21,7 +21,7 @@ debug commands.
 5. [HTTP API surface](#5-http-api-surface)
 6. [Job lifecycle](#6-job-lifecycle)
 7. [Feature playbooks](#7-feature-playbooks)
-   - [7.1 File identify](#71-file-identify)
+   - [7.1 Metadata inspect](#71-metadata-inspect)
    - [7.2 Image conversion (+ AI ops)](#72-image-conversion--ai-ops)
    - [7.3 Face detection preview](#73-face-detection-preview)
    - [7.4 Audio conversion (+ AI ops)](#74-audio-conversion--ai-ops)
@@ -52,8 +52,7 @@ set of local media-processing pipelines:
   GPU.
 - **AI audio ops** — vocal isolation/removal, noise cleanup — via Demucs and
   DeepFilter.
-- **Identification + metadata** via ImageMagick `identify`, ExifTool, and
-  FFprobe.
+- **Metadata inspection** via ExifTool and FFprobe (`/api/metadata/inspect`).
 - **Transcription** via `whisper-ctranslate2` (faster-whisper) on CUDA.
 - **Adaptive streaming transcode** — HLS (H.264/AAC) and DASH (AV1 or VP9)
   packages with optional multilingual captions, sprite-sheet storyboards,
@@ -536,7 +535,7 @@ All routes live under `/api/` except `/healthz`.
 | --- | --- | --- | --- |
 | GET | `/healthz` | Process liveness. | No |
 | GET | `/api/health` | Same, namespaced under `/api`. | No |
-| POST | `/api/details` | Identify a file + extract metadata (no job created). | No (sync, bounded by `COMMAND_TIMEOUT_SECONDS`) |
+| POST | `/api/metadata/inspect` | Inspect a file's metadata with exiftool/ffprobe (no job created). | No (sync, each tool capped at 20 s) |
 | POST | `/api/upload` | Multipart upload + conversion. Returns `{jobId}`. | Yes (goroutine) |
 | POST | `/api/video-upload/presign` | Presigned S3 PUT URL for the UI to upload a video directly. | No |
 | POST | `/api/video-upload/complete` | Tells the API "the S3 upload finished, do something with it". Used by the convert/transcribe flows. | Yes |
@@ -611,43 +610,40 @@ SSE handler at `/api/job/:jobId/events` is the only consumer today.
 
 ## 7. Feature playbooks
 
-### 7.1 File identify
+### 7.1 Metadata inspect
 
-`POST /api/details` — sync. Detects type, runs the right probe tool, returns
-a structured response.
+`POST /api/metadata/inspect` (multipart `file`) - sync. Saves the upload to a
+temp file, runs `metadata.Inspect` (exiftool two passes, plus ffprobe for
+video/audio) and returns the `MetadataDocument`. The legacy identify route
+was removed in MM12 and now returns 404. Binaries: section 9.1; inspector details: the metadata inspector section near the end.
 
 ```mermaid
 sequenceDiagram
     participant UI
     participant API
-    participant Tools as ImageMagick/<br/>ffprobe/<br/>exiftool/<br/>file
-    UI->>API: POST /api/details (multipart)
-    API->>API: Save to TEMP_DIR
-    API->>API: MediaInspector.DetectFile(mimetype)
-    alt image
-        API->>Tools: magick identify -verbose
-        API->>Tools: exiftool -json -G1 -s -a
-    else video / audio
-        API->>Tools: ffprobe -show_streams -show_format
-    else other
-        API->>Tools: file -b --mime-all
+    participant Tools as exiftool/<br/>ffprobe
+    UI->>API: POST /api/metadata/inspect (multipart)
+    API->>API: Save to temp, DetectFile(mimetype)
+    API->>Tools: exiftool -json -G1 -s -a (print + -n passes)
+    opt video / audio
+        API->>Tools: ffprobe -show_format -show_streams
     end
     Tools-->>API: stdout
-    API->>API: parse + structure
-    API-->>UI: 200 FileIdentificationResponse
-    API->>API: rm TEMP_DIR/identify_*
+    API->>API: fold into MetadataDocument + classify
+    API-->>UI: 200 MetadataDocument (tool failures become warnings[])
+    API->>API: rm temp file
 ```
 
-**Happy path:** sub-second for images, 1–5 s for video depending on file
-size and disk.
+**Happy path:** sub-second for images, 1-5 s for video depending on file size.
 
 **Failure modes:**
 
 | Symptom | Likely cause | Check |
 | --- | --- | --- |
-| `Failed to identify file` (500) | ImageMagick or `ffprobe` not on PATH; or file is corrupt. | `which magick convert identify ffprobe exiftool file` (the API uses `magick` if present, else `convert`/`identify`) |
-| Returns `fileType: unknown` | mimetype probe failed and file extension is unrecognized. | Look at `details.file_command_output` in the response. |
-| `probe_error` key present in response | Identify ran but its parser hiccupped; raw output is in `rawOutput`. | Use `rawOutput` to debug what the probe actually printed. |
+| 200 with `warnings: ["exiftool unavailable"]` | exiftool not on PATH. | `which exiftool ffprobe`; startup log line `metadata inspector tools ...` |
+| 400 `no file provided` | Missing multipart `file` field. | Client request. |
+| 400 oversized | Upload over the inspector size cap. | See the metadata inspector section. |
+| Empty `entries` | File has no metadata, or both tools failed. | Check `warnings[]`. |
 
 ---
 
@@ -1198,13 +1194,13 @@ added on top before deciding a card "fits".
 | Binary | Where it's invoked | Required for | If missing |
 | --- | --- | --- | --- |
 | `ffmpeg` | `converter.go`, `transcribe.go`, `transcode_*.go`, `analysis_queue.go` | All video/audio conversion, transcoding, captions, storyboards, audio extraction for whisper. | Most features fail at job start. |
-| `ffprobe` | `media_tools.go`, `transcode_probe.go`, `transcribe.go` | File identify, transcode probe, transcription duration probe. | Identify/probe/transcribe fail at job start. |
-| `magick` **or** `convert`/`identify` | `converter.go`, `media_tools.go` | Image identify + conversion. The API prefers `magick` (ImageMagick 7) and falls back to `convert`/`identify` (ImageMagick 6, e.g. Ubuntu 24.04). | Image features fail only if neither is on PATH. |
-| `exiftool` | `media_tools.go` | Image metadata extraction. | Metadata block missing from identify; rest of the response still works. |
+| `ffprobe` | `internal/metadata`, `validation`, `transcode_probe.go`, `transcribe.go` | Video/audio metadata, upload duration/resolution caps, transcode probe, transcription duration probe. | Inspector warns; probe/transcribe fail at job start; caps are skipped. |
+| `magick` **or** `convert`/`identify` | `converter.go` | Image conversion. The API prefers `magick` (ImageMagick 7) and falls back to `convert`/`identify` (ImageMagick 6, e.g. Ubuntu 24.04). | Image features fail only if neither is on PATH. |
+| `exiftool` | `internal/metadata`, `converter.go` | Metadata inspector (all kinds) and strip/keep/custom metadata modes. | Inspector returns 200 with a warning and no entries; strip/custom jobs fail. |
 | `gifsicle` | `converter.go` | GIF compression after ffmpeg. | GIF jobs fail. |
-| `file` | `media_tools.go` | Unknown-type identify fallback. | Unknown files report `file_command_output_error`. |
+| `file` | - | No longer used by the inspector. | - |
 | `pdftoppm` (poppler-utils) | `pdf_tools.go` | PDF → JPG/PNG rendering. | PDF→image jobs fail with "PDF conversion is unavailable". Install `poppler-utils`. |
-| `pdfinfo` (poppler-utils) | `pdf_tools.go`, `media_tools.go` | PDF page-count probe (page-cap enforcement) + PDF identify. | PDF→image refuses to run (cannot enforce page cap); identify falls back to `file`. |
+| `pdfinfo` (poppler-utils) | `pdf_tools.go` | PDF page-count probe (page-cap enforcement). | PDF→image refuses to run (cannot enforce page cap). |
 | ImageMagick with HEIC/AVIF delegates | `converter.go` | HEIC/HEIF + AVIF decode (heic→jpg, avif→jpg/png). | Those conversions fail with a decode-delegate error. Verify with `convert -list format \| grep -E 'HEIC\|AVIF'` (IM6) or `magick -list format \| ...` (IM7). |
 | `rsvg-convert` (librsvg2-bin) | `image_format_tools.go` | Preferred safe SVG → PNG rasterizer. | Falls back to hardened ImageMagick at 150 DPI. |
 | `potrace` | `image_format_tools.go` | PNG/raster → SVG vectorization. | PNG→SVG fails with "vectorization is unavailable". Install `potrace`. |
@@ -1538,7 +1534,7 @@ go test ./internal/services/ -v     # should be all PASS
 
 #### 12.6.1 Metadata inspector (MM07)
 
-`POST /api/metadata/inspect` (multipart `file`) returns the canonical `MetadataDocument` (package `internal/metadata`; `/details` is unchanged). Binaries: `exiftool` (runs for every kind, two passes: print-converted and `-n`) and `ffprobe` (video/audio only, folded into `Format`, `Stream:<n>`, `Chapter:<n>`, `SideData` entries). Each invocation is capped at 20 s. Tool failure never yields a 5xx: the document returns 200 with a `warnings[]` entry. The API logs `metadata inspector tools exiftool=<ver|missing> ffprobe=<ver|missing>` at startup. Regenerate the classifier with `go generate ./internal/metadata` (reads `docs/design/research/METADATA_TAG_CATALOG.md`).
+`POST /api/metadata/inspect` (multipart `file`) returns the canonical `MetadataDocument` (package `internal/metadata`; the legacy identify route was removed in MM12). Binaries: `exiftool` (runs for every kind, two passes: print-converted and `-n`) and `ffprobe` (video/audio only, folded into `Format`, `Stream:<n>`, `Chapter:<n>`, `SideData` entries). Each invocation is capped at 20 s. Tool failure never yields a 5xx: the document returns 200 with a `warnings[]` entry. The API logs `metadata inspector tools exiftool=<ver|missing> ffprobe=<ver|missing>` at startup. Regenerate the classifier with `go generate ./internal/metadata` (reads `docs/design/research/METADATA_TAG_CATALOG.md`).
 
 | `warnings[]` string | Trigger |
 | --- | --- |
@@ -1547,6 +1543,18 @@ go test ./internal/services/ -v     # should be all PASS
 | `exiftool failed: <first stderr line>` / `ffprobe failed: <first stderr line>` | Non-zero exit |
 | `exiftool output could not be parsed` / `ffprobe output could not be parsed` | JSON decode error |
 | `exiftool numeric pass failed: <reason>` | The `-n` pass failed; entries kept, only `rawValue` is missing |
+
+#### 12.6.2 Job metadata routes (MM08)
+
+All four are owner-gated by `authorizeJobAccess` (session header `X-MM-Session-ID`, owning user token, or operator; a stranger gets the same 404 as a missing job; `?sid=` is not accepted). Documents never expose server paths or temp names: `System:FileName` and `file.name` carry the job's user-facing file name.
+
+| Route | Result |
+| --- | --- |
+| `GET /api/job/:jobId/metadata?side=original\|result` | `MetadataDocument`. `original` (default) reads `outputs/<job>/metadata.json`; a legacy file is migrated on read (re-inspect the stored upload, else a degraded `Legacy` document with warning `legacy metadata; re-inspect unavailable`) and rewritten atomically. `result` needs a completed job (else 409), probes lazily, caches `outputs/<job>/metadata.result.json` (keyed by result mtime+size, singleflight per job); archives return an empty document with warning `result is an archive; metadata not applicable`. Other `side` values: 400. |
+| `GET /api/job/:jobId/metadata/diff` | `{removed[], added[], changed[{id,before,after}], unchanged, byCategory{cat:{removed,added,changed,unchanged}}}`. 409 `{error}` when the job is not completed, the result file is gone, or the result is an archive. |
+| `GET /api/job/:jobId/metadata/binary/:entryId?side=&inline=1` | Raw bytes of one `binary: true` entry via `exiftool -b -<Group>:<Tag> -- <path>` (20 s, 8 MiB cap -> 413). `entryId` must match `Group:Tag` (letters, digits, `_ . -`, no leading `-`, no `..`); `#n` duplicates are 422. Always `nosniff`; `attachment` unless the bytes sniff as JPEG/PNG and `inline=1`. Original side needs the stored upload (404 once expired). |
+
+Job JSON gains `metadataAvailable: {original, result}` (stat-based) and `strippedCount` (strip jobs only). Video/audio options accept `metadataMode: keep|strip` (`custom` rejected); strip adds `-map_metadata -1 -map_chapters -1` and, for mp4/mov/m4a/m4v, an `exiftool -all= -overwrite_original -- <out>` pass that needs free temp space about the size of the output (best effort, logged on failure).
 
 ### 12.7 Quick health summary one-liner
 

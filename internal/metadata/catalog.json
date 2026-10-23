@@ -119,7 +119,7 @@
       "description": "Animation, frame, alpha.",
       "privacy": "",
       "category": "png",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "ANIM",
@@ -129,7 +129,7 @@
       "description": "Animation, frame, alpha.",
       "privacy": "",
       "category": "png",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "ANMF",
@@ -139,7 +139,7 @@
       "description": "Animation, frame, alpha.",
       "privacy": "",
       "category": "png",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "APP1",
@@ -812,7 +812,7 @@
       "description": "Bits per sample (QuickTime visual sample).",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "BitRate",
@@ -822,7 +822,7 @@
       "description": "Average total bits per second.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "BitsPerPixel",
@@ -1388,7 +1388,7 @@
       "description": "Text encoding of IIM (e.g. UTF-8 = ESC % G).",
       "privacy": "",
       "category": "iptc",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "CodingHistory",
@@ -1439,7 +1439,7 @@
       "description": "Video primaries (bt709, bt2020).",
       "privacy": "",
       "category": "color",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "ColorProfiles",
@@ -1449,7 +1449,7 @@
       "description": "QuickTime color description atom.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "ColorResolutionDepth",
@@ -1567,7 +1567,7 @@
       "description": "Other brands the file claims compatibility with.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "CompatibleBrands",
@@ -1713,7 +1713,7 @@
       "description": "Compressor name string in sample entry.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "ConditionalFEC",
@@ -2492,7 +2492,7 @@
       "description": "Folder path where the file lives.",
       "privacy": "identity",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "Disclaimer",
@@ -2631,10 +2631,10 @@
       "aliases": [
         "duration"
       ],
-      "description": "Length of the media in time.",
+      "description": "Length of the media in time (ffprobe format.duration).",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "Duration",
@@ -2680,7 +2680,7 @@
       "description": "ICC profile, EXIF and XMP in WebP.",
       "privacy": "identity",
       "category": "png",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "EXIFInfo",
@@ -2853,10 +2853,10 @@
     {
       "tag": "Error",
       "aliases": [],
-      "description": "ExifTool error reading the file.",
+      "description": "ExifTool error reading the file (ExifTool group).",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "ExifByteOrder",
@@ -2864,7 +2864,7 @@
       "description": "Whether EXIF numbers are big or little endian.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "ExifCameraInfo",
@@ -3053,7 +3053,7 @@
       "description": "When the file was last read on the filesystem.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "FileCreateDate",
@@ -3063,7 +3063,27 @@
       "description": "When the file was created on the filesystem.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
+    },
+    {
+      "tag": "FileGroupID",
+      "aliases": [
+        "uid / gid"
+      ],
+      "description": "Owner and group of the file on the filesystem.",
+      "privacy": "identity",
+      "category": "file",
+      "unverified": false
+    },
+    {
+      "tag": "FileInodeChangeDate",
+      "aliases": [
+        "ctime"
+      ],
+      "description": "When the file's directory entry last changed (non-Windows).",
+      "privacy": "",
+      "category": "file",
+      "unverified": false
     },
     {
       "tag": "FileModifyDate",
@@ -3073,7 +3093,7 @@
       "description": "When the file was last changed on the filesystem.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "FileName",
@@ -3083,7 +3103,7 @@
       "description": "Name of the file on disk.",
       "privacy": "identity",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "FileNumber",
@@ -3111,7 +3131,7 @@
       "description": "Filesystem permission bits.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "FileSize",
@@ -3121,7 +3141,7 @@
       "description": "Total size of the file in bytes.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "FileSource",
@@ -3139,7 +3159,7 @@
       "description": "Detected format such as JPEG, PNG, MP4.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "FileTypeExtension",
@@ -3147,7 +3167,17 @@
       "description": "Standard extension for the detected format.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
+    },
+    {
+      "tag": "FileUserID",
+      "aliases": [
+        "uid / gid"
+      ],
+      "description": "Owner and group of the file on the filesystem.",
+      "privacy": "identity",
+      "category": "file",
+      "unverified": false
     },
     {
       "tag": "FileVersion",
@@ -3342,7 +3372,7 @@
       "description": "Container format name reported by ffprobe.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "FractalParameters",
@@ -3415,12 +3445,13 @@
     {
       "tag": "GEOB",
       "aliases": [
-        "ID3 GEOB"
+        "ID3 GEOB",
+        "ExifTool GeneralEncapsulatedObject"
       ],
       "description": "General encapsulated object.",
       "privacy": "location",
       "category": "audio",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "GIFApplicationExtension",
@@ -3887,10 +3918,10 @@
     {
       "tag": "GSpherical",
       "aliases": [],
-      "description": "Spherical video metadata (V1 XMP / V2 MP4 boxes); not fetched.",
+      "description": "Spherical video metadata (V1 XML); ExifTool lists a GSpherical table (Extra.html).",
       "privacy": "",
       "category": "pano",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "GainControl",
@@ -4277,7 +4308,7 @@
       "description": "ICC profile, EXIF and XMP in WebP.",
       "privacy": "identity",
       "category": "png",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "ICC_Profile",
@@ -4682,11 +4713,13 @@
     },
     {
       "tag": "Incremental updates",
-      "aliases": [],
-      "description": "Earlier saved versions may remain in the file.",
+      "aliases": [
+        "PDF-update"
+      ],
+      "description": "Earlier saved versions may remain in the file; ExifTool exposes them as the PDF-update pseudo-group (PDF.html).",
       "privacy": "identity",
       "category": "pdf",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "Information",
@@ -5321,7 +5354,7 @@
       "description": "Internet media type, e.g. image/jpeg.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "MPImage",
@@ -5349,7 +5382,7 @@
       "description": "Primary ISO-BMFF/QuickTime brand (e.g. isom, mp42, qt, heic).",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "MajorBrand",
@@ -5438,7 +5471,7 @@
       "description": "YCbCr matrix (bt709, bt2020nc).",
       "privacy": "",
       "category": "color",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "MaxApertureValue",
@@ -5498,7 +5531,7 @@
       "description": "Per-track media times (UTC).",
       "privacy": "",
       "category": "datetime",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "MediaModifyDate",
@@ -5508,7 +5541,7 @@
       "description": "Per-track media times (UTC).",
       "privacy": "",
       "category": "datetime",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "MediaWhitePoint",
@@ -5586,7 +5619,7 @@
       "description": "Version of the major brand.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "MinorVersion",
@@ -5743,7 +5776,7 @@
       "description": "Number of streams (video, audio, subtitle, data).",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "OLEInfo",
@@ -6036,12 +6069,13 @@
     {
       "tag": "PRIV",
       "aliases": [
-        "ID3 PRIV"
+        "ID3 PRIV",
+        "ExifTool Private"
       ],
       "description": "Private app data.",
       "privacy": "identity",
       "category": "audio",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "Padding",
@@ -7496,7 +7530,7 @@
       "description": "Timestamp offset where the stream starts.",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "Stereo3DMode",
@@ -8155,7 +8189,7 @@
       "description": "Track header times.",
       "privacy": "",
       "category": "datetime",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "TrackDefault",
@@ -8205,7 +8239,7 @@
       "description": "Track header times.",
       "privacy": "",
       "category": "datetime",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "TrackName",
@@ -8300,6 +8334,14 @@
       "unverified": false
     },
     {
+      "tag": "Trailer",
+      "aliases": [],
+      "description": "Full JPEG trailer data block (File group; only extracted on request).",
+      "privacy": "",
+      "category": "file",
+      "unverified": false
+    },
+    {
       "tag": "TransferCharacteristics",
       "aliases": [
         "color_transfer"
@@ -8307,7 +8349,7 @@
       "description": "Transfer function (bt709, smpte2084 PQ, arib-std-b67 HLG).",
       "privacy": "",
       "category": "color",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "TransferFunction",
@@ -8507,7 +8549,7 @@
       "description": "Lossy, lossless, extended format.",
       "privacy": "",
       "category": "png",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "VP8L",
@@ -8517,7 +8559,7 @@
       "description": "Lossy, lossless, extended format.",
       "privacy": "",
       "category": "png",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "VP8X",
@@ -8527,7 +8569,7 @@
       "description": "Lossy, lossless, extended format.",
       "privacy": "",
       "category": "png",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "Vendor",
@@ -8591,7 +8633,7 @@
       "description": "Frame rate (QuickTime computed).",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "VideoFrameRate",
@@ -8609,7 +8651,7 @@
       "description": "Full (pc) or limited (tv) range.",
       "privacy": "",
       "category": "color",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "VideoOrientation",
@@ -8676,10 +8718,10 @@
     {
       "tag": "Warning",
       "aliases": [],
-      "description": "ExifTool warning about damaged or odd data.",
+      "description": "ExifTool warning about damaged or odd data (ExifTool group).",
       "privacy": "",
       "category": "file",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "Warning",
@@ -8865,7 +8907,7 @@
       "description": "Nominal density in video sample entry.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "XiaomiExifInfo",
@@ -8993,7 +9035,7 @@
       "description": "Nominal density in video sample entry.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "Year",
@@ -9013,6 +9055,14 @@
       "description": "Descriptive tags in Keys form.",
       "privacy": "",
       "category": "apple",
+      "unverified": false
+    },
+    {
+      "tag": "ZoneIdentifier",
+      "aliases": [],
+      "description": "Windows Zone.Identifier stream (download origin zone).",
+      "privacy": "identity",
+      "category": "file",
       "unverified": false
     },
     {
@@ -9067,7 +9117,7 @@
       "description": "Cover image stream in video/audio.",
       "privacy": "history",
       "category": "thumbnail",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "av1C",
@@ -9093,7 +9143,7 @@
       "description": "Average frames per second.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "bit_rate",
@@ -9101,7 +9151,7 @@
       "description": "Video bits per second.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "bit_rate",
@@ -9111,7 +9161,7 @@
       "description": "Audio bits per second.",
       "privacy": "",
       "category": "audio",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "bits_per_raw_sample",
@@ -9121,7 +9171,7 @@
       "description": "Bits per color sample (8, 10).",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "bits_per_sample",
@@ -9129,7 +9179,7 @@
       "description": "Sample format and bit depth.",
       "privacy": "",
       "category": "audio",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "btrt",
@@ -9137,7 +9187,7 @@
       "description": "Color description, pixel aspect, clean aperture, bit rate.",
       "privacy": "",
       "category": "container",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "c2pa.actions",
@@ -9296,7 +9346,7 @@
       "description": "Channel count and layout.",
       "privacy": "",
       "category": "audio",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "channels",
@@ -9306,7 +9356,7 @@
       "description": "Channel count and layout.",
       "privacy": "",
       "category": "audio",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "chroma_location",
@@ -9314,7 +9364,7 @@
       "description": "Chroma sample siting.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "claim_generator",
@@ -9345,7 +9395,7 @@
       "description": "Color description, pixel aspect, clean aperture, bit rate.",
       "privacy": "",
       "category": "container",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "closed_captions",
@@ -9353,7 +9403,7 @@
       "description": "Whether CEA-608/708 captions are embedded.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "codec_long_name",
@@ -9361,7 +9411,7 @@
       "description": "Long codec name.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "codec_name",
@@ -9372,7 +9422,7 @@
       "description": "Short codec name (h264, hevc, vp9, av1, prores).",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "codec_name",
@@ -9382,7 +9432,7 @@
       "description": "aac, mp3, opus, vorbis, flac, alac, pcm_s16le.",
       "privacy": "",
       "category": "audio",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "codec_tag_string",
@@ -9392,7 +9442,7 @@
       "description": "FourCC (avc1, hvc1, hev1, mp4v).",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "coded_height",
@@ -9400,7 +9450,7 @@
       "description": "Padded coded frame size.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "coded_width",
@@ -9408,7 +9458,7 @@
       "description": "Padded coded frame size.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "color_primaries",
@@ -9416,7 +9466,7 @@
       "description": "See 2.7.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "color_range",
@@ -9424,7 +9474,7 @@
       "description": "See 2.7.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "color_space",
@@ -9432,7 +9482,7 @@
       "description": "See 2.7.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "color_transfer",
@@ -9440,7 +9490,7 @@
       "description": "See 2.7.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "colr",
@@ -9448,7 +9498,7 @@
       "description": "Color description, pixel aspect, clean aperture, bit rate.",
       "privacy": "",
       "category": "container",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "covr",
@@ -9539,10 +9589,10 @@
       "aliases": [
         "IPTC iptcExt:DigitalSourceType"
       ],
-      "description": "Origin, e.g. trainedAlgorithmicMedia; also on XMP.",
+      "description": "Key on a c2pa.actions action; value is an IPTC term such as trainedAlgorithmicMedia (C2PA 2.1). Also on XMP.",
       "privacy": "",
       "category": "c2pa",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "disk",
@@ -9562,7 +9612,7 @@
       "description": "Display shape (16:9).",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "disposition",
@@ -9574,7 +9624,7 @@
       "description": "Stream flags.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "eXIf",
@@ -9616,7 +9666,7 @@
       "description": "Progressive or interlaced field order.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "gathered_assertions",
@@ -9634,7 +9684,7 @@
       "description": "Uses B-frames.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "height",
@@ -9645,7 +9695,7 @@
       "description": "Frame size in pixels.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "hvcC",
@@ -9735,7 +9785,7 @@
       "description": "Codec level (e.g. 4.1 = 41).",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "manifest.inaccessible",
@@ -9765,7 +9815,7 @@
       "description": "Peak bit rate.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "mdat",
@@ -9807,7 +9857,7 @@
       "description": "Frame count.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "pasp",
@@ -9815,7 +9865,7 @@
       "description": "Color description, pixel aspect, clean aperture, bit rate.",
       "privacy": "",
       "category": "container",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "pcst",
@@ -9835,7 +9885,15 @@
       "description": "Pixel layout (yuv420p, yuv420p10le).",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
+    },
+    {
+      "tag": "probe_score",
+      "aliases": [],
+      "description": "ffprobe's format-detection confidence (0-100).",
+      "privacy": "",
+      "category": "file",
+      "unverified": false
     },
     {
       "tag": "profile",
@@ -9843,7 +9901,7 @@
       "description": "Codec profile (High, Main, Main 10, Baseline).",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "r_frame_rate",
@@ -9851,7 +9909,7 @@
       "description": "Base frame rate guess.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "redacted_assertions",
@@ -9869,7 +9927,7 @@
       "description": "Reference frames.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "sample tables",
@@ -9887,7 +9945,7 @@
       "description": "Pixel shape.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "sample_fmt",
@@ -9895,7 +9953,7 @@
       "description": "Sample format and bit depth.",
       "privacy": "",
       "category": "audio",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "sample_rate",
@@ -9905,7 +9963,7 @@
       "description": "Samples per second.",
       "privacy": "",
       "category": "audio",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "signature",
@@ -9916,6 +9974,14 @@
       "privacy": "",
       "category": "c2pa",
       "unverified": false
+    },
+    {
+      "tag": "st3d",
+      "aliases": [],
+      "description": "Spherical video metadata (V2 MP4 boxes); not fetched.",
+      "privacy": "",
+      "category": "pano",
+      "unverified": true
     },
     {
       "tag": "stEvt",
@@ -9967,7 +10033,7 @@
       "description": "Author/creator identity.",
       "privacy": "identity",
       "category": "c2pa",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "stsd",
@@ -10002,9 +10068,9 @@
       "unverified": true
     },
     {
-      "tag": "sv3d/st3d",
+      "tag": "sv3d",
       "aliases": [],
-      "description": "Spherical video metadata (V1 XMP / V2 MP4 boxes); not fetched.",
+      "description": "Spherical video metadata (V2 MP4 boxes); not fetched.",
       "privacy": "",
       "category": "pano",
       "unverified": true
@@ -10015,7 +10081,7 @@
       "description": "Timestamp unit.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "trkn",
@@ -10074,7 +10140,7 @@
       "description": "Frame size in pixels.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "tag": "xmp",
@@ -12561,7 +12627,7 @@
       "description": "Movie header times (UTC) and clock.",
       "privacy": "",
       "category": "container",
-      "unverified": true
+      "unverified": false
     },
     {
       "group": "QuickTime",
@@ -12573,29 +12639,62 @@
       "description": "Movie header times (UTC) and clock.",
       "privacy": "",
       "category": "container",
-      "unverified": true
+      "unverified": false
     },
     {
       "group": "QuickTime",
-      "tag": "Language",
-      "aliases": [
-        "mdhd"
-      ],
-      "description": "Media times, clock, language.",
-      "privacy": "identity",
-      "category": "container",
-      "unverified": true
-    },
-    {
-      "group": "QuickTime",
-      "tag": "Matrix",
+      "tag": "MatrixStructure",
       "aliases": [
         "tkhd"
       ],
       "description": "Track header; matrix encodes rotation (0/90/180/270).",
       "privacy": "",
       "category": "container",
-      "unverified": true
+      "unverified": false
+    },
+    {
+      "group": "QuickTime",
+      "tag": "MediaCreateDate",
+      "aliases": [
+        "mdhd"
+      ],
+      "description": "Media times, clock, language.",
+      "privacy": "",
+      "category": "container",
+      "unverified": false
+    },
+    {
+      "group": "QuickTime",
+      "tag": "MediaLanguageCode",
+      "aliases": [
+        "mdhd"
+      ],
+      "description": "Media times, clock, language.",
+      "privacy": "identity",
+      "category": "container",
+      "unverified": false
+    },
+    {
+      "group": "QuickTime",
+      "tag": "MediaModifyDate",
+      "aliases": [
+        "mdhd"
+      ],
+      "description": "Media times, clock, language.",
+      "privacy": "",
+      "category": "container",
+      "unverified": false
+    },
+    {
+      "group": "QuickTime",
+      "tag": "MediaTimeScale",
+      "aliases": [
+        "mdhd"
+      ],
+      "description": "Media times, clock, language.",
+      "privacy": "",
+      "category": "container",
+      "unverified": false
     },
     {
       "group": "QuickTime",
@@ -12607,7 +12706,7 @@
       "description": "Movie header times (UTC) and clock.",
       "privacy": "",
       "category": "container",
-      "unverified": true
+      "unverified": false
     },
     {
       "group": "QuickTime",
@@ -12619,7 +12718,18 @@
       "description": "Movie header times (UTC) and clock.",
       "privacy": "",
       "category": "container",
-      "unverified": true
+      "unverified": false
+    },
+    {
+      "group": "QuickTime",
+      "tag": "TrackCreateDate",
+      "aliases": [
+        "tkhd"
+      ],
+      "description": "Track header; matrix encodes rotation (0/90/180/270).",
+      "privacy": "",
+      "category": "container",
+      "unverified": false
     },
     {
       "group": "QuickTime",
@@ -12630,7 +12740,18 @@
       "description": "Track header; matrix encodes rotation (0/90/180/270).",
       "privacy": "",
       "category": "container",
-      "unverified": true
+      "unverified": false
+    },
+    {
+      "group": "QuickTime",
+      "tag": "TrackModifyDate",
+      "aliases": [
+        "tkhd"
+      ],
+      "description": "Track header; matrix encodes rotation (0/90/180/270).",
+      "privacy": "",
+      "category": "container",
+      "unverified": false
     },
     {
       "group": "Samsung",
@@ -13118,15 +13239,15 @@
     },
     {
       "group": "SideData",
-      "tag": "Content light level",
+      "tag": "Content light level metadata",
       "aliases": [
-        "MaxCLL",
-        "MaxFALL"
+        "max_content",
+        "max_average"
       ],
-      "description": "HDR peak/average light level.",
+      "description": "HDR peak (MaxCLL) and average (MaxFALL) light level.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "group": "SideData",
@@ -13135,7 +13256,7 @@
       "description": "Dolby Vision profile and level.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "group": "SideData",
@@ -13146,7 +13267,7 @@
       "description": "Rotation in degrees applied on playback.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "group": "SideData",
@@ -13155,7 +13276,7 @@
       "description": "HDR10+ per-frame metadata.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "group": "SideData",
@@ -13164,7 +13285,7 @@
       "description": "HDR10 mastering display primaries/luminance.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "group": "Sony",
@@ -13772,7 +13893,7 @@
       "description": "SMPTE start timecode.",
       "privacy": "",
       "category": "video",
-      "unverified": true
+      "unverified": false
     },
     {
       "group": "Stream",

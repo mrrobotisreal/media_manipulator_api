@@ -99,13 +99,15 @@ func NewConversionHandler(jobManager *services.JobManager, converter *services.C
 }
 
 func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
-	r.POST("/details", h.IdentifyFile)
 	r.POST("/metadata/inspect", h.InspectMetadata)
 	r.POST("/upload", h.UploadFile)
 	r.POST("/video-upload/presign", h.PresignVideoUpload)
 	r.POST("/video-upload/complete", h.CompleteVideoUpload)
 	r.GET("/job/:jobId", h.GetJobStatus)
 	r.GET("/job/:jobId/events", h.StreamJobEvents)
+	r.GET("/job/:jobId/metadata", h.GetJobMetadata)
+	r.GET("/job/:jobId/metadata/diff", h.GetJobMetadataDiff)
+	r.GET("/job/:jobId/metadata/binary/:entryId", h.GetJobMetadataBinary)
 	r.GET("/download/:jobId", h.DownloadFile)
 	r.GET("/result/:jobId", h.InlineResult)
 	r.GET("/transcript/:jobId", h.GetTranscriptResult)
@@ -118,50 +120,6 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.POST("/video-transcode/probe", h.ProbeVideoForTranscode)
 	r.POST("/video-transcode/start", h.StartVideoTranscode)
 	r.GET("/video-transcode/capabilities", h.GetTranscodeCapabilities)
-}
-
-func (h *ConversionHandler) IdentifyFile(c *gin.Context) {
-	file, fileHeader, err := h.multipartFile(c)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	defer file.Close()
-
-	tempPath := filepath.Join(h.cfg.TempDir, fmt.Sprintf("identify_%d_%s", time.Now().UnixNano(), safeFilename(fileHeader.Filename)))
-	if err := h.saveUploadedFile(file, tempPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save temporary file"})
-		return
-	}
-	defer func() { _ = os.Remove(tempPath) }()
-
-	ctx, cancel := context.WithTimeout(c.Request.Context(), h.cfg.CommandTimeout)
-	defer cancel()
-
-	fileType, mimeType := h.inspector.DetectFile(ctx, tempPath, fileHeader.GetHeader("Content-Type"))
-	metadata, err := h.inspector.ProbeFile(ctx, tempPath, fileType)
-	if err != nil && metadata == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to identify file: %v", err)})
-		return
-	}
-	if metadata == nil {
-		metadata = &services.MediaMetadata{FileType: fileType, MimeType: mimeType, Details: map[string]any{}, Error: stringOrErr(err)}
-	}
-
-	response := &models.FileIdentificationResponse{
-		FileName:      fileHeader.Filename,
-		FileSize:      fileHeader.Size,
-		FileType:      fileType,
-		MimeType:      mimeType,
-		Details:       metadata.Details,
-		ImageMetadata: metadata.ImageMetadata,
-		Tool:          metadata.Tool,
-		RawOutput:     metadata.Raw,
-	}
-	if metadata.Error != "" {
-		response.Details["probe_error"] = metadata.Error
-	}
-	c.JSON(http.StatusOK, response)
 }
 
 func (h *ConversionHandler) UploadFile(c *gin.Context) {
@@ -218,20 +176,10 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
-	metadata, probeErr := h.inspector.ProbeFile(ctx, uploadPath, fileType)
-	if probeErr != nil {
-		log.Printf("metadata probe failed for job %s: %v", job.ID, probeErr)
-	}
-	if metadata == nil {
-		metadata = &services.MediaMetadata{FileType: fileType, MimeType: mimeType, Details: map[string]any{}, Error: stringOrErr(probeErr)}
-	}
-	if err := services.WriteMetadata(filepath.Join(jobOutputDir, "metadata.json"), metadata); err != nil {
-		log.Printf("failed to write metadata for job %s: %v", job.ID, err)
-	}
+	h.writeOriginalMetadata(ctx, job.ID, uploadPath, fileType, fileHeader.Filename, mimeType, jobOutputDir)
 
-	// Duration and resolution caps. ProbeFile already ran ffprobe and kept the
-	// raw JSON, so this reuses that output rather than probing again.
-	if rejection := rejectOverLimit(c, h.cfg, fileType, metadata); rejection != nil {
+	// Duration and resolution caps.
+	if rejection := rejectOverLimit(ctx, c, h.cfg, fileType, uploadPath); rejection != nil {
 		_ = h.jobManager.UpdateJobError(job.ID, rejection.UserMessage)
 		_ = os.RemoveAll(jobUploadDir)
 		c.JSON(rejection.HTTPStatus, gin.H{"error": rejection.UserMessage, "reason": rejection.Reason})
@@ -259,7 +207,7 @@ func (h *ConversionHandler) GetJobStatus(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
 		return
 	}
-	c.JSON(http.StatusOK, job)
+	c.JSON(http.StatusOK, h.withMetadataFields(job))
 }
 
 // resolveCompletedResult is the shared lookup behind /download/:jobId and
@@ -465,6 +413,7 @@ func (h *ConversionHandler) processConversion(job *models.ConversionJob, inputPa
 		return
 	}
 	h.ensureResultMime(job, outputPath)
+	h.recordStripped(job)
 	if err := h.jobManager.UpdateJobResult(job.ID, "/api/download/"+job.ID); err != nil {
 		log.Printf("failed to update job %s result: %v", job.ID, err)
 		_ = h.jobManager.UpdateJobError(job.ID, "Failed to update job result")
@@ -872,13 +821,6 @@ func safeFilename(name string) string {
 		return "upload"
 	}
 	return name
-}
-
-func stringOrErr(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
 }
 
 // DetectFaces runs the face-privacy script in --detect-only mode against the

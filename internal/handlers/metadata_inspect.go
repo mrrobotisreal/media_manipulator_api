@@ -52,6 +52,11 @@ func (h *ConversionHandler) InspectMetadata(c *gin.Context) {
 	doc := inspectMetadata(ctx, tempPath, string(fileType))
 	// Report the upload's identity, not the server temp file's.
 	doc.File.Name = fileHeader.Filename
+	for i := range doc.Entries {
+		if metadata.IsUploadFileName(doc.Entries[i]) {
+			doc.Entries[i].Value = fileHeader.Filename
+		}
+	}
 	doc.File.Mime = mimeType
 	doc.File.Kind = string(fileType)
 	doc.File.SHA256 = hex.EncodeToString(hasher.Sum(nil))

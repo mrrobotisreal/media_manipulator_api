@@ -26,15 +26,37 @@ func exiftoolNumericArgs(path string) []string {
 	return append(args, path)
 }
 
-// skippedKeys are exiftool keys that never become entries: server temp-path
-// leakage, or data that goes elsewhere in the document.
+// skippedKeys are exiftool keys that never become entries: data that goes
+// elsewhere in the document.
 var skippedKeys = map[string]bool{
 	"SourceFile":               true,
 	"ExifTool:ExifToolVersion": true,
-	"File:Directory":           true,
-	"File:FilePermissions":     true,
-	"File:FileAccessDate":      true,
-	"File:FileCreateDate":      true,
+}
+
+// fileSystemGroups are the -G1 groups exiftool uses for the server's own
+// file-system tags. Real exiftool reports them as "System"; older fixtures and
+// -G0 output use "File".
+var fileSystemGroups = map[string]bool{"System": true, "File": true}
+
+// skippedFileSystemTags describe the server temp file, not the upload (temp
+// directory, permissions, access/inode times), so they never become entries.
+var skippedFileSystemTags = map[string]bool{
+	"Directory":           true,
+	"FilePermissions":     true,
+	"FileAccessDate":      true,
+	"FileCreateDate":      true,
+	"FileInodeChangeDate": true,
+}
+
+// isSkippedKey reports whether an exiftool key must not become an entry.
+func isSkippedKey(key, group, tag string) bool {
+	return skippedKeys[key] || (fileSystemGroups[group] && skippedFileSystemTags[tag])
+}
+
+// IsUploadFileName reports whether an entry carries the name of the file on
+// disk, which on the server is a temp name the handler replaces.
+func IsUploadFileName(e MetadataEntry) bool {
+	return fileSystemGroups[e.Group] && e.Tag == "FileName"
 }
 
 var binaryRE = regexp.MustCompile(`^\((?:Large )?[Bb]inary data (\d+) bytes[^)]*\)$`)
@@ -156,7 +178,7 @@ func buildExiftoolEntries(pairs []rawPair) extraction {
 			ex.version = fmt.Sprint(p.Val)
 		}
 		group, tag, ok := splitKey(p.Key)
-		if !ok || skippedKeys[p.Key] {
+		if !ok || isSkippedKey(p.Key, group, tag) {
 			ex.skipped++
 			continue
 		}

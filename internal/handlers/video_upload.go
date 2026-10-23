@@ -177,16 +177,7 @@ func (h *ConversionHandler) CompleteVideoUpload(c *gin.Context) {
 		return
 	}
 
-	metadata, probeErr := h.inspector.ProbeFile(ctx, uploadPath, fileType)
-	if probeErr != nil {
-		log.Printf("metadata probe failed for S3 video job %s: %v", job.ID, probeErr)
-	}
-	if metadata == nil {
-		metadata = &services.MediaMetadata{FileType: fileType, MimeType: mimeType, Details: map[string]any{}, Error: stringOrErr(probeErr)}
-	}
-	if err := services.WriteMetadata(filepath.Join(jobOutputDir, "metadata.json"), metadata); err != nil {
-		log.Printf("failed to write metadata for S3 video job %s: %v", job.ID, err)
-	}
+	h.writeOriginalMetadata(ctx, job.ID, uploadPath, fileType, fileName, mimeType, jobOutputDir)
 
 	if !isTranscribeMode(job) && specializedMode(job) == "" {
 		h.analysisJobs.Enqueue(services.AnalysisJob{JobID: job.ID, InputPath: uploadPath, OutputDir: jobOutputDir, FileType: fileType, MimeType: mimeType})

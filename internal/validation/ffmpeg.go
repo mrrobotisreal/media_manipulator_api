@@ -192,8 +192,7 @@ func Probe(ctx context.Context, ffprobeBin, path string, timeout time.Duration) 
 //
 // Exported so callers that have already run ffprobe for another reason can
 // validate without paying for a second process. The upload path is the case:
-// MediaInspector.ProbeFile keeps the raw JSON, so validation costs a JSON
-// decode rather than another probe of a multi-gigabyte file.
+// ffprobe output was already captured. Probe wraps it for the common case.
 func ParseProbeJSON(out []byte) (*ProbeReport, error) {
 	var raw struct {
 		Streams []struct {
