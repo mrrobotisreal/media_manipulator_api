@@ -841,21 +841,16 @@ func (h *StudioHandler) serveAssetDerivative(c *gin.Context, which string) {
 		return
 	}
 
-	var key, contentType string
+	var key string
 	switch which {
 	case "sprite":
 		key = asset.ThumbnailSpriteURL // stores the sprite's S3 key
-		contentType = "image/jpeg"
 	case "file":
 		key = asset.S3KeyOriginal
-		contentType = "application/octet-stream"
 	default:
 		key = asset.S3KeyProxy
-		contentType = "video/mp4"
-		if asset.MediaKind == models.StudioMediaKindAudio {
-			contentType = "audio/mp4"
-		}
 	}
+	contentType := studioDerivativeContentType(asset, which, key)
 	if key == "" {
 		c.JSON(http.StatusNotFound, gin.H{"error": which + " is not ready yet"})
 		return
@@ -876,6 +871,10 @@ func (h *StudioHandler) serveAssetDerivative(c *gin.Context, which string) {
 	if out.ContentType != nil && *out.ContentType != "" {
 		contentType = *out.ContentType
 	}
+	if which == "file" && asset.MediaKind == models.StudioMediaKindImage && strings.EqualFold(sanitizeExtension(filepath.Ext(key)), "svg") {
+		// Never let an uploaded SVG render as a document on the API origin.
+		contentType = "application/octet-stream"
+	}
 	c.Header("Content-Type", contentType)
 	c.Header("Accept-Ranges", "bytes")
 	c.Header("Cache-Control", "private, max-age=3600")
@@ -890,6 +889,36 @@ func (h *StudioHandler) serveAssetDerivative(c *gin.Context, which string) {
 	c.Status(status)
 	if _, err := io.Copy(c.Writer, out.Body); err != nil {
 		log.Printf("studio: stream %s for asset %s interrupted: %v", which, asset.ID, err)
+	}
+}
+
+// studioDerivativeContentType is the default Content-Type for an asset
+// derivative ("proxy", "sprite", "file") before S3's stored type is applied.
+func studioDerivativeContentType(asset *models.StudioAsset, which, key string) string {
+	ext := strings.ToLower(sanitizeExtension(filepath.Ext(key)))
+	isImage := asset != nil && asset.MediaKind == models.StudioMediaKindImage
+	switch which {
+	case "sprite":
+		if isImage && ext == "png" {
+			return "image/png"
+		}
+		return "image/jpeg"
+	case "file":
+		if isImage {
+			return studioImageMIMEForExt(ext)
+		}
+		return "application/octet-stream"
+	default:
+		if isImage {
+			if ext == "png" {
+				return "image/png"
+			}
+			return "image/jpeg"
+		}
+		if asset != nil && asset.MediaKind == models.StudioMediaKindAudio {
+			return "audio/mp4"
+		}
+		return "video/mp4"
 	}
 }
 

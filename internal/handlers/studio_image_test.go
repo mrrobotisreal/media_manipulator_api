@@ -52,3 +52,31 @@ func TestStudioImageDimensions(t *testing.T) {
 		})
 	}
 }
+
+func TestStudioDerivativeContentType(t *testing.T) {
+	img := &models.StudioAsset{MediaKind: models.StudioMediaKindImage}
+	vid := &models.StudioAsset{MediaKind: models.StudioMediaKindVideo}
+	aud := &models.StudioAsset{MediaKind: models.StudioMediaKindAudio}
+	cases := []struct {
+		a          *models.StudioAsset
+		which, key string
+		want       string
+	}{
+		{img, "proxy", "studio/d/s/id_proxy.jpg", "image/jpeg"},
+		{img, "proxy", "studio/d/s/id_proxy.png", "image/png"},
+		{img, "proxy", "", "image/jpeg"},
+		{img, "sprite", "studio/d/s/id_thumb.jpg", "image/jpeg"},
+		{img, "sprite", "studio/d/s/id_thumb.png", "image/png"},
+		{img, "file", "studio/d/s/x.heic", "image/heic"},
+		{img, "file", "studio/d/s/x.jpeg", "image/jpeg"},
+		{vid, "proxy", "k_proxy.mp4", "video/mp4"},
+		{aud, "proxy", "k_proxy.m4a", "audio/mp4"},
+		{vid, "sprite", "k_sprite.jpg", "image/jpeg"},
+		{vid, "file", "k.mp4", "application/octet-stream"},
+	}
+	for _, tc := range cases {
+		if got := studioDerivativeContentType(tc.a, tc.which, tc.key); got != tc.want {
+			t.Errorf("%s %s -> %q want %q", tc.which, tc.key, got, tc.want)
+		}
+	}
+}
