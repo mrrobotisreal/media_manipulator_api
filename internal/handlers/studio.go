@@ -46,6 +46,10 @@ type StudioHandler struct {
 	// peaksMu dedupes on-demand waveform backfill per asset id so concurrent
 	// /peaks requests don't decode the same source twice.
 	peaksMu sync.Map
+	// MM24 deletion (SetDeletion).
+	expirer      Expirer
+	projectStore ProjectDeleteStore
+	onDelete     func(scope string)
 }
 
 // NewStudioHandler mirrors NewConversionHandler's construction: it derives the
@@ -82,6 +86,7 @@ func RegisterStudioRoutes(r gin.IRouter, h *StudioHandler) {
 	studio.GET("/projects", h.ListProjects)
 	studio.GET("/projects/:id", h.GetProject)
 	studio.PUT("/projects/:id", h.SaveProject)
+	studio.DELETE("/projects/:id", h.DeleteProject)
 	studio.GET("/projects/:id/assets", h.ListAssets)
 	// Version history (part 09): checkpoints + restore. Restore checkpoints
 	// the current state first, so it is always reversible.

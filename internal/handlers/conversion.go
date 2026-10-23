@@ -45,6 +45,25 @@ type ConversionHandler struct {
 	// is already at the limit of readability, and because nil is a fully supported
 	// configuration — see SetAnalyticsEmitter.
 	analytics *analyticsemit.Emitter
+	// records is the durable job lookup the download routes fall back to when the
+	// in-memory job map no longer has the job (API restart). nil = no fallback.
+	records JobRecordSource
+	// data serves the MM24 delete / keep-longer routes. nil = not mounted.
+	data *DataHandler
+}
+
+// SetJobRecords attaches the durable job lookup (MM24 download-after-restart).
+func (h *ConversionHandler) SetJobRecords(r JobRecordSource) {
+	if h != nil {
+		h.records = r
+	}
+}
+
+// SetDataHandler attaches the MM24 per-item delete / keep-longer routes.
+func (h *ConversionHandler) SetDataHandler(d *DataHandler) {
+	if h != nil {
+		h.data = d
+	}
 }
 
 // SetAnalyticsEmitter attaches the server-truth analytics feed. Optional: a nil
@@ -109,6 +128,11 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.GET("/job/:jobId/metadata/diff", h.GetJobMetadataDiff)
 	r.GET("/job/:jobId/metadata/binary/:entryId", h.GetJobMetadataBinary)
 	r.GET("/download/:jobId", h.DownloadFile)
+	if h != nil && h.data != nil {
+		// MM24: owner-scoped deletion and "keep longer".
+		r.DELETE("/jobs/:jobId", h.data.DeleteJob)
+		r.PATCH("/jobs/:jobId/retention", h.data.KeepJobLonger)
+	}
 	r.GET("/result/:jobId", h.InlineResult)
 	r.GET("/transcript/:jobId", h.GetTranscriptResult)
 	r.GET("/analysis/:jobId", h.GetAnalysisResult)
@@ -230,6 +254,11 @@ func (h *ConversionHandler) resolveCompletedResult(c *gin.Context, allowQuerySID
 	}
 	job, err := h.jobManager.GetJob(jobID)
 	if err != nil {
+		// MM24: after an API restart the in-memory map is empty but history (served
+		// from Postgres and the ledger) still lists the download link.
+		if h.records != nil {
+			return h.resolveRecordedResult(c, jobID, allowQuerySID)
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
 		return nil, "", nil, false
 	}
@@ -266,7 +295,7 @@ func (h *ConversionHandler) InlineResult(c *gin.Context) {
 		return
 	}
 	defer file.Close()
-	name := h.getOutputFilename(job)
+	name := h.resultName(c, job)
 	if inlineSafeMime(mime) {
 		c.Header("Content-Type", mime)
 		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%q", name))
@@ -286,7 +315,7 @@ func (h *ConversionHandler) DownloadFile(c *gin.Context) {
 		return
 	}
 	h.ensureResultMime(job, outputPath)
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", h.getOutputFilename(job)))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", h.resultName(c, job)))
 	c.Header("Content-Type", "application/octet-stream")
 	c.File(outputPath)
 

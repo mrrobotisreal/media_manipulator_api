@@ -34,6 +34,13 @@ type Registry struct {
 	analyticsEmitEvents     *prometheus.CounterVec
 	analyticsEmitBatches    *prometheus.CounterVec
 	retentionRegisterFailed prometheus.Counter
+	retentionSwept          *prometheus.CounterVec
+	retentionWouldDelete    *prometheus.CounterVec
+	retentionSweepErrors    *prometheus.CounterVec
+	retentionGaveUp         *prometheus.CounterVec
+	retentionBacklog        *prometheus.GaugeVec
+	accountDeleted          *prometheus.CounterVec
+	dataDeleted             *prometheus.CounterVec
 }
 
 // New creates a fresh Registry with all metrics registered.
@@ -135,7 +142,39 @@ func New() *Registry {
 		Help: "Retained-object ledger writes that failed (MM22); the request still succeeded.",
 	})
 
+	r.retentionSwept = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mm_retention_swept_total",
+		Help: "Ledger rows the retention sweeper deleted, by kind (MM23).",
+	}, []string{"kind"})
+	r.retentionWouldDelete = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mm_retention_would_delete_total",
+		Help: "Ledger rows the sweeper WOULD have deleted in dry-run mode, by kind (MM23).",
+	}, []string{"kind"})
+	r.retentionSweepErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mm_retention_sweep_errors_total",
+		Help: "Failed attempts to delete a ledger row, by kind (MM23).",
+	}, []string{"kind"})
+	r.retentionGaveUp = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mm_retention_gave_up_total",
+		Help: "Ledger rows the sweeper stopped retrying after the max attempts, by kind; they need a human (MM23).",
+	}, []string{"kind"})
+	r.retentionBacklog = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "mm_retention_backlog",
+		Help: "Overdue, undeleted ledger rows: state=due (retryable) or state=gave_up (stuck) (MM23).",
+	}, []string{"state"})
+
+	r.accountDeleted = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mm_account_deleted_total",
+		Help: "DELETE /api/account outcomes: completed, incomplete (a step failed, retryable), files_pending (S3 not clean, nothing else touched) (MM24).",
+	}, []string{"result"})
+	r.dataDeleted = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mm_data_deleted_total",
+		Help: "User-initiated deletions by scope: item (a job), project, all (MM24).",
+	}, []string{"scope"})
+
 	reg.MustRegister(
+		r.accountDeleted, r.dataDeleted,
+		r.retentionSwept, r.retentionWouldDelete, r.retentionSweepErrors, r.retentionGaveUp, r.retentionBacklog,
 		r.httpDuration, r.httpStatus, r.conversionJobs, r.toolUsage,
 		r.commandDuration, r.commandFailures, r.ffmpegValidationRejects,
 		r.rateLimitEvents, r.gpuWait, r.gpuRun,
@@ -319,4 +358,62 @@ func (r *Registry) RetentionRegisterFailed() {
 		return
 	}
 	r.retentionRegisterFailed.Inc()
+}
+
+// RetentionSwept counts ledger rows the sweeper deleted.
+func (r *Registry) RetentionSwept(kind string, n int) {
+	if r == nil || n <= 0 {
+		return
+	}
+	r.retentionSwept.WithLabelValues(kind).Add(float64(n))
+}
+
+// RetentionWouldDelete counts rows a dry-run sweep would have deleted.
+func (r *Registry) RetentionWouldDelete(kind string, n int) {
+	if r == nil || n <= 0 {
+		return
+	}
+	r.retentionWouldDelete.WithLabelValues(kind).Add(float64(n))
+}
+
+// RetentionSweepError counts one failed delete attempt.
+func (r *Registry) RetentionSweepError(kind string) {
+	if r == nil {
+		return
+	}
+	r.retentionSweepErrors.WithLabelValues(kind).Inc()
+}
+
+// RetentionGaveUp counts one row that hit the attempts ceiling.
+func (r *Registry) RetentionGaveUp(kind string) {
+	if r == nil {
+		return
+	}
+	r.retentionGaveUp.WithLabelValues(kind).Inc()
+}
+
+// SetRetentionBacklog sets the retention_backlog gauge.
+func (r *Registry) SetRetentionBacklog(due, gaveUp int64) {
+	if r == nil {
+		return
+	}
+	r.retentionBacklog.WithLabelValues("due").Set(float64(due))
+	r.retentionBacklog.WithLabelValues("gave_up").Set(float64(gaveUp))
+}
+
+// AccountDeleted counts a finished DELETE /api/account by result
+// (completed, incomplete, files_pending).
+func (r *Registry) AccountDeleted(result string) {
+	if r == nil {
+		return
+	}
+	r.accountDeleted.WithLabelValues(result).Inc()
+}
+
+// DataDeleted counts a user-initiated deletion by scope (item, project, all).
+func (r *Registry) DataDeleted(scope string) {
+	if r == nil {
+		return
+	}
+	r.dataDeleted.WithLabelValues(scope).Inc()
 }

@@ -48,10 +48,12 @@ func TestSweepRootReapsWholeJobDirIncludingKeptResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := &Worker{Cfg: &config.Config{}, Logger: slog.Default()}
-	if _, _, _, _, err := w.sweepRoot(context.Background(), root, time.Hour, true, map[string]struct{}{}, 10); err != nil {
+	if _, _, _, _, err := w.sweepRoot(context.Background(), root, time.Hour, true, nil, map[string]struct{}{}, 10); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(job); !os.IsNotExist(err) {
 		t.Fatalf("job dir (with results/) should be reaped, stat err=%v", err)
 	}
 }
+
+func exists(p string) bool { _, err := os.Stat(p); return err == nil }

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -36,15 +37,61 @@ type AccountHandler struct {
 	// when S3 is not configured — history still lists its rows, they just carry
 	// no link.
 	presign *s3.PresignClient
-	// jobs answers whether a locally-stored result is still addressable by
-	// GET /api/download/:jobId. Optional.
+	// presignFn replaces presignResult in tests (no AWS in the unit suite).
+	presignFn func(ctx context.Context, key, fileName string) string
+	// jobs is retained for wiring compatibility; history no longer consults the
+	// in-memory job map (MM23): it serves from Postgres + the retention ledger.
 	jobs JobLookup
+	// history is where the History route reads jobs and ledger rows. It is the
+	// store in production; tests substitute a fake. nil = no history.
+	history historySource
 	// analytics receives `server_signup_completed`. Attached by a setter; nil is a
 	// supported configuration.
 	analytics *analyticsemit.Emitter
 	// billing, when attached, has its /billing/* routes mounted by
 	// RegisterAccountRoutes (MM17). Kept here so cmd/api wiring stays one line.
 	billing *BillingHandler
+	// data serves the MM24 account-wide data routes (delete-all, export, revoke,
+	// account deletion). nil = not mounted.
+	data *AccountDataHandler
+	// tombstones overrides the store for the sign-in tombstone check (tests).
+	tombstones tombstoneChecker
+}
+
+// tombstoneChecker is the store slice the sign-in check needs.
+type tombstoneChecker interface {
+	HasAccountTombstone(ctx context.Context, firebaseUID string, now time.Time) (bool, error)
+}
+
+// tombstoned reports whether this Firebase uid was deleted in the last 30 days.
+// A lookup failure FAILS CLOSED (no claim): skipping a claim is recoverable at
+// the next sync, resurrecting a deleted account's rows is not.
+func (h *AccountHandler) tombstoned(ctx context.Context, uid string) bool {
+	var tc tombstoneChecker = h.tombstones
+	if tc == nil && h.store != nil {
+		tc = h.store
+	}
+	if tc == nil {
+		return false
+	}
+	ok, err := tc.HasAccountTombstone(ctx, uid, h.nowFn())
+	if err != nil {
+		if !errors.Is(err, telemetry.ErrNoStore) {
+			h.logger.Warn("account: tombstone lookup failed; skipping claim", "error", err.Error())
+			return true
+		}
+		return false
+	}
+	return ok
+}
+
+func (h *AccountHandler) nowFn() time.Time { return time.Now().UTC() }
+
+// SetAccountData attaches the MM24 account data routes (nil = none mounted).
+func (h *AccountHandler) SetAccountData(d *AccountDataHandler) {
+	if h != nil {
+		h.data = d
+	}
 }
 
 // SetBilling attaches the billing routes (nil = none mounted).
@@ -62,10 +109,8 @@ func (h *AccountHandler) SetAnalyticsEmitter(e *analyticsemit.Emitter) {
 	h.analytics = e
 }
 
-// JobLookup is the slice of the in-memory job manager conversion history needs:
-// results that were never uploaded to S3 are served off local disk by
-// /api/download/:jobId, which resolves the output path from the live job, so a
-// link is only worth offering while that job is still in memory.
+// JobLookup is the (now vestigial) slice of the in-memory job manager the
+// account handler is constructed with. History no longer uses it (MM23).
 type JobLookup interface {
 	GetJob(jobID string) (*models.ConversionJob, error)
 }
@@ -74,7 +119,18 @@ func NewAccountHandler(store *telemetry.Store, registry *tiers.Registry, cfg *co
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &AccountHandler{store: store, registry: registry, cfg: cfg, logger: logger, presign: presign, jobs: jobs}
+	h := &AccountHandler{store: store, registry: registry, cfg: cfg, logger: logger, presign: presign, jobs: jobs}
+	if store != nil { // avoid a typed-nil interface
+		h.history = store
+	}
+	return h
+}
+
+// historySource is what the History route reads. *telemetry.Store implements it.
+type historySource interface {
+	ConversionHistoryForUser(ctx context.Context, userID string, limit, offset int) ([]models.ConversionHistoryEntry, int, error)
+	LedgerForJobs(ctx context.Context, jobIDs []string) ([]telemetry.JobLedgerEntry, error)
+	UserRetentionHours(ctx context.Context, userID string) (int, bool, error)
 }
 
 // tierDescriptor is one row of the public matrix.
@@ -223,7 +279,13 @@ func (h *AccountHandler) Sync(c *gin.Context) {
 	// it here means the anonymous editor's work survives making an account
 	// instead of silently becoming unreachable once ownership is by user id.
 	if session := c.GetHeader("X-MM-Session-ID"); session != "" && user != nil {
-		claimOnSignIn(c.Request.Context(), h.store, h.logger, user, session, time.Now().UTC())
+		// MM24: a uid deleted inside the last 30 days claims nothing, so a re-signup
+		// cannot resurrect the session rows the deleted account once owned.
+		if h.tombstoned(c.Request.Context(), principal.UID) {
+			h.logger.Info("account: sign-in claim skipped (uid deleted within 30 days)")
+		} else {
+			claimOnSignIn(c.Request.Context(), h.store, h.logger, user, session, time.Now().UTC())
+		}
 	}
 
 	c.JSON(http.StatusOK, h.buildUsageResponse(c, user, true))
@@ -339,6 +401,15 @@ type historyEntry struct {
 	// for the job. Additive and omitted when neither exists. It stays true after the
 	// media itself has expired: the routes read the cached JSON, not the file.
 	MetadataAvailable *models.MetadataAvailability `json:"metadataAvailable,omitempty"`
+	// RetainedObjectID is the ledger row that governs this result (MM23; MM24/MM25
+	// act on it). Omitted for jobs with no ledger row (created before MM22).
+	RetainedObjectID string `json:"retainedObjectId,omitempty"`
+	// DeletesOn is when the sweeper will delete the result: the ledger expires_at.
+	// Mirrors ResultExpiresAt for ledgered rows; additive for MM25.
+	DeletesOn string `json:"deletesOn,omitempty"`
+	// KeptLonger is true when this result's deadline is later than the account's
+	// retention window alone would give (a "keep longer" pin, MM24).
+	KeptLonger bool `json:"keptLonger,omitempty"`
 }
 
 // historyMetadataAvailable stats outputs/<jobId>/metadata.json and
@@ -411,6 +482,9 @@ func (h *AccountHandler) resultExpiry(e models.ConversionHistoryEntry) *time.Tim
 // anything it cannot sign, which the caller renders as "no link", never as an
 // error: a history page must still load when S3 is unhappy.
 func (h *AccountHandler) presignResult(ctx context.Context, key, fileName string) string {
+	if h.presignFn != nil {
+		return h.presignFn(ctx, key, fileName)
+	}
 	if h.presign == nil || key == "" || h.cfg == nil || h.cfg.S3Bucket == "" {
 		return ""
 	}
@@ -424,30 +498,6 @@ func (h *AccountHandler) presignResult(ctx context.Context, key, fileName string
 		return ""
 	}
 	return signed.URL
-}
-
-// liveLocalResult reports whether /api/download/:jobId can still serve this
-// job's result.
-//
-// Only the packaging pipelines (transcode, restore) upload to S3; an ordinary
-// conversion leaves its output on local disk, where the download endpoint
-// resolves the filename from the live in-memory job. So the honest test for
-// "is there a link" is "is the job still in memory, and did it finish" — a link
-// that 404s is worse than no link at all.
-//
-// This is why a history row can lose its download while the file itself is still
-// inside its retention window: an API restart drops the in-memory job. Making
-// local results addressable after a restart needs the on-disk output name
-// persisted and a database-backed download path, which is a follow-up.
-func (h *AccountHandler) liveLocalResult(jobID string) bool {
-	if h.jobs == nil || jobID == "" {
-		return false
-	}
-	job, err := h.jobs.GetJob(jobID)
-	if err != nil || job == nil {
-		return false
-	}
-	return job.Status == models.StatusCompleted
 }
 
 // History lists the signed-in caller's own jobs, newest first.
@@ -477,14 +527,27 @@ func (h *AccountHandler) History(c *gin.Context) {
 		return
 	}
 
-	rows, total, err := h.store.ConversionHistoryForUser(c.Request.Context(), user.ID, limit, offset)
+	if h.history == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "History is temporarily unavailable"})
+		return
+	}
+	rows, total, err := h.history.ConversionHistoryForUser(c.Request.Context(), user.ID, limit, offset)
 	if err != nil {
 		h.logger.Warn("account: history lookup failed", "error", err.Error())
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "History is temporarily unavailable"})
 		return
 	}
 
-	now := time.Now().UTC()
+	entries := h.buildHistoryEntries(c.Request.Context(), user, rows, time.Now().UTC())
+	c.JSON(http.StatusOK, historyResponse{Entries: entries, Total: total, Limit: limit, Offset: offset})
+}
+
+// buildHistoryEntries maps one page of job rows to response entries, joining the
+// retention ledger. It reads Postgres only: nothing here depends on the in-memory
+// job map, which is why history survives an API restart.
+func (h *AccountHandler) buildHistoryEntries(ctx context.Context, user *models.User, rows []models.ConversionHistoryEntry, now time.Time) []historyEntry {
+	ledger := h.historyLedger(ctx, rows)
+	windowHours := h.historyWindowHours(ctx, user)
 	entries := make([]historyEntry, 0, len(rows))
 	for _, r := range rows {
 		out := historyEntry{
@@ -502,14 +565,15 @@ func (h *AccountHandler) History(c *gin.Context) {
 		if r.CompletedAt != nil {
 			out.CompletedAt = r.CompletedAt.UTC().Format(time.RFC3339)
 		}
-		if expiry := h.resultExpiry(r); expiry != nil {
-			out.ResultExpiresAt = expiry.UTC().Format(time.RFC3339)
-			out.Expired = expiry.Before(now)
-		}
+		h.fillHistoryRetention(&out, r, ledger[r.JobID], windowHours, now)
 		if !out.Expired && r.Status == string(models.StatusCompleted) {
 			if r.ResultS3Key != "" {
-				out.DownloadURL = h.presignResult(c.Request.Context(), r.ResultS3Key, r.ResultFileName)
-			} else if h.liveLocalResult(r.JobID) {
+				// Re-presigned on every listing: a link is minted for a sitting; the
+				// FILE's life is the ledger's, not the presign TTL's.
+				out.DownloadURL = h.presignResult(ctx, r.ResultS3Key, r.ResultFileName)
+			} else {
+				// A local result is addressed by job id (/api/download/:jobId). The
+				// ledger, not the in-memory job map, says whether it still exists.
 				out.DownloadPath = "/download/" + r.JobID
 			}
 		}
@@ -518,8 +582,82 @@ func (h *AccountHandler) History(c *gin.Context) {
 		}
 		entries = append(entries, out)
 	}
+	return entries
+}
 
-	c.JSON(http.StatusOK, historyResponse{Entries: entries, Total: total, Limit: limit, Offset: offset})
+// historyLedger loads the ledger rows for one page of jobs, keyed by job id.
+// A failure degrades to "no ledger info" (rows fall back to the tier estimate)
+// rather than failing the page.
+func (h *AccountHandler) historyLedger(ctx context.Context, rows []models.ConversionHistoryEntry) map[string][]telemetry.JobLedgerEntry {
+	out := map[string][]telemetry.JobLedgerEntry{}
+	if len(rows) == 0 || h.history == nil {
+		return out
+	}
+	ids := make([]string, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.JobID)
+	}
+	entries, err := h.history.LedgerForJobs(ctx, ids)
+	if err != nil {
+		h.logger.Warn("account: history ledger lookup failed", "error", err.Error())
+		return out
+	}
+	for _, e := range entries {
+		out[e.JobID] = append(out[e.JobID], e)
+	}
+	return out
+}
+
+// historyWindowHours is the account's retention window, for keptLonger.
+func (h *AccountHandler) historyWindowHours(ctx context.Context, user *models.User) int {
+	if h.history != nil {
+		if hours, ok, err := h.history.UserRetentionHours(ctx, user.ID); err == nil && ok {
+			return hours
+		}
+	}
+	return retention.DefaultHours(user.Tier)
+}
+
+// primaryLedgerRow picks the row whose lifetime IS the result's: the output
+// directory, else the S3 object holding the result key, else any S3 object of
+// the job. Parked metadata is never the primary (it outlives the result).
+func primaryLedgerRow(rows []telemetry.JobLedgerEntry, resultKey string) *telemetry.JobLedgerEntry {
+	var best *telemetry.JobLedgerEntry
+	for i := range rows {
+		r := &rows[i]
+		switch {
+		case r.Kind == telemetry.RetainedOutputDir:
+			return r
+		case r.Kind == telemetry.RetainedS3Object && resultKey != "" && r.Locator == resultKey:
+			return r
+		case r.Kind == telemetry.RetainedS3Object && resultKey == "":
+			if best == nil {
+				best = r
+			}
+		}
+	}
+	return best
+}
+
+// fillHistoryRetention sets expiresAt / expired / deletesOn / retainedObjectId /
+// keptLonger from the ledger. Rows with no ledger entry (jobs from before MM22)
+// keep the previous tier-window estimate.
+func (h *AccountHandler) fillHistoryRetention(out *historyEntry, r models.ConversionHistoryEntry, rows []telemetry.JobLedgerEntry, windowHours int, now time.Time) {
+	p := primaryLedgerRow(rows, r.ResultS3Key)
+	if p == nil {
+		if expiry := h.resultExpiry(r); expiry != nil {
+			out.ResultExpiresAt = expiry.UTC().Format(time.RFC3339)
+			out.Expired = expiry.Before(now)
+		}
+		return
+	}
+	out.RetainedObjectID = p.ID
+	out.DeletesOn = p.ExpiresAt.UTC().Format(time.RFC3339)
+	out.ResultExpiresAt = out.DeletesOn
+	out.Expired = p.DeletedAt != nil || p.ExpiresAt.Before(now)
+	if windowHours > 0 && p.ExpiresAt.After(p.CreatedAt.Add(time.Duration(windowHours)*time.Hour+time.Minute)) {
+		out.KeptLonger = true
+	}
 }
 
 // Tiers serves the public tier matrix. /pricing, the upgrade prompts and the
@@ -575,6 +713,9 @@ func RegisterAccountRoutes(rg *gin.RouterGroup, h *AccountHandler, cfg *config.C
 		authed.GET("/settings", settings.Get)
 		authed.PATCH("/settings", settings.Patch)
 		authed.GET("/settings/preview", settings.Preview)
+		if h.data != nil {
+			h.data.Register(account, authed)
+		}
 	}
 }
 

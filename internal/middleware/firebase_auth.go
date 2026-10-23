@@ -37,6 +37,10 @@ type Principal struct {
 	EmailVerified bool
 	// Claims is the full custom-claims map, for callers that need more.
 	Claims map[string]any
+	// AuthTime is when the user last actively authenticated (the token's
+	// auth_time claim, unix seconds; 0 = unknown). Account deletion requires it
+	// to be recent, so a stolen long-lived session cannot delete an account.
+	AuthTime int64
 }
 
 // TokenVerifier verifies a raw Firebase ID token and returns the identity it
@@ -63,7 +67,7 @@ func (v *firebaseVerifier) Verify(ctx context.Context, idToken string) (*Princip
 // and email_verified live in the standard claims map rather than on the token
 // struct, so they are read defensively.
 func principalFromToken(token *auth.Token) *Principal {
-	p := &Principal{UID: token.UID, Claims: token.Claims}
+	p := &Principal{UID: token.UID, Claims: token.Claims, AuthTime: token.AuthTime}
 	if token.Claims != nil {
 		if email, ok := token.Claims["email"].(string); ok {
 			p.Email = email

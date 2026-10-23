@@ -43,8 +43,8 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/redisx"
-	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
@@ -284,6 +284,28 @@ func main() {
 	// Cleanup worker
 	if cfg.CleanupEnabled {
 		worker := cleanup.NewWorker(cfg, store, metricsReg, logging, jobManager)
+		// MM23: ledger-driven sweeper + orphan walker + purges. DRY RUN unless
+		// RETENTION_SWEEP_DRY_RUN=false (default true).
+		var objStore retention.ObjectStore
+		if s3Client != nil {
+			objStore = retention.NewS3Store(s3Client)
+		}
+		worker.Sweeper = retention.NewSweeper(store, retention.OSDisk{}, objStore, jobManager.ActiveJobIDs,
+			retention.NewMeter(metricsReg), logging, retention.SweepConfig{
+				UploadDir: cfg.UploadDir, OutputDir: cfg.OutputDir, Bucket: cfg.S3Bucket,
+				AllowedPrefixes: []string{"videos", cfg.S3ResultPrefix, cfg.ContentStudioS3Prefix},
+				Batch:           cfg.RetentionSweepBatch, Budget: cfg.RetentionSweepBudget,
+				MaxAttempts: cfg.RetentionMaxAttempts, DryRun: cfg.CleanupDryRun || cfg.RetentionSweepDryRun,
+			})
+		worker.Purger = retention.NewPurger(store, logging)
+		worker.Janitor = jobManager
+		worker.Orphans = store
+		worker.Emitter = analyticsEmitter
+		if cfg.CleanupDryRun || cfg.RetentionSweepDryRun {
+			logging.Warn("retention sweeper is in DRY-RUN mode: nothing will be deleted. Set RETENTION_SWEEP_DRY_RUN=false (and CLEANUP_DRY_RUN=false) after reviewing mm_cleanup_runs.properties")
+		} else {
+			logging.Warn("retention sweeper is ENFORCING: expired ledger rows and orphaned files will be deleted")
+		}
 		go worker.Run(ctx)
 	}
 
@@ -324,6 +346,9 @@ func main() {
 	// Billing (MM17) ships dark: every /api/billing route answers 503
 	// billing_unavailable unless BILLING_ENABLED and all Stripe settings are set.
 	accountHandler.SetBilling(newBillingHandler(cfg, store, tierRegistry, analyticsEmitter, logging))
+	// MM24: per-item delete, keep longer, delete-all, export, sign-out-everywhere and
+	// account deletion; also the Postgres-backed fallback for /api/download after a restart.
+	wireDataControls(ctx, cfg, store, jobManager, s3Client, conversionHandler, studioHandler, accountHandler, limiter, metricsReg, analyticsEmitter, logging)
 
 	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg, analyticsEmitter)
 
