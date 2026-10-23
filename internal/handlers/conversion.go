@@ -107,6 +107,8 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.GET("/job/:jobId", h.GetJobStatus)
 	r.GET("/job/:jobId/events", h.StreamJobEvents)
 	r.GET("/job/:jobId/metadata", h.GetJobMetadata)
+	r.GET("/job/:jobId/metadata/diff", h.GetJobMetadataDiff)
+	r.GET("/job/:jobId/metadata/binary/:entryId", h.GetJobMetadataBinary)
 	r.GET("/download/:jobId", h.DownloadFile)
 	r.GET("/result/:jobId", h.InlineResult)
 	r.GET("/transcript/:jobId", h.GetTranscriptResult)
