@@ -307,6 +307,13 @@ func (s *RestoreService) Process(ctx context.Context, req RestoreRequest) {
 		s.failRestore(req, stages, "Failed to package the results", err)
 		return
 	}
+	// Keep the per-model MP4s (and the reference clip) for the comparison
+	// viewer: move them out of stage/ before the deferred cleanup deletes it.
+	// Best effort — the tarball is the contract, so a failure here only costs
+	// the inline viewer, never the job.
+	if err := keepRestoreResults(stageRoot, jobOutputDir, manifest); err != nil {
+		log.Printf("video-restore job %s: keeping per-model results failed: %v", req.JobID, err)
+	}
 	advance("package", models.StageStatusCompleted, restoreProgressPackage, "")
 
 	// --- upload_result ----------------------------------------------------

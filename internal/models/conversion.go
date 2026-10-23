@@ -25,23 +25,26 @@ const (
 )
 
 type ConversionJob struct {
-	ID              string                 `json:"id"`
-	Status          JobStatus              `json:"status"`
-	Progress        int                    `json:"progress,omitempty"`
-	ResultURL       string                 `json:"resultUrl,omitempty"`
-	Error           string                 `json:"error,omitempty"`
-	OriginalFile    OriginalFileInfo       `json:"originalFile"`
-	Options         map[string]interface{} `json:"options"`
-	CreatedAt       time.Time              `json:"createdAt"`
-	CompletedAt     *time.Time             `json:"completedAt,omitempty"`
-	Mode            string                 `json:"mode,omitempty"`
-	CurrentStage    string                 `json:"currentStage,omitempty"`
-	Stages          []TranscodeJobStage    `json:"stages,omitempty"`
-	ResultS3Key     string                 `json:"resultS3Key,omitempty"`
-	ResultFileName  string                 `json:"resultFileName,omitempty"`
+	ID             string                 `json:"id"`
+	Status         JobStatus              `json:"status"`
+	Progress       int                    `json:"progress,omitempty"`
+	ResultURL      string                 `json:"resultUrl,omitempty"`
+	Error          string                 `json:"error,omitempty"`
+	OriginalFile   OriginalFileInfo       `json:"originalFile"`
+	Options        map[string]interface{} `json:"options"`
+	CreatedAt      time.Time              `json:"createdAt"`
+	CompletedAt    *time.Time             `json:"completedAt,omitempty"`
+	Mode           string                 `json:"mode,omitempty"`
+	CurrentStage   string                 `json:"currentStage,omitempty"`
+	Stages         []TranscodeJobStage    `json:"stages,omitempty"`
+	ResultS3Key    string                 `json:"resultS3Key,omitempty"`
+	ResultFileName string                 `json:"resultFileName,omitempty"`
 	// ResultSizeBytes is the size of the packaged result artifact (e.g. the
 	// restoration tarball). Optional — only pipelines that know the size set it.
-	ResultSizeBytes int64               `json:"resultSizeBytes,omitempty"`
+	ResultSizeBytes int64 `json:"resultSizeBytes,omitempty"`
+	// ResultMime is the server-sniffed MIME type of the result file (never
+	// client-declared). Empty until a result exists.
+	ResultMime      string              `json:"resultMime,omitempty"`
 	ExpiresAt       *time.Time          `json:"expiresAt,omitempty"`
 	TranscodeReport *VideoProbeResponse `json:"transcodeReport,omitempty"`
 }

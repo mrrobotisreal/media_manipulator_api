@@ -232,6 +232,10 @@ func (h *ImageRestoreHandler) GetImageRestoreResults(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
 		return
 	}
+	if !authorizeJobAccess(c, h.jobManager, job) {
+		denyJobAccess(c)
+		return
+	}
 	if job.Status != models.StatusCompleted {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Job not completed"})
 		return
@@ -252,6 +256,11 @@ func (h *ImageRestoreHandler) GetImageRestoreResultImage(c *gin.Context) {
 	job, err := h.jobManager.GetJob(jobID)
 	if err != nil || job.Mode != "image_restore" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+	// <img> cannot send headers, so this inline route also accepts ?sid=.
+	if !authorizeJobAccessSID(c, h.jobManager, job, true) {
+		denyJobAccess(c)
 		return
 	}
 	path, err := h.imageRestore.ResultImagePath(jobID, resultID)

@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -51,6 +54,77 @@ func NewVideoRestoreHandler(jobManager *services.JobManager, cfg *config.Config,
 func RegisterVideoRestoreRoutes(r gin.IRouter, h *VideoRestoreHandler) {
 	r.GET("/video-restore/capabilities", h.GetRestoreCapabilities)
 	r.POST("/video-restore/start", h.StartVideoRestore)
+	r.GET("/video-restore/:jobId/results", h.GetRestoreResults)
+	r.GET("/video-restore/:jobId/result/:name", h.GetRestoreResultFile)
+}
+
+// restoreResultsJob resolves the job for the two results routes: it must exist,
+// be a restore job, be visible to the caller, and be completed. Failures have
+// already been written to the response.
+func (h *VideoRestoreHandler) restoreResultsJob(c *gin.Context, allowQuerySID bool) (*models.ConversionJob, bool) {
+	jobID := strings.TrimSpace(c.Param("jobId"))
+	job, err := h.jobManager.GetJob(jobID)
+	if err != nil || job.Mode != "restore" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
+		return nil, false
+	}
+	if !authorizeJobAccessSID(c, h.jobManager, job, allowQuerySID) {
+		denyJobAccess(c)
+		return nil, false
+	}
+	if job.Status != models.StatusCompleted {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Job not completed"})
+		return nil, false
+	}
+	return job, true
+}
+
+// GetRestoreResults lists the original clip and every model of a completed
+// restore job. Failed models are listed without fileName.
+func (h *VideoRestoreHandler) GetRestoreResults(c *gin.Context) {
+	job, ok := h.restoreResultsJob(c, false)
+	if !ok {
+		return
+	}
+	resp, err := services.ReadRestoreResults(h.cfg.OutputDir, job.ID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Results not found"})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// GetRestoreResultFile streams one result MP4 inline with HTTP range support.
+// :name is resolved against the job's manifest only ("original" or a completed
+// model id); anything else is 404 and user input never reaches a path join.
+func (h *VideoRestoreHandler) GetRestoreResultFile(c *gin.Context) {
+	job, ok := h.restoreResultsJob(c, true)
+	if !ok {
+		return
+	}
+	path, err := services.RestoreResultPath(h.cfg.OutputDir, job.ID, c.Param("name"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+	name := filepath.Base(path)
+	c.Header("Content-Type", "video/mp4")
+	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%q", name))
+	c.Header("Accept-Ranges", "bytes")
+	c.Header("Cache-Control", "private, max-age=300")
+	c.Header("X-Content-Type-Options", "nosniff")
+	http.ServeContent(c.Writer, c.Request, name, info.ModTime(), file)
 }
 
 // GetRestoreCapabilities reports feature flags, limits and per-model

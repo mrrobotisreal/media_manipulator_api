@@ -55,6 +55,7 @@ func loadDotEnv() {
 func main() {
 	loadDotEnv()
 	cfg := config.Load()
+	handlers.SetResultOwnershipEnforce(cfg.ResultOwnershipEnforce)
 	logging := logger.New(cfg)
 	slog.SetDefault(logging)
 
