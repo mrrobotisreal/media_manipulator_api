@@ -120,9 +120,17 @@ type StudioDucking struct {
 	ReleaseMs float64
 }
 
+// ExportInput is one ffmpeg input: a local path plus the input options that
+// must precede its -i (e.g. "-loop 1 -framerate 30 -t N" for a still image).
+// Pre is nil for video/audio, so their argv is byte-identical to the bare path.
+type ExportInput struct {
+	Path string
+	Pre  []string
+}
+
 // StudioExportPlan is the resolved, render-ready EDL.
 type StudioExportPlan struct {
-	Inputs   []string
+	Inputs   []ExportInput
 	Video    []StudioExportVideoSeg
 	Audio    []StudioExportAudioSeg
 	Width    int
@@ -210,7 +218,8 @@ func buildAudioMixArgs(plan StudioExportPlan, outputPath string) (args []string,
 	}
 	args = []string{"-y"}
 	for _, in := range plan.Inputs {
-		args = append(args, "-i", in)
+		args = append(args, in.Pre...)
+		args = append(args, "-i", in.Path)
 	}
 	args = append(args, "-filter_complex", strings.Join(stmts, ";"))
 	args = append(args, "-map", "["+audioOut+"]", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-t", durStr, outputPath)
@@ -237,7 +246,8 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 
 	args := []string{"-y"}
 	for _, in := range plan.Inputs {
-		args = append(args, "-i", in)
+		args = append(args, in.Pre...)
+		args = append(args, "-i", in.Path)
 	}
 
 	stmts := make([]string, 0, len(plan.Video)*2+len(plan.Audio)+4)

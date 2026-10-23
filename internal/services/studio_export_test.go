@@ -28,7 +28,7 @@ func filterComplex(t *testing.T, args []string) string {
 
 func TestBuildMultiTrackExportArgs_OverlayAndMix(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs: []string{"/a.mp4", "/b.mp4", "/music.mp3"},
+		Inputs: inputs("/a.mp4", "/b.mp4", "/music.mp3"),
 		Video: []StudioExportVideoSeg{
 			{InputIndex: 0, SourceIn: 0, SourceOut: 5, TimelineStart: 0, Opacity: 1, TrackIndex: 0},
 			{InputIndex: 1, SourceIn: 1, SourceOut: 3, TimelineStart: 2, Opacity: 0.5, TrackIndex: 1},
@@ -83,7 +83,7 @@ func TestBuildMultiTrackExportArgs_SingleVideoClipNoExtraAudio(t *testing.T) {
 	// One video clip with its embedded audio: single overlay, single audio
 	// source (no amix), both mapped.
 	plan := StudioExportPlan{
-		Inputs: []string{"/a.mp4"},
+		Inputs: inputs("/a.mp4"),
 		Video:  []StudioExportVideoSeg{{InputIndex: 0, SourceIn: 2, SourceOut: 8, TimelineStart: 0, Opacity: 1, TrackIndex: 0}},
 		Audio:  []StudioExportAudioSeg{{InputIndex: 0, SourceIn: 2, SourceOut: 8, TimelineStart: 0, Volume: 1}},
 		Width:  1280, Height: 720, FPS: 24, Duration: 6,
@@ -107,7 +107,7 @@ func TestBuildMultiTrackExportArgs_SingleVideoClipNoExtraAudio(t *testing.T) {
 
 func TestBuildMultiTrackExportArgs_Effects(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs: []string{"/a.mp4", "/b.mp4"},
+		Inputs: inputs("/a.mp4", "/b.mp4"),
 		Video: []StudioExportVideoSeg{
 			{InputIndex: 0, SourceIn: 0, SourceOut: 6, TimelineStart: 0, Opacity: 1, TrackIndex: 0,
 				Adjustments:  &models.StudioAdjustments{Brightness: 0.1, Contrast: 1.2, Saturation: 0.8},
@@ -143,7 +143,7 @@ func TestBuildMultiTrackExportArgs_Effects(t *testing.T) {
 // this guarantees existing projects export byte-identically after the v2 work.
 func TestBuildMultiTrackExportArgs_LegacyV1Regression(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs: []string{"/a.mp4", "/music.mp3"},
+		Inputs: inputs("/a.mp4", "/music.mp3"),
 		Video: []StudioExportVideoSeg{
 			{InputIndex: 0, SourceIn: 0, SourceOut: 6, TimelineStart: 0, Opacity: 1, TrackIndex: 0,
 				Adjustments: &models.StudioAdjustments{Brightness: 0.1, Contrast: 1.2, Saturation: 0.8}},
@@ -186,7 +186,7 @@ func wantAll(t *testing.T, fc string, wants ...string) {
 
 func TestExportV2_TransformAndCrop(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs: []string{"/a.mp4"},
+		Inputs: inputs("/a.mp4"),
 		Video: []StudioExportVideoSeg{{
 			InputIndex: 0, SourceIn: 0, SourceOut: 5, TimelineStart: 0, Opacity: 1, TrackIndex: 0,
 			Transform: &models.StudioTransform{X: 0.1, Y: -0.2, Scale: 0.5, RotationDeg: 90},
@@ -205,7 +205,7 @@ func TestExportV2_TransformAndCrop(t *testing.T) {
 
 func TestExportV2_MultiplyBlend(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs: []string{"/a.mp4", "/b.mp4"},
+		Inputs: inputs("/a.mp4", "/b.mp4"),
 		Video: []StudioExportVideoSeg{
 			{InputIndex: 0, SourceIn: 0, SourceOut: 5, TimelineStart: 0, Opacity: 1, TrackIndex: 0},
 			{InputIndex: 1, SourceIn: 0, SourceOut: 5, TimelineStart: 0, Opacity: 1, TrackIndex: 1, BlendMode: "multiply"},
@@ -231,7 +231,7 @@ func TestExportV2_MultiplyBlend(t *testing.T) {
 
 func TestExportV2_Lumetri(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs: []string{"/a.mp4"},
+		Inputs: inputs("/a.mp4"),
 		Video: []StudioExportVideoSeg{{
 			InputIndex: 0, SourceIn: 0, SourceOut: 5, TimelineStart: 0, Opacity: 1, TrackIndex: 0,
 			Effects: []models.StudioEffect{{
@@ -253,7 +253,7 @@ func TestExportV2_Lumetri(t *testing.T) {
 func TestExportV2_Lut3dIntensity(t *testing.T) {
 	mk := func(intensity float64) string {
 		plan := StudioExportPlan{
-			Inputs: []string{"/a.mp4"},
+			Inputs: inputs("/a.mp4"),
 			Video: []StudioExportVideoSeg{{
 				InputIndex: 0, SourceIn: 0, SourceOut: 5, TimelineStart: 0, Opacity: 1, TrackIndex: 0,
 				Effects:  []models.StudioEffect{{ID: "e1", Type: models.StudioEffectLUT, Enabled: true, LutAssetID: sp("L1"), Intensity: fp(intensity)}},
@@ -285,7 +285,7 @@ func TestExportV2_Lut3dIntensity(t *testing.T) {
 
 func TestExportV2_ChromaKey(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs: []string{"/a.mp4"},
+		Inputs: inputs("/a.mp4"),
 		Video: []StudioExportVideoSeg{{
 			InputIndex: 0, SourceIn: 0, SourceOut: 5, TimelineStart: 0, Opacity: 1, TrackIndex: 0,
 			Effects: []models.StudioEffect{{ID: "e1", Type: models.StudioEffectChromaKey, Enabled: true, KeyColor: sp("#00FF00"), Similarity: fp(0.2), Blend: fp(0.1), Despill: fp(0.6)}},
@@ -301,7 +301,7 @@ func TestExportV2_ChromaKey(t *testing.T) {
 
 func TestExportV2_VolumeKeyframesAndPan(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs: []string{"/a.mp4"},
+		Inputs: inputs("/a.mp4"),
 		Audio: []StudioExportAudioSeg{{
 			InputIndex: 0, SourceIn: 0, SourceOut: 4, TimelineStart: 0, Volume: 1, Pan: 0.5,
 			VolumeKeyframes: []models.StudioVolumeKeyframe{{T: 0, Gain: 0.5}, {T: 2, Gain: 1.5}, {T: 4, Gain: 1.0}},
@@ -317,7 +317,7 @@ func TestExportV2_VolumeKeyframesAndPan(t *testing.T) {
 
 func TestExportV2_QsinFades(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs: []string{"/a.mp4"},
+		Inputs: inputs("/a.mp4"),
 		Audio:  []StudioExportAudioSeg{{InputIndex: 0, SourceIn: 0, SourceOut: 6, TimelineStart: 0, Volume: 1, FadeIn: 1.5, FadeOut: 1.5}},
 		Width:  1920, Height: 1080, FPS: 30, Duration: 6,
 	}
@@ -327,7 +327,7 @@ func TestExportV2_QsinFades(t *testing.T) {
 
 func TestExportV2_DuckingGraph(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs: []string{"/voice.mp3", "/music.mp3"},
+		Inputs: inputs("/voice.mp3", "/music.mp3"),
 		Audio: []StudioExportAudioSeg{
 			{InputIndex: 0, SourceIn: 0, SourceOut: 10, TimelineStart: 0, Volume: 1, Voice: true},
 			{InputIndex: 1, SourceIn: 0, SourceOut: 10, TimelineStart: 0, Volume: 0.6, Voice: false},
@@ -345,7 +345,7 @@ func TestExportV2_DuckingGraph(t *testing.T) {
 
 func TestExportV2_LoudnessPreset(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs:   []string{"/a.mp4"},
+		Inputs:   inputs("/a.mp4"),
 		Audio:    []StudioExportAudioSeg{{InputIndex: 0, SourceIn: 0, SourceOut: 4, TimelineStart: 0, Volume: 1}},
 		Loudness: "streaming",
 		Width:    1920, Height: 1080, FPS: 30, Duration: 4,
@@ -366,7 +366,7 @@ func TestHexToFFColor(t *testing.T) {
 func TestBuildMultiTrackExportArgs_AudioOnly(t *testing.T) {
 	// No video segments → audio-only output (no video map, no -c:v).
 	plan := StudioExportPlan{
-		Inputs: []string{"/voice.mp3"},
+		Inputs: inputs("/voice.mp3"),
 		Audio:  []StudioExportAudioSeg{{InputIndex: 0, SourceIn: 0, SourceOut: 4, TimelineStart: 1, Volume: 0.8}},
 		Width:  1920, Height: 1080, FPS: 30, Duration: 5,
 	}
@@ -390,7 +390,7 @@ func TestBuildMultiTrackExportArgs_AudioOnly(t *testing.T) {
 // A carries the matching TransOut pairing CollectExportRefs derives).
 func twoClipPlan(transitionType string) StudioExportPlan {
 	return StudioExportPlan{
-		Inputs: []string{"/a.mp4", "/b.mp4"},
+		Inputs: inputs("/a.mp4", "/b.mp4"),
 		Video: []StudioExportVideoSeg{
 			{InputIndex: 0, SourceIn: 0, SourceOut: 2.5, TimelineStart: 0, Opacity: 1, TrackIndex: 0,
 				TransOutType: transitionType, TransOutStart: 1.5, TransOutDur: 1},
@@ -494,7 +494,7 @@ func kfLane(points ...models.StudioKeyframe) []models.StudioKeyframe { return po
 
 func TestBuildMultiTrackExportArgs_KeyframedMotionAndOpacity(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs: []string{"/a.mp4"},
+		Inputs: inputs("/a.mp4"),
 		Video: []StudioExportVideoSeg{
 			{
 				InputIndex: 0, SourceIn: 0, SourceOut: 4, TimelineStart: 1, Opacity: 1, TrackIndex: 0,
@@ -531,7 +531,7 @@ func TestBuildMultiTrackExportArgs_KeyframedMotionAndOpacity(t *testing.T) {
 
 func TestBuildMultiTrackExportArgs_SendCmdInsertion(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs:      []string{"/a.mp4"},
+		Inputs:      inputs("/a.mp4"),
 		Video:       []StudioExportVideoSeg{{InputIndex: 0, SourceOut: 4, Opacity: 1}},
 		Width:       1920, Height: 1080, FPS: 30, Duration: 4,
 		SendCmdPath: "/tmp/job/keyframes.cmd",
@@ -544,7 +544,7 @@ func TestBuildMultiTrackExportArgs_SendCmdInsertion(t *testing.T) {
 
 	// Audio-only project: the sidecar rides an asendcmd on the mix output.
 	audioPlan := StudioExportPlan{
-		Inputs:      []string{"/a.mp3"},
+		Inputs:      inputs("/a.mp3"),
 		Audio:       []StudioExportAudioSeg{{InputIndex: 0, SourceOut: 4, Volume: 1}},
 		Width:       1920, Height: 1080, FPS: 30, Duration: 4,
 		SendCmdPath: "/tmp/job/keyframes.cmd",
@@ -594,7 +594,7 @@ func TestBuildMultiTrackExportArgs_NoKeyframesByteStable(t *testing.T) {
 			Exposure: fp(1), Contrast: fp(1.2), Saturation: fp(1), Temperature: fp(0), Tint: fp(0), Vibrance: fp(0),
 		}},
 	}
-	plan := StudioExportPlan{Inputs: []string{"/a.mp4"}, Video: []StudioExportVideoSeg{seg}, Width: 1920, Height: 1080, FPS: 30, Duration: 4}
+	plan := StudioExportPlan{Inputs: inputs("/a.mp4"), Video: []StudioExportVideoSeg{seg}, Width: 1920, Height: 1080, FPS: 30, Duration: 4}
 	fc := filterComplex(t, buildMultiTrackExportArgs(plan, "libx264", "", "", "/fontsdir", "/out.mp4"))
 	for _, marker := range []string{"@op", "@lume", "@lumb", "@lumv", "@lumq", "@ck", "@dsp", "@pan"} {
 		if strings.Contains(fc, marker) {
@@ -615,4 +615,13 @@ func TestBuildMultiTrackExportArgs_NoKeyframesByteStable(t *testing.T) {
 			t.Errorf("static chain missing %q: %s", want, fc)
 		}
 	}
+}
+
+// inputs builds plain (no per-input options) ExportInputs from paths.
+func inputs(paths ...string) []ExportInput {
+	out := make([]ExportInput, len(paths))
+	for i, p := range paths {
+		out[i] = ExportInput{Path: p}
+	}
+	return out
 }

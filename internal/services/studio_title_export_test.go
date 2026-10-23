@@ -57,7 +57,7 @@ func multiLayerTitle() *models.StudioTitle {
 // chain and overlay composite.
 func TestBuildExportArgs_TitleClipChain(t *testing.T) {
 	plan := StudioExportPlan{
-		Inputs: []string{"/a.mp4"},
+		Inputs: inputs("/a.mp4"),
 		Video: []StudioExportVideoSeg{
 			{InputIndex: 0, SourceIn: 0, SourceOut: 10, TimelineStart: 0, Opacity: 1, TrackIndex: 0},
 			titleSeg(multiLayerTitle()),

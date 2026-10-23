@@ -1328,7 +1328,7 @@ func (h *StudioHandler) runCaptionsJob(job *models.ConversionJob, projectID stri
 			pan = *r.Clip.Pan
 		}
 		idx := len(plan.Inputs)
-		plan.Inputs = append(plan.Inputs, localByKey[r.Asset.S3KeyOriginal])
+		plan.Inputs = append(plan.Inputs, services.ExportInput{Path: localByKey[r.Asset.S3KeyOriginal]})
 		plan.Audio = append(plan.Audio, services.StudioExportAudioSeg{
 			InputIndex: idx, SourceIn: r.Clip.SourceIn, SourceOut: r.Clip.SourceOut,
 			TimelineStart: r.Clip.TimelineStart, Volume: volume,

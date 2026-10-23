@@ -174,7 +174,7 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 		idx := -1
 		if r.Clip.Title == nil {
 			idx = len(plan.Inputs)
-			plan.Inputs = append(plan.Inputs, spec.LocalByKey[r.Asset.S3KeyOriginal])
+			plan.Inputs = append(plan.Inputs, ExportInput{Path: spec.LocalByKey[r.Asset.S3KeyOriginal]})
 		}
 		opacity := 1.0
 		if r.Clip.Opacity != nil {
