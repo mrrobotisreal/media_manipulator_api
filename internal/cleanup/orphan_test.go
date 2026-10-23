@@ -333,3 +333,29 @@ func TestTickRunsTheSweeperThenOrphans(t *testing.T) {
 		t.Error("the ledger sweeper deletes the expired tracked directory (enforce mode)")
 	}
 }
+
+type kindAwareOrphans struct{ asked [][]string }
+
+func (k *kindAwareOrphans) LiveLedgerLocators(_ context.Context, kinds, locators []string) (map[string]bool, error) {
+	k.asked = append(k.asked, kinds)
+	out := map[string]bool{}
+	for _, kind := range kinds {
+		if kind == retention.KindMetadata {
+			for _, l := range locators {
+				out[l] = true // a live parked metadata_report row exists for every candidate
+			}
+		}
+	}
+	return out, nil
+}
+
+// The kept-metadata directory (output_dir row already swept, parked
+// metadata_report row live) must not be reaped by the orphan walker.
+func TestOrphanWalkerKeepsDirectoriesTrackedByParkedMetadataRows(t *testing.T) {
+	outputs := t.TempDir()
+	dir := agedDir(t, outputs, "kept-metadata", 72*time.Hour)
+	enforcing(outputs, &kindAwareOrphans{}).tick(context.Background())
+	if !exists(dir) {
+		t.Fatal("outputs/<id> holding kept metadata reports must survive the orphan walker")
+	}
+}

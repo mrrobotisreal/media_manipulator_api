@@ -192,6 +192,94 @@ after changing them.
 | `S3_RESULT_PRESIGN_TTL_SECONDS` | `1800` (30 min) | Lifetime of the presigned GET URL handed back when a transcode finishes. |
 | `S3_RESULT_PREFIX` | `results` | Key prefix for transcode result tarballs. |
 
+#### 4.2.1 Retention sweeper and the S3 lifecycle backstop (MM23)
+
+**What deletes what.** Since MM23 the cleanup worker (same ticker, `CLEANUP_ENABLED`, `CLEANUP_INTERVAL_SECONDS`, default 15 min) does four things per tick, in this order:
+
+1. **Ledger sweeper** (primary). Deletes whatever `mm_retained_objects` says has expired (`expires_at < now() AND deleted_at IS NULL`, oldest first, `FOR UPDATE SKIP LOCKED`): job `uploads/<id>` and `outputs/<id>` directories, S3 objects plus their proxy / sprite / peaks derivatives (`DeleteObjects`, at most 1,000 keys per call), Darkroom assets and projects (database rows first, S3 keys after), `job_row` anonymization (keeps counts and timings, nulls the result key / file name / file-name-like options and the media-asset hashes) and `metadata_report` rows. It never acts without a ledger row and refuses any disk locator that is not a single path segment under `UPLOAD_DIR` / `OUTPUT_DIR`, and any S3 key outside the `videos/`, `S3_RESULT_PREFIX` (`results/`) and `CONTENT_STUDIO_S3_PREFIX` (`studio/`) prefixes.
+2. **Orphan walker** (safety net). The old mtime walker, now only for top-level entries with **no live ledger row**, at the global `UPLOAD_RETENTION_SECONDS` / `OUTPUT_RETENTION_SECONDS` (24 h) and `TEMP_RETENTION_SECONDS` (1 h). Entries the ledger tracks are never touched by it, whatever their age. If the ledger lookup fails the root is skipped for that tick. The `.mm-retention` marker is **no longer read**; a directory that still carries one is left alone for 30 days (the longest window old builds wrote), then treated as an ordinary orphan. Remove that guard (`legacyMarkerFile` in `internal/cleanup/worker.go`) once 31 days have passed.
+3. **`JobManager.CleanupOldJobs`** (`RETENTION_JOB_MAP_MAX_AGE_HOURS`, default 24) trims finished jobs from the in-memory map. Account history no longer depends on that map: it reads `mm_conversion_jobs` plus the ledger, so it survives restarts.
+4. **Postgres purges**, at most once an hour, 5,000 rows per statement: `mm_usage_counters` older than 400 days; `mm_safety_incidents` with `retention_until < now()` and `legal_hold = false`; raw IPs (`ip`, `cf_connecting_ip`, `x_forwarded_for`) set to NULL on `mm_api_requests` and `ip` on `mm_rate_limit_events` older than 90 days; `mm_cleanup_runs` older than 180 days (their path rows cascade); ledger rows that were stamped `deleted_at` more than 30 days ago.
+
+**Metadata reports (ADR-0010, proposal).** For a signed-in owner whose `delete_metadata_reports` is `false` (the default), sweeping an `output_dir` removes everything **except** `metadata.json` / `metadata.result.json`, after first writing a parked `metadata_report` ledger row (`keep_with_account = true`, `expires_at = 9999-12-31`). The account history "Metadata" button keeps working after the media is gone. Turning `delete_metadata_reports` on makes the hourly purge pass un-park those rows; the next sweep deletes the documents. Guests keep nothing. Mitch has not confirmed this default yet (design METADATA_INSPECTOR section 7 Q2); to change it, flip the default of `delete_metadata_reports` and the "keeps" branch in `Sweeper.preserveMetadata`.
+
+**Knobs** (all in `internal/config/config.go`):
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `RETENTION_SWEEP_DRY_RUN` | `true` | **Safety switch.** While true the sweeper, the orphan walker and the purges only count and log what they *would* delete (`mm_retention_would_delete_total{kind}`, `mm_cleanup_runs.properties`), and nothing is deleted or changed. Set `false` to enforce. `CLEANUP_DRY_RUN=true` (older flag) also forces dry run. |
+| `RETENTION_SWEEP_BATCH` | `200` | Ledger rows claimed per batch. |
+| `RETENTION_SWEEP_BUDGET_SECONDS` | `300` | Per-tick time budget; a bigger backlog continues next tick (`properties.truncated`). |
+| `RETENTION_MAX_ATTEMPTS` | `10` | After this many failed deletes a row is kept, never retried, logged at error and counted in `mm_retention_gave_up_total{kind}`. Backoff is 5 min x 2^attempts, capped at 6 h. A missing file / `NoSuchKey` counts as success. |
+| `RETENTION_JOB_MAP_MAX_AGE_HOURS` | `24` | In-memory job map trim age. |
+
+**Reading the audit.** One `mm_cleanup_runs` row per tick. `properties` is JSON: `dryRun`, `kinds.<kind>.{deleted,wouldDelete,errors,deferred,gaveUp,bytes}`, `backlogDue`, `gaveUp`, `truncated`, `purge.<rule>`, `orphanDirs`, `orphanFiles`. `mm_cleanup_deleted_paths` lists up to `CLEANUP_AUDIT_MAX_PATHS_PER_RUN` entries (`kind/locator`; dry-run rows carry `error_message = 'dry_run'`).
+
+```sql
+-- last 10 ticks, newest first
+SELECT started_at, status, deleted_dirs, deleted_files, deleted_bytes, error_message,
+       properties->>'dryRun' AS dry, properties->'kinds' AS kinds, properties->'purge' AS purge
+FROM mm_cleanup_runs ORDER BY started_at DESC LIMIT 10;
+
+-- rows the sweeper gave up on (need a human)
+SELECT id, kind, locator, attempts, delete_error, expires_at FROM mm_retained_objects
+WHERE deleted_at IS NULL AND expires_at < now() AND attempts >= 10;
+```
+
+Metrics: `mm_retention_swept_total{kind}`, `mm_retention_would_delete_total{kind}`, `mm_retention_sweep_errors_total{kind}`, `mm_retention_gave_up_total{kind}`, `mm_retention_backlog{state="due"|"gave_up"}`. The server analytics event `server_retention_swept {kind, countBucket}` is emitted once per kind per tick that deleted something (never in dry run); it is dropped today for lack of a visitor id, like the billing events.
+
+**Forcing a sweep.** There is no endpoint (MM24 adds inline sweeps for user deletes). To run one now: `sudo systemctl restart media-manipulator-api` (the worker runs a tick immediately at boot), or lower `CLEANUP_INTERVAL_SECONDS`. To make one row due: `UPDATE mm_retained_objects SET expires_at = now() - interval '1 minute', next_attempt_at = NULL WHERE id = '...';` then wait for a tick. To retry a given-up row: `UPDATE mm_retained_objects SET attempts = 0, next_attempt_at = NULL WHERE id = '...';`.
+
+**First deploy / rollout (read this before enabling).**
+
+1. Run migration `20261023005_add_retention_sweeper` (adds `next_attempt_at`, `keep_with_account` and indexes; deletes nothing). The `mm_api_requests` index builds under a write lock: pick a quiet minute, or pre-create it with `CREATE INDEX CONCURRENTLY IF NOT EXISTS mm_api_requests_ip_scrub_idx ON mm_api_requests(created_at) WHERE ip IS NOT NULL OR cf_connecting_ip IS NOT NULL OR x_forwarded_for IS NOT NULL;`.
+2. Deploy with the default `RETENTION_SWEEP_DRY_RUN=true`. Pre-MM22 data has no ledger rows, so the ledger sweeper has little to do at first; the orphan walker's dry-run output shows exactly which pre-existing directories it would remove at 24 h.
+3. After about a day, read `mm_cleanup_runs` (query above). Check `kinds`, `orphanDirs` and the `mm_cleanup_deleted_paths` sample against what you expect. If anything looks wrong, stop here.
+4. Enforce: set `RETENTION_SWEEP_DRY_RUN=false` **and** `CLEANUP_DRY_RUN=false`, restart. Watch `mm_retention_sweep_errors_total` and `mm_retention_gave_up_total` for the first hour.
+5. Rollback is flipping `RETENTION_SWEEP_DRY_RUN=true` and restarting. Deleted data is not recoverable (there are no backups of media).
+
+**S3 lifecycle backstop (a human step, not done by code).** The sweeper only deletes objects that have a ledger row. Anything uploaded before MM22, and anything whose registration failed (`mm_retention_register_failed_total`), has none, so S3 itself must expire it. Rule: prefixes `videos/`, `results/`, `studio/` (the prefix values of `S3_RESULT_PREFIX` and `CONTENT_STUDIO_S3_PREFIX`; adjust if you changed them) expire current versions 2 years + 7 days = **737 days** after creation, which is longer than the maximum 2-year user window plus a week of slack, so it never beats the sweeper for a ledgered object. Also abort incomplete multipart uploads after 7 days. Do not apply it to the whole bucket: `double-raven/`, `documents/`, `feedback/` and `chatlab/` belong to the Double Raven portal.
+
+Console steps (S3 console, us-west-2):
+
+1. S3 > Buckets > `media-manipulator` (your `S3_BUCKET`) > **Management** > **Lifecycle rules** > **Create lifecycle rule**.
+2. Rule name `mm-retention-backstop-videos`. Scope: **Limit the scope of this rule using one or more filters**, prefix `videos/`. Tick the acknowledgement.
+3. Lifecycle rule actions: tick **Expire current versions of objects** and **Delete incomplete multipart uploads**. (If the bucket is versioned also tick **Permanently delete noncurrent versions of objects** with 7 days.)
+4. Expire current versions: **737** days after object creation. Incomplete multipart uploads: **7** days.
+5. **Create rule**. Repeat for `results/` (`mm-retention-backstop-results`) and `studio/` (`mm-retention-backstop-studio`). If a rule already exists for a prefix, edit it instead.
+
+Equivalent JSON (`aws s3api put-bucket-lifecycle-configuration --bucket "$S3_BUCKET" --lifecycle-configuration file://lifecycle.json`; this REPLACES the bucket's whole lifecycle configuration, so merge with any existing rules first: `aws s3api get-bucket-lifecycle-configuration --bucket "$S3_BUCKET"`):
+
+```json
+{
+  "Rules": [
+    {
+      "ID": "mm-retention-backstop-videos",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "videos/" },
+      "Expiration": { "Days": 737 },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 7 }
+    },
+    {
+      "ID": "mm-retention-backstop-results",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "results/" },
+      "Expiration": { "Days": 737 },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 7 }
+    },
+    {
+      "ID": "mm-retention-backstop-studio",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "studio/" },
+      "Expiration": { "Days": 737 },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 7 }
+    }
+  ]
+}
+```
+
+Note: the earliest this rule deletes anything is 737 days after the oldest object, so it cannot hurt a recent upload; and because a user's maximum window is 2 years, it can only ever remove objects the ledger has already forgotten.
+
 ### 4.3 Whisper / transcription
 
 | Var | Default | Effect |
@@ -1196,7 +1284,7 @@ switch.
 
 ### 7.x Retention ledger and user retention setting (MM22)
 
-Retention is chosen by the user, not by tier: every signed-in account sets 24 h to 2 years (default 4320 h = 6 months) in `mm_user_settings`; guests are fixed at 24 h. `TIER_*_RETENTION_HOURS` no longer caps anything. Every producer of durable data (job `uploads/<jobId>/` and `outputs/<jobId>/` directories, S3 objects, Darkroom projects/assets) writes an `mm_retained_objects` row (`expires_at = created_at + window`) through `internal/retention.Register`; a failed write is logged as `retention_register_failed` and counted in `mm_retention_register_failed_total` and never fails the request. Routes: `GET/PATCH /api/account/settings` (`?dryRun=1`) and `GET /api/account/settings/preview?retentionHours=N`; changing the window re-stamps the caller's live rows with a floor of `now + 1h`. **Nothing is deleted yet** (the ledger-driven sweeper is MM23); the old mtime sweeper still runs and no longer reads `.mm-retention` markers for new jobs. **Deploy:** run migration `20261023004_add_user_settings_and_retained_objects` on the server before this build serves traffic (until then ledger writes fail, are metered, and settings routes answer 500).
+Retention is chosen by the user, not by tier: every signed-in account sets 24 h to 2 years (default 4320 h = 6 months) in `mm_user_settings`; guests are fixed at 24 h. `TIER_*_RETENTION_HOURS` no longer caps anything. Every producer of durable data (job `uploads/<jobId>/` and `outputs/<jobId>/` directories, S3 objects, Darkroom projects/assets) writes an `mm_retained_objects` row (`expires_at = created_at + window`) through `internal/retention.Register`; a failed write is logged as `retention_register_failed` and counted in `mm_retention_register_failed_total` and never fails the request. Routes: `GET/PATCH /api/account/settings` (`?dryRun=1`) and `GET /api/account/settings/preview?retentionHours=N`; changing the window re-stamps the caller's live rows with a floor of `now + 1h`. The ledger-driven sweeper (MM23, section 4.2.1) acts on `expires_at`; it ships in dry-run mode (`RETENTION_SWEEP_DRY_RUN=true`) until you turn enforcement on. **Deploy:** run migration `20261023004_add_user_settings_and_retained_objects` on the server before this build serves traffic (until then ledger writes fail, are metered, and settings routes answer 500).
 
 ## 8. GPU scheduling
 
@@ -1557,6 +1645,8 @@ sudo -u <api-user> /opt/creatv/whisper-ct2/bin/whisper-ctranslate2 --help | head
 ```
 
 ### 12.3 S3 sanity
+
+The S3 lifecycle backstop (a manual console step) and the retention sweeper's knobs live in section 4.2.1. Check the rules with `aws s3api get-bucket-lifecycle-configuration --bucket "$S3_BUCKET"`.
 
 ```bash
 aws s3 ls s3://$S3_BUCKET/videos/ --recursive --human-readable | tail

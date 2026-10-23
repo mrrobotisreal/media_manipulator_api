@@ -210,7 +210,10 @@ func (w *Worker) tick(ctx context.Context) {
 	}
 	sweeps := []sweepSpec{
 		{root: w.Cfg.UploadDir, retention: w.Cfg.UploadRetention, jobAware: true, kinds: []string{retention.KindUploadDir}},
-		{root: w.Cfg.OutputDir, retention: w.Cfg.OutputRetention, jobAware: true, kinds: []string{retention.KindOutputDir}},
+		{root: w.Cfg.OutputDir, retention: w.Cfg.OutputRetention, jobAware: true,
+			// A live metadata_report row also tracks outputs/<id>: it is the kept
+			// metadata*.json (ADR-0010) left after the output_dir row was swept.
+			kinds: []string{retention.KindOutputDir, retention.KindMetadata}},
 		{root: w.Cfg.TempDir, retention: w.Cfg.TempRetention, jobAware: false},
 	}
 	var orphanFiles, orphanDirs int64
