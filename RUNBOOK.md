@@ -1126,6 +1126,10 @@ switch.
 
 ---
 
+### 7.x Retention ledger and user retention setting (MM22)
+
+Retention is chosen by the user, not by tier: every signed-in account sets 24 h to 2 years (default 4320 h = 6 months) in `mm_user_settings`; guests are fixed at 24 h. `TIER_*_RETENTION_HOURS` no longer caps anything. Every producer of durable data (job `uploads/<jobId>/` and `outputs/<jobId>/` directories, S3 objects, Darkroom projects/assets) writes an `mm_retained_objects` row (`expires_at = created_at + window`) through `internal/retention.Register`; a failed write is logged as `retention_register_failed` and counted in `mm_retention_register_failed_total` and never fails the request. Routes: `GET/PATCH /api/account/settings` (`?dryRun=1`) and `GET /api/account/settings/preview?retentionHours=N`; changing the window re-stamps the caller's live rows with a floor of `now + 1h`. **Nothing is deleted yet** (the ledger-driven sweeper is MM23); the old mtime sweeper still runs and no longer reads `.mm-retention` markers for new jobs. **Deploy:** run migration `20261023004_add_user_settings_and_retained_objects` on the server before this build serves traffic (until then ledger writes fail, are metered, and settings routes answer 500).
+
 ## 8. GPU scheduling
 
 The `GPUScheduler` is a process-wide singleton (created on first call to
