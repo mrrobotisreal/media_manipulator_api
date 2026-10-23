@@ -457,7 +457,7 @@ func (s *Sweeper) deleteJobDir(ctx context.Context, row telemetry.LedgerRow, act
 		return fail(fmt.Errorf("refusing unsafe or unconfigured job directory locator for %s", row.Kind))
 	}
 	size := DirSize(path)
-	if row.Kind == KindOutputDir {
+	if row.Kind == KindOutputDir && !forceDelete(ctx) {
 		keep, err := s.preserveMetadata(ctx, row, path)
 		if err != nil {
 			return fail(err)
@@ -536,7 +536,7 @@ func (s *Sweeper) deleteJobRow(ctx context.Context, row telemetry.LedgerRow) out
 // is deleted. An ordinary row follows the owner's setting: keep means re-stamp to
 // account lifetime, otherwise delete the documents.
 func (s *Sweeper) deleteMetadata(ctx context.Context, row telemetry.LedgerRow) outcome {
-	if !row.KeepWithAccount && row.OwnerUserID != "" {
+	if !row.KeepWithAccount && row.OwnerUserID != "" && !forceDelete(ctx) {
 		keeps, err := s.store.OwnerKeepsMetadataReports(ctx, row.OwnerUserID)
 		if err != nil {
 			return fail(fmt.Errorf("read metadata setting: %w", err))

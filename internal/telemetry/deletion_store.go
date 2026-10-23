@@ -2,6 +2,8 @@ package telemetry
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -222,4 +224,162 @@ func (s *Store) DetachJob(ctx context.Context, jobID string) error {
 	defer cancel()
 	_, err := s.Pool.Exec(ctx, `UPDATE mm_conversion_jobs SET user_id = NULL, updated_at = now() WHERE job_id = $1::uuid`, jobID)
 	return err
+}
+
+// DetachUserJobs anonymizes every conversion job of a user in one transaction
+// (counts and timings stay; result key/name, file-name-like options and the
+// media assets' hashes/names go) and clears user_id so the rows leave the
+// account. Returns the number of job rows detached. Idempotent.
+func (s *Store) DetachUserJobs(ctx context.Context, userID string) (int64, error) {
+	if !s.Enabled() {
+		return 0, ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `
+UPDATE mm_media_assets SET original_filename_redacted = NULL, sha256 = NULL, perceptual_hash = NULL
+WHERE job_id IN (SELECT job_id FROM mm_conversion_jobs WHERE user_id = $1::uuid)`, userID); err != nil {
+		return 0, err
+	}
+	tag, err := tx.Exec(ctx, `
+UPDATE mm_conversion_jobs
+SET result_s3_key = NULL, result_file_name = NULL, result_expires_at = NULL,
+    options = options - $2::text[], user_id = NULL, updated_at = now()
+WHERE user_id = $1::uuid`, userID, anonymizeJobKeys)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), tx.Commit(ctx)
+}
+
+// DeleteUserProjects removes every Darkroom project row of a user (versions and
+// assets cascade explicitly) and returns the S3 keys the asset rows held, for
+// callers that must clean up projects the ledger never knew. Idempotent.
+func (s *Store) DeleteUserProjects(ctx context.Context, userID string) (int64, error) {
+	ids, err := s.UserProjectIDs(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	for _, id := range ids {
+		if _, err := s.DeleteStudioProjectRows(ctx, id); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+// DeleteUserSettingsAndGrants removes mm_user_settings and mm_tier_grants rows
+// of a user. Returns (settings, grants) row counts. Idempotent.
+func (s *Store) DeleteUserSettingsAndGrants(ctx context.Context, userID string) (settings, grants int64, err error) {
+	if !s.Enabled() {
+		return 0, 0, ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	t1, err := tx.Exec(ctx, `DELETE FROM mm_user_settings WHERE user_id = $1::uuid`, userID)
+	if err != nil {
+		return 0, 0, err
+	}
+	t2, err := tx.Exec(ctx, `DELETE FROM mm_tier_grants WHERE user_id = $1::uuid`, userID)
+	if err != nil {
+		return 0, 0, err
+	}
+	return t1.RowsAffected(), t2.RowsAffected(), tx.Commit(ctx)
+}
+
+// DeleteUserRow removes the mm_users row. It fails (FK, by design) while the
+// user still has undeleted ledger rows: ledger.owner_user_id has no ON DELETE
+// action so a forgotten sweep is a hard error, never orphaned files. Ledger rows
+// that are already stamped deleted are detached first (their audit value does
+// not need the user id). Returns whether a row was deleted.
+func (s *Store) DeleteUserRow(ctx context.Context, userID string) (bool, error) {
+	if !s.Enabled() {
+		return false, ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `UPDATE mm_retained_objects SET owner_user_id = NULL
+		WHERE owner_user_id = $1::uuid AND deleted_at IS NOT NULL AND owner_session_id IS NOT NULL`, userID); err != nil {
+		return false, err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM mm_retained_objects
+		WHERE owner_user_id = $1::uuid AND deleted_at IS NOT NULL`, userID); err != nil {
+		return false, err
+	}
+	tag, err := tx.Exec(ctx, `DELETE FROM mm_users WHERE id = $1::uuid`, userID)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, tx.Commit(ctx)
+}
+
+// LiveLedgerCount counts a user's undeleted ledger rows (the "did the sweep
+// finish" check before the mm_users row goes).
+func (s *Store) LiveLedgerCount(ctx context.Context, userID string) (int, error) {
+	if !s.Enabled() {
+		return 0, ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	var n int
+	err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM mm_retained_objects
+		WHERE owner_user_id = $1::uuid AND deleted_at IS NULL`, userID).Scan(&n)
+	return n, err
+}
+
+// --- tombstone ---------------------------------------------------------------
+
+// tombstoneSalt is fixed, like the limiter's and the quota's: the goal is that
+// the table holds no raw Firebase uid, not secrecy.
+const tombstoneSalt = "mm-account-deletion-uid-salt"
+
+// UIDHash is the tombstone key for a Firebase uid.
+func UIDHash(firebaseUID string) string {
+	sum := sha256.Sum256([]byte(tombstoneSalt + ":" + firebaseUID))
+	return hex.EncodeToString(sum[:])
+}
+
+// TombstoneWindow is how long a deleted account's tombstone is kept.
+const TombstoneWindow = 30 * 24 * time.Hour
+
+// WriteAccountTombstone records the deletion. Idempotent (a retry keeps the first time).
+func (s *Store) WriteAccountTombstone(ctx context.Context, firebaseUID string, now time.Time) error {
+	if !s.Enabled() {
+		return ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	_, err := s.Pool.Exec(ctx, `INSERT INTO mm_account_deletions (firebase_uid_hash, deleted_at)
+		VALUES ($1, $2) ON CONFLICT (firebase_uid_hash) DO NOTHING`, UIDHash(firebaseUID), now)
+	return err
+}
+
+// HasAccountTombstone reports whether this uid was deleted inside the window.
+func (s *Store) HasAccountTombstone(ctx context.Context, firebaseUID string, now time.Time) (bool, error) {
+	if !s.Enabled() {
+		return false, ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	var ok bool
+	err := s.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM mm_account_deletions
+		WHERE firebase_uid_hash = $1 AND deleted_at > $2)`, UIDHash(firebaseUID), now.Add(-TombstoneWindow)).Scan(&ok)
+	return ok, err
 }

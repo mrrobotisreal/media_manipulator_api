@@ -65,7 +65,7 @@ func Cutoff(rule string, now time.Time) time.Time {
 		return day(RawIPRetentionDays)
 	case telemetry.PurgeCleanupRuns:
 		return day(CleanupRunRetentionDays)
-	case telemetry.PurgeLedgerDeleted:
+	case telemetry.PurgeLedgerDeleted, telemetry.PurgeAccountDeletes:
 		return day(LedgerAuditRetentionDays)
 	}
 	return time.Time{}

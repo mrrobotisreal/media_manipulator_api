@@ -24,6 +24,16 @@ type ExpireStore interface {
 	PendingByIDs(ctx context.Context, ids []string) (int, error)
 }
 
+type forceKey struct{}
+
+// forceDelete reports whether ctx belongs to a user-initiated delete: then the
+// "keep metadata reports past file expiry" default (ADR-0010) does not apply,
+// because the user asked for the files, and everything about them, to go.
+func forceDelete(ctx context.Context) bool {
+	v, _ := ctx.Value(forceKey{}).(bool)
+	return v
+}
+
 // ErrNoExpire is returned when the sweeper's store cannot expire rows.
 var ErrNoExpire = errors.New("retention: store does not support inline expiry")
 
@@ -56,6 +66,7 @@ func (s *Sweeper) ExpireNow(ctx context.Context, f telemetry.LedgerFilter) (Expi
 	if len(ids) == 0 {
 		return out, nil
 	}
+	ctx = context.WithValue(ctx, forceKey{}, true)
 	res := &Result{PerKind: map[string]*KindResult{}}
 	deadline := s.now().Add(ExpireBudget)
 	batch := s.cfg.Batch

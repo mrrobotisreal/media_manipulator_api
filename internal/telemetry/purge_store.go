@@ -18,6 +18,7 @@ const (
 	PurgeRateLimitIPs   = "rate_limit_ips"
 	PurgeCleanupRuns    = "cleanup_runs"
 	PurgeLedgerDeleted  = "ledger_deleted"
+	PurgeAccountDeletes = "account_deletions"
 )
 
 type purgeRule struct {
@@ -42,11 +43,13 @@ var purgeRules = map[string]purgeRule{
 	PurgeCleanupRuns: {table: "mm_cleanup_runs", where: "started_at < $1"},
 	// cutoff = now - 30 d: audit rows of already-deleted ledger entries.
 	PurgeLedgerDeleted: {table: "mm_retained_objects", where: "deleted_at IS NOT NULL AND deleted_at < $1"},
+	// cutoff = now - 30 d: MM24 account-deletion tombstones.
+	PurgeAccountDeletes: {table: "mm_account_deletions", where: "deleted_at < $1"},
 }
 
 // PurgeRuleNames lists the rules in the order the purger runs them.
 func PurgeRuleNames() []string {
-	return []string{PurgeUsageCounters, PurgeSafetyIncident, PurgeAPIRequestIPs, PurgeRateLimitIPs, PurgeCleanupRuns, PurgeLedgerDeleted}
+	return []string{PurgeUsageCounters, PurgeSafetyIncident, PurgeAPIRequestIPs, PurgeRateLimitIPs, PurgeCleanupRuns, PurgeLedgerDeleted, PurgeAccountDeletes}
 }
 
 func purgeSQL(r purgeRule) string {

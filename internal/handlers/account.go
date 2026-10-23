@@ -50,6 +50,16 @@ type AccountHandler struct {
 	// billing, when attached, has its /billing/* routes mounted by
 	// RegisterAccountRoutes (MM17). Kept here so cmd/api wiring stays one line.
 	billing *BillingHandler
+	// data serves the MM24 account-wide data routes (delete-all, export, revoke,
+	// account deletion). nil = not mounted.
+	data *AccountDataHandler
+}
+
+// SetAccountData attaches the MM24 account data routes (nil = none mounted).
+func (h *AccountHandler) SetAccountData(d *AccountDataHandler) {
+	if h != nil {
+		h.data = d
+	}
 }
 
 // SetBilling attaches the billing routes (nil = none mounted).
@@ -665,6 +675,9 @@ func RegisterAccountRoutes(rg *gin.RouterGroup, h *AccountHandler, cfg *config.C
 		authed.GET("/settings", settings.Get)
 		authed.PATCH("/settings", settings.Patch)
 		authed.GET("/settings/preview", settings.Preview)
+		if h.data != nil {
+			h.data.Register(account, authed)
+		}
 	}
 }
 

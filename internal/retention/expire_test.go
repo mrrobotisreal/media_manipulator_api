@@ -171,3 +171,21 @@ func TestExpireNowRefusesEmptyFilterAndExpiresParkedMetadata(t *testing.T) {
 		t.Error("parked metadata file must be removed")
 	}
 }
+
+func TestExpireNowDeletesMetadataReportsEvenWhenOwnerKeepsThem(t *testing.T) {
+	e := newSweepEnv(t)
+	e.db.keepMeta[user1] = true // the default: keep reports past file expiry
+	dir := e.jobDir(e.outputs, "job-k", "converted.png", "metadata.json")
+	e.db.add(telemetry.LedgerRow{Kind: KindOutputDir, Locator: "job-k", JobID: "job-k", OwnerUserID: user1, ExpiresAt: sweepT0.Add(time.Hour)})
+
+	res, err := e.sweeper().ExpireNow(context.Background(), telemetry.LedgerFilter{JobID: "job-k"})
+	if err != nil || res.Pending != 0 {
+		t.Fatalf("%v %+v", err, res)
+	}
+	if exists(dir) {
+		t.Error("a user delete removes the whole directory, metadata report included")
+	}
+	if len(e.db.parked) != 0 {
+		t.Errorf("nothing may be parked by a user delete: %v", e.db.parked)
+	}
+}
