@@ -52,3 +52,20 @@ func FilterCountBucket(n int) string {
 		return "100+"
 	}
 }
+
+// CountBucket buckets a "how many" for server_retention_swept: "1", "2-9",
+// "10-99", "100+". Zero reports "0" (never emitted, but total).
+func CountBucket(n int) string {
+	switch {
+	case n <= 0:
+		return "0"
+	case n == 1:
+		return "1"
+	case n <= 9:
+		return "2-9"
+	case n <= 99:
+		return "10-99"
+	default:
+		return "100+"
+	}
+}

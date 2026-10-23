@@ -498,3 +498,127 @@ func nonEmpty(vals ...string) []string {
 	}
 	return out
 }
+
+// JobHasLiveRows reports whether any non-metadata ledger row of the job is
+// still live. The sweeper anonymizes a job's database row only once every file
+// it names is gone.
+func (s *Store) JobHasLiveRows(ctx context.Context, jobID string) (bool, error) {
+	if !s.Enabled() {
+		return false, ErrNoStore
+	}
+	if strings.TrimSpace(jobID) == "" {
+		return false, nil
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	var live bool
+	err := s.Pool.QueryRow(ctx, `
+SELECT EXISTS (SELECT 1 FROM mm_retained_objects
+	WHERE job_id = $1::uuid AND deleted_at IS NULL AND kind <> 'metadata_report')`, jobID).Scan(&live)
+	return live, err
+}
+
+// JobLedgerEntry is the slice of a ledger row account history needs.
+type JobLedgerEntry struct {
+	ID              string
+	Kind            string
+	Locator         string
+	JobID           string
+	CreatedAt       time.Time
+	ExpiresAt       time.Time
+	DeletedAt       *time.Time
+	KeepWithAccount bool
+}
+
+// LedgerForJobs returns every result-bearing ledger row (output dir, S3 object,
+// parked metadata) for the given jobs, deleted ones included, so history can say
+// "expired" truthfully after the sweeper ran.
+func (s *Store) LedgerForJobs(ctx context.Context, jobIDs []string) ([]JobLedgerEntry, error) {
+	if !s.Enabled() {
+		return nil, ErrNoStore
+	}
+	if len(jobIDs) == 0 {
+		return nil, nil
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	rows, err := s.Pool.Query(ctx, `
+SELECT id::text, kind, locator, job_id::text, created_at, expires_at, deleted_at, keep_with_account
+FROM mm_retained_objects
+WHERE job_id = ANY($1::uuid[]) AND kind IN ('output_dir', 's3_object', 'metadata_report')`, jobIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []JobLedgerEntry
+	for rows.Next() {
+		var e JobLedgerEntry
+		if err := rows.Scan(&e.ID, &e.Kind, &e.Locator, &e.JobID, &e.CreatedAt, &e.ExpiresAt, &e.DeletedAt, &e.KeepWithAccount); err != nil {
+			return out, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// PurgeLedgerDeleted removes audit rows whose deletion is older than cutoff.
+func (s *Store) PurgeLedgerDeleted(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
+	return s.purge(ctx, `
+DELETE FROM mm_retained_objects WHERE ctid IN (
+	SELECT ctid FROM mm_retained_objects WHERE deleted_at IS NOT NULL AND deleted_at < $1 LIMIT $2)`, cutoff, limit)
+}
+
+func (s *Store) purge(ctx context.Context, sql string, args ...any) (int64, error) {
+	if !s.Enabled() {
+		return 0, ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	tag, err := s.Pool.Exec(ctx, sql, args...)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// Postgres purges (MM23 decision 6). Each statement takes one bounded batch and
+// the caller loops until it returns fewer rows than the limit. All of them are
+// pure functions of a cutoff, so a repeat is a no-op.
+
+// PurgeUsageCounters deletes mm_usage_counters rows older than cutoffDay.
+func (s *Store) PurgeUsageCounters(ctx context.Context, cutoffDay time.Time, limit int) (int64, error) {
+	return s.purge(ctx, `
+DELETE FROM mm_usage_counters WHERE id IN (
+	SELECT id FROM mm_usage_counters WHERE day < $1::date LIMIT $2)`, cutoffDay, limit)
+}
+
+// PurgeSafetyIncidents deletes incidents past retention_until unless on legal hold.
+func (s *Store) PurgeSafetyIncidents(ctx context.Context, now time.Time, limit int) (int64, error) {
+	return s.purge(ctx, `
+DELETE FROM mm_safety_incidents WHERE safety_incident_id IN (
+	SELECT safety_incident_id FROM mm_safety_incidents
+	WHERE retention_until IS NOT NULL AND retention_until < $1 AND legal_hold = false LIMIT $2)`, now, limit)
+}
+
+// ScrubRequestIPs nulls raw addresses on old mm_api_requests rows.
+func (s *Store) ScrubRequestIPs(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
+	return s.purge(ctx, `
+UPDATE mm_api_requests SET ip = NULL, cf_connecting_ip = NULL, x_forwarded_for = NULL WHERE ctid IN (
+	SELECT ctid FROM mm_api_requests
+	WHERE created_at < $1 AND (ip IS NOT NULL OR cf_connecting_ip IS NOT NULL OR x_forwarded_for IS NOT NULL)
+	LIMIT $2)`, cutoff, limit)
+}
+
+// ScrubRateLimitIPs nulls raw addresses on old mm_rate_limit_events rows.
+func (s *Store) ScrubRateLimitIPs(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
+	return s.purge(ctx, `
+UPDATE mm_rate_limit_events SET ip = NULL WHERE ctid IN (
+	SELECT ctid FROM mm_rate_limit_events WHERE created_at < $1 AND ip IS NOT NULL LIMIT $2)`, cutoff, limit)
+}
+
+// PurgeCleanupRuns deletes audit runs older than cutoff (paths cascade).
+func (s *Store) PurgeCleanupRuns(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
+	return s.purge(ctx, `
+DELETE FROM mm_cleanup_runs WHERE cleanup_run_id IN (
+	SELECT cleanup_run_id FROM mm_cleanup_runs WHERE started_at < $1 LIMIT $2)`, cutoff, limit)
+}

@@ -51,3 +51,12 @@ const (
 	ServerSubscriptionCancelled     = "server_subscription_cancelled"
 	ServerSubscriptionPaymentFailed = "server_subscription_payment_failed"
 )
+
+// Retention (MM23). Emitted by the ledger sweeper once per kind per tick that
+// deleted anything: {kind, countBucket}. The analytics-side catalog entry is
+// MM26's. KNOWN LIMIT (same as the MM17 billing events): a background sweeper has
+// no browser, hence no visitor/session UUIDs, and Emit drops identity-less events
+// on purpose, so until the analytics service accepts a server identity this is
+// counted as skipped_no_identity; the Prometheus counters and mm_cleanup_runs
+// are the durable record.
+const ServerRetentionSwept = "server_retention_swept"
