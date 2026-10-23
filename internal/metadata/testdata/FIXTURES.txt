@@ -1,0 +1,28 @@
+MM07 fixtures
+=============
+
+All three fixtures below are HAND-AUTHORED from catalog tag names. They are
+not real exiftool/ffprobe output (key quoting, "(Binary data N bytes, ...)"
+wording and value formatting may differ). Replace them with real output
+generated on the server (exiftool 12.x+, ffprobe 7.x) using the commands below,
+then regenerate the goldens with:
+
+    go test ./internal/metadata -update
+
+Layout per fixture dir: exiftool.json (pass 1), exiftool.n.json (pass 2, optional),
+ffprobe.json (video/audio only), want.json (golden MetadataDocument).
+
+jpeg-gps-xmp  (a phone JPEG with GPS, XMP, ICC and an IFD1 thumbnail)
+  exiftool -json -G1 -s -a -struct -api largefilesupport=1 sample.jpg > exiftool.json
+  exiftool -json -G1 -s -a -n -GPS:all -Composite:GPSPosition -Composite:GPSLatitude -Composite:GPSLongitude -ExposureTime -ShutterSpeedValue -ApertureValue -FNumber -FocalLength -ExposureCompensation -BrightnessValue sample.jpg > exiftool.n.json
+  Must contain both IFD0:ModifyDate and XMP-xmp:ModifyDate.
+
+mp4-quicktime-keys  (an iPhone .mov with Keys, a rotated video stream, audio, one chapter)
+  exiftool -json -G1 -s -a -struct -api largefilesupport=1 clip.mov > exiftool.json
+  ffprobe -v error -print_format json -show_format -show_streams -show_chapters -show_program_version clip.mov > ffprobe.json
+
+pdf-info-xmp  (a PDF with Info dictionary and XMP)
+  exiftool -json -G1 -s -a -struct -api largefilesupport=1 report.pdf > exiftool.json
+
+Notes: the tests feed these through a fake Runner, so the "SourceFile" and
+File:Directory values are ignored/skipped. Real output has the same keys.

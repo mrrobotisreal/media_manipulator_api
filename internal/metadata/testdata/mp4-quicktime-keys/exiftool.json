@@ -1,0 +1,22 @@
+[{
+  "SourceFile": "/tmp/mm_upload/clip.mov",
+  "ExifTool:ExifToolVersion": 12.76,
+  "File:FileName": "clip.mov",
+  "File:Directory": "/tmp/mm_upload",
+  "File:FileSize": "18 MB",
+  "File:FileType": "MOV",
+  "File:MIMEType": "video/quicktime",
+  "QuickTime:MajorBrand": "Apple QuickTime (.MOV/QT)",
+  "QuickTime:MovieHeaderVersion": 0,
+  "QuickTime:CreateDate": "2026:09:30 16:42:00",
+  "QuickTime:Duration": "4.00 s",
+  "Keys:Make": "Apple",
+  "Keys:Model": "iPhone 15 Pro",
+  "Keys:Software": "17.4.1",
+  "Keys:CreationDate": "2026:09:30 18:42:00+02:00",
+  "Keys:com.apple.quicktime.make": "Apple",
+  "Keys:GPSCoordinates": "48.8582, 2.2945, 35.2",
+  "Track1:HandlerDescription": "Core Media Video",
+  "Track2:HandlerDescription": "Core Media Audio",
+  "Composite:Rotation": 90
+}]

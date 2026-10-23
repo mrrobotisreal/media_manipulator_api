@@ -1,0 +1,12 @@
+[{
+  "SourceFile": "/tmp/mm_upload/IMG_0001.jpg",
+  "ExifIFD:ExposureTime": 0.008333333333,
+  "ExifIFD:FNumber": 1.8,
+  "ExifIFD:FocalLength": 6.9,
+  "GPS:GPSLatitudeRef": "N",
+  "GPS:GPSLatitude": 48.858222,
+  "GPS:GPSLongitudeRef": "E",
+  "GPS:GPSLongitude": 2.294500,
+  "GPS:GPSAltitude": 35.2,
+  "Composite:GPSPosition": "48.858222 2.2945"
+}]

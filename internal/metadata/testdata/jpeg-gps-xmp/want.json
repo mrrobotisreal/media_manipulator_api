@@ -1,0 +1,283 @@
+{
+  "schemaVersion": 1,
+  "file": {
+    "name": "IMG_0001.jpg",
+    "sizeBytes": 0,
+    "mime": "",
+    "kind": "image"
+  },
+  "tools": [
+    "exiftool 12.76"
+  ],
+  "entries": [
+    {
+      "id": "File:FileName",
+      "group": "File",
+      "tag": "FileName",
+      "value": "IMG_0001.jpg",
+      "category": "other"
+    },
+    {
+      "id": "File:FileSize",
+      "group": "File",
+      "tag": "FileSize",
+      "value": "2.1 MB",
+      "category": "other"
+    },
+    {
+      "id": "File:FileModifyDate",
+      "group": "File",
+      "tag": "FileModifyDate",
+      "value": "2026:10:01 09:15:00+00:00",
+      "category": "other"
+    },
+    {
+      "id": "File:FileType",
+      "group": "File",
+      "tag": "FileType",
+      "value": "JPEG",
+      "category": "other"
+    },
+    {
+      "id": "File:FileTypeExtension",
+      "group": "File",
+      "tag": "FileTypeExtension",
+      "value": "jpg",
+      "category": "other"
+    },
+    {
+      "id": "File:MIMEType",
+      "group": "File",
+      "tag": "MIMEType",
+      "value": "image/jpeg",
+      "category": "other"
+    },
+    {
+      "id": "IFD0:Make",
+      "group": "IFD0",
+      "tag": "Make",
+      "value": "Apple",
+      "category": "other"
+    },
+    {
+      "id": "IFD0:Model",
+      "group": "IFD0",
+      "tag": "Model",
+      "value": "iPhone 15 Pro",
+      "category": "other"
+    },
+    {
+      "id": "IFD0:Orientation",
+      "group": "IFD0",
+      "tag": "Orientation",
+      "value": "Rotate 90 CW",
+      "category": "other"
+    },
+    {
+      "id": "IFD0:Software",
+      "group": "IFD0",
+      "tag": "Software",
+      "value": "17.4.1",
+      "category": "other"
+    },
+    {
+      "id": "IFD0:ModifyDate",
+      "group": "IFD0",
+      "tag": "ModifyDate",
+      "value": "2026:09:30 18:42:11",
+      "category": "other"
+    },
+    {
+      "id": "ExifIFD:ExposureTime",
+      "group": "ExifIFD",
+      "tag": "ExposureTime",
+      "value": "1/120",
+      "rawValue": 0.008333333333,
+      "category": "other"
+    },
+    {
+      "id": "ExifIFD:FNumber",
+      "group": "ExifIFD",
+      "tag": "FNumber",
+      "value": 1.8,
+      "category": "other"
+    },
+    {
+      "id": "ExifIFD:ISO",
+      "group": "ExifIFD",
+      "tag": "ISO",
+      "value": 80,
+      "category": "other"
+    },
+    {
+      "id": "ExifIFD:DateTimeOriginal",
+      "group": "ExifIFD",
+      "tag": "DateTimeOriginal",
+      "value": "2026:09:30 18:42:10",
+      "category": "other"
+    },
+    {
+      "id": "ExifIFD:FocalLength",
+      "group": "ExifIFD",
+      "tag": "FocalLength",
+      "value": "6.9 mm",
+      "rawValue": 6.9,
+      "category": "other"
+    },
+    {
+      "id": "ExifIFD:LensModel",
+      "group": "ExifIFD",
+      "tag": "LensModel",
+      "value": "iPhone 15 Pro back triple camera 6.765mm f/1.78",
+      "category": "other"
+    },
+    {
+      "id": "ExifIFD:BodySerialNumber",
+      "group": "ExifIFD",
+      "tag": "BodySerialNumber",
+      "value": "F2LXXXXXXXX",
+      "category": "other"
+    },
+    {
+      "id": "GPS:GPSLatitudeRef",
+      "group": "GPS",
+      "tag": "GPSLatitudeRef",
+      "value": "North",
+      "rawValue": "N",
+      "category": "other"
+    },
+    {
+      "id": "GPS:GPSLatitude",
+      "group": "GPS",
+      "tag": "GPSLatitude",
+      "value": "48 deg 51' 29.60\" N",
+      "rawValue": 48.858222,
+      "category": "other"
+    },
+    {
+      "id": "GPS:GPSLongitudeRef",
+      "group": "GPS",
+      "tag": "GPSLongitudeRef",
+      "value": "East",
+      "rawValue": "E",
+      "category": "other"
+    },
+    {
+      "id": "GPS:GPSLongitude",
+      "group": "GPS",
+      "tag": "GPSLongitude",
+      "value": "2 deg 17' 40.20\" E",
+      "rawValue": 2.294500,
+      "category": "other"
+    },
+    {
+      "id": "GPS:GPSAltitude",
+      "group": "GPS",
+      "tag": "GPSAltitude",
+      "value": "35.2 m Above Sea Level",
+      "rawValue": 35.2,
+      "category": "other"
+    },
+    {
+      "id": "XMP-xmp:CreatorTool",
+      "group": "XMP-xmp",
+      "tag": "CreatorTool",
+      "value": "17.4.1",
+      "category": "other"
+    },
+    {
+      "id": "XMP-xmp:ModifyDate",
+      "group": "XMP-xmp",
+      "tag": "ModifyDate",
+      "value": "2026:09:30 18:42:11+02:00",
+      "category": "other"
+    },
+    {
+      "id": "XMP-dc:Subject",
+      "group": "XMP-dc",
+      "tag": "Subject",
+      "value": [
+        "paris",
+        "trip"
+      ],
+      "category": "other"
+    },
+    {
+      "id": "XMP-xmpMM:History",
+      "group": "XMP-xmpMM",
+      "tag": "History",
+      "value": [
+        {
+          "Action": "saved",
+          "SoftwareAgent": "Photos 9.0"
+        },
+        {
+          "Action": "converted",
+          "Parameters": "from image/heic to image/jpeg"
+        }
+      ],
+      "category": "other"
+    },
+    {
+      "id": "ICC-header:ProfileCMMType",
+      "group": "ICC-header",
+      "tag": "ProfileCMMType",
+      "value": "Apple Computer Inc.",
+      "category": "other"
+    },
+    {
+      "id": "ICC_Profile:ProfileDescription",
+      "group": "ICC_Profile",
+      "tag": "ProfileDescription",
+      "value": "Display P3",
+      "category": "other"
+    },
+    {
+      "id": "IFD1:ThumbnailOffset",
+      "group": "IFD1",
+      "tag": "ThumbnailOffset",
+      "value": 1234,
+      "category": "other"
+    },
+    {
+      "id": "IFD1:ThumbnailLength",
+      "group": "IFD1",
+      "tag": "ThumbnailLength",
+      "value": 5120,
+      "category": "other"
+    },
+    {
+      "id": "IFD1:ThumbnailImage",
+      "group": "IFD1",
+      "tag": "ThumbnailImage",
+      "value": {
+        "bytes": 5120
+      },
+      "binary": true,
+      "category": "other"
+    },
+    {
+      "id": "Composite:GPSPosition",
+      "group": "Composite",
+      "tag": "GPSPosition",
+      "value": "48 deg 51' 29.60\" N, 2 deg 17' 40.20\" E",
+      "rawValue": "48.858222 2.2945",
+      "category": "other"
+    },
+    {
+      "id": "Composite:ImageSize",
+      "group": "Composite",
+      "tag": "ImageSize",
+      "value": "4032x3024",
+      "category": "other"
+    },
+    {
+      "id": "Composite:Megapixels",
+      "group": "Composite",
+      "tag": "Megapixels",
+      "value": 12.2,
+      "category": "other"
+    }
+  ],
+  "warnings": []
+}

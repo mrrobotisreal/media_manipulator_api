@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "file": {
+    "name": "report.pdf",
+    "sizeBytes": 0,
+    "mime": "",
+    "kind": "document"
+  },
+  "tools": [
+    "exiftool 12.76"
+  ],
+  "entries": [
+    {
+      "id": "File:FileName",
+      "group": "File",
+      "tag": "FileName",
+      "value": "report.pdf",
+      "category": "other"
+    },
+    {
+      "id": "File:FileType",
+      "group": "File",
+      "tag": "FileType",
+      "value": "PDF",
+      "category": "other"
+    },
+    {
+      "id": "File:MIMEType",
+      "group": "File",
+      "tag": "MIMEType",
+      "value": "application/pdf",
+      "category": "other"
+    },
+    {
+      "id": "PDF:PDFVersion",
+      "group": "PDF",
+      "tag": "PDFVersion",
+      "value": 1.7,
+      "category": "other"
+    },
+    {
+      "id": "PDF:Linearized",
+      "group": "PDF",
+      "tag": "Linearized",
+      "value": "No",
+      "category": "other"
+    },
+    {
+      "id": "PDF:PageCount",
+      "group": "PDF",
+      "tag": "PageCount",
+      "value": 12,
+      "category": "other"
+    },
+    {
+      "id": "PDF:Author",
+      "group": "PDF",
+      "tag": "Author",
+      "value": "Jane Q. Writer",
+      "category": "other"
+    },
+    {
+      "id": "PDF:Creator",
+      "group": "PDF",
+      "tag": "Creator",
+      "value": "Microsoft Word",
+      "category": "other"
+    },
+    {
+      "id": "PDF:Producer",
+      "group": "PDF",
+      "tag": "Producer",
+      "value": "Microsoft: Print To PDF",
+      "category": "other"
+    },
+    {
+      "id": "PDF:CreateDate",
+      "group": "PDF",
+      "tag": "CreateDate",
+      "value": "2026:08:01 10:00:00+02:00",
+      "category": "other"
+    },
+    {
+      "id": "XMP-pdf:Producer",
+      "group": "XMP-pdf",
+      "tag": "Producer",
+      "value": "Microsoft: Print To PDF",
+      "category": "other"
+    },
+    {
+      "id": "XMP-xmp:CreatorTool",
+      "group": "XMP-xmp",
+      "tag": "CreatorTool",
+      "value": "Microsoft Word",
+      "category": "other"
+    },
+    {
+      "id": "XMP-xmp:CreateDate",
+      "group": "XMP-xmp",
+      "tag": "CreateDate",
+      "value": "2026:08:01 10:00:00+02:00",
+      "category": "other"
+    },
+    {
+      "id": "XMP-xmp:ModifyDate",
+      "group": "XMP-xmp",
+      "tag": "ModifyDate",
+      "value": "2026:08:01 10:05:00+02:00",
+      "category": "other"
+    },
+    {
+      "id": "XMP-xmpMM:DocumentID",
+      "group": "XMP-xmpMM",
+      "tag": "DocumentID",
+      "value": "uuid:5a0b7c1e-0000-4000-8000-000000000001",
+      "category": "other"
+    }
+  ],
+  "warnings": [
+    "exiftool numeric pass failed: Error: no fixture exiftool.n.json"
+  ]
+}
