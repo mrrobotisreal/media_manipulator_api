@@ -530,4 +530,11 @@ func RegisterAccountRoutes(rg *gin.RouterGroup, h *AccountHandler, cfg *config.C
 	authed.POST("/sync", h.Sync)
 	authed.GET("/me", h.Me)
 	authed.GET("/history", h.History)
+
+	// MM22: per-user retention. Register the preview before the bare path is
+	// fine in gin; both are exact matches.
+	settings := NewSettingsHandler(h.store, h.logger)
+	authed.GET("/settings", settings.Get)
+	authed.PATCH("/settings", settings.Patch)
+	authed.GET("/settings/preview", settings.Preview)
 }
