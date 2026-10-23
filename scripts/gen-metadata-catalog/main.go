@@ -39,8 +39,10 @@ var sectionCategory = map[string]string{
 	"2.21": "composite", "2.22": "other",
 }
 
-// unverifiedSections ship flagged unverified (catalog "Confidence notes").
-var unverifiedSections = map[string]bool{"2.1": true, "2.12": true, "2.22": true}
+// unverifiedSections ship every row flagged unverified (catalog "Confidence
+// notes"). Empty since MM12 verified 2.1 and 2.12 against fetched pages; 2.22 is
+// guidance prose and emits no rows. Individual dagger rows still flag themselves.
+var unverifiedSections = map[string]bool{}
 
 // guidanceSections hold prose rows, not tag names; they produce no rows.
 var guidanceSections = map[string]bool{"2.22": true}
