@@ -123,3 +123,20 @@ func TestPurgerReportsUnparkedMetadata(t *testing.T) {
 		t.Errorf("got %v", got)
 	}
 }
+
+func TestAccountTombstonesPurgedAfterThirtyDays(t *testing.T) {
+	now := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
+	got := Cutoff(telemetry.PurgeAccountDeletes, now)
+	if want := now.AddDate(0, 0, -30); !got.Equal(want) {
+		t.Errorf("cutoff %v want %v", got, want)
+	}
+	found := false
+	for _, r := range telemetry.PurgeRuleNames() {
+		if r == telemetry.PurgeAccountDeletes {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the purger must run the account_deletions rule")
+	}
+}

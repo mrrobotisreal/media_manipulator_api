@@ -128,7 +128,7 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.GET("/job/:jobId/metadata/diff", h.GetJobMetadataDiff)
 	r.GET("/job/:jobId/metadata/binary/:entryId", h.GetJobMetadataBinary)
 	r.GET("/download/:jobId", h.DownloadFile)
-	if h.data != nil {
+	if h != nil && h.data != nil {
 		// MM24: owner-scoped deletion and "keep longer".
 		r.DELETE("/jobs/:jobId", h.data.DeleteJob)
 		r.PATCH("/jobs/:jobId/retention", h.data.KeepJobLonger)

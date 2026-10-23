@@ -25,12 +25,14 @@ type FakeClient struct {
 	CheckoutErr       error
 	PortalErr         error
 	GetSubErr         error
+	CancelErr         error // MM24
 
 	// Recorded calls.
 	CustomersCreated int
 	CheckoutCalls    []CheckoutRequest
 	PortalCalls      []string
 	GetSubCalls      []string
+	CancelCalls      []string // MM24
 
 	customers map[string]string // user id -> customer id (idempotency key semantics)
 }

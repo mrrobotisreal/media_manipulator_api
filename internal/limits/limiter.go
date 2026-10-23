@@ -335,3 +335,15 @@ func (l *Limiter) HashIP(ip string) string {
 	}
 	return l.hash(strings.TrimSpace(ip))
 }
+
+// AllowWindow is a generic fixed-window check for callers outside the HTTP
+// middleware chain (MM24 export: 3 per hour per user). key must not contain a
+// raw IP. With Redis unavailable or the limiter disabled it allows, like every
+// other bucket here; callers that need a hard cap layer their own.
+func (l *Limiter) AllowWindow(ctx context.Context, key string, limit int, window time.Duration) (allowed bool, retryAfterSeconds int) {
+	if !l.Enabled() || limit <= 0 {
+		return true, 0
+	}
+	d := l.fixedWindow(ctx, keyPrefix+key, limit, window)
+	return d.Allowed, d.RetryAfterSeconds
+}

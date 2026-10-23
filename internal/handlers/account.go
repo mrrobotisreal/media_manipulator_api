@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -53,7 +54,38 @@ type AccountHandler struct {
 	// data serves the MM24 account-wide data routes (delete-all, export, revoke,
 	// account deletion). nil = not mounted.
 	data *AccountDataHandler
+	// tombstones overrides the store for the sign-in tombstone check (tests).
+	tombstones tombstoneChecker
 }
+
+// tombstoneChecker is the store slice the sign-in check needs.
+type tombstoneChecker interface {
+	HasAccountTombstone(ctx context.Context, firebaseUID string, now time.Time) (bool, error)
+}
+
+// tombstoned reports whether this Firebase uid was deleted in the last 30 days.
+// A lookup failure FAILS CLOSED (no claim): skipping a claim is recoverable at
+// the next sync, resurrecting a deleted account's rows is not.
+func (h *AccountHandler) tombstoned(ctx context.Context, uid string) bool {
+	var tc tombstoneChecker = h.tombstones
+	if tc == nil && h.store != nil {
+		tc = h.store
+	}
+	if tc == nil {
+		return false
+	}
+	ok, err := tc.HasAccountTombstone(ctx, uid, h.nowFn())
+	if err != nil {
+		if !errors.Is(err, telemetry.ErrNoStore) {
+			h.logger.Warn("account: tombstone lookup failed; skipping claim", "error", err.Error())
+			return true
+		}
+		return false
+	}
+	return ok
+}
+
+func (h *AccountHandler) nowFn() time.Time { return time.Now().UTC() }
 
 // SetAccountData attaches the MM24 account data routes (nil = none mounted).
 func (h *AccountHandler) SetAccountData(d *AccountDataHandler) {
@@ -247,7 +279,13 @@ func (h *AccountHandler) Sync(c *gin.Context) {
 	// it here means the anonymous editor's work survives making an account
 	// instead of silently becoming unreachable once ownership is by user id.
 	if session := c.GetHeader("X-MM-Session-ID"); session != "" && user != nil {
-		claimOnSignIn(c.Request.Context(), h.store, h.logger, user, session, time.Now().UTC())
+		// MM24: a uid deleted inside the last 30 days claims nothing, so a re-signup
+		// cannot resurrect the session rows the deleted account once owned.
+		if h.tombstoned(c.Request.Context(), principal.UID) {
+			h.logger.Info("account: sign-in claim skipped (uid deleted within 30 days)")
+		} else {
+			claimOnSignIn(c.Request.Context(), h.store, h.logger, user, session, time.Now().UTC())
+		}
 	}
 
 	c.JSON(http.StatusOK, h.buildUsageResponse(c, user, true))

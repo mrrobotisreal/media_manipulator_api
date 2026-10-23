@@ -41,6 +41,13 @@ type DataHandler struct {
 	onDelete func(scope string) // account_data_deleted metric hook (optional)
 }
 
+// SetMetric attaches the data_deleted counter hook (scope item | project | all).
+func (h *DataHandler) SetMetric(f func(scope string)) {
+	if h != nil {
+		h.onDelete = f
+	}
+}
+
 // NewDataHandler builds the handler. Any dependency may be nil; routes then 503.
 func NewDataHandler(store DataStore, expirer Expirer, jobs *services.JobManager, logger *slog.Logger) *DataHandler {
 	if logger == nil {

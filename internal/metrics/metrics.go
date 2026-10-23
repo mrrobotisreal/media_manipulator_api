@@ -39,6 +39,8 @@ type Registry struct {
 	retentionSweepErrors    *prometheus.CounterVec
 	retentionGaveUp         *prometheus.CounterVec
 	retentionBacklog        *prometheus.GaugeVec
+	accountDeleted          *prometheus.CounterVec
+	dataDeleted             *prometheus.CounterVec
 }
 
 // New creates a fresh Registry with all metrics registered.
@@ -161,7 +163,17 @@ func New() *Registry {
 		Help: "Overdue, undeleted ledger rows: state=due (retryable) or state=gave_up (stuck) (MM23).",
 	}, []string{"state"})
 
+	r.accountDeleted = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mm_account_deleted_total",
+		Help: "DELETE /api/account outcomes: completed, incomplete (a step failed, retryable), files_pending (S3 not clean, nothing else touched) (MM24).",
+	}, []string{"result"})
+	r.dataDeleted = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mm_data_deleted_total",
+		Help: "User-initiated deletions by scope: item (a job), project, all (MM24).",
+	}, []string{"scope"})
+
 	reg.MustRegister(
+		r.accountDeleted, r.dataDeleted,
 		r.retentionSwept, r.retentionWouldDelete, r.retentionSweepErrors, r.retentionGaveUp, r.retentionBacklog,
 		r.httpDuration, r.httpStatus, r.conversionJobs, r.toolUsage,
 		r.commandDuration, r.commandFailures, r.ffmpegValidationRejects,
@@ -387,4 +399,21 @@ func (r *Registry) SetRetentionBacklog(due, gaveUp int64) {
 	}
 	r.retentionBacklog.WithLabelValues("due").Set(float64(due))
 	r.retentionBacklog.WithLabelValues("gave_up").Set(float64(gaveUp))
+}
+
+// AccountDeleted counts a finished DELETE /api/account by result
+// (completed, incomplete, files_pending).
+func (r *Registry) AccountDeleted(result string) {
+	if r == nil {
+		return
+	}
+	r.accountDeleted.WithLabelValues(result).Inc()
+}
+
+// DataDeleted counts a user-initiated deletion by scope (item, project, all).
+func (r *Registry) DataDeleted(scope string) {
+	if r == nil {
+		return
+	}
+	r.dataDeleted.WithLabelValues(scope).Inc()
 }

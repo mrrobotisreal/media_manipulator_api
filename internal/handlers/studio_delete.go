@@ -24,6 +24,13 @@ func (h *StudioHandler) SetDeletion(e Expirer, store ProjectDeleteStore) {
 	}
 }
 
+// SetDeletionMetric attaches the data_deleted counter hook.
+func (h *StudioHandler) SetDeletionMetric(f func(scope string)) {
+	if h != nil {
+		h.onDelete = f
+	}
+}
+
 // ownsProjectRow is the ownership rule for projects: an account owns rows with
 // its user_id; a guest owns rows with its session id and NO user.
 func ownsProjectRow(rowUser, rowSession, userID, session string) bool {
@@ -72,6 +79,9 @@ func (h *StudioHandler) DeleteProject(c *gin.Context) {
 	// nothing to sweep: remove its rows directly. Idempotent for a swept project.
 	if _, err := h.projectStore.DeleteStudioProjectRows(ctx, id); err != nil {
 		res.Pending++
+	}
+	if h.onDelete != nil {
+		h.onDelete("project")
 	}
 	c.JSON(http.StatusOK, newDeletedBody(res))
 }

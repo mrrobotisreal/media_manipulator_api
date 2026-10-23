@@ -44,6 +44,8 @@ type AccountDataHandler struct {
 	OnDelete func(scope string)
 
 	revoker SessionRevoker
+	account *accountDeleteDeps
+	export  *exportDeps
 }
 
 // NewAccountDataHandler builds the handler.
@@ -197,4 +199,7 @@ func (h *AccountDataHandler) RevokeSessions(c *gin.Context) {
 func (h *AccountDataHandler) Register(account *gin.RouterGroup, authed *gin.RouterGroup) {
 	authed.POST("/data/delete-all", h.DeleteAll)
 	authed.POST("/sessions/revoke", h.RevokeSessions)
+	authed.GET("/data/export", h.limitExport(), h.Export)
+	// DELETE /api/account: fresh token + exact confirm string, enforced in the handler.
+	authed.DELETE("", h.DeleteAccount)
 }

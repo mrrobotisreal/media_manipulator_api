@@ -60,3 +60,11 @@ const (
 // counted as skipped_no_identity; the Prometheus counters and mm_cleanup_runs
 // are the durable record.
 const ServerRetentionSwept = "server_retention_swept"
+
+// Account deletion (MM24). Emitted once per completed DELETE /api/account:
+// {steps_failed, analytics: ok|failed|not_configured|skipped}. KNOWN LIMIT: it needs
+// the caller's visitor and session ids (request headers); without them Emit drops
+// it as skipped_no_identity, so the Prometheus counter mm_account_deleted_total and
+// the mm_account_deletions tombstone are the durable record. The analytics-side
+// catalog entry is MM26's.
+const ServerAccountDeleted = "server_account_deleted"

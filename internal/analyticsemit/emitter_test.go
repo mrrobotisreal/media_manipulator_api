@@ -430,12 +430,12 @@ func TestEventNamesMatchTheAnalyticsCatalog(t *testing.T) {
 	want := []string{
 		"server_job_created", "server_job_completed", "server_job_failed",
 		"server_download_served", "server_quota_rejected", "server_rate_limited",
-		"server_signup_completed",
+		"server_signup_completed", "server_account_deleted",
 	}
 	got := []string{
 		ServerJobCreated, ServerJobCompleted, ServerJobFailed,
 		ServerDownloadServed, ServerQuotaRejected, ServerRateLimited,
-		ServerSignupCompleted,
+		ServerSignupCompleted, ServerAccountDeleted,
 	}
 	for i := range want {
 		if got[i] != want[i] {

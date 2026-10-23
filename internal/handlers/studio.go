@@ -49,6 +49,7 @@ type StudioHandler struct {
 	// MM24 deletion (SetDeletion).
 	expirer      Expirer
 	projectStore ProjectDeleteStore
+	onDelete     func(scope string)
 }
 
 // NewStudioHandler mirrors NewConversionHandler's construction: it derives the
