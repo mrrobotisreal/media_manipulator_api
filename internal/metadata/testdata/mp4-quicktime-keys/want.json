@@ -1,0 +1,353 @@
+{
+  "schemaVersion": 1,
+  "file": {
+    "name": "clip.mov",
+    "sizeBytes": 0,
+    "mime": "",
+    "kind": "video"
+  },
+  "tools": [
+    "exiftool 12.76",
+    "ffprobe 7.1"
+  ],
+  "entries": [
+    {
+      "id": "File:FileName",
+      "group": "File",
+      "tag": "FileName",
+      "value": "clip.mov",
+      "category": "file",
+      "privacy": "identity"
+    },
+    {
+      "id": "File:FileSize",
+      "group": "File",
+      "tag": "FileSize",
+      "value": "18 MB",
+      "category": "file"
+    },
+    {
+      "id": "File:FileType",
+      "group": "File",
+      "tag": "FileType",
+      "value": "MOV",
+      "category": "file"
+    },
+    {
+      "id": "File:MIMEType",
+      "group": "File",
+      "tag": "MIMEType",
+      "value": "video/quicktime",
+      "category": "file"
+    },
+    {
+      "id": "QuickTime:MajorBrand",
+      "group": "QuickTime",
+      "tag": "MajorBrand",
+      "value": "Apple QuickTime (.MOV/QT)",
+      "category": "container"
+    },
+    {
+      "id": "QuickTime:MovieHeaderVersion",
+      "group": "QuickTime",
+      "tag": "MovieHeaderVersion",
+      "value": 0,
+      "category": "container"
+    },
+    {
+      "id": "QuickTime:CreateDate",
+      "group": "QuickTime",
+      "tag": "CreateDate",
+      "value": "2026:09:30 16:42:00",
+      "category": "container"
+    },
+    {
+      "id": "QuickTime:Duration",
+      "group": "QuickTime",
+      "tag": "Duration",
+      "value": "4.00 s",
+      "category": "container"
+    },
+    {
+      "id": "Keys:Make",
+      "group": "Keys",
+      "tag": "Make",
+      "value": "Apple",
+      "category": "apple",
+      "privacy": "device"
+    },
+    {
+      "id": "Keys:Model",
+      "group": "Keys",
+      "tag": "Model",
+      "value": "iPhone 15 Pro",
+      "category": "apple",
+      "privacy": "device"
+    },
+    {
+      "id": "Keys:Software",
+      "group": "Keys",
+      "tag": "Software",
+      "value": "17.4.1",
+      "category": "apple",
+      "privacy": "identity"
+    },
+    {
+      "id": "Keys:CreationDate",
+      "group": "Keys",
+      "tag": "CreationDate",
+      "value": "2026:09:30 18:42:00+02:00",
+      "category": "apple"
+    },
+    {
+      "id": "Keys:com.apple.quicktime.make",
+      "group": "Keys",
+      "tag": "com.apple.quicktime.make",
+      "value": "Apple",
+      "category": "apple",
+      "privacy": "device"
+    },
+    {
+      "id": "Keys:GPSCoordinates",
+      "group": "Keys",
+      "tag": "GPSCoordinates",
+      "value": "48.8582, 2.2945, 35.2",
+      "category": "apple",
+      "privacy": "location"
+    },
+    {
+      "id": "Track1:HandlerDescription",
+      "group": "Track1",
+      "tag": "HandlerDescription",
+      "value": "Core Media Video",
+      "category": "container",
+      "privacy": "identity"
+    },
+    {
+      "id": "Track2:HandlerDescription",
+      "group": "Track2",
+      "tag": "HandlerDescription",
+      "value": "Core Media Audio",
+      "category": "container",
+      "privacy": "identity"
+    },
+    {
+      "id": "Composite:Rotation",
+      "group": "Composite",
+      "tag": "Rotation",
+      "value": 90,
+      "category": "composite"
+    },
+    {
+      "id": "Format:nb_streams",
+      "group": "Format",
+      "tag": "nb_streams",
+      "value": 2,
+      "category": "container"
+    },
+    {
+      "id": "Format:format_name",
+      "group": "Format",
+      "tag": "format_name",
+      "value": "mov,mp4,m4a,3gp,3g2,mj2",
+      "category": "container"
+    },
+    {
+      "id": "Format:duration",
+      "group": "Format",
+      "tag": "duration",
+      "value": "4.000000",
+      "category": "container"
+    },
+    {
+      "id": "Format:size",
+      "group": "Format",
+      "tag": "size",
+      "value": "18874368",
+      "category": "container"
+    },
+    {
+      "id": "Format:major_brand",
+      "group": "Format",
+      "tag": "major_brand",
+      "value": "qt  ",
+      "category": "container"
+    },
+    {
+      "id": "Format:com.apple.quicktime.make",
+      "group": "Format",
+      "tag": "com.apple.quicktime.make",
+      "value": "Apple",
+      "category": "container"
+    },
+    {
+      "id": "Stream:0:StreamType",
+      "group": "Stream:0",
+      "tag": "StreamType",
+      "value": "video",
+      "category": "video"
+    },
+    {
+      "id": "Stream:0:index",
+      "group": "Stream:0",
+      "tag": "index",
+      "value": 0,
+      "category": "video"
+    },
+    {
+      "id": "Stream:0:codec_name",
+      "group": "Stream:0",
+      "tag": "codec_name",
+      "value": "hevc",
+      "category": "video"
+    },
+    {
+      "id": "Stream:0:codec_type",
+      "group": "Stream:0",
+      "tag": "codec_type",
+      "value": "video",
+      "category": "video"
+    },
+    {
+      "id": "Stream:0:width",
+      "group": "Stream:0",
+      "tag": "width",
+      "value": 1920,
+      "category": "video"
+    },
+    {
+      "id": "Stream:0:height",
+      "group": "Stream:0",
+      "tag": "height",
+      "value": 1080,
+      "category": "video"
+    },
+    {
+      "id": "Stream:0:creation_time",
+      "group": "Stream:0",
+      "tag": "creation_time",
+      "value": "2026-09-30T16:42:00.000000Z",
+      "category": "video"
+    },
+    {
+      "id": "Stream:0:handler_name",
+      "group": "Stream:0",
+      "tag": "handler_name",
+      "value": "Core Media Video",
+      "category": "video",
+      "privacy": "identity"
+    },
+    {
+      "id": "Stream:1:StreamType",
+      "group": "Stream:1",
+      "tag": "StreamType",
+      "value": "audio",
+      "category": "audio"
+    },
+    {
+      "id": "Stream:1:index",
+      "group": "Stream:1",
+      "tag": "index",
+      "value": 1,
+      "category": "audio"
+    },
+    {
+      "id": "Stream:1:codec_name",
+      "group": "Stream:1",
+      "tag": "codec_name",
+      "value": "aac",
+      "category": "audio"
+    },
+    {
+      "id": "Stream:1:codec_type",
+      "group": "Stream:1",
+      "tag": "codec_type",
+      "value": "audio",
+      "category": "audio"
+    },
+    {
+      "id": "Stream:1:sample_rate",
+      "group": "Stream:1",
+      "tag": "sample_rate",
+      "value": "48000",
+      "category": "audio"
+    },
+    {
+      "id": "Stream:1:channels",
+      "group": "Stream:1",
+      "tag": "channels",
+      "value": 2,
+      "category": "audio"
+    },
+    {
+      "id": "Stream:1:handler_name",
+      "group": "Stream:1",
+      "tag": "handler_name",
+      "value": "Core Media Audio",
+      "category": "audio",
+      "privacy": "identity"
+    },
+    {
+      "id": "Chapter:0:id",
+      "group": "Chapter:0",
+      "tag": "id",
+      "value": 1,
+      "category": "container"
+    },
+    {
+      "id": "Chapter:0:time_base",
+      "group": "Chapter:0",
+      "tag": "time_base",
+      "value": "1/1000",
+      "category": "container"
+    },
+    {
+      "id": "Chapter:0:start",
+      "group": "Chapter:0",
+      "tag": "start",
+      "value": 0,
+      "category": "container"
+    },
+    {
+      "id": "Chapter:0:start_time",
+      "group": "Chapter:0",
+      "tag": "start_time",
+      "value": "0.000000",
+      "category": "container"
+    },
+    {
+      "id": "Chapter:0:end",
+      "group": "Chapter:0",
+      "tag": "end",
+      "value": 4000,
+      "category": "container"
+    },
+    {
+      "id": "Chapter:0:end_time",
+      "group": "Chapter:0",
+      "tag": "end_time",
+      "value": "4.000000",
+      "category": "container"
+    },
+    {
+      "id": "Chapter:0:title",
+      "group": "Chapter:0",
+      "tag": "title",
+      "value": "Intro",
+      "category": "container"
+    },
+    {
+      "id": "SideData:0:Display Matrix",
+      "group": "SideData",
+      "tag": "0:Display Matrix",
+      "value": {
+        "displaymatrix": "\n00000000:            0       65536           0\n",
+        "rotation": -90
+      },
+      "category": "video"
+    }
+  ],
+  "warnings": [
+    "exiftool numeric pass failed: Error: no fixture exiftool.n.json"
+  ]
+}
