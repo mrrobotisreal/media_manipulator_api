@@ -38,6 +38,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/handlers"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/limits"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/logger"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/metadata"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/metrics"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
@@ -154,6 +155,9 @@ func main() {
 	jobManager.SetAnalyticsEmitter(analyticsEmitter)
 	converter := services.NewConverter(cfg)
 	inspector := services.NewMediaInspector(cfg.CommandTimeout)
+	// MM07: log (never fatal) whether the metadata inspector's tools exist.
+	etVer, ffVer := metadata.Probe(context.Background())
+	slog.Info("metadata inspector tools", "exiftool", etVer, "ffprobe", ffVer)
 	analysisQueue := services.NewAnalysisQueue(cfg, inspector)
 	if hookable, ok := any(analysisQueue).(interface {
 		SetTelemetry(store *telemetry.Store, sanitizer *cmdaudit.PathSanitizer, enricher *geo.Enricher, cfg *config.Config)

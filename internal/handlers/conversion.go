@@ -100,6 +100,7 @@ func NewConversionHandler(jobManager *services.JobManager, converter *services.C
 
 func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.POST("/details", h.IdentifyFile)
+	r.POST("/metadata/inspect", h.InspectMetadata)
 	r.POST("/upload", h.UploadFile)
 	r.POST("/video-upload/presign", h.PresignVideoUpload)
 	r.POST("/video-upload/complete", h.CompleteVideoUpload)

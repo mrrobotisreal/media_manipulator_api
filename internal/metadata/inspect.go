@@ -146,3 +146,6 @@ func reason(stderr string, err error) string {
 	}
 	return "unknown error"
 }
+
+// NewInspector returns an Inspector backed by r (a fake in tests).
+func NewInspector(r Runner) *Inspector { return &Inspector{Runner: r} }
