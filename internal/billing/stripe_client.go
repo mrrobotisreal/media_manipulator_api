@@ -85,6 +85,14 @@ func (c *stripeClient) CreateCheckoutSession(ctx context.Context, req CheckoutRe
 		ConsentCollection: &stripe.CheckoutSessionCreateConsentCollectionParams{
 			TermsOfService: stripe.String("required"),
 		},
+		// The Stripe account is shared with CreaTV, so the account-level Terms
+		// link would point at CreaTV's terms. Replace the consent line with
+		// Media Manipulator's own Terms and Privacy links.
+		CustomText: &stripe.CheckoutSessionCreateCustomTextParams{
+			TermsOfServiceAcceptance: &stripe.CheckoutSessionCreateCustomTextTermsOfServiceAcceptanceParams{
+				Message: stripe.String(termsAcceptanceMessage(req.BaseURL, loc)),
+			},
+		},
 		CustomerUpdate: &stripe.CheckoutSessionCreateCustomerUpdateParams{
 			Address: stripe.String("auto"),
 		},
@@ -215,4 +223,15 @@ func subscriptionMetadata(req CheckoutRequest) map[string]string {
 		m["session_id"] = req.SessionID
 	}
 	return m
+}
+
+// termsAcceptanceMessage is the Checkout consent line (Stripe renders
+// [text](url) links). English pages are unprefixed; other locales use
+// /<locale>/.
+func termsAcceptanceMessage(baseURL, uiLocale string) string {
+	prefix := baseURL
+	if uiLocale != "" && uiLocale != "en" {
+		prefix = baseURL + "/" + uiLocale
+	}
+	return fmt.Sprintf("I agree to the Media Manipulator [Terms of Service](%s/terms-of-service) and [Privacy Policy](%s/privacy-policy).", prefix, prefix)
 }
