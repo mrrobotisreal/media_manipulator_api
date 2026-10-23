@@ -173,6 +173,11 @@ func renderVariant(id, leg string, p goldenProject, g *goldenFile, fixturesDir, 
 		}
 		plan.SendCmdPath = cmdPath
 	}
+	for i, in := range plan.Inputs {
+		if len(in.Pre) > 0 {
+			fmt.Printf("  [%s/%s] input %d pre-options: %s\n", id, leg, i, strings.Join(in.Pre, " "))
+		}
+	}
 	renderPath := filepath.Join(legDir, "render.mp4")
 	if err := runFFmpeg(services.ParityExportArgs(plan, fontFile, fontsDir, renderPath)); err != nil {
 		return fmt.Errorf("render: %w", err)

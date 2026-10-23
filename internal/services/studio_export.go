@@ -83,7 +83,20 @@ type StudioExportVideoSeg struct {
 	// emitted for title segs (ffmpeg's eq/colorbalance stages destroy alpha;
 	// the inspector hides them for title clips).
 	Title *models.StudioTitle
+
+	// SourceKind selects the chain head: "" or "video" trims the input, "image"
+	// holds a looped still (no trim; the input is bounded by -t), "title"
+	// starts from a color= source. Empty means video so existing literals and
+	// goldens are unchanged.
+	SourceKind string
 }
+
+// Seg source kinds (StudioExportVideoSeg.SourceKind).
+const (
+	StudioSegKindVideo = "video"
+	StudioSegKindImage = "image"
+	StudioSegKindTitle = "title"
+)
 
 // StudioExportAudioSeg is one audio-contributing clip (a video clip's embedded
 // audio or an audio-track clip). Muted tracks contribute none.
@@ -348,6 +361,7 @@ func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, 
 	boxH := int(math.Round(float64(height) * sMax))
 
 	var chain []string
+	isImage := vc.SourceKind == StudioSegKindImage && vc.Title == nil
 	if vc.Title != nil {
 		// Transparent full-frame source at the clip's duration; the layer
 		// stack draws onto it (bottom → top, same order as the raster), then
@@ -358,6 +372,14 @@ func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, 
 		)
 		chain = append(chain, titleLayerParts(vc.Title, width, height, fontsDir, fontFile)...)
 		chain = append(chain, fmt.Sprintf("setpts=PTS-STARTPTS+%s/TB", tsStr))
+	} else if isImage {
+		// Looped still: the input is already bounded by -t (see
+		// imageInputPre), so no trim — a trim on a looped frame stream would
+		// only re-cut what -t produced. rgba keeps PNG alpha through scale.
+		chain = append(chain,
+			fmt.Sprintf("[%d:v]format=rgba", vc.InputIndex),
+			fmt.Sprintf("setpts=PTS-STARTPTS+%s/TB", tsStr),
+		)
 	} else {
 		chain = append(chain,
 			fmt.Sprintf("[%d:v]trim=start=%s:end=%s", vc.InputIndex, formatSeconds(vc.SourceIn), formatSeconds(vc.SourceOut)),
@@ -367,8 +389,14 @@ func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, 
 	if c := cropArg(vc.Crop); c != "" {
 		chain = append(chain, c)
 	}
+	scaleOpts := ""
+	if isImage {
+		// Image segs only (video chains stay byte-stable): pin the RGB->YUV
+		// matrix to bt709 like the preview's sRGB path.
+		scaleOpts = ":in_color_matrix=auto:out_color_matrix=bt709"
+	}
 	chain = append(chain,
-		fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", boxW, boxH),
+		fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease%s", boxW, boxH, scaleOpts),
 		"setsar=1",
 		fmt.Sprintf("fps=%s", fpsStr),
 	)

@@ -172,9 +172,24 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 		// Title clips consume no ffmpeg input — their chain starts from a
 		// color= source (buildVideoClipChain); InputIndex -1 marks that.
 		idx := -1
-		if r.Clip.Title == nil {
+		sourceKind := ""
+		if r.Clip.Title != nil {
+			sourceKind = StudioSegKindTitle
+		} else {
+			in := ExportInput{Path: spec.LocalByKey[r.Asset.S3KeyOriginal]}
+			if r.Asset.MediaKind == models.StudioMediaKindImage {
+				// Still image: loop the single frame at the project rate for
+				// exactly the hold length (+1 frame for fps rounding). -t bounds
+				// the demuxer so a very long hold is not decoded unboundedly.
+				// Every image clip owns its input (hold lengths differ even for
+				// a shared asset). The ORIGINAL file is used (design §6); ffmpeg
+				// autorotates EXIF orientation on stills by default (6+/7), which
+				// the parity photo.jpg fixture covers.
+				sourceKind = StudioSegKindImage
+				in.Pre = imageInputPre(spec.FPS, r.Clip.SourceOut-r.Clip.SourceIn)
+			}
 			idx = len(plan.Inputs)
-			plan.Inputs = append(plan.Inputs, ExportInput{Path: spec.LocalByKey[r.Asset.S3KeyOriginal]})
+			plan.Inputs = append(plan.Inputs, in)
 		}
 		opacity := 1.0
 		if r.Clip.Opacity != nil {
@@ -193,6 +208,7 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 				Effects: r.Clip.Effects, LutPaths: spec.LutPaths,
 				ClipKeyframes: r.Clip.Keyframes,
 				Title:         r.Clip.Title,
+				SourceKind:    sourceKind,
 			}
 			// Typed entrance transition (part 14): crossDissolve keeps the
 			// legacy linear-alpha FadeIn path (byte-stable v1/v2 graphs); every
@@ -255,4 +271,21 @@ func clipEffectiveDur(c models.StudioClip) float64 {
 		return d
 	}
 	return 0
+}
+
+// imageInputPre is the per-input option block for a looped still image:
+// -loop 1 -framerate <fps> -t <hold + 1/fps>.
+func imageInputPre(fps, hold float64) []string {
+	fpsStr := formatFrameRate(fps)
+	if fpsStr == "" {
+		fpsStr = "30"
+	}
+	frame := 1.0 / 30.0
+	if fps > 0 {
+		frame = 1.0 / fps
+	}
+	if hold < 0 {
+		hold = 0
+	}
+	return []string{"-loop", "1", "-framerate", fpsStr, "-t", formatSeconds(hold + frame)}
 }
