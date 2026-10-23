@@ -144,3 +144,54 @@ func TestNonEmptyDropsBlanks(t *testing.T) {
 		t.Errorf("got %v", got)
 	}
 }
+
+func TestPurgeRulesKeepTheirSafetyClauses(t *testing.T) {
+	// legal_hold rows survive the incident purge.
+	if w := purgeRules[PurgeSafetyIncident].where; !strings.Contains(w, "legal_hold = false") || !strings.Contains(w, "retention_until < $1") {
+		t.Errorf("incident purge must exclude legal holds and respect retention_until: %s", w)
+	}
+	// IP scrubs UPDATE (never delete the request row) and only touch rows that hold an address.
+	for _, name := range []string{PurgeAPIRequestIPs, PurgeRateLimitIPs} {
+		sql := purgeSQL(purgeRules[name])
+		if !strings.HasPrefix(sql, "UPDATE ") || strings.Contains(sql, "DELETE") || !strings.Contains(sql, "IS NOT NULL") {
+			t.Errorf("%s must be an UPDATE ... SET ip = NULL over rows holding an ip: %s", name, sql)
+		}
+	}
+	if !strings.Contains(purgeRules[PurgeAPIRequestIPs].set, "cf_connecting_ip = NULL") {
+		t.Error("cf_connecting_ip must be scrubbed too")
+	}
+	// Deletes are bounded.
+	for _, name := range []string{PurgeUsageCounters, PurgeSafetyIncident, PurgeCleanupRuns, PurgeLedgerDeleted} {
+		sql := purgeSQL(purgeRules[name])
+		if !strings.HasPrefix(sql, "DELETE FROM ") || !strings.Contains(sql, "LIMIT $2") {
+			t.Errorf("%s must be a bounded DELETE: %s", name, sql)
+		}
+	}
+	// The audit purge only ever removes rows that were already stamped deleted.
+	if !strings.Contains(purgeRules[PurgeLedgerDeleted].where, "deleted_at IS NOT NULL") {
+		t.Error("ledger audit purge must never touch live rows")
+	}
+	// Dry run is a pure count over the same WHERE.
+	for name, r := range purgeRules {
+		q := strings.ToUpper(purgeCountSQL(r))
+		if !strings.HasPrefix(q, "SELECT COUNT(*)") || strings.Contains(q, "DELETE FROM") || strings.Contains(q, "UPDATE ") {
+			t.Errorf("%s dry-run must be a read-only count: %s", name, q)
+		}
+		if !strings.Contains(purgeCountSQL(r), r.where) {
+			t.Errorf("%s dry-run must use the same WHERE as the real rule", name)
+		}
+	}
+	if len(PurgeRuleNames()) != len(purgeRules) {
+		t.Error("PurgeRuleNames must list every rule")
+	}
+}
+
+func TestPurgeBatchRejectsUnknownRuleAndNoPool(t *testing.T) {
+	s := &Store{}
+	if _, err := s.PurgeBatch(context.Background(), "mm_users", time.Now(), 10, false); err == nil || err == ErrNoStore {
+		t.Errorf("unknown rule must be refused before anything else, got %v", err)
+	}
+	if _, err := s.PurgeBatch(context.Background(), PurgeUsageCounters, time.Now(), 10, false); err != ErrNoStore {
+		t.Errorf("no pool: %v", err)
+	}
+}

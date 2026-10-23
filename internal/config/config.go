@@ -133,6 +133,21 @@ type Config struct {
 	CleanupDryRun              bool
 	CleanupAuditMaxPathsPerRun int
 
+	// Ledger-driven retention sweeper (MM23). The sweeper deletes only what
+	// mm_retained_objects says has expired.
+	//
+	// RetentionSweepDryRun DEFAULTS TO TRUE: the sweeper (and the orphan walker)
+	// log, meter and audit what they WOULD delete and delete nothing. Flip
+	// RETENTION_SWEEP_DRY_RUN=false deliberately, after reading a day of dry-run
+	// output in mm_cleanup_runs (RUNBOOK 4.2.1).
+	RetentionSweepDryRun bool
+	RetentionSweepBatch  int           // rows per batch (default 200)
+	RetentionSweepBudget time.Duration // per-tick time budget (default 5m)
+	RetentionMaxAttempts int           // give-up threshold per row (default 10)
+	// RetentionJobMapMaxAge is how long a finished job stays in the in-memory job
+	// map (default 24h). History no longer depends on it.
+	RetentionJobMapMaxAge time.Duration
+
 	// Observability
 	MetricsEnabled     bool
 	PProfEnabled       bool
@@ -550,6 +565,11 @@ func Load() *Config {
 		TempRetention:              time.Duration(getEnvInt("TEMP_RETENTION_SECONDS", 3600)) * time.Second,
 		CleanupDryRun:              getEnvBool("CLEANUP_DRY_RUN", false),
 		CleanupAuditMaxPathsPerRun: getEnvInt("CLEANUP_AUDIT_MAX_PATHS_PER_RUN", 1000),
+		RetentionSweepDryRun:       getEnvBool("RETENTION_SWEEP_DRY_RUN", true),
+		RetentionSweepBatch:        getEnvInt("RETENTION_SWEEP_BATCH", 200),
+		RetentionSweepBudget:       time.Duration(getEnvInt("RETENTION_SWEEP_BUDGET_SECONDS", 300)) * time.Second,
+		RetentionMaxAttempts:       getEnvInt("RETENTION_MAX_ATTEMPTS", 10),
+		RetentionJobMapMaxAge:      time.Duration(getEnvInt("RETENTION_JOB_MAP_MAX_AGE_HOURS", 24)) * time.Hour,
 
 		// Observability
 		MetricsEnabled:     getEnvBool("METRICS_ENABLED", true),
