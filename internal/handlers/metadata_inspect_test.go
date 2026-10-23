@@ -94,6 +94,30 @@ func TestInspectMetadataOK(t *testing.T) {
 	}
 }
 
+func TestInspectMetadataHidesServerTempFile(t *testing.T) {
+	engine, _ := metadataTestRouter(t, stubRunner(func(name string, args []string) (string, string, error) {
+		return `[{"SourceFile":"/srv/tmp/metadata_9_x.jpg","System:FileName":"metadata_9_x.jpg","System:Directory":"/srv/tmp","System:FilePermissions":"-rw-r--r--","System:FileAccessDate":"2026:10:23 09:55:50-06:00","File:FileType":"JPEG"}]`, "", nil
+	}))
+	body, ct := multipartBody(t, "file", "holiday.jpg", []byte("\xff\xd8\xff\xe0 fake jpeg bytes"))
+	rec := post(engine, "/api/metadata/inspect", body, ct)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	out := rec.Body.String()
+	for _, leak := range []string{"/srv/tmp", "metadata_9_x", "FilePermissions", "FileAccessDate", "Directory"} {
+		if strings.Contains(out, leak) {
+			t.Fatalf("response leaks %q: %s", leak, out)
+		}
+	}
+	var doc metadata.MetadataDocument
+	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Entries) != 2 || doc.Entries[0].ID != "System:FileName" || doc.Entries[0].Value != "holiday.jpg" {
+		t.Fatalf("entries %+v", doc.Entries)
+	}
+}
+
 func TestInspectMetadataToolFailureIs200WithWarning(t *testing.T) {
 	engine, _ := metadataTestRouter(t, stubRunner(func(string, []string) (string, string, error) {
 		return "", "", errors.New("boom")

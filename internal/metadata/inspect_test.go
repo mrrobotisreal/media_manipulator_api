@@ -113,7 +113,8 @@ func TestSkippedKeysAndNoDrops(t *testing.T) {
 		}
 		skipped := 0
 		for _, p := range pairs {
-			if skippedKeys[p.Key] {
+			group, tag, _ := splitKey(p.Key)
+			if isSkippedKey(p.Key, group, tag) {
 				skipped++
 			}
 		}
@@ -126,6 +127,26 @@ func TestSkippedKeysAndNoDrops(t *testing.T) {
 				t.Fatalf("leaked %s", e.ID)
 			}
 		}
+	}
+}
+
+// Real exiftool -G1 output names the file-system group "System", not "File".
+func TestSystemGroupTempFileTagsSkipped(t *testing.T) {
+	pairs, err := decodeExiftoolJSON(`[{"SourceFile":"/srv/tmp/metadata_1_a.jpg","System:FileName":"metadata_1_a.jpg","System:Directory":"/srv/tmp","System:FileSize":"9 bytes","System:FileModifyDate":"2026:10:23 09:55:50-06:00","System:FileAccessDate":"2026:10:23 09:55:50-06:00","System:FileInodeChangeDate":"2026:10:23 09:55:50-06:00","System:FilePermissions":"-rw-r--r--","File:FileType":"JPEG"}]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ex := buildExiftoolEntries(pairs)
+	var ids []string
+	for _, e := range ex.entries {
+		ids = append(ids, e.ID)
+	}
+	want := []string{"System:FileName", "System:FileSize", "System:FileModifyDate", "File:FileType"}
+	if strings.Join(ids, ",") != strings.Join(want, ",") {
+		t.Fatalf("entries %v, want %v", ids, want)
+	}
+	if !IsUploadFileName(ex.entries[0]) || IsUploadFileName(ex.entries[1]) {
+		t.Fatalf("IsUploadFileName wrong for %v", ids)
 	}
 }
 
