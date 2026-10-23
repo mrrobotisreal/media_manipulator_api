@@ -398,6 +398,7 @@ func (h *ConversionHandler) processConversion(job *models.ConversionJob, inputPa
 		_ = h.jobManager.UpdateJobError(job.ID, err.Error())
 		return
 	}
+	h.ensureResultMime(job, outputPath)
 	if err := h.jobManager.UpdateJobResult(job.ID, "/api/download/"+job.ID); err != nil {
 		log.Printf("failed to update job %s result: %v", job.ID, err)
 		_ = h.jobManager.UpdateJobError(job.ID, "Failed to update job result")
@@ -430,6 +431,7 @@ func (h *ConversionHandler) processTranscription(job *models.ConversionJob, inpu
 		_ = h.jobManager.UpdateJobError(job.ID, err.Error())
 		return
 	}
+	h.ensureResultMime(job, outputPath)
 	if err := h.jobManager.UpdateJobResult(job.ID, "/api/download/"+job.ID); err != nil {
 		log.Printf("failed to update job %s result: %v", job.ID, err)
 		_ = h.jobManager.UpdateJobError(job.ID, "Failed to update job result")
@@ -453,6 +455,7 @@ func (h *ConversionHandler) processSpecializedTool(job *models.ConversionJob, mo
 		_ = h.jobManager.UpdateJobError(job.ID, err.Error())
 		return
 	}
+	h.ensureResultMime(job, outputPath)
 	if err := h.jobManager.UpdateJobResult(job.ID, "/api/download/"+job.ID); err != nil {
 		log.Printf("failed to update job %s result: %v", job.ID, err)
 		_ = h.jobManager.UpdateJobError(job.ID, "Failed to update job result")

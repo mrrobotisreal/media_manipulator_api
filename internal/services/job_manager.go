@@ -619,6 +619,20 @@ func (jm *JobManager) SetResultSize(jobID string, sizeBytes int64) error {
 	return nil
 }
 
+// SetResultMime records the sniffed MIME type of the job's result file.
+func (jm *JobManager) SetResultMime(jobID, mime string) error {
+	jm.mu.Lock()
+	job, ok := jm.jobs[jobID]
+	if !ok {
+		jm.mu.Unlock()
+		return fmt.Errorf("job not found")
+	}
+	job.ResultMime = mime
+	jm.mu.Unlock()
+	jm.notifySubscribers(jobID)
+	return nil
+}
+
 func (jm *JobManager) UpdateJobError(jobID string, errorMsg string) error {
 	jm.mu.Lock()
 	job, exists := jm.jobs[jobID]
