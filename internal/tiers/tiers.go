@@ -9,6 +9,7 @@
 package tiers
 
 import (
+	"strings"
 	"time"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
@@ -23,16 +24,26 @@ const (
 	TierAnonymous Tier = "anonymous"
 	TierFree      Tier = "free"
 	TierPremium   Tier = "premium"
+	// TierOperator is the site's own people — the owner and whoever they name
+	// in OPERATOR_EMAILS. Nothing is counted, nothing is capped beyond the
+	// deployment's physical ceilings, and the per-route abuse buckets are
+	// skipped. It is NEVER stored: mm_users.tier cannot hold it, grant-tier
+	// cannot grant it, and no client can ask for it. It exists only as the
+	// result of Registry.ResolveFor on a request whose Firebase ID token
+	// carries a VERIFIED email on the allowlist, re-derived on every request.
+	TierOperator Tier = "operator"
 )
 
-// All returns the tiers in ascending order of capability. Used by the public
-// /api/tiers endpoint so the UI never has to know the list.
+// All returns the PUBLIC tiers in ascending order of capability. Used by the
+// public /api/tiers endpoint so the UI never has to know the list. Operator is
+// deliberately absent: it is not a plan anyone can get, so /pricing must not
+// render it and the ladder's "unlocked by" copy must never name it.
 func All() []Tier { return []Tier{TierAnonymous, TierFree, TierPremium} }
 
 // Valid reports whether t is a tier this package knows.
 func Valid(t Tier) bool {
 	switch t {
-	case TierAnonymous, TierFree, TierPremium:
+	case TierAnonymous, TierFree, TierPremium, TierOperator:
 		return true
 	}
 	return false
@@ -57,70 +68,144 @@ type Limits struct {
 	// across tiers today; a possible future monetization lever (ADR ws/0001).
 	StudioVersionAutoKeep int  `json:"studioVersionAutoKeep"`
 	BatchEnabled          bool `json:"batchEnabled"`
-	PriorityGPU          bool `json:"priorityGpu"`
-	ResultRetentionHours int  `json:"resultRetentionHours"`
-	AdsRemoved           bool `json:"adsRemoved"`
+	PriorityGPU           bool `json:"priorityGpu"`
+	ResultRetentionHours  int  `json:"resultRetentionHours"`
+	AdsRemoved            bool `json:"adsRemoved"`
+	// RateLimitExempt skips the per-route hourly abuse buckets
+	// (internal/limits.Limiter.Route). Only the operator tier sets it; the
+	// global per-IP RPS guard still applies to everyone because it is DoS
+	// protection, not a usage allowance.
+	RateLimitExempt bool `json:"rateLimitExempt"`
 }
 
-// Unlimited is the sentinel StudioProjects uses.
+// Unlimited is the sentinel StudioProjects, OpsPerDay and AIOpsPerDay use for
+// "no cap". The quota middleware treats a non-positive allowance as
+// "nothing to count", and the UI renders it as ∞.
 const Unlimited = -1
 
 // Registry holds the resolved limits for every tier. Built once from config at
 // startup so a request never re-reads the environment.
 type Registry struct {
 	limits map[Tier]Limits
+	// operators is the lowercased OPERATOR_EMAILS allowlist. Membership is the
+	// ONLY way to become TierOperator.
+	operators map[string]struct{}
 }
 
 // New builds the registry from configuration. The defaults in config.go are the
 // published matrix; see the "Tier limits" block there.
 func New(cfg *config.Config) *Registry {
-	return &Registry{limits: map[Tier]Limits{
+	operators := make(map[string]struct{}, len(cfg.OperatorEmails))
+	for _, email := range cfg.OperatorEmails {
+		if e := strings.ToLower(strings.TrimSpace(email)); e != "" {
+			operators[e] = struct{}{}
+		}
+	}
+	r := &Registry{operators: operators, limits: map[Tier]Limits{
 		TierAnonymous: {
-			OpsPerDay:            cfg.TierAnonOpsPerDay,
-			AIOpsPerDay:          cfg.TierAnonAIOpsPerDay,
-			MaxFileBytes:         cfg.TierAnonMaxFileBytes,
-			MaxVideoSeconds:      cfg.TierAnonMaxVideoSeconds,
-			MaxOutputHeight:      cfg.TierAnonMaxOutputHeight,
-			MaxLadderHeight:      cfg.TierAnonMaxLadderHeight,
+			OpsPerDay:             cfg.TierAnonOpsPerDay,
+			AIOpsPerDay:           cfg.TierAnonAIOpsPerDay,
+			MaxFileBytes:          cfg.TierAnonMaxFileBytes,
+			MaxVideoSeconds:       cfg.TierAnonMaxVideoSeconds,
+			MaxOutputHeight:       cfg.TierAnonMaxOutputHeight,
+			MaxLadderHeight:       cfg.TierAnonMaxLadderHeight,
 			StudioProjects:        cfg.TierAnonStudioProjects,
 			StudioVersionAutoKeep: cfg.TierAnonStudioVersionAutoKeep,
 			BatchEnabled:          false,
-			PriorityGPU:          false,
-			ResultRetentionHours: cfg.TierAnonRetentionHours,
-			AdsRemoved:           false,
+			PriorityGPU:           false,
+			ResultRetentionHours:  cfg.TierAnonRetentionHours,
+			AdsRemoved:            false,
 		},
 		TierFree: {
-			OpsPerDay:            cfg.TierFreeOpsPerDay,
-			AIOpsPerDay:          cfg.TierFreeAIOpsPerDay,
-			MaxFileBytes:         cfg.TierFreeMaxFileBytes,
-			MaxVideoSeconds:      cfg.TierFreeMaxVideoSeconds,
-			MaxOutputHeight:      cfg.TierFreeMaxOutputHeight,
-			MaxLadderHeight:      cfg.TierFreeMaxLadderHeight,
+			OpsPerDay:             cfg.TierFreeOpsPerDay,
+			AIOpsPerDay:           cfg.TierFreeAIOpsPerDay,
+			MaxFileBytes:          cfg.TierFreeMaxFileBytes,
+			MaxVideoSeconds:       cfg.TierFreeMaxVideoSeconds,
+			MaxOutputHeight:       cfg.TierFreeMaxOutputHeight,
+			MaxLadderHeight:       cfg.TierFreeMaxLadderHeight,
 			StudioProjects:        cfg.TierFreeStudioProjects,
 			StudioVersionAutoKeep: cfg.TierFreeStudioVersionAutoKeep,
 			BatchEnabled:          false,
-			PriorityGPU:          false,
-			ResultRetentionHours: cfg.TierFreeRetentionHours,
+			PriorityGPU:           false,
+			ResultRetentionHours:  cfg.TierFreeRetentionHours,
 			// Free accounts still see ads. Only Premium removes them — that is
 			// the deal, and weakening it would cost the AdSense inventory the
 			// whole free product is funded by.
 			AdsRemoved: false,
 		},
 		TierPremium: {
-			OpsPerDay:            cfg.TierPremiumOpsPerDay,
-			AIOpsPerDay:          cfg.TierPremiumAIOpsPerDay,
-			MaxFileBytes:         cfg.TierPremiumMaxFileBytes,
-			MaxVideoSeconds:      cfg.TierPremiumMaxVideoSeconds,
-			MaxOutputHeight:      cfg.TierPremiumMaxOutputHeight,
-			MaxLadderHeight:      cfg.TierPremiumMaxLadderHeight,
+			OpsPerDay:             cfg.TierPremiumOpsPerDay,
+			AIOpsPerDay:           cfg.TierPremiumAIOpsPerDay,
+			MaxFileBytes:          cfg.TierPremiumMaxFileBytes,
+			MaxVideoSeconds:       cfg.TierPremiumMaxVideoSeconds,
+			MaxOutputHeight:       cfg.TierPremiumMaxOutputHeight,
+			MaxLadderHeight:       cfg.TierPremiumMaxLadderHeight,
 			StudioProjects:        cfg.TierPremiumStudioProjects,
 			StudioVersionAutoKeep: cfg.TierPremiumStudioVersionAutoKeep,
 			BatchEnabled:          true,
-			PriorityGPU:          true,
-			ResultRetentionHours: cfg.TierPremiumRetentionHours,
-			AdsRemoved:           true,
+			PriorityGPU:           true,
+			ResultRetentionHours:  cfg.TierPremiumRetentionHours,
+			AdsRemoved:            true,
 		},
 	}}
+	// Operator = Premium with every allowance removed. Not configurable by
+	// env on purpose: there is no economics to tune here, only "the owner can
+	// test everything". The byte and duration caps are the deployment's own
+	// physical ceilings, so the UI shows the real number rather than "—", and
+	// the handlers' tighter-wins logic resolves to exactly that ceiling.
+	operator := r.limits[TierPremium]
+	operator.OpsPerDay = Unlimited
+	operator.AIOpsPerDay = Unlimited
+	operator.MaxFileBytes = cfg.MaxFileSize
+	operator.MaxVideoSeconds = cfg.MaxVideoDurationSeconds
+	operator.StudioProjects = Unlimited
+	operator.RateLimitExempt = true
+	r.limits[TierOperator] = operator
+	return r
+}
+
+// IsOperator reports whether a verified identity is on the operator allowlist.
+//
+// Both conditions are load-bearing and neither is negotiable:
+//
+//   - The email must come from a Firebase ID token whose signature the Admin
+//     SDK verified (the caller's job — middleware.OptionalFirebaseAuth). This
+//     function never sees a request header.
+//   - email_verified must be true. Firebase lets anyone create an
+//     email/password account with any address they like; verification is what
+//     proves they can read mail at it. Without this check, an attacker who
+//     registers one of the allowlisted addresses before its owner does would
+//     inherit the operator tier. Google sign-in always yields a verified email.
+func (r *Registry) IsOperator(email string, emailVerified bool) bool {
+	if r == nil || len(r.operators) == 0 || !emailVerified {
+		return false
+	}
+	e := strings.ToLower(strings.TrimSpace(email))
+	if e == "" {
+		return false
+	}
+	_, ok := r.operators[e]
+	return ok
+}
+
+// OperatorCount is how many addresses are on the allowlist, for the startup
+// log. The addresses themselves are never logged.
+func (r *Registry) OperatorCount() int {
+	if r == nil {
+		return 0
+	}
+	return len(r.operators)
+}
+
+// ResolveFor is Resolve plus the operator allowlist: a signed-in caller whose
+// verified email is on it is TierOperator regardless of what mm_users says,
+// and everyone else resolves exactly as before. This is the only function
+// that can return TierOperator.
+func (r *Registry) ResolveFor(signedIn bool, email string, emailVerified bool, user *models.User) Tier {
+	if signedIn && r.IsOperator(email, emailVerified) {
+		return TierOperator
+	}
+	return Resolve(signedIn, user)
 }
 
 // For returns the limits for t, falling back to the anonymous tier for an
@@ -158,7 +243,10 @@ func Resolve(signedIn bool, user *models.User) Tier {
 		return TierFree
 	}
 	t := Tier(user.Tier)
-	if !Valid(t) || t == TierAnonymous {
+	// Operator is not a storable tier (the mm_users CHECK forbids it), but a
+	// row claiming it must still never be honoured: the allowlist is the only
+	// path, and it is evaluated in ResolveFor from the verified token.
+	if !Valid(t) || t == TierAnonymous || t == TierOperator {
 		return TierFree
 	}
 	if t == TierPremium && user.TierExpiresAt != nil && !user.TierExpiresAt.After(time.Now().UTC()) {

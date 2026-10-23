@@ -48,6 +48,10 @@ type Limiter struct {
 	// tests are unaffected; nil is a fully supported configuration.
 	Analytics  *analyticsemit.Emitter
 	hashSecret []byte
+	// RouteExempt, when set, lets Route skip its hourly buckets for one
+	// request. cmd/api wires it to the tier resolver; nil (tests, tools) means
+	// nobody is exempt. GlobalIPRPS never consults it.
+	RouteExempt func(c *gin.Context) bool
 }
 
 // Decision describes the outcome of a single limiter check.
@@ -125,6 +129,16 @@ func (l *Limiter) Route(routeKey, tool string, sessionLimit, ipLimit int) gin.Ha
 		return func(c *gin.Context) { c.Next() }
 	}
 	return func(c *gin.Context) {
+		// The operator tier is exempt from the per-route hourly buckets so the
+		// site's own people can test a tool fifty times in a row. The decision
+		// comes from middleware.ResolveTier, i.e. from a verified Firebase
+		// token — the same source the quota uses — so it cannot be spoofed by
+		// a header. The global per-IP RPS guard above this still applies: that
+		// is DoS protection, not a usage allowance, and nobody is exempt.
+		if l.RouteExempt != nil && l.RouteExempt(c) {
+			c.Next()
+			return
+		}
 		// IP per hour first — cheaper to evaluate and a stronger guard
 		// against anonymous flooding.
 		ip := geo.ExtractIP(c)

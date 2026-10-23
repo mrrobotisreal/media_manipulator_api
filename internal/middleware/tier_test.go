@@ -155,3 +155,59 @@ func TestTierContext_LookupFailureFallsBackToFree(t *testing.T) {
 		t.Error("expected no user row after a failed lookup")
 	}
 }
+
+// The operator tier is derived from the Principal's verified email claim, not
+// from the mm_users row and not from anything on the request.
+func TestTierContext_OperatorFromVerifiedClaim(t *testing.T) {
+	cfg := config.Load()
+	cfg.OperatorEmails = []string{"a@b.c"}
+	registry := tiers.New(cfg)
+
+	run := func(t *testing.T, principal *Principal, user *models.User) TierResolution {
+		t.Helper()
+		gin.SetMode(gin.TestMode)
+		store := &countingStore{enabled: true, user: user}
+		var res TierResolution
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			if principal != nil {
+				c.Set(CtxPrincipal, principal)
+			}
+			c.Next()
+		})
+		r.Use(TierContext(TierConfig{Store: store, Registry: registry}, true))
+		r.GET("/probe", func(c *gin.Context) {
+			res, _ = ResolveTier(c)
+			c.Status(http.StatusOK)
+		})
+		req := httptest.NewRequest(http.MethodGet, "/probe", nil)
+		// A spoof attempt: headers are never consulted.
+		req.Header.Set("X-MM-Tier", "operator")
+		r.ServeHTTP(httptest.NewRecorder(), req)
+		return res
+	}
+
+	verified := &Principal{UID: "uid-1", Email: "a@b.c", EmailVerified: true}
+	if res := run(t, verified, &models.User{ID: "u1", Tier: "free"}); res.Tier != tiers.TierOperator {
+		t.Errorf("verified allowlisted email with a free row: got %v, want operator", res.Tier)
+	} else if res.User == nil || res.User.ID != "u1" {
+		t.Error("the mm_users row must still be attached so studio ownership works")
+	}
+	if res := run(t, verified, nil); res.Tier != tiers.TierOperator {
+		t.Errorf("verified allowlisted email with no row: got %v, want operator", res.Tier)
+	}
+
+	unverified := &Principal{UID: "uid-1", Email: "a@b.c", EmailVerified: false}
+	if res := run(t, unverified, &models.User{ID: "u1", Tier: "free"}); res.Tier != tiers.TierFree {
+		t.Errorf("unverified allowlisted email: got %v, want free", res.Tier)
+	}
+
+	stranger := &Principal{UID: "uid-2", Email: "x@y.z", EmailVerified: true}
+	if res := run(t, stranger, &models.User{ID: "u2", Tier: "premium"}); res.Tier != tiers.TierPremium {
+		t.Errorf("non-allowlisted premium: got %v, want premium", res.Tier)
+	}
+
+	if res := run(t, nil, nil); res.Tier != tiers.TierAnonymous {
+		t.Errorf("anonymous with a spoofed header: got %v, want anonymous", res.Tier)
+	}
+}

@@ -169,6 +169,16 @@ func main() {
 	// middleware, the validators, the transcode ladder and the public
 	// /api/tiers endpoint. One table, read in one place.
 	tierRegistry := tiers.New(cfg)
+	if n := tierRegistry.OperatorCount(); n > 0 {
+		logging.Info("operator tier enabled", "allowlisted_accounts", n)
+	}
+	// The per-route hourly abuse buckets skip operators. The predicate reads
+	// the request's tier resolution, which TierContext derived from a verified
+	// Firebase token — so it is exactly as spoof-proof as the quota itself.
+	limiter.RouteExempt = func(c *gin.Context) bool {
+		res, ok := middleware.ResolveTier(c)
+		return ok && res.Limits.RateLimitExempt
+	}
 	conversionHandler := handlers.NewConversionHandler(jobManager, converter, cfg, inspector, analysisQueue, transcription, s3Client, faceDetectionStore, tierRegistry)
 	// `server_download_served` — the one server-truth event whose call site is a
 	// plain request handler.

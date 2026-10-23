@@ -177,7 +177,10 @@ func RequireQuota(cfg QuotaConfig, metric string) gin.HandlerFunc {
 		c.Header(HeaderQuotaReset, reset.Format(time.RFC3339))
 
 		if limit <= 0 {
-			// No countable allowance for this metric under this tier.
+			// No countable allowance for this metric under this tier — either
+			// the metric is uncounted, or the tier is unlimited (operator,
+			// whose OpsPerDay is tiers.Unlimited). Nothing is incremented, so
+			// an operator's testing never lands in the usage ledger either.
 			c.Next()
 			return
 		}

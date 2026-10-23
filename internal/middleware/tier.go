@@ -108,6 +108,15 @@ func (cfg TierConfig) resolveNow(c *gin.Context) TierResolution {
 		}
 	}
 
-	tier := tiers.Resolve(signedIn, user)
+	// The operator check reads the email and email_verified claims off the
+	// Principal, which OptionalFirebaseAuth populated from a token whose
+	// signature was verified by the Firebase Admin SDK. Nothing from the
+	// request itself is consulted, so no header can forge it.
+	var email string
+	var verified bool
+	if signedIn {
+		email, verified = principal.Email, principal.EmailVerified
+	}
+	tier := cfg.Registry.ResolveFor(signedIn, email, verified, user)
 	return TierResolution{Tier: tier, Limits: cfg.Registry.For(tier), User: user}
 }

@@ -394,7 +394,42 @@ deploy. Runtime verification: `docs/dr-desktop-downloads-verification.md`.
 | `DR_DESKTOP_MAC_INTEL_KEY` | `double-raven/desktop/mac/intel/Double Raven Portal-0.1.0.dmg` | S3 key of the Mac (Intel) `.dmg`. |
 | `DR_DESKTOP_WINDOWS_KEY` | `double-raven/desktop/windows/Double Raven Portal Setup 0.1.0.exe` | S3 key of the Windows installer `.exe`. |
 
-### 4.11 Product-analytics emission (media_manipulator_analytics)
+### 4.11 Tiers, quotas and the operator allowlist
+
+Every number the product promises resolves through `internal/tiers` (fed by
+`TIER_*` env vars; `/pricing` renders `GET /api/tiers`). `TIER_QUOTA_ENABLED`
+(default `true`) is the single kill switch for the whole tier system.
+
+The **operator** tier is the site's own people. It is not a plan: it does not
+appear in `/api/tiers`, cannot be stored on `mm_users` (the CHECK forbids it),
+and `cmd/grant-tier` cannot grant it. It is re-derived on **every request** from
+the Firebase ID token the Admin SDK verified, and only when that token carries
+`email_verified=true` for an address on the list — so no header, query string,
+client flag or database row can produce it, and a stranger who registers one
+of the listed addresses with a password (unverified) gets the free tier.
+
+An operator gets Premium's capabilities with every allowance removed: `ops`,
+`ai_ops` and `export` are uncounted (nothing is written to `mm_usage_counters`),
+the saved-project cap is unlimited, the per-route hourly abuse buckets
+(`RATE_LIMIT_*_PER_HOUR`, `*_RATE_LIMIT_PER_*_PER_HOUR`) are skipped, and the
+upload-size / source-duration caps are the deployment ceilings
+(`MAX_FILE_SIZE_BYTES`, `MAX_VIDEO_DURATION_SECONDS`). The **global per-IP RPS
+guard still applies** — it is DoS protection, not an allowance.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `OPERATOR_EMAILS` | _(empty)_ | Comma-separated, case-insensitive allowlist of Firebase accounts that resolve to the `operator` tier. Empty → the tier does not exist. The server logs `operator tier enabled` with the count (never the addresses) at startup. |
+
+Sign-in note: Google sign-in always yields a verified email. An email/password
+account must complete Firebase email verification before the allowlist honours
+it — until then it is an ordinary free account.
+
+Migration `20261023001_add_operator_owner_tier` widens the
+`mm_conversion_jobs.owner_tier` CHECK so an operator's jobs are recorded like
+anyone else's (history + retention); apply it with the usual
+`go run migrate.go up` before setting the variable.
+
+### 4.12 Product-analytics emission (media_manipulator_analytics)
 
 The API emits a small set of **server-truth** product-analytics events to the
 analytics service on port 59998 (`internal/analyticsemit`). This is a second,

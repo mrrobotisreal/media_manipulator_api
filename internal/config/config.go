@@ -178,12 +178,12 @@ type Config struct {
 	// deployment can monetize depth without a code change.
 	TierAnonStudioVersionAutoKeep int
 
-	TierFreeOpsPerDay       int
-	TierFreeAIOpsPerDay     int
-	TierFreeMaxFileBytes    int64
-	TierFreeMaxVideoSeconds int
-	TierFreeMaxOutputHeight int
-	TierFreeMaxLadderHeight int
+	TierFreeOpsPerDay             int
+	TierFreeAIOpsPerDay           int
+	TierFreeMaxFileBytes          int64
+	TierFreeMaxVideoSeconds       int
+	TierFreeMaxOutputHeight       int
+	TierFreeMaxLadderHeight       int
 	TierFreeStudioProjects        int
 	TierFreeRetentionHours        int
 	TierFreeStudioVersionAutoKeep int
@@ -199,6 +199,19 @@ type Config struct {
 	TierPremiumStudioProjects        int
 	TierPremiumRetentionHours        int
 	TierPremiumStudioVersionAutoKeep int
+
+	// OperatorEmails is the allowlist behind the `operator` tier: the site's
+	// own people, who get no daily allowance, no saved-project cap and no
+	// per-route hourly bucket so they can test every tool without hitting a
+	// wall. Comma-separated, lowercased at load.
+	//
+	// Spoof-resistance comes from WHERE the email is read, not from secrecy of
+	// the list: tiers.Registry.IsOperator only ever sees the email claim of a
+	// Firebase ID token the Admin SDK verified, and only honours it when the
+	// token also says email_verified=true. A request header, a query string,
+	// a client-side flag or an mm_users row can never produce the tier.
+	// Empty (the default) disables the tier entirely.
+	OperatorEmails []string
 
 	// FFmpeg validation
 	MaxVideoDurationSeconds int
@@ -539,35 +552,39 @@ func Load() *Config {
 		// pre-tier global-config behaviour exactly.
 		TierQuotaEnabled: getEnvBool("TIER_QUOTA_ENABLED", true),
 
-		TierAnonOpsPerDay:       getEnvInt("TIER_ANON_OPS_PER_DAY", 5),
-		TierAnonAIOpsPerDay:     getEnvInt("TIER_ANON_AI_OPS_PER_DAY", 1),
-		TierAnonMaxFileBytes:    getEnvInt64("TIER_ANON_MAX_FILE_BYTES", 200*1024*1024),
-		TierAnonMaxVideoSeconds: getEnvInt("TIER_ANON_MAX_VIDEO_SECONDS", 5*60),
-		TierAnonMaxOutputHeight: getEnvInt("TIER_ANON_MAX_OUTPUT_HEIGHT", 1080),
-		TierAnonMaxLadderHeight: getEnvInt("TIER_ANON_MAX_LADDER_HEIGHT", 720),
-		TierAnonStudioProjects:  getEnvIntDefault("TIER_ANON_STUDIO_PROJECTS", 1),
-		TierAnonRetentionHours:  getEnvInt("TIER_ANON_RETENTION_HOURS", 24),
+		TierAnonOpsPerDay:             getEnvInt("TIER_ANON_OPS_PER_DAY", 5),
+		TierAnonAIOpsPerDay:           getEnvInt("TIER_ANON_AI_OPS_PER_DAY", 1),
+		TierAnonMaxFileBytes:          getEnvInt64("TIER_ANON_MAX_FILE_BYTES", 200*1024*1024),
+		TierAnonMaxVideoSeconds:       getEnvInt("TIER_ANON_MAX_VIDEO_SECONDS", 5*60),
+		TierAnonMaxOutputHeight:       getEnvInt("TIER_ANON_MAX_OUTPUT_HEIGHT", 1080),
+		TierAnonMaxLadderHeight:       getEnvInt("TIER_ANON_MAX_LADDER_HEIGHT", 720),
+		TierAnonStudioProjects:        getEnvIntDefault("TIER_ANON_STUDIO_PROJECTS", 1),
+		TierAnonRetentionHours:        getEnvInt("TIER_ANON_RETENTION_HOURS", 24),
 		TierAnonStudioVersionAutoKeep: getEnvInt("TIER_ANON_STUDIO_VERSION_AUTO_KEEP", 20),
 
-		TierFreeOpsPerDay:       getEnvInt("TIER_FREE_OPS_PER_DAY", 30),
-		TierFreeAIOpsPerDay:     getEnvInt("TIER_FREE_AI_OPS_PER_DAY", 5),
-		TierFreeMaxFileBytes:    getEnvInt64("TIER_FREE_MAX_FILE_BYTES", 1024*1024*1024),
-		TierFreeMaxVideoSeconds: getEnvInt("TIER_FREE_MAX_VIDEO_SECONDS", 20*60),
-		TierFreeMaxOutputHeight: getEnvInt("TIER_FREE_MAX_OUTPUT_HEIGHT", 1440),
-		TierFreeMaxLadderHeight: getEnvInt("TIER_FREE_MAX_LADDER_HEIGHT", 1080),
-		TierFreeStudioProjects:  getEnvIntDefault("TIER_FREE_STUDIO_PROJECTS", 5),
-		TierFreeRetentionHours:  getEnvInt("TIER_FREE_RETENTION_HOURS", 7*24),
+		TierFreeOpsPerDay:             getEnvInt("TIER_FREE_OPS_PER_DAY", 30),
+		TierFreeAIOpsPerDay:           getEnvInt("TIER_FREE_AI_OPS_PER_DAY", 5),
+		TierFreeMaxFileBytes:          getEnvInt64("TIER_FREE_MAX_FILE_BYTES", 1024*1024*1024),
+		TierFreeMaxVideoSeconds:       getEnvInt("TIER_FREE_MAX_VIDEO_SECONDS", 20*60),
+		TierFreeMaxOutputHeight:       getEnvInt("TIER_FREE_MAX_OUTPUT_HEIGHT", 1440),
+		TierFreeMaxLadderHeight:       getEnvInt("TIER_FREE_MAX_LADDER_HEIGHT", 1080),
+		TierFreeStudioProjects:        getEnvIntDefault("TIER_FREE_STUDIO_PROJECTS", 5),
+		TierFreeRetentionHours:        getEnvInt("TIER_FREE_RETENTION_HOURS", 7*24),
 		TierFreeStudioVersionAutoKeep: getEnvInt("TIER_FREE_STUDIO_VERSION_AUTO_KEEP", 20),
 
-		TierPremiumOpsPerDay:       getEnvInt("TIER_PREMIUM_OPS_PER_DAY", 300),
-		TierPremiumAIOpsPerDay:     getEnvInt("TIER_PREMIUM_AI_OPS_PER_DAY", 60),
-		TierPremiumMaxFileBytes:    getEnvInt64("TIER_PREMIUM_MAX_FILE_BYTES", 5*1024*1024*1024),
-		TierPremiumMaxVideoSeconds: getEnvInt("TIER_PREMIUM_MAX_VIDEO_SECONDS", 2*60*60),
-		TierPremiumMaxOutputHeight: getEnvInt("TIER_PREMIUM_MAX_OUTPUT_HEIGHT", 2160),
-		TierPremiumMaxLadderHeight: getEnvInt("TIER_PREMIUM_MAX_LADDER_HEIGHT", 2160),
-		TierPremiumStudioProjects:  getEnvIntDefault("TIER_PREMIUM_STUDIO_PROJECTS", -1),
-		TierPremiumRetentionHours:  getEnvInt("TIER_PREMIUM_RETENTION_HOURS", 30*24),
+		TierPremiumOpsPerDay:             getEnvInt("TIER_PREMIUM_OPS_PER_DAY", 300),
+		TierPremiumAIOpsPerDay:           getEnvInt("TIER_PREMIUM_AI_OPS_PER_DAY", 60),
+		TierPremiumMaxFileBytes:          getEnvInt64("TIER_PREMIUM_MAX_FILE_BYTES", 5*1024*1024*1024),
+		TierPremiumMaxVideoSeconds:       getEnvInt("TIER_PREMIUM_MAX_VIDEO_SECONDS", 2*60*60),
+		TierPremiumMaxOutputHeight:       getEnvInt("TIER_PREMIUM_MAX_OUTPUT_HEIGHT", 2160),
+		TierPremiumMaxLadderHeight:       getEnvInt("TIER_PREMIUM_MAX_LADDER_HEIGHT", 2160),
+		TierPremiumStudioProjects:        getEnvIntDefault("TIER_PREMIUM_STUDIO_PROJECTS", -1),
+		TierPremiumRetentionHours:        getEnvInt("TIER_PREMIUM_RETENTION_HOURS", 30*24),
 		TierPremiumStudioVersionAutoKeep: getEnvInt("TIER_PREMIUM_STUDIO_VERSION_AUTO_KEEP", 20),
+
+		// Operator allowlist — see the struct doc. Same loader as
+		// DR_ALLOWED_EMAILS so membership is a plain lowercase compare.
+		OperatorEmails: splitCSVLower(getEnv("OPERATOR_EMAILS", "")),
 
 		// FFmpeg validation
 		MaxVideoDurationSeconds: getEnvInt("MAX_VIDEO_DURATION_SECONDS", 7200),

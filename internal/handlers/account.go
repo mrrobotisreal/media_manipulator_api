@@ -117,7 +117,16 @@ func (h *AccountHandler) currentUser(c *gin.Context) (*models.User, bool) {
 }
 
 func (h *AccountHandler) buildUsageResponse(c *gin.Context, user *models.User, signedIn bool) usageResponse {
-	tier := tiers.Resolve(signedIn, user)
+	// Same resolution the enforcement path uses (middleware.TierContext →
+	// Registry.ResolveFor), so the meter the UI renders and the 429 it would
+	// get agree — including the operator allowlist, which is read off the
+	// verified token's claims and nowhere else.
+	var email string
+	var verified bool
+	if principal, ok := middleware.PrincipalFrom(c); ok && signedIn {
+		email, verified = principal.Email, principal.EmailVerified
+	}
+	tier := h.registry.ResolveFor(signedIn, email, verified, user)
 	now := time.Now().UTC()
 
 	usage := map[string]int64{}

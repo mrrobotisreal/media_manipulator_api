@@ -367,3 +367,52 @@ func TestQuotaFailsOpenOnStoreError(t *testing.T) {
 		}
 	}
 }
+
+// An operator — a verified Firebase identity on OPERATOR_EMAILS — is never
+// counted and never blocked, no matter how many times they hit a gated route.
+// The ledger stays empty for them, and the tier header says why.
+func TestQuotaOperatorIsUncounted(t *testing.T) {
+	cfg := config.Load()
+	cfg.OperatorEmails = []string{"owner@example.com"}
+	registry := tiers.New(cfg)
+	store := &stubQuotaStore{user: &models.User{ID: "u-op", Tier: "free"}}
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := r.Group("/api")
+	// Stand in for OptionalFirebaseAuth: the identity a verified token yields.
+	api.Use(func(c *gin.Context) {
+		c.Set(middleware.CtxPrincipal, &middleware.Principal{UID: "uid-op", Email: "owner@example.com", EmailVerified: true})
+		c.Next()
+	})
+	api.Use(middleware.TierContext(middleware.TierConfig{Store: store, Registry: registry}, true))
+	api.Use(quotaDispatcher(middleware.QuotaConfig{
+		Store:        store,
+		Registry:     registry,
+		Enabled:      true,
+		IPHashSecret: quotaIPSalt[:],
+	}))
+	api.POST("/upload", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	api.POST("/image-restore/start", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+
+	for _, path := range []string{"/api/upload", "/api/image-restore/start"} {
+		for i := 0; i < cfg.TierPremiumOpsPerDay+5; i++ {
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, path, nil))
+			if w.Code != http.StatusOK {
+				t.Fatalf("%s request %d: operator must never be throttled, got %d (%s)", path, i, w.Code, w.Body.String())
+			}
+			if got := w.Header().Get(middleware.HeaderTier); got != string(tiers.TierOperator) {
+				t.Fatalf("%s: X-MM-Tier = %q, want operator", path, got)
+			}
+			if w.Header().Get(middleware.HeaderQuotaLimit) != "" {
+				t.Fatalf("%s: an uncounted tier must not advertise a limit", path)
+			}
+		}
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.counts) != 0 {
+		t.Fatalf("operator usage landed in the ledger: %v", store.counts)
+	}
+}
