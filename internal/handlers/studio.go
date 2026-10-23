@@ -344,6 +344,12 @@ func (h *StudioHandler) PresignAsset(c *gin.Context) {
 		return
 	}
 	contentType := normalizeUploadContentType(req.ContentType, ext)
+	if isStudioImageExtension(ext) {
+		// Browsers often send HEIC/AVIF/SVG as octet-stream or empty.
+		if lc := strings.ToLower(strings.TrimSpace(contentType)); lc == "" || lc == "application/octet-stream" {
+			contentType = studioImageMIMEForExt(ext)
+		}
+	}
 	if ext == "cube" {
 		// LUT asset: small, non-AV content type.
 		if req.FileSizeBytes > studioMaxLUTBytes {
@@ -357,8 +363,15 @@ func (h *StudioHandler) PresignAsset(c *gin.Context) {
 			return
 		}
 		lower := strings.ToLower(contentType)
-		if !strings.HasPrefix(lower, "video/") && !strings.HasPrefix(lower, "audio/") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "contentType must be a video or audio MIME type"})
+		isImage := strings.HasPrefix(lower, "image/")
+		if isStudioImageExtension(ext) {
+			// Image extensions only accept image/* (no video/audio smuggling).
+			if !isImage {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "contentType must be a video, audio, or image MIME type"})
+				return
+			}
+		} else if !strings.HasPrefix(lower, "video/") && !strings.HasPrefix(lower, "audio/") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "contentType must be a video, audio, or image MIME type"})
 			return
 		}
 	}
@@ -1361,8 +1374,30 @@ func isSupportedStudioExtension(ext string) bool {
 		"cube": // 3D LUT asset
 		return true
 	default:
-		return false
+		return isStudioImageExtension(ext)
 	}
+}
+
+// studioImageMIMEs maps still-image extensions to their canonical MIME type.
+var studioImageMIMEs = map[string]string{
+	"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+	"webp": "image/webp", "gif": "image/gif", "bmp": "image/bmp",
+	"tif": "image/tiff", "tiff": "image/tiff", "heic": "image/heic",
+	"heif": "image/heif", "avif": "image/avif", "svg": "image/svg+xml",
+}
+
+func isStudioImageExtension(ext string) bool {
+	_, ok := studioImageMIMEs[strings.ToLower(ext)]
+	return ok
+}
+
+// studioImageMIMEForExt returns the image MIME for ext, or
+// application/octet-stream when ext is not a still-image extension.
+func studioImageMIMEForExt(ext string) string {
+	if m, ok := studioImageMIMEs[strings.ToLower(ext)]; ok {
+		return m
+	}
+	return "application/octet-stream"
 }
 
 // studioMaxLUTBytes caps .cube uploads (LUTs are tiny; an 8MB ceiling is
