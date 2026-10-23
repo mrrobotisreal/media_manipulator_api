@@ -4,6 +4,8 @@ A Go backend service for converting images, videos, and audio files. Built to wo
 
 ## Features
 
+> The web app exposes 70 tool pages (count of `slug:` entries in `../media-manipulator-ui/content/toolPages.ts`; the list lives in the UI repo, so recount there rather than trusting this number).
+
 ### Image Conversion
 - **Raster formats**: JPG, PNG, WebP, GIF, AVIF (in/out, delegate-dependent)
 - **Modern inputs**: HEIC/HEIF (iPhone) and AVIF decode via ImageMagick delegates
@@ -68,6 +70,9 @@ media_manipulator_api/
 - ImageMagick (for advanced image processing and as the WebP→PDF rasterization fallback)
 - **exiftool** (`libimage-exiftool-perl` on Debian/Ubuntu, `brew install exiftool` on macOS): required for the metadata inspector and for strip/keep/custom metadata modes. `ffprobe` (part of FFmpeg) feeds video/audio metadata.
 - **poppler-utils** (for PDF conversion — provides `pdftoppm` and `pdfinfo`)
+- **tesseract** and **Ghostscript** (`gs`) (for the document-scan tool: `apt install tesseract-ocr ghostscript` / `brew install tesseract ghostscript`)
+- **rsvg-convert**, **potrace**: see "Image format / vector tooling" below
+- **whisper-ctranslate2** (Python, in a venv or on `$PATH`; captions/transcription) and, optionally, **nvidia-smi** (GPU detection; GPU-accelerated paths fall back when absent). Python venv setup for the AI tools is described in `RUNBOOK.md`.
 - **zip** is not required: ZIP archives are produced by Go's standard library
 
 > If FFmpeg is missing, conversions return an actionable "install FFmpeg" error;

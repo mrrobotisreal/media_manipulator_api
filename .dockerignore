@@ -1,0 +1,5 @@
+# Credentials never enter a docker build context (MM37).
+.env
+.env.*
+*firebase*.json
+*service-account*.json

@@ -550,7 +550,7 @@ key scoped only to token verification answers `INSUFFICIENT_PERMISSION`.
 Migration `20261023001_add_operator_owner_tier` widens the
 `mm_conversion_jobs.owner_tier` CHECK so an operator's jobs are recorded like
 anyone else's (history + retention); apply it with the usual
-`go run migrate.go up` before setting the variable.
+`go run ./internal/migrations up` before setting the variable.
 
 #### Tier promises enforced (MM18)
 
@@ -570,7 +570,7 @@ What `/pricing` sells is what the server delivers:
 | `GPU_SCHED_AGING_MINUTES` | `10` | A GPU-queue waiter older than this is promoted ahead of every un-aged waiter, so Premium cannot starve free jobs. `0` disables aging (strict precedence). |
 
 - **Output height.** A request whose rendered height exceeds the tier's
-  `MaxOutputHeight` (1080 anonymous / 1440 free / 2160 Premium; operator uncapped
+  `MaxOutputHeight` (`TIER_ANON_MAX_OUTPUT_HEIGHT` 1080 / `TIER_FREE_MAX_OUTPUT_HEIGHT` 1440 / `TIER_PREMIUM_MAX_OUTPUT_HEIGHT` 2160; operator uncapped
   to the 4320 deployment ceiling) is refused with HTTP 403:
   `{"error":"output_height_limited","message":...,"limit":<px>,"requested":<px>,"upgradePath":"signup"|"premium"}`
   (`upgradePath` is omitted for Premium, which has nothing higher to buy).
@@ -613,7 +613,7 @@ Billing is **off** until `BILLING_ENABLED=true` AND all four values below are se
   `customer.subscription.created|updated|deleted`, `invoice.paid`,
   `invoice.payment_failed`. Local test: `stripe listen --forward-to localhost:59997/api/billing/webhook`.
 * Migration `20261023003_add_billing` adds the Stripe columns to `mm_users` and the
-  `mm_billing_events` idempotency table; apply with `go run migrate.go up` BEFORE
+  `mm_billing_events` idempotency table; apply with `go run ./internal/migrations up` BEFORE
   enabling billing. Subscription tier changes are audited in `mm_tier_grants` with
   `granted_by='stripe'`.
 * Go-live (live keys, endpoint, Portal config, taxes) is **section 4.13**, written in MM21.
@@ -1152,7 +1152,7 @@ package/
 | --- | --- | --- |
 | `Invalid s3Key` (400 on /start) | The UI sent a key that doesn't match `videos/YYYYMMDD/sessionID/uuid.ext`. | Confirm the UI is rendering through the standard upload flow. |
 | `Uploaded video was not found` | The S3 object expired or was deleted between probe and start. | Re-upload. |
-| `360p requires a premium account` etc. | UI selected a rung outside the free allow-list. | Free is `360p, 480p, 720p` only. |
+| `360p requires a premium account` etc. | UI selected a rung outside the free allow-list. | Free tops out at `TIER_FREE_MAX_LADDER_HEIGHT` (default 1080), so `360p`-`1080p`; anonymous is capped by `TIER_ANON_MAX_LADDER_HEIGHT` (720), Premium by `TIER_PREMIUM_MAX_LADDER_HEIGHT` (2160). |
 | `source video is too small for 720p` | UI ignored `selectableRungs` and submitted a rung > probe.height. | UI bug; confirm probe response was respected. |
 | `This video is below the free transcode minimum of 360p…` | Source height < 360. | User-facing — show the message. |
 | `captions failed: ...` in stages but job completes anyway | Captions are best-effort. The error lives in `stages[].message` and `report.json.warnings`. | Open the package and check the README. |

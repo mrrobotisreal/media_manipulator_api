@@ -34,3 +34,7 @@ internal/services/job-*/
 /grant-tier
 /operator-check
 /parity-render
+
+# Credentials must never live in the repo tree (MM37). Keep them outside, e.g. /etc/media-manipulator/.
+*firebase*.json
+*service-account*.json
