@@ -218,6 +218,26 @@ type Config struct {
 	// Empty (the default) disables the tier entirely.
 	OperatorEmails []string
 
+	// Billing (MM17). Ships dark: BillingEnabled defaults to false, and
+	// BillingConfigured() additionally demands every secret/id below, so a
+	// half-filled env can never expose a broken checkout. StripeSecretKey and
+	// StripeWebhookSecret are SECRETS: never log them.
+	BillingEnabled            bool
+	StripeSecretKey           string
+	StripeWebhookSecret       string
+	StripePricePremiumMonthly string
+	StripePricePremiumYearly  string
+	// StripeAPIVersion optionally overrides the API version the SDK sends
+	// (default: the stripe-go constant). Empty = use the SDK's.
+	StripeAPIVersion string
+	// BillingGraceDays is how long Premium survives a failed payment.
+	BillingGraceDays int
+	// BillingPublicBaseURL prefixes Checkout success/cancel and Portal return URLs.
+	BillingPublicBaseURL string
+	// Display-only prices for GET /api/tiers; the charged amount is the Stripe Price.
+	BillingPriceMonthlyUSD int
+	BillingPriceYearlyUSD  int
+
 	// FFmpeg validation
 	MaxVideoDurationSeconds int
 	MaxVideoWidth           int
@@ -592,6 +612,18 @@ func Load() *Config {
 		// Operator allowlist — see the struct doc. Same loader as
 		// DR_ALLOWED_EMAILS so membership is a plain lowercase compare.
 		OperatorEmails: splitCSVLower(getEnv("OPERATOR_EMAILS", "")),
+
+		// Billing — see the struct doc. Dark by default.
+		BillingEnabled:            getEnvBool("BILLING_ENABLED", false),
+		StripeSecretKey:           strings.TrimSpace(getEnv("STRIPE_SECRET_KEY", "")),
+		StripeWebhookSecret:       strings.TrimSpace(getEnv("STRIPE_WEBHOOK_SECRET", "")),
+		StripePricePremiumMonthly: strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_MONTHLY", "")),
+		StripePricePremiumYearly:  strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_YEARLY", "")),
+		StripeAPIVersion:          strings.TrimSpace(getEnv("STRIPE_API_VERSION", "")),
+		BillingGraceDays:          getEnvInt("BILLING_GRACE_DAYS", 7),
+		BillingPublicBaseURL:      strings.TrimRight(strings.TrimSpace(getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com")), "/"),
+		BillingPriceMonthlyUSD:    getEnvInt("BILLING_PRICE_MONTHLY_USD", 7),
+		BillingPriceYearlyUSD:     getEnvInt("BILLING_PRICE_YEARLY_USD", 70),
 
 		// FFmpeg validation
 		MaxVideoDurationSeconds: getEnvInt("MAX_VIDEO_DURATION_SECONDS", 7200),
