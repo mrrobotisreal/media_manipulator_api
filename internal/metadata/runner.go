@@ -27,3 +27,6 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) (string,
 	}
 	return stdout.String(), stderr.String(), err
 }
+
+// DefaultRunner returns the Runner that executes the real binaries.
+func DefaultRunner() Runner { return execRunner{} }

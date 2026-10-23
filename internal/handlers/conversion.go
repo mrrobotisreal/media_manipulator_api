@@ -106,6 +106,7 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.POST("/video-upload/complete", h.CompleteVideoUpload)
 	r.GET("/job/:jobId", h.GetJobStatus)
 	r.GET("/job/:jobId/events", h.StreamJobEvents)
+	r.GET("/job/:jobId/metadata", h.GetJobMetadata)
 	r.GET("/download/:jobId", h.DownloadFile)
 	r.GET("/result/:jobId", h.InlineResult)
 	r.GET("/transcript/:jobId", h.GetTranscriptResult)
@@ -225,9 +226,7 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 	if metadata == nil {
 		metadata = &services.MediaMetadata{FileType: fileType, MimeType: mimeType, Details: map[string]any{}, Error: stringOrErr(probeErr)}
 	}
-	if err := services.WriteMetadata(filepath.Join(jobOutputDir, "metadata.json"), metadata); err != nil {
-		log.Printf("failed to write metadata for job %s: %v", job.ID, err)
-	}
+	h.writeOriginalMetadata(ctx, job.ID, uploadPath, fileType, fileHeader.Filename, mimeType, jobOutputDir)
 
 	// Duration and resolution caps. ProbeFile already ran ffprobe and kept the
 	// raw JSON, so this reuses that output rather than probing again.
