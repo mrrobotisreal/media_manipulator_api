@@ -28,9 +28,20 @@ type StudioClipRef struct {
 	TrackID    string
 	TrackKind  models.StudioTrackKind
 	TrackIndex int
+	// TrackMuted means the track is SILENCED in the mix: the part-19 export
+	// derives it from models.IsTrackAudible (solo beats mute; while any audio
+	// track solos every non-soloed track, video embedded audio included, is
+	// silent). The name predates solo; every consumer wants "not audible".
 	TrackMuted bool
-	FadeIn     float64
-	FadeOut    float64
+	// TrackHidden (part 19): a hidden video track never reaches the composite
+	// (its embedded audio still mixes). Mirrors the preview's hiddenTrackIds.
+	TrackHidden bool
+	// Track mixer fields (part 19), copied from the EDL track.
+	TrackGain    *float64
+	TrackPan     *float64
+	TrackEffects *models.StudioTrackEffects
+	FadeIn       float64
+	FadeOut      float64
 
 	TransInType   string
 	TransInDur    float64
@@ -61,7 +72,9 @@ func resolveTransition(c models.StudioClip) (string, float64) {
 func CollectExportRefs(p *models.StudioProject, assets map[string]*models.StudioAsset) ([]StudioClipRef, float64, bool) {
 	refs := make([]StudioClipRef, 0)
 	var duration float64
+	soloOn := models.AnySolo(p.Tracks)
 	for _, track := range p.Tracks {
+		silenced := !models.IsTrackAudible(track, soloOn)
 		ordered := append([]models.StudioClip(nil), track.Clips...)
 		sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].TimelineStart < ordered[j].TimelineStart })
 
@@ -85,7 +98,7 @@ func CollectExportRefs(p *models.StudioProject, assets map[string]*models.Studio
 			if clip.Volume != nil {
 				volume = *clip.Volume
 			}
-			contributesAudio := !track.Muted && asset.HasAudio && clip.Freeze == nil &&
+			contributesAudio := !silenced && asset.HasAudio && clip.Freeze == nil &&
 				(volume > 0 || len(clip.VolumeKeyframes) > 0 || clipHasVolumeLane(clip))
 			if track.Kind != models.StudioTrackKindVideo && !contributesAudio {
 				continue // muted/silent audio clip — nothing to render
@@ -122,7 +135,11 @@ func CollectExportRefs(p *models.StudioProject, assets map[string]*models.Studio
 				TrackID:       track.ID,
 				TrackKind:     track.Kind,
 				TrackIndex:    track.Index,
-				TrackMuted:    track.Muted,
+				TrackMuted:    silenced,
+				TrackHidden:   track.Hidden && track.Kind == models.StudioTrackKindVideo,
+				TrackGain:     track.Gain,
+				TrackPan:      track.Pan,
+				TrackEffects:  track.Effects,
 				FadeIn:        fadeIn,
 				FadeOut:       fadeOut,
 				TransInType:   transInType,
@@ -155,6 +172,9 @@ type StudioPlanSpec struct {
 	// LocalByKey maps an asset's S3KeyOriginal to the local media path used as
 	// its ffmpeg input.
 	LocalByKey map[string]string
+	// MasterGain (part 19) is the project master fader (audio.masterGain, 0..2);
+	// nil = unity.
+	MasterGain *float64
 	// LutPaths maps a lut effect's lutAssetId to a local .cube path. A missing
 	// entry skips that LUT.
 	LutPaths map[string]string
@@ -168,7 +188,13 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 		Width: spec.Width, Height: spec.Height, FPS: spec.FPS, Duration: spec.Duration,
 		Ducking: spec.Ducking, Loudness: spec.Loudness,
 	}
+	if spec.MasterGain != nil && *spec.MasterGain != 1 {
+		g := *spec.MasterGain
+		plan.MasterGain = &g
+	}
+	seenTrack := map[string]bool{}
 	for _, r := range refs {
+
 		// Title clips consume no ffmpeg input — their chain starts from a
 		// color= source (buildVideoClipChain); InputIndex -1 marks that.
 		idx := -1
@@ -199,7 +225,10 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 		if r.Clip.Volume != nil {
 			volume = *r.Clip.Volume
 		}
-		if r.TrackKind == models.StudioTrackKindVideo {
+		if r.TrackKind == models.StudioTrackKindVideo && r.TrackHidden {
+			plan.BlankVideo = true // keep a black canvas if every video track is hidden
+		}
+		if r.TrackKind == models.StudioTrackKindVideo && !r.TrackHidden {
 			seg := StudioExportVideoSeg{
 				InputIndex: idx, SourceIn: r.Clip.SourceIn, SourceOut: r.Clip.SourceOut,
 				TimelineStart: r.Clip.TimelineStart, Opacity: opacity, TrackIndex: r.TrackIndex,
@@ -258,6 +287,13 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 				ClipKeyframes: r.Clip.Keyframes,
 				SegIndex:      len(plan.Audio),
 			}
+			if tr, ok := audioTrackFor(r); ok {
+				aseg.TrackID = r.TrackID
+				if !seenTrack[r.TrackID] {
+					seenTrack[r.TrackID] = true
+					plan.AudioTracks = append(plan.AudioTracks, tr)
+				}
+			}
 			ApplyAudioSpeed(&aseg, r.Clip)
 			plan.Audio = append(plan.Audio, aseg)
 		}
@@ -302,4 +338,19 @@ func imageInputPre(fps, hold float64) []string {
 		hold = 0
 	}
 	return []string{"-loop", "1", "-framerate", fpsStr, "-t", formatSeconds(hold + frame)}
+}
+
+// audioTrackFor builds the track-level mixer stage for a ref's track (part 19),
+// or ok=false when the track has no non-default mixer setting — such tracks
+// stay on the flat per-clip path so pre-mixer graphs are byte-identical.
+func audioTrackFor(r StudioClipRef) (StudioExportAudioTrack, bool) {
+	tr := StudioExportAudioTrack{ID: r.TrackID, Gain: optF(r.TrackGain, 1), Pan: optF(r.TrackPan, 0)}
+	if fx := r.TrackEffects; fx != nil {
+		tr.EQ = fx.EQ
+		tr.Compressor = fx.Compressor
+	}
+	if !tr.active() {
+		return StudioExportAudioTrack{}, false
+	}
+	return tr, true
 }
