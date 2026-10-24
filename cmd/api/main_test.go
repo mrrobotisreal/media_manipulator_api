@@ -94,6 +94,9 @@ func TestRouteLimitDispatcherMatchesGatedRoutes(t *testing.T) {
 	r.POST("/api/studio/projects/abc-123/export", func(c *gin.Context) { c.Status(http.StatusOK) })
 	r.POST("/api/job/xyz/cancel", func(c *gin.Context) { c.Status(http.StatusOK) })
 	r.GET("/api/upload", func(c *gin.Context) { c.Status(http.StatusOK) })
+	r.GET("/api/share/:token", func(c *gin.Context) { c.Status(http.StatusOK) })
+	r.GET("/api/share/:token/file", func(c *gin.Context) { c.Status(http.StatusOK) })
+	r.POST("/api/jobs/:jobId/share", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	cases := []struct {
 		method, path string
@@ -105,6 +108,10 @@ func TestRouteLimitDispatcherMatchesGatedRoutes(t *testing.T) {
 		{http.MethodPost, "/api/job/xyz/cancel", ""},
 		// GET never spends a bucket.
 		{http.MethodGet, "/api/upload", ""},
+		// MM32: the public share routes are IP-limited; the owner POST is not.
+		{http.MethodGet, "/api/share/abc", "share_public"},
+		{http.MethodGet, "/api/share/abc/file", "share_public"},
+		{http.MethodPost, "/api/jobs/xyz/share", ""},
 	}
 
 	for _, tc := range cases {

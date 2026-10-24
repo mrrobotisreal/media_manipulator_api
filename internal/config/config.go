@@ -166,6 +166,12 @@ type Config struct {
 	RateLimitAnalysisPerSessionPerHour   int
 	RateLimitAnalysisPerIPPerHour        int
 	RateLimitAuditAllowed                bool
+	// MM32: per-IP hourly cap on the public share routes (descriptor + file
+	// range requests). Keyed by IP only; the caller has no session.
+	RateLimitSharePerIPPerHour int
+	// SharePublicBaseURL prefixes the page URL returned by POST /api/jobs/:id/share
+	// (<base>/r/<token>).
+	SharePublicBaseURL string
 
 	// Tier limits
 	//
@@ -607,6 +613,9 @@ func Load() *Config {
 		RateLimitAnalysisPerSessionPerHour:   getEnvInt("RATE_LIMIT_ANALYSIS_PER_SESSION_PER_HOUR", 20),
 		RateLimitAnalysisPerIPPerHour:        getEnvInt("RATE_LIMIT_ANALYSIS_PER_IP_PER_HOUR", 40),
 		RateLimitAuditAllowed:                getEnvBool("RATE_LIMIT_AUDIT_ALLOWED", false),
+		RateLimitSharePerIPPerHour:           getEnvInt("RATE_LIMIT_SHARE_PER_IP_PER_HOUR", 1200),
+		SharePublicBaseURL: strings.TrimRight(strings.TrimSpace(getEnv("SHARE_PUBLIC_BASE_URL",
+			getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com"))), "/"),
 
 		// Tier limits — see the struct comment. These defaults are the
 		// published matrix; /pricing renders them via GET /api/tiers.

@@ -45,6 +45,8 @@ func wireDataControls(ctx context.Context, cfg *config.Config, store *telemetry.
 	data.SetMetric(func(scope string) { m.DataDeleted(scope) })
 	conversion.SetDataHandler(data)
 	conversion.SetJobRecords(store)
+	// MM32: result share links (owner create/revoke, public read-only token routes).
+	conversion.SetShareHandler(handlers.NewShareHandler(conversion, store, jobManager, cfg, log))
 	studio.SetDeletion(sweeper, store)
 	studio.SetDeletionMetric(func(scope string) { m.DataDeleted(scope) })
 

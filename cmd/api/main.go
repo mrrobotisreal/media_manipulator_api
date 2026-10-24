@@ -789,7 +789,15 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 			},
 		},
 	}
+	// MM32: the public share routes (descriptor + file, GET only) are limited like
+	// downloads' abuse surface: per IP, no session bucket (the viewer has none),
+	// and never charged to a quota.
+	shareGuard := guard("share_public", "share", 0, cfg.RateLimitSharePerIPPerHour)
 	return func(c *gin.Context) {
+		if c.Request.Method == http.MethodGet && strings.HasPrefix(c.Request.URL.Path, "/api/share/") {
+			shareGuard(c)
+			return
+		}
 		if c.Request.Method != http.MethodPost {
 			c.Next()
 			return

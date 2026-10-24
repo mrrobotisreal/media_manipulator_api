@@ -50,6 +50,8 @@ type ConversionHandler struct {
 	records JobRecordSource
 	// data serves the MM24 delete / keep-longer routes. nil = not mounted.
 	data *DataHandler
+	// share serves the MM32 result-link routes. nil = not mounted.
+	share *ShareHandler
 }
 
 // SetJobRecords attaches the durable job lookup (MM24 download-after-restart).
@@ -60,6 +62,12 @@ func (h *ConversionHandler) SetJobRecords(r JobRecordSource) {
 }
 
 // SetDataHandler attaches the MM24 per-item delete / keep-longer routes.
+func (h *ConversionHandler) SetShareHandler(s *ShareHandler) {
+	if h != nil {
+		h.share = s
+	}
+}
+
 func (h *ConversionHandler) SetDataHandler(d *DataHandler) {
 	if h != nil {
 		h.data = d
@@ -134,6 +142,13 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 		r.PATCH("/jobs/:jobId/retention", h.data.KeepJobLonger)
 	}
 	r.GET("/result/:jobId", h.InlineResult)
+	if h != nil && h.share != nil {
+		// MM32: owner-scoped share/revoke and the public, token-addressed read routes.
+		r.POST("/jobs/:jobId/share", h.share.CreateShare)
+		r.DELETE("/jobs/:jobId/share", h.share.RevokeShare)
+		r.GET("/share/:token", h.share.GetShare)
+		r.GET("/share/:token/file", h.share.GetShareFile)
+	}
 	r.GET("/transcript/:jobId", h.GetTranscriptResult)
 	r.GET("/analysis/:jobId", h.GetAnalysisResult)
 
@@ -296,8 +311,16 @@ func (h *ConversionHandler) InlineResult(c *gin.Context) {
 		return
 	}
 	defer file.Close()
-	name := h.resultName(c, job)
-	if inlineSafeMime(mime) {
+	serveResultFile(c, file, info, mime, h.resultName(c, job), true, "private, max-age=300")
+}
+
+// serveResultFile writes one result file with MM05's rules: real MIME, HTTP range
+// support and an inline disposition only when wantInline is true AND the type is
+// safe to render; everything else (svg, html, archives, unknown) is an
+// octet-stream attachment. Shared by GET /api/result/:jobId and the MM32 public
+// GET /api/share/:token/file so the two can never drift.
+func serveResultFile(c *gin.Context, file *os.File, info os.FileInfo, mime, name string, wantInline bool, cacheControl string) {
+	if wantInline && inlineSafeMime(mime) {
 		c.Header("Content-Type", mime)
 		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%q", name))
 	} else {
@@ -305,7 +328,7 @@ func (h *ConversionHandler) InlineResult(c *gin.Context) {
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
 	}
 	c.Header("Accept-Ranges", "bytes")
-	c.Header("Cache-Control", "private, max-age=300")
+	c.Header("Cache-Control", cacheControl)
 	c.Header("X-Content-Type-Options", "nosniff")
 	http.ServeContent(c.Writer, c.Request, name, info.ModTime(), file)
 }
