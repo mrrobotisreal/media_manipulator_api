@@ -174,7 +174,7 @@ func TestExpireNowRefusesEmptyFilterAndExpiresParkedMetadata(t *testing.T) {
 
 func TestExpireNowDeletesMetadataReportsEvenWhenOwnerKeepsThem(t *testing.T) {
 	e := newSweepEnv(t)
-	e.db.keepMeta[user1] = true // the default: keep reports past file expiry
+	e.db.keepMeta[user1] = true // explicit keep
 	dir := e.jobDir(e.outputs, "job-k", "converted.png", "metadata.json")
 	e.db.add(telemetry.LedgerRow{Kind: KindOutputDir, Locator: "job-k", JobID: "job-k", OwnerUserID: user1, ExpiresAt: sweepT0.Add(time.Hour)})
 

@@ -24,7 +24,7 @@ type fakeLedgerDB struct {
 	mu           sync.Mutex
 	rows         map[string]*fakeRow // by id
 	order        []string
-	keepMeta     map[string]bool // user id -> keeps reports (absent = true)
+	keepMeta     map[string]bool // user id -> keeps reports (absent = false: the default is delete)
 	assets       map[string][]string
 	assetProject map[string]string
 	projects     map[string]bool
@@ -258,7 +258,7 @@ func (f *fakeLedgerDB) OwnerKeepsMetadataReports(_ context.Context, user string)
 	if v, ok := f.keepMeta[user]; ok {
 		return v, nil
 	}
-	return true, nil
+	return false, nil // no settings row: reports are deleted with their files
 }
 
 func (f *fakeLedgerDB) StudioAssetKeys(_ context.Context, id string) ([]string, bool, error) {
