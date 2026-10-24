@@ -35,6 +35,6 @@ internal/services/job-*/
 /operator-check
 /parity-render
 
-# Credentials must never live in the repo tree (MM37). Keep them outside, e.g. /etc/media-manipulator/.
+# Never commit credential files (MM37). The server keeps its own file where GOOGLE_APPLICATION_CREDENTIALS points; leave that as is.
 *firebase*.json
 *service-account*.json
