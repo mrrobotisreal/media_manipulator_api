@@ -55,3 +55,12 @@ func TestStripeAutomaticTaxDefaultsOffAndCanBeEnabled(t *testing.T) {
 		t.Fatal("true must enable")
 	}
 }
+
+func TestRetentionPriceEnvVars(t *testing.T) {
+	t.Setenv("STRIPE_PRICE_PREMIUM_MONTHLY_RETAIN7", " price_r7 ")
+	t.Setenv("STRIPE_PRICE_PREMIUM_MONTHLY_RETAIN6", "")
+	c := Load()
+	if c.StripePricePremiumMonthlyRetain7 != "price_r7" || c.StripePricePremiumMonthlyRetain6 != "" {
+		t.Fatalf("%q %q", c.StripePricePremiumMonthlyRetain7, c.StripePricePremiumMonthlyRetain6)
+	}
+}

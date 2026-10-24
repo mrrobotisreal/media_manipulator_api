@@ -158,8 +158,15 @@ func (c *stripeClient) GetSubscription(ctx context.Context, id string) (*Subscri
 	if s.Customer != nil {
 		out.CustomerID = s.Customer.ID
 	}
+	if s.CancelAt > 0 {
+		out.CancelAt = time.Unix(s.CancelAt, 0).UTC()
+	}
 	if s.Items != nil && len(s.Items.Data) > 0 {
 		item := s.Items.Data[0]
+		out.ItemID = item.ID
+		if item.Price != nil {
+			out.PriceID = item.Price.ID
+		}
 		if item.CurrentPeriodEnd > 0 {
 			out.CurrentPeriodEnd = time.Unix(item.CurrentPeriodEnd, 0).UTC()
 		}
@@ -180,6 +187,28 @@ func (c *stripeClient) GetSubscription(ctx context.Context, id string) (*Subscri
 		}
 	}
 	return out, nil
+}
+
+// ResumeSubscription is the retention flow's single Stripe write: one
+// Subscriptions.Update that un-cancels and (optionally) swaps the one item's
+// price. proration_behavior=none keeps it free today; billing_cycle_anchor
+// "unchanged" keeps the next invoice on the original date.
+func (c *stripeClient) ResumeSubscription(ctx context.Context, subID, itemID, newPriceID, offer string) (*Subscription, error) {
+	p := &stripe.SubscriptionUpdateParams{
+		Params:                      c.params(ctx),
+		CancelAtPeriodEnd:           stripe.Bool(false),
+		ProrationBehavior:           stripe.String("none"),
+		BillingCycleAnchorUnchanged: stripe.Bool(true),
+	}
+	p.AddUnsetField(stripe.SubscriptionUpdateParamsUnsetFieldCancelAt)
+	if newPriceID != "" {
+		p.Items = []*stripe.SubscriptionUpdateItemParams{{ID: stripe.String(itemID), Price: stripe.String(newPriceID)}}
+	}
+	p.SetIdempotencyKey("retain-" + subID + "-" + offer)
+	if _, err := c.sc.V1Subscriptions.Update(ctx, subID, p); err != nil {
+		return nil, wrapErr(err)
+	}
+	return c.GetSubscription(ctx, subID)
 }
 
 func (c *stripeClient) GetCheckoutSession(ctx context.Context, id string) (*CheckoutSession, error) {

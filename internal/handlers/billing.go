@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -209,6 +210,12 @@ type manualGrantInfo struct {
 	ExpiresAt *string `json:"expiresAt"`
 }
 
+type retentionOffer struct {
+	Kind         string  `json:"kind"`
+	PriceUSD     float64 `json:"priceUSD"`
+	NextChargeAt string  `json:"nextChargeAt"`
+}
+
 type billingStatusResponse struct {
 	Purchasable       bool             `json:"purchasable"`
 	Interval          *string          `json:"interval"`
@@ -217,6 +224,15 @@ type billingStatusResponse struct {
 	CancelAtPeriodEnd bool             `json:"cancelAtPeriodEnd"`
 	PortalAvailable   bool             `json:"portalAvailable"`
 	ManualGrant       *manualGrantInfo `json:"manualGrant"`
+	// EndsAt is when Premium ends for a cancelled-but-active subscription
+	// (equal to renewsAt then); null otherwise.
+	EndsAt *string `json:"endsAt"`
+	// PriceMonthlyUSD is what the subscriber pays per interval, read from the
+	// Stripe subscription item. Only resolved while the plan is cancelled (the
+	// only time the UI needs it); null otherwise or when unknown.
+	PriceMonthlyUSD *float64 `json:"priceMonthlyUSD"`
+	// Offer is the retention offer, or null.
+	Offer *retentionOffer `json:"offer"`
 	// PeriodsPaid is the number of paid billing periods on the current MONTHLY
 	// subscription (processed invoice.paid rows in mm_billing_events, no Stripe
 	// call). Omitted for yearly or no subscription, and when the count is
@@ -231,14 +247,27 @@ func strPtr(s string) *string {
 	return &s
 }
 
-// Status reports the caller's billing state from the stored mirror (no Stripe
-// call). It answers even when billing is off (purchasable:false) so the UI can
-// render the account page unconditionally.
-func (h *BillingHandler) Status(c *gin.Context) {
-	_, user, ok := h.caller(c)
-	if !ok {
-		return
+func (h *BillingHandler) retentionPrices() billing.RetentionPrices {
+	return billing.RetentionPrices{Retain7ID: h.cfg.StripePricePremiumMonthlyRetain7, Retain6ID: h.cfg.StripePricePremiumMonthlyRetain6}
+}
+
+func toRetentionOffer(o *billing.Offer) *retentionOffer {
+	if o == nil {
+		return nil
 	}
+	return &retentionOffer{Kind: o.Kind, PriceUSD: o.PriceUSD, NextChargeAt: o.NextChargeAt.UTC().Format(time.RFC3339)}
+}
+
+// cancelledActive: the mirror says the subscription is active and ending.
+func cancelledActive(u *models.User) bool {
+	return u.CancelAtPeriodEnd && u.StripeSubscriptionID != "" &&
+		(u.SubscriptionStatus == billing.StatusActive || u.SubscriptionStatus == billing.StatusTrialing)
+}
+
+// buildStatus renders the status JSON. The only Stripe call is a Subscription
+// retrieve for a cancelled-but-active plan (price + offer); a failure there
+// just leaves priceMonthlyUSD and offer null.
+func (h *BillingHandler) buildStatus(ctx context.Context, user *models.User) (billingStatusResponse, *billing.Subscription) {
 	now := h.now().UTC()
 	out := billingStatusResponse{
 		Purchasable:       h.available(),
@@ -250,9 +279,33 @@ func (h *BillingHandler) Status(c *gin.Context) {
 	if user.TierSource == "subscription" && user.TierExpiresAt != nil {
 		s := user.TierExpiresAt.UTC().Format(time.RFC3339)
 		out.RenewsAt = &s
+		if cancelledActive(user) && user.TierExpiresAt.After(now) {
+			out.EndsAt = &s
+		}
+	}
+	var fetched *billing.Subscription
+	if h.available() && cancelledActive(user) {
+		if sub, err := h.client.GetSubscription(ctx, user.StripeSubscriptionID); err != nil {
+			h.logger.Warn("billing: status subscription fetch failed", "error", err.Error())
+		} else {
+			fetched = sub
+			if sub.UnitAmountCents != nil && sub.Currency == "usd" {
+				v := float64(*sub.UnitAmountCents) / 100
+				out.PriceMonthlyUSD = &v
+			}
+			if end, ok := billing.CancelledEnd(sub, now); ok {
+				e := end.Format(time.RFC3339)
+				out.EndsAt, out.RenewsAt, out.CancelAtPeriodEnd = &e, &e, true
+			}
+			fallback := float64(h.cfg.BillingPriceMonthlyUSD)
+			if sub.Interval == billing.IntervalYearly {
+				fallback = float64(h.cfg.BillingPriceYearlyUSD)
+			}
+			out.Offer = toRetentionOffer(billing.ComputeRetentionOffer(sub, now, h.retentionPrices(), fallback))
+		}
 	}
 	if h.available() && user.BillingInterval == "monthly" && user.StripeSubscriptionID != "" {
-		if n, err := h.store.CountPaidPeriods(c.Request.Context(), user.ID, user.StripeSubscriptionID); err != nil {
+		if n, err := h.store.CountPaidPeriods(ctx, user.ID, user.StripeSubscriptionID); err != nil {
 			h.logger.Warn("billing: periodsPaid unavailable", "error", err.Error())
 		} else {
 			out.PeriodsPaid = &n
@@ -266,7 +319,108 @@ func (h *BillingHandler) Status(c *gin.Context) {
 		}
 		out.ManualGrant = info
 	}
+	return out, fetched
+}
+
+// Status reports the caller's billing state from the stored mirror. It answers
+// even when billing is off (purchasable:false) so the UI can render the account
+// page unconditionally. The one Stripe read is described on buildStatus.
+func (h *BillingHandler) Status(c *gin.Context) {
+	_, user, ok := h.caller(c)
+	if !ok {
+		return
+	}
+	out, _ := h.buildStatus(c.Request.Context(), user)
 	c.JSON(http.StatusOK, out)
+}
+
+type retainRequest struct {
+	Offer string `json:"offer"`
+}
+
+// Retain accepts the "stay" offer (or a plain resume) for the caller's own
+// cancelled-but-active subscription. The server recomputes the offer from its
+// own clock and Stripe's state; the client's choice is only accepted if it
+// matches. One Stripe update, then the result is applied through the processor
+// so the UI flips before the webhook arrives.
+func (h *BillingHandler) Retain(c *gin.Context) {
+	var req retainRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
+		return
+	}
+	switch req.Offer {
+	case billing.OfferRetain7, billing.OfferRetain6, billing.OfferResume:
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_offer"})
+		return
+	}
+	_, user, ok := h.caller(c)
+	if !ok {
+		return
+	}
+	if user.StripeSubscriptionID == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no_subscription"})
+		return
+	}
+	ctx := c.Request.Context()
+	sub, err := h.client.GetSubscription(ctx, user.StripeSubscriptionID)
+	if errors.Is(err, billing.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no_subscription"})
+		return
+	}
+	if err != nil {
+		h.logger.Warn("billing: retain: get subscription failed", "error", err.Error())
+		c.JSON(http.StatusBadGateway, gin.H{"error": "billing_provider_error"})
+		return
+	}
+	if user.StripeCustomerID != "" && sub.CustomerID != "" && sub.CustomerID != user.StripeCustomerID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no_subscription"})
+		return
+	}
+	now := h.now().UTC()
+	fallback := float64(h.cfg.BillingPriceMonthlyUSD)
+	if sub.Interval == billing.IntervalYearly {
+		fallback = float64(h.cfg.BillingPriceYearlyUSD)
+	}
+	offer := billing.ComputeRetentionOffer(sub, now, h.retentionPrices(), fallback)
+	if offer == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "not_cancelled", "reason": "not_cancelled"})
+		return
+	}
+	// "resume" is always acceptable: it keeps the current price, so a client that
+	// asked for it never gets a different price than it saw. A discount must match.
+	if req.Offer != billing.OfferResume && req.Offer != offer.Kind {
+		c.JSON(http.StatusConflict, gin.H{"error": "offer_changed", "reason": "offer_changed", "offer": toRetentionOffer(offer)})
+		return
+	}
+	applied := offer
+	if req.Offer == billing.OfferResume {
+		applied = &billing.Offer{Kind: billing.OfferResume}
+	}
+	if applied.PriceID != "" && sub.ItemID == "" {
+		h.logger.Warn("billing: retain: subscription has no item id")
+		c.JSON(http.StatusBadGateway, gin.H{"error": "billing_provider_error"})
+		return
+	}
+	updated, err := h.client.ResumeSubscription(ctx, sub.ID, sub.ItemID, applied.PriceID, applied.Kind)
+	if err != nil {
+		h.logger.Warn("billing: retain: resume failed", "error", err.Error())
+		c.JSON(http.StatusBadGateway, gin.H{"error": "billing_provider_error"})
+		return
+	}
+	if h.processor != nil {
+		if err := h.processor.ApplyRetained(ctx, updated, user.ID, billing.AnalyticsOffer(applied.Kind)); err != nil {
+			// Stripe already changed; the webhook converges the mirror.
+			h.logger.Warn("billing: retain: applying resumed subscription failed", "error", err.Error())
+		}
+	}
+	fresh, err := h.store.UserByID(ctx, user.ID)
+	if err != nil || fresh == nil {
+		fresh = user
+	}
+	out, _ := h.buildStatus(ctx, fresh)
+	c.JSON(http.StatusOK, gin.H{"status": out})
 }
 
 // Session verifies a Checkout return: does this session belong to the caller,
@@ -348,6 +502,7 @@ func RegisterBillingRoutes(rg *gin.RouterGroup, h *BillingHandler, verifier midd
 	authed.Use(middleware.RequireFirebaseAuth(true, verifier), h.requireBilling)
 	authed.POST("/checkout", h.Checkout)
 	authed.POST("/portal", h.Portal)
+	authed.POST("/retain", h.Retain)
 	authed.GET("/session/:id", h.Session)
 
 	// /status stays reachable when billing is off (purchasable:false) so the

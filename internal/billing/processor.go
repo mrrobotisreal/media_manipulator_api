@@ -121,6 +121,32 @@ func (p *Processor) ApplyCheckout(ctx context.Context, sess *CheckoutSession) er
 	return err
 }
 
+// ApplyRetained applies a subscription the retention flow just un-cancelled,
+// exactly like ApplyCheckout, so the UI flips without waiting for the
+// customer.subscription.updated webhook (which then finds identical state), and
+// emits server_subscription_retained. offer is "retain7", "retain6" or "none".
+func (p *Processor) ApplyRetained(ctx context.Context, sub *Subscription, userID, offer string) error {
+	if sub == nil || sub.ID == "" {
+		return nil
+	}
+	if _, err := p.apply(ctx, Event{
+		ID:             "retain:" + sub.ID,
+		Type:           EventSubscriptionUpdated,
+		CustomerID:     sub.CustomerID,
+		SubscriptionID: sub.ID,
+		UserID:         userID,
+	}); err != nil {
+		return err
+	}
+	if p.Emitter != nil {
+		if u, err := p.Store.UserByID(ctx, userID); err == nil && u != nil {
+			p.emit(Event{ID: "retain:" + sub.ID + ":" + offer}, sub, u, analyticsemit.ServerSubscriptionRetained,
+				map[string]any{"interval": sub.Interval, "offer": offer}, "")
+		}
+	}
+	return nil
+}
+
 func (p *Processor) logger() *slog.Logger {
 	if p.Log != nil {
 		return p.Log
@@ -180,7 +206,7 @@ func (p *Processor) apply(ctx context.Context, ev Event) (note string, err error
 	wasTerminal := IsTerminalStatus(user.SubscriptionStatus)
 	prevStatus := user.SubscriptionStatus
 
-	if err := p.Store.UpdateSubscriptionState(ctx, user.ID, sub.ID, sub.Status, sub.Interval, sub.CancelAtPeriodEnd); err != nil {
+	if err := p.Store.UpdateSubscriptionState(ctx, user.ID, sub.ID, sub.Status, sub.Interval, sub.IsCancelling(p.now())); err != nil {
 		return "", fmt.Errorf("update subscription state: %w", err)
 	}
 

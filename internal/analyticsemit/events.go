@@ -50,6 +50,9 @@ const (
 	ServerSubscriptionRenewed       = "server_subscription_renewed"
 	ServerSubscriptionCancelled     = "server_subscription_cancelled"
 	ServerSubscriptionPaymentFailed = "server_subscription_payment_failed"
+	// ServerSubscriptionRetained: a cancelled-but-active subscription was resumed
+	// (billing retention offer). {interval, offer: retain7|retain6|none}.
+	ServerSubscriptionRetained = "server_subscription_retained"
 )
 
 // Retention (MM23). Emitted by the ledger sweeper once per kind per tick that

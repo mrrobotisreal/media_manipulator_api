@@ -18,7 +18,7 @@ func TestBillingRoutesAreOutsideQuotaAndRouteBuckets(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	paths := []string{
 		"/api/billing/webhook", "/api/billing/checkout", "/api/billing/portal",
-		"/api/billing/status", "/api/billing/session/cs_test_1",
+		"/api/billing/status", "/api/billing/retain", "/api/billing/session/cs_test_1",
 	}
 	for _, p := range paths {
 		for _, q := range quotaRoutes {

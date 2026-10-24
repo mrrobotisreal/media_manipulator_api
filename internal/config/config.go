@@ -253,6 +253,11 @@ type Config struct {
 	StripeWebhookSecret       string
 	StripePricePremiumMonthly string
 	StripePricePremiumYearly  string
+	// StripePricePremiumMonthlyRetain7 / Retain6 are the monthly retention-offer
+	// prices ($7 / $6, STRIPE_PRICE_PREMIUM_MONTHLY_RETAIN7 / _RETAIN6). Optional:
+	// when one is unset that offer is never shown.
+	StripePricePremiumMonthlyRetain7 string
+	StripePricePremiumMonthlyRetain6 string
 	// StripeAPIVersion optionally overrides the API version the SDK sends
 	// (default: the stripe-go constant). Empty = use the SDK's.
 	StripeAPIVersion string
@@ -673,18 +678,20 @@ func Load() *Config {
 		OperatorEmails: splitCSVLower(getEnv("OPERATOR_EMAILS", "")),
 
 		// Billing — see the struct doc. Dark by default.
-		BillingEnabled:            getEnvBool("BILLING_ENABLED", false),
-		StripeSecretKey:           strings.TrimSpace(getEnv("STRIPE_SECRET_KEY", "")),
-		StripeWebhookSecret:       strings.TrimSpace(getEnv("STRIPE_WEBHOOK_SECRET", "")),
-		StripePricePremiumMonthly: strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_MONTHLY", "")),
-		StripePricePremiumYearly:  strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_YEARLY", "")),
-		StripeAPIVersion:          strings.TrimSpace(getEnv("STRIPE_API_VERSION", "")),
-		StripeAutomaticTax:        getEnvBool("STRIPE_AUTOMATIC_TAX", false),
-		BillingGraceDays:          getEnvInt("BILLING_GRACE_DAYS", 7),
-		EmailEnabled:              getEnvBool("EMAIL_ENABLED", false),
-		EmailProviderAPIKey:       strings.TrimSpace(getEnv("EMAIL_PROVIDER_API_KEY", "")),
-		EmailFrom:                 strings.TrimSpace(getEnv("EMAIL_FROM", "")),
-		EmailReplyTo:              strings.TrimSpace(getEnv("EMAIL_REPLY_TO", "")),
+		BillingEnabled:                   getEnvBool("BILLING_ENABLED", false),
+		StripeSecretKey:                  strings.TrimSpace(getEnv("STRIPE_SECRET_KEY", "")),
+		StripeWebhookSecret:              strings.TrimSpace(getEnv("STRIPE_WEBHOOK_SECRET", "")),
+		StripePricePremiumMonthly:        strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_MONTHLY", "")),
+		StripePricePremiumYearly:         strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_YEARLY", "")),
+		StripeAPIVersion:                 strings.TrimSpace(getEnv("STRIPE_API_VERSION", "")),
+		StripePricePremiumMonthlyRetain7: strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_MONTHLY_RETAIN7", "")),
+		StripePricePremiumMonthlyRetain6: strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_MONTHLY_RETAIN6", "")),
+		StripeAutomaticTax:               getEnvBool("STRIPE_AUTOMATIC_TAX", false),
+		BillingGraceDays:                 getEnvInt("BILLING_GRACE_DAYS", 7),
+		EmailEnabled:                     getEnvBool("EMAIL_ENABLED", false),
+		EmailProviderAPIKey:              strings.TrimSpace(getEnv("EMAIL_PROVIDER_API_KEY", "")),
+		EmailFrom:                        strings.TrimSpace(getEnv("EMAIL_FROM", "")),
+		EmailReplyTo:                     strings.TrimSpace(getEnv("EMAIL_REPLY_TO", "")),
 		EmailPublicBaseURL: strings.TrimRight(strings.TrimSpace(getEnv("EMAIL_PUBLIC_BASE_URL",
 			getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com"))), "/"),
 		EmailDigestInterval: time.Duration(getEnvInt("EMAIL_DIGEST_INTERVAL_HOURS", 24)) * time.Hour,
