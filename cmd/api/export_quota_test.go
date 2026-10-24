@@ -105,3 +105,21 @@ func TestRefusedExportDoesNotSpendQuota(t *testing.T) {
 		t.Fatalf("allowed export must count once: %v", store.counts)
 	}
 }
+
+// Part 20: render-again starts a render, so it spends the export allowance and
+// rides the export rate bucket; the history list and frame export do not.
+func TestIsStudioExportPath(t *testing.T) {
+	for path, want := range map[string]bool{
+		"/api/studio/projects/p1/export":              true,
+		"/api/studio/projects/p1/exports/e1/again":    true,
+		"/api/studio/projects/p1/exports":             false,
+		"/api/studio/projects/p1/frame":               false,
+		"/api/studio/projects/p1/captions/generate":   false,
+		"/api/studio/assets/a1/export":                false,
+		"/api/studio/projects/p1/versions/v1/restore": false,
+	} {
+		if got := isStudioExportPath(path); got != want {
+			t.Errorf("%s: got %v want %v", path, got, want)
+		}
+	}
+}

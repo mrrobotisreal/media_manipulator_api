@@ -135,6 +135,10 @@ func (jm *JobManager) EmitStudioRender(
 		"encoder":           stats.Encoder,
 		"filterCountBucket": analyticsemit.FilterCountBucket(stats.FilterCount),
 	}
+	// Part 20: the output format (h264|hevc|mp3|wav), a closed enum.
+	if stats.Format != "" {
+		props["format"] = stats.Format
+	}
 	if timelineSeconds > 0 && renderSeconds >= 0 {
 		props["durationRatioBucket"] = analyticsemit.RatioBucket(renderSeconds / timelineSeconds)
 	}

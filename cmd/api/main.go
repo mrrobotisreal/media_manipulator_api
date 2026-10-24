@@ -641,9 +641,25 @@ var quotaRoutes = []quotaRoute{
 	{
 		metric: models.MetricExport,
 		matches: func(path string) bool {
-			return strings.HasPrefix(path, "/api/studio/projects/") && strings.HasSuffix(path, "/export")
+			return isStudioExportPath(path)
 		},
 	},
+}
+
+// isStudioExportPath matches the two routes that START a render: POST
+// /api/studio/projects/:id/export and, since part 20, POST
+// /api/studio/projects/:id/exports/:exportId/again (render again). Both spend
+// the export allowance and share its transcode rate bucket and output-height
+// gate. The history list (GET) and the frame export (a transient single-frame
+// render on the analysis bucket) are deliberately NOT matched.
+func isStudioExportPath(path string) bool {
+	if !strings.HasPrefix(path, "/api/studio/projects/") {
+		return false
+	}
+	if strings.HasSuffix(path, "/export") {
+		return true
+	}
+	return strings.Contains(path, "/exports/") && strings.HasSuffix(path, "/again")
 }
 
 // gateThenQuota runs a refusal BEFORE the allowance is spent, so a request that
@@ -745,8 +761,18 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 			tool:         "studio_export",
 			sessionLimit: cfg.RateLimitTranscodesPerSessionPerHour,
 			ipLimit:      cfg.RateLimitTranscodesPerIPPerHour,
+			matches:      isStudioExportPath,
+		},
+		// Frame-as-PNG export (part 20): one synchronous ffmpeg frame render.
+		// Not a job and not an export allowance spend, so it shares the
+		// analysis bucket (like caption generation) rather than the transcode one.
+		{
+			routeKey:     "studio_project_frame",
+			tool:         "studio_frame",
+			sessionLimit: cfg.RateLimitAnalysisPerSessionPerHour,
+			ipLimit:      cfg.RateLimitAnalysisPerIPPerHour,
 			matches: func(path string) bool {
-				return strings.HasPrefix(path, "/api/studio/projects/") && strings.HasSuffix(path, "/export")
+				return strings.HasPrefix(path, "/api/studio/projects/") && strings.HasSuffix(path, "/frame")
 			},
 		},
 		// AI-derived audio (DeepFilter/Demucs) competes with whisper for GPU —

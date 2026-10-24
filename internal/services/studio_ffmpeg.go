@@ -41,6 +41,13 @@ var (
 	studioNVENCWorks bool
 
 	studioSendCmdOnce sync.Once
+
+	// HEVC (part 20) is probed on its own: an NVENC H.264 success says nothing
+	// about hevc_nvenc (older GPUs, driver builds), and libx265 is a build-time
+	// ffmpeg option the server may lack.
+	studioHEVCOnce  sync.Once
+	studioHEVCNVENC bool
+	studioHEVCX265  bool
 )
 
 // assertStudioSendCmdSupport logs (once, never hard-fails) when the installed
@@ -142,6 +149,111 @@ func h264EncodeArgs(encoder, quality string) []string {
 			"-crf", crf,
 			"-pix_fmt", "yuv420p",
 		}
+	}
+}
+
+// ErrStudioHEVCUnavailable is the job error for an HEVC export on a host that has
+// neither a working hevc_nvenc nor libx265. Deliberately loud: silently handing
+// back an H.264 file named as HEVC would be worse than failing. The wording
+// carries "unsupported" so the failure class telemetry files it as such
+// (analyticsemit.ErrorType), and avoids "nvenc"/"gpu" which would misfile it.
+//
+// RUNBOOK: if HEVC is wanted on a host where this fires, check
+// `ffmpeg -encoders | grep -E "hevc_nvenc|libx265"` and the NVENC probe in
+// probeNVENCHEVC (it runs a real 256x256 encode on ContentStudioGPUIndex).
+var ErrStudioHEVCUnavailable = fmt.Errorf("HEVC export is unsupported on this server: no usable HEVC encoder is installed")
+
+// pickHEVCEncoder is the pure HEVC encoder choice: NVENC when its probe
+// succeeded, else libx265 when the build has it, else ErrStudioHEVCUnavailable.
+func pickHEVCEncoder(nvencOK, x265OK bool) (string, error) {
+	switch {
+	case nvencOK:
+		return "hevc_nvenc", nil
+	case x265OK:
+		return "libx265", nil
+	}
+	return "", ErrStudioHEVCUnavailable
+}
+
+// studioHEVCEncoder resolves (and caches for the process lifetime) the HEVC
+// encoder for this host.
+func studioHEVCEncoder(cfg *config.Config) (string, error) {
+	studioHEVCOnce.Do(func() {
+		studioHEVCNVENC = probeNVENCHEVC(cfg)
+		studioHEVCX265 = probeLibx265()
+	})
+	return pickHEVCEncoder(studioHEVCNVENC, studioHEVCX265)
+}
+
+func probeNVENCHEVC(cfg *config.Config) bool {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	// 256x256: hevc_nvenc rejects the 64x64 the H.264 probe uses on some GPUs
+	// (minimum frame size is larger for HEVC).
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "color=c=black:s=256x256:d=0.1",
+		"-c:v", "hevc_nvenc", "-f", "null", "-")
+	cmd.Env = studioFFmpegEnv(cfg.ContentStudioGPUIndex)
+	return cmd.Run() == nil
+}
+
+// probeLibx265 reports whether this ffmpeg build lists the libx265 encoder.
+func probeLibx265() bool {
+	out, err := exec.Command("ffmpeg", "-hide_banner", "-encoders").Output()
+	return err == nil && encodersListHasX265(string(out))
+}
+
+// encodersListHasX265 scans `ffmpeg -encoders` output for a libx265 row.
+func encodersListHasX265(listing string) bool {
+	for _, line := range strings.Split(listing, "\n") {
+		f := strings.Fields(line)
+		if len(f) >= 2 && f[1] == "libx265" {
+			return true
+		}
+	}
+	return false
+}
+
+// hevcEncodeArgs mirrors h264EncodeArgs for HEVC. Offsets vs H.264 follow the
+// usual ~5 CQ/CRF points for equal perceived quality. -tag:v hvc1 makes the MP4
+// play in QuickTime/Safari/iOS (ffmpeg's default hev1 tag does not).
+func hevcEncodeArgs(encoder, quality string) []string {
+	q := strings.ToLower(strings.TrimSpace(quality))
+	if encoder == "hevc_nvenc" {
+		preset, cq := "p4", "28"
+		switch q {
+		case "high":
+			preset, cq = "p5", "24"
+		case "low":
+			preset, cq = "p4", "33"
+		}
+		return []string{
+			"-c:v", "hevc_nvenc",
+			"-preset", preset,
+			"-rc", "vbr",
+			"-cq", cq,
+			"-b:v", "0",
+			"-pix_fmt", "yuv420p",
+			"-tag:v", "hvc1",
+		}
+	}
+	preset, crf := "medium", "28"
+	switch q {
+	case "high":
+		preset, crf = "slow", "24"
+	case "low":
+		preset, crf = "veryfast", "32"
+	}
+	return []string{
+		"-c:v", "libx265",
+		"-preset", preset,
+		"-crf", crf,
+		"-pix_fmt", "yuv420p",
+		"-tag:v", "hvc1",
+		"-x265-params", "log-level=error",
 	}
 }
 

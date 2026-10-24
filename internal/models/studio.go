@@ -556,11 +556,73 @@ const (
 	StudioDeriveReverseProxy = "reverse_proxy"
 )
 
+// Export formats (part 20). h264/hevc render an MP4; mp3/wav are audio-only.
+const (
+	StudioExportFormatH264 = "h264"
+	StudioExportFormatHEVC = "hevc"
+	StudioExportFormatMP3  = "mp3"
+	StudioExportFormatWAV  = "wav"
+)
+
+// Caption delivery modes (part 20): one explicit choice per export.
+const (
+	StudioCaptionsNone    = "none"
+	StudioCaptionsBurnIn  = "burn_in"
+	StudioCaptionsSidecar = "sidecar" // SRT/VTT generated client-side; the render has no captions
+)
+
+// studio_exports.status values.
+const (
+	StudioExportRunning   = "running"
+	StudioExportCompleted = "completed"
+	StudioExportFailed    = "failed"
+)
+
 // StudioExportRequest is the body for POST /api/studio/projects/:id/export.
+// Every field is optional; an empty body is the pre-part-20 request (H.264 MP4
+// at the project's own height, captions burned in when the project has them
+// enabled), which is also what the CreaTV embed sends.
 type StudioExportRequest struct {
 	FileName string `json:"fileName,omitempty"`
 	Preset   string `json:"preset,omitempty"`   // quality preset key
 	Loudness string `json:"loudness,omitempty"` // '' | streaming | podcast | broadcast
+	// Format: '' (= h264) | h264 | hevc | mp3 | wav.
+	Format string `json:"format,omitempty"`
+	// Resolution is the OUTPUT height in pixels: 0 (= the project's canvas) or
+	// one of the ladder rungs 720 | 1080 | 1440 | 2160. Gated by the tier's
+	// MaxOutputHeight exactly like the canvas height (tiers.EnforceOutputHeight).
+	Resolution int `json:"resolution,omitempty"`
+	// CaptionsMode: '' (= legacy: burn in when enabled) | none | burn_in | sidecar.
+	CaptionsMode string `json:"captionsMode,omitempty"`
+}
+
+// StudioExport is one studio_exports row as the Exports panel sees it.
+type StudioExport struct {
+	ID           string     `json:"id"`
+	ProjectID    string     `json:"projectId"`
+	JobID        string     `json:"jobId"`
+	FileName     string     `json:"fileName,omitempty"`
+	Preset       string     `json:"preset,omitempty"`
+	Format       string     `json:"format"`
+	Resolution   int        `json:"resolution"`
+	CaptionsMode string     `json:"captionsMode"`
+	Loudness     string     `json:"loudness,omitempty"`
+	Status       string     `json:"status"`
+	Error        string     `json:"error,omitempty"` // coarse error class
+	CreatedAt    time.Time  `json:"createdAt"`
+	CompletedAt  *time.Time `json:"completedAt,omitempty"`
+	// Available is true while the rendered artifact is still on disk (i.e.
+	// inside its retention window). Computed on read, never stored.
+	Available bool `json:"available"`
+}
+
+// StudioFrameRequest is the body for POST /api/studio/projects/:id/frame.
+type StudioFrameRequest struct {
+	T        float64 `json:"t"`
+	FileName string  `json:"fileName,omitempty"`
+	// Captions burns the project's captions into the frame (default off: the
+	// frame export is a thumbnail workflow).
+	Captions bool `json:"captions,omitempty"`
 }
 
 // Version history (part 09, ADR ws/0001 item 3).
