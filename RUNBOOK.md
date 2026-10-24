@@ -782,6 +782,10 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/job/:jobId/events` | SSE event stream of job state changes. Closes on completed/failed. | Yes (open connection) |
 | GET | `/api/download/:jobId` | Stream the converted output file for jobs that produced one locally (image/audio/video convert + transcribe). | No |
 | GET | `/api/result/:jobId` | Same file as `/download`, served inline with its sniffed MIME and HTTP range (`206`/`416`); unsafe types fall back to an octet-stream attachment. Accepts `?sid=`. | No |
+| POST | `/api/jobs/:jobId/share` | MM32. Owner only (MM24 strict check). Body optional `{ttlHours}` (>=1, clamped to 168 and to the remaining retention of the job result files; default 72). `201 {token,url,expiresAt}`; the plaintext token is shown once, only its SHA-256 is stored. `422 share_not_allowed` (metadata report, Darkroom, unknown kind), `409 result_unavailable` / `share_limit` (5 live links). | Owner |
+| DELETE | `/api/jobs/:jobId/share` | MM32. Owner only. Revokes every live link. `200 {revoked:N}`. | Owner |
+| GET | `/api/share/:token` | MM32. Public. Sanitized descriptor `{kind,fileName,sizeBytes,mime,tool,expiresAt,downloadUrl,thumbnailUrl?}`; 404 (identical body) for unknown, expired, revoked or deleted. Increments `view_count`. Rate limit `RATE_LIMIT_SHARE_PER_IP_PER_HOUR` (1200) per IP. | No |
+| GET | `/api/share/:token/file` | MM32. Public. Same serving code as `/api/result` (ranges, nosniff, unsafe types as attachments); `?download=1` forces an attachment. | No |
 | GET | `/api/transcript/:jobId` | Serve the `transcribe_result.json` for a transcribe job. | No |
 | GET | `/api/analysis/:jobId` | Serve the `analysis.json` (transcript summary + safety review) for a transcribe job. | No |
 
@@ -2022,3 +2026,5 @@ npm run electron:dev
    Accessibility → Display → Reduce motion) and reload: cards/badges fade
    without sliding/scaling, and the drag overlay drops its tilt/scale.
 
+
+**Share links (MM32).** Table `mm_share_links` (hash only). Liveness is evaluated at query time against `mm_retained_objects` (live `output_dir`/`s3_object` rows of the job): job delete (MM24) or a sweep makes the link 404 with no write. Takedown: `UPDATE mm_share_links SET revoked_at = now() WHERE job_id = '<uuid>' AND revoked_at IS NULL;` (`view_count` shows traffic). `SHARE_PUBLIC_BASE_URL` (default `BILLING_PUBLIC_BASE_URL`) prefixes the returned page URL.
