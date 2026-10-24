@@ -94,6 +94,9 @@ type gpuWaiter struct {
 	// impossible is set when the probe shows no card could ever hold the
 	// request; such a waiter never blocks anyone, aged or not.
 	impossible bool
+	// parked is true while the waiter sleeps on the condition variable, i.e. it
+	// is genuinely queued. Guarded by s.mu; read by Snapshot.
+	parked bool
 }
 
 // blocksOthers reports whether lower-ranked callers must stand aside for w.
@@ -206,6 +209,34 @@ func (s *GPUScheduler) blockedByHigherPriority(w *gpuWaiter) bool {
 	return false
 }
 
+// GPUQueueSnapshot is a point-in-time view of the shared GPU queue.
+type GPUQueueSnapshot struct {
+	Enabled bool
+	Running int
+	Waiting int
+}
+
+// Snapshot returns the running (slots held) and waiting (parked callers)
+// counts. It takes only the scheduler mutex, never probes nvidia-smi, and is
+// safe on a nil or disabled scheduler (all zero).
+func (s *GPUScheduler) Snapshot() GPUQueueSnapshot {
+	if s == nil || !s.enabled {
+		return GPUQueueSnapshot{}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	snap := GPUQueueSnapshot{Enabled: true}
+	for _, n := range s.inUse {
+		snap.Running += n
+	}
+	for w := range s.waiters {
+		if w.parked {
+			snap.Waiting++
+		}
+	}
+	return snap
+}
+
 // Enabled reports whether the scheduler has GPU info to work with.
 func (s *GPUScheduler) Enabled() bool { return s.enabled }
 
@@ -217,8 +248,24 @@ func (s *GPUScheduler) Enabled() bool { return s.enabled }
 // Cancellation: if ctx is cancelled while we're queued, returns ctx.Err()
 // and the broadcast safety path wakes any other parked waiters too.
 func (s *GPUScheduler) Acquire(ctx context.Context, req GPURequest) (int, func(), error) {
+	idx, release, _, err := s.AcquireTimed(ctx, req)
+	return idx, release, err
+}
+
+// GPUWait reports how an Acquire spent its time. Queued is true only when the
+// caller actually had to park (no slot, or standing aside for a higher-priority
+// job); Wait is then enqueue to acquire on the scheduler's clock. A disabled
+// scheduler, or an immediate grant, is the zero value.
+type GPUWait struct {
+	Queued bool
+	Wait   time.Duration
+}
+
+// AcquireTimed is Acquire plus the time spent waiting for the slot (MM33
+// queueWaitMs). All Acquire semantics apply.
+func (s *GPUScheduler) AcquireTimed(ctx context.Context, req GPURequest) (int, func(), GPUWait, error) {
 	if !s.enabled {
-		return -1, func() {}, nil
+		return -1, func() {}, GPUWait{}, nil
 	}
 	safety := req.SafetyMarginMiB
 	if safety <= 0 {
@@ -246,6 +293,7 @@ func (s *GPUScheduler) Acquire(ctx context.Context, req GPURequest) (int, func()
 	}()
 
 	var waitStarted time.Time
+	queued := false
 
 	for {
 		// Probe under no lock — nvidia-smi can take a few hundred ms and we
@@ -255,10 +303,10 @@ func (s *GPUScheduler) Acquire(ctx context.Context, req GPURequest) (int, func()
 		s.mu.Lock()
 
 		if ctx.Err() != nil {
-			return -1, nil, ctx.Err()
+			return -1, nil, GPUWait{}, ctx.Err()
 		}
 		if err != nil {
-			return -1, nil, fmt.Errorf("nvidia-smi probe: %w", err)
+			return -1, nil, GPUWait{}, fmt.Errorf("nvidia-smi probe: %w", err)
 		}
 
 		gpuByIdx := make(map[int]GPUSnapshot, len(snaps))
@@ -284,6 +332,9 @@ func (s *GPUScheduler) Acquire(ctx context.Context, req GPURequest) (int, func()
 		// Stand aside for a Premium job. Checked per iteration rather than
 		// once, because the prioritised caller may arrive while we are parked.
 		yielding := s.blockedByHigherPriority(w)
+		if yielding {
+			queued = true
+		}
 		if yielding && waitStarted.IsZero() {
 			waitStarted = time.Now()
 			log.Printf("gpu-scheduler: %s standing aside for a higher-priority job", req.Kind)
@@ -308,6 +359,10 @@ func (s *GPUScheduler) Acquire(ctx context.Context, req GPURequest) (int, func()
 			if !waitStarted.IsZero() {
 				log.Printf("gpu-scheduler: %s waited %s in queue", req.Kind, time.Since(waitStarted).Round(time.Second))
 			}
+			var waited GPUWait
+			if queued {
+				waited = GPUWait{Queued: true, Wait: s.now().Sub(w.enqueued)}
+			}
 			var releaseOnce sync.Once
 			release := func() {
 				releaseOnce.Do(func() {
@@ -320,18 +375,37 @@ func (s *GPUScheduler) Acquire(ctx context.Context, req GPURequest) (int, func()
 					log.Printf("gpu-scheduler: %s released GPU %d", req.Kind, chosen)
 				})
 			}
-			return chosen, release, nil
+			return chosen, release, waited, nil
 		}
 
 		// Nothing fits — queue.
+		queued = true
 		if waitStarted.IsZero() {
 			waitStarted = time.Now()
 			log.Printf("gpu-scheduler: %s queued (required=%dMiB+%dMiB safety); waiting for GPU", req.Kind, req.VRAMRequiredMiB, safety)
 		}
-		if err := s.waitOrCtx(ctx, s.agingWake(w)); err != nil {
-			return -1, nil, err
+		w.parked = true
+		err = s.waitOrCtx(ctx, s.agingWake(w))
+		w.parked = false
+		if err != nil {
+			return -1, nil, GPUWait{}, err
 		}
 	}
+}
+
+// acquireGPUForJob is SharedGPUScheduler().Acquire that also records, on the
+// job, how long the caller waited in the queue (MM33 queueWaitMs). jm or jobID
+// may be empty, in which case it is a plain Acquire.
+func acquireGPUForJob(ctx context.Context, jm *JobManager, jobID string, req GPURequest) (int, func(), error) {
+	return acquireGPUForJobOn(ctx, SharedGPUScheduler(), jm, jobID, req)
+}
+
+func acquireGPUForJobOn(ctx context.Context, s *GPUScheduler, jm *JobManager, jobID string, req GPURequest) (int, func(), error) {
+	idx, release, waited, err := s.AcquireTimed(ctx, req)
+	if err == nil && waited.Queued {
+		jm.AddQueueWait(jobID, waited.Wait)
+	}
+	return idx, release, err
 }
 
 // fitsAnyCard reports whether any candidate card has enough TOTAL memory for

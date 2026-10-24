@@ -212,7 +212,7 @@ func (s *TranscriptionService) Transcribe(ctx context.Context, job *models.Conve
 	// to (-1, no-op release, nil) on CPU-only hosts so the rest of the flow
 	// is unchanged there.
 	gpuReq := ResolveWhisperGPURequest(whisperCfg)
-	gpuIdx, releaseGPU, err := SharedGPUScheduler().Acquire(ctx, gpuReq)
+	gpuIdx, releaseGPU, err := acquireGPUForJob(ctx, s.jobManager, job.ID, gpuReq)
 	if err != nil {
 		return nil, fmt.Errorf("acquire GPU for whisper: %w", err)
 	}

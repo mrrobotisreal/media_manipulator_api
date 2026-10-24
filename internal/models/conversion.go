@@ -53,6 +53,10 @@ type ConversionJob struct {
 	// StrippedCount is the number of metadata entries a strip job removed (the
 	// expected File/Composite changes excluded). 0 and omitted when unknown.
 	StrippedCount int `json:"strippedCount,omitempty"`
+	// QueueWaitMs is the total time (ms) this job spent parked in the shared GPU
+	// scheduler waiting for a slot (enqueue to acquire, summed over every GPU
+	// stage). Nil, and so omitted, when the job never had to queue.
+	QueueWaitMs *int64 `json:"queueWaitMs,omitempty"`
 }
 
 // MetadataAvailability reports which metadata documents can be requested.

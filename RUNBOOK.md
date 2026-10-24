@@ -778,7 +778,7 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/image-restore/:jobId/result/:resultId` | Stream one result PNG inline (id resolved from the manifest only). | No |
 | GET | `/api/video-restore/:jobId/results` | Listing for a completed restore job: `{jobId, original, models[]}` (failed models carry no `fileName`). | No |
 | GET | `/api/video-restore/:jobId/result/:name` | Stream one kept MP4 inline with range; `:name` is `original` or a completed model id from the manifest only. Accepts `?sid=`. | No |
-| GET | `/api/job/:jobId` | Poll a job's full JSON state. | No |
+| GET | `/api/job/:jobId` | Poll a job's full JSON state. `queueWaitMs` (ms, MM33) is the total time the job parked in the shared GPU scheduler (`GPUScheduler.AcquireTimed`, enqueue to acquire, summed across GPU stages); omitted when the job never queued (also on the SSE status). | No |
 | GET | `/api/job/:jobId/events` | SSE event stream of job state changes. Closes on completed/failed. | Yes (open connection) |
 | GET | `/api/download/:jobId` | Stream the converted output file for jobs that produced one locally (image/audio/video convert + transcribe). | No |
 | GET | `/api/result/:jobId` | Same file as `/download`, served inline with its sniffed MIME and HTTP range (`206`/`416`); unsafe types fall back to an octet-stream attachment. Accepts `?sid=`. | No |
