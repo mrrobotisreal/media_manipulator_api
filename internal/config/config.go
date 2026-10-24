@@ -262,6 +262,20 @@ type Config struct {
 	BillingPriceMonthlyUSD int
 	BillingPriceYearlyUSD  int
 
+	// Transactional email (MM31). Off unless EmailEnabled AND EmailProviderAPIKey
+	// are both set; otherwise every send is a logged no-op.
+	EmailEnabled bool
+	// EmailProviderAPIKey is a SECRET (Resend API key). Never log or print it.
+	EmailProviderAPIKey string
+	// EmailFrom is the From header, e.g. `Media Manipulator <hello@example.com>`.
+	EmailFrom string
+	// EmailReplyTo is optional.
+	EmailReplyTo string
+	// EmailPublicBaseURL prefixes links inside emails (preferences, billing).
+	EmailPublicBaseURL string
+	// EmailDigestInterval is how often the expiry-digest worker scans.
+	EmailDigestInterval time.Duration
+
 	// FFmpeg validation
 	MaxVideoDurationSeconds int
 	MaxVideoWidth           int
@@ -657,9 +671,17 @@ func Load() *Config {
 		StripeAPIVersion:          strings.TrimSpace(getEnv("STRIPE_API_VERSION", "")),
 		StripeAutomaticTax:        getEnvBool("STRIPE_AUTOMATIC_TAX", true),
 		BillingGraceDays:          getEnvInt("BILLING_GRACE_DAYS", 7),
-		BillingPublicBaseURL:      strings.TrimRight(strings.TrimSpace(getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com")), "/"),
-		BillingPriceMonthlyUSD:    getEnvInt("BILLING_PRICE_MONTHLY_USD", 7),
-		BillingPriceYearlyUSD:     getEnvInt("BILLING_PRICE_YEARLY_USD", 70),
+		EmailEnabled:              getEnvBool("EMAIL_ENABLED", false),
+		EmailProviderAPIKey:       strings.TrimSpace(getEnv("EMAIL_PROVIDER_API_KEY", "")),
+		EmailFrom:                 strings.TrimSpace(getEnv("EMAIL_FROM", "")),
+		EmailReplyTo:              strings.TrimSpace(getEnv("EMAIL_REPLY_TO", "")),
+		EmailPublicBaseURL: strings.TrimRight(strings.TrimSpace(getEnv("EMAIL_PUBLIC_BASE_URL",
+			getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com"))), "/"),
+		EmailDigestInterval: time.Duration(getEnvInt("EMAIL_DIGEST_INTERVAL_HOURS", 24)) * time.Hour,
+
+		BillingPublicBaseURL:   strings.TrimRight(strings.TrimSpace(getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com")), "/"),
+		BillingPriceMonthlyUSD: getEnvInt("BILLING_PRICE_MONTHLY_USD", 7),
+		BillingPriceYearlyUSD:  getEnvInt("BILLING_PRICE_YEARLY_USD", 70),
 
 		// FFmpeg validation
 		MaxVideoDurationSeconds: getEnvInt("MAX_VIDEO_DURATION_SECONDS", 7200),
