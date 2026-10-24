@@ -148,6 +148,10 @@ type StudioExportAudioSeg struct {
 	// its stereotools@pan<i> instance name (chain labels vary with ducking).
 	SegIndex int
 
+	// TrackID (part 19) names the seg's EDL track when that track has an active
+	// mixer stage (a StudioExportAudioTrack in plan.AudioTracks); "" otherwise.
+	TrackID string
+
 	// Speed controls (part 17): see StudioExportVideoSeg. PitchOff selects the
 	// resample path (asetrate+aresample) over the pitch-preserving atempo chain.
 	Speed    float64
@@ -167,6 +171,29 @@ func ApplyAudioSpeed(seg *StudioExportAudioSeg, c models.StudioClip) {
 	}
 	seg.Reverse = c.Reverse && c.Freeze == nil
 	seg.PitchOff = !models.ClipMaintainsPitch(c)
+}
+
+// StudioExportAudioTrack is one track's mixer stage (part 19): its clips are
+// mixed together, then EQ -> compressor -> gain -> pan, then fed to the
+// ducking/master stages. The order mirrors the preview's Web Audio chain
+// (clipGain -> clipPan -> EQ -> compressor -> trackGain -> trackPan ->
+// duckGain -> master), so the composition is clip x track x master.
+type StudioExportAudioTrack struct {
+	ID         string
+	Gain       float64 // 0..2
+	Pan        float64 // -1..1
+	EQ         *models.StudioTrackEQ
+	Compressor *models.StudioTrackCompressor
+}
+
+// eqActive reports whether any EQ band is non-flat.
+func (t StudioExportAudioTrack) eqActive() bool {
+	return t.EQ != nil && (t.EQ.LowGainDb != 0 || t.EQ.MidGainDb != 0 || t.EQ.HighGainDb != 0)
+}
+
+// active reports whether the track needs its own mixer stage.
+func (t StudioExportAudioTrack) active() bool {
+	return t.Gain != 1 || t.Pan != 0 || t.eqActive() || t.Compressor != nil
 }
 
 // StudioDucking is the resolved auto-ducking config for an export.
@@ -195,7 +222,16 @@ type StudioExportPlan struct {
 	Duration float64
 	// EDL v2.
 	Ducking  *StudioDucking
-	Loudness string // '' | streaming | podcast | broadcast
+	// AudioTracks (part 19): the tracks with an active mixer stage. MasterGain
+	// is the project master fader (nil = unity), applied after ducking and
+	// before loudnorm.
+	// BlankVideo (part 19): a hidden video track existed, so keep the video
+	// output (black canvas) even when no visible video seg remains — the
+	// preview shows black there, not an audio-only file.
+	BlankVideo  bool
+	AudioTracks []StudioExportAudioTrack
+	MasterGain  *float64
+	Loudness    string // '' | streaming | podcast | broadcast
 	// CaptionsASSPath, when set, is burned in as the final video filter (Phase 7).
 	CaptionsASSPath string
 	// SendCmdPath, when set, is the keyframe sidecar (part 15) written by the
@@ -310,7 +346,7 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 
 	// --- video composite ---
 	videoOut := ""
-	if len(plan.Video) > 0 {
+	if len(plan.Video) > 0 || plan.BlankVideo {
 		segs := sortVideoSegs(plan.Video)
 		// The keyframe sidecar rides the base color source: CFR at the project
 		// rate with PTS = timeline time, so its intervals fire deterministically
@@ -600,6 +636,10 @@ func compositeStep(last, clipLabel string, vc StudioExportVideoSeg, k, width, he
 
 // buildAudioSection builds the audio mix statements + the output label. Returns
 // ("", "") when there is no audio.
+//
+// Stage order (part 19, mirrored by the preview graph): per-clip chain ->
+// per-track mixer stage (EQ, compressor, gain, pan) -> ducking -> master gain
+// -> loudnorm.
 func buildAudioSection(plan StudioExportPlan, durStr string) ([]string, string) {
 	if len(plan.Audio) == 0 {
 		return nil, ""
@@ -607,10 +647,16 @@ func buildAudioSection(plan StudioExportPlan, durStr string) ([]string, string) 
 	var stmts []string
 
 	// Final label: when a loudness preset is set, mix to a premaster then
-	// loudnorm into [aout]; otherwise mix directly into [aout].
+	// loudnorm into [aout]; otherwise mix directly into [aout]. A master gain
+	// adds one more stage between the mix and the loudness/out label.
 	finalLabel := "aout"
 	if plan.Loudness != "" {
 		finalLabel = "apm"
+	}
+	mixLabel := finalLabel
+	masterGain := masterGainOf(plan)
+	if masterGain != 1 {
+		mixLabel = "amixpre"
 	}
 
 	ducking := plan.Ducking
@@ -618,52 +664,166 @@ func buildAudioSection(plan StudioExportPlan, durStr string) ([]string, string) 
 	useDuck := ducking != nil && len(voice) > 0 && len(bed) > 0
 
 	if !useDuck {
-		// Standard path (byte-identical to v1 when no v2 fields are present).
-		if len(plan.Audio) == 1 {
-			stmts = append(stmts, audioSegChain(plan.Audio[0], finalLabel))
-		} else {
-			var mixIn strings.Builder
-			for k, ac := range plan.Audio {
-				label := fmt.Sprintf("ac%d", k)
-				stmts = append(stmts, audioSegChain(ac, label))
-				mixIn.WriteString("[" + label + "]")
-			}
-			stmts = append(stmts, fmt.Sprintf("%samix=inputs=%d:normalize=0:dropout_transition=0[%s]", mixIn.String(), len(plan.Audio), finalLabel))
-		}
+		// Standard path (byte-identical to v1 when no v2/mixer fields are present).
+		mixSegs(&stmts, plan, plan.Audio, "ac", mixLabel)
 	} else {
-		// Ducking: bed group → sidechaincompress keyed by the voice group.
-		bedLabel := mixGroup(&stmts, bed, "bed")
-		voiceLabel := mixGroup(&stmts, voice, "voice")
+		// Ducking: bed group -> sidechaincompress keyed by the voice group.
+		bedLabel := mixSegs(&stmts, plan, bed, "bed", "bed")
+		voiceLabel := mixSegs(&stmts, plan, voice, "voice", "voice")
 		stmts = append(stmts, fmt.Sprintf("[%s]asplit[%smix][%ssc]", voiceLabel, voiceLabel, voiceLabel))
 		stmts = append(stmts, fmt.Sprintf(
 			"[%s][%ssc]sidechaincompress=threshold=0.02:ratio=%s:attack=%s:release=%s:makeup=1[duckedbed]",
 			bedLabel, voiceLabel, formatGain(duckRatio(ducking.AmountDb)), formatGain(ducking.AttackMs), formatGain(ducking.ReleaseMs),
 		))
-		stmts = append(stmts, fmt.Sprintf("[duckedbed][%smix]amix=inputs=2:normalize=0:dropout_transition=0[%s]", voiceLabel, finalLabel))
+		stmts = append(stmts, fmt.Sprintf("[duckedbed][%smix]amix=inputs=2:normalize=0:dropout_transition=0[%s]", voiceLabel, mixLabel))
 	}
 
+	if masterGain != 1 {
+		stmts = append(stmts, fmt.Sprintf("[%s]volume=%s[%s]", mixLabel, formatGain(masterGain), finalLabel))
+	}
 	if plan.Loudness != "" {
 		stmts = append(stmts, fmt.Sprintf("[%s]%s[aout]", finalLabel, loudnormArg(plan.Loudness)))
 	}
 	return stmts, "aout"
 }
 
-// mixGroup writes one chain per seg in the group and amixes them into a single
-// labeled output (or passes a single seg through). Returns the group label.
-func mixGroup(stmts *[]string, group []StudioExportAudioSeg, name string) string {
+func masterGainOf(plan StudioExportPlan) float64 {
+	if plan.MasterGain == nil {
+		return 1
+	}
+	return *plan.MasterGain
+}
+
+// trackStage finds the mixer stage for a seg's track.
+func trackStage(plan StudioExportPlan, id string) (StudioExportAudioTrack, bool) {
+	if id == "" {
+		return StudioExportAudioTrack{}, false
+	}
+	for _, t := range plan.AudioTracks {
+		if t.ID == id {
+			return t, true
+		}
+	}
+	return StudioExportAudioTrack{}, false
+}
+
+// mixSegs writes one chain per seg and amixes them into `out` (or passes a
+// single seg straight through). Segs on a track with an active mixer stage are
+// first mixed together and run through trackStageChain; the stage output joins
+// the plain segs in the group mix. With no active stages this reduces to the
+// pre-mixer wiring byte-for-byte (labels `<prefix><k>`). Returns `out`.
+func mixSegs(stmts *[]string, plan StudioExportPlan, group []StudioExportAudioSeg, prefix, out string) string {
+	var plain []StudioExportAudioSeg
+	var order []string
+	byTrack := map[string][]StudioExportAudioSeg{}
+	for _, ac := range group {
+		if _, ok := trackStage(plan, ac.TrackID); ok {
+			if _, seen := byTrack[ac.TrackID]; !seen {
+				order = append(order, ac.TrackID)
+			}
+			byTrack[ac.TrackID] = append(byTrack[ac.TrackID], ac)
+		} else {
+			plain = append(plain, ac)
+		}
+	}
+	if len(order) == 0 {
+		mixPlain(stmts, plain, prefix, out)
+		return out
+	}
+	// Each track stage becomes one input of the group mix.
+	var inputs []string
+	for _, id := range order {
+		stage, _ := trackStage(plan, id)
+		label := fmt.Sprintf("%st%d", prefix, len(inputs))
+		raw := label + "m"
+		mixPlain(stmts, byTrack[id], label+"s", raw)
+		*stmts = append(*stmts, fmt.Sprintf("[%s]%s[%s]", raw, strings.Join(trackStageParts(stage), ","), label))
+		inputs = append(inputs, label)
+	}
+	for k, ac := range plain {
+		label := fmt.Sprintf("%sp%d", prefix, k)
+		*stmts = append(*stmts, audioSegChain(ac, label))
+		inputs = append(inputs, label)
+	}
+	if len(inputs) == 1 {
+		// Rename the lone stage output to `out` via anull.
+		*stmts = append(*stmts, fmt.Sprintf("[%s]anull[%s]", inputs[0], out))
+		return out
+	}
+	var mixIn strings.Builder
+	for _, l := range inputs {
+		mixIn.WriteString("[" + l + "]")
+	}
+	*stmts = append(*stmts, fmt.Sprintf("%samix=inputs=%d:normalize=0:dropout_transition=0[%s]", mixIn.String(), len(inputs), out))
+	return out
+}
+
+// mixPlain is the pre-mixer group wiring: a single seg is chained straight into
+// `out`; several are chained into `<prefix><k>` and amixed into `out`.
+func mixPlain(stmts *[]string, group []StudioExportAudioSeg, prefix, out string) {
 	if len(group) == 1 {
-		*stmts = append(*stmts, audioSegChain(group[0], name))
-		return name
+		*stmts = append(*stmts, audioSegChain(group[0], out))
+		return
 	}
 	var mixIn strings.Builder
 	for k, ac := range group {
-		label := fmt.Sprintf("%s%d", name, k)
+		label := fmt.Sprintf("%s%d", prefix, k)
 		*stmts = append(*stmts, audioSegChain(ac, label))
 		mixIn.WriteString("[" + label + "]")
 	}
-	*stmts = append(*stmts, fmt.Sprintf("%samix=inputs=%d:normalize=0:dropout_transition=0[%s]", mixIn.String(), len(group), name))
-	return name
+	*stmts = append(*stmts, fmt.Sprintf("%samix=inputs=%d:normalize=0:dropout_transition=0[%s]", mixIn.String(), len(group), out))
 }
+
+// Track EQ band centers/topology. These constants are mirrored by
+// lib/studio/audioPresets.ts (EQ_BANDS) for the BiquadFilter chain: low shelf
+// 120 Hz, peaking 1 kHz (Q 1), high shelf 8 kHz, RBJ shelf slope 1.
+const (
+	trackEQLowHz  = 120
+	trackEQMidHz  = 1000
+	trackEQHighHz = 8000
+	// acompressor's knee is a linear ratio (default 2.82843 ~ 9 dB); the
+	// preview's DynamicsCompressorNode knee is set to 9 dB to match.
+	trackCompKnee = 2.82843
+)
+
+// trackStageParts is the comma-joined filter list for one track's mixer stage:
+// EQ -> compressor -> gain -> pan. Flat EQ bands and unity gain / centre pan
+// emit nothing.
+func trackStageParts(t StudioExportAudioTrack) []string {
+	var parts []string
+	if t.EQ != nil {
+		if g := t.EQ.LowGainDb; g != 0 {
+			parts = append(parts, fmt.Sprintf("lowshelf=f=%d:t=s:w=1:g=%s", trackEQLowHz, formatGain(g)))
+		}
+		if g := t.EQ.MidGainDb; g != 0 {
+			parts = append(parts, fmt.Sprintf("equalizer=f=%d:t=q:w=1:g=%s", trackEQMidHz, formatGain(g)))
+		}
+		if g := t.EQ.HighGainDb; g != 0 {
+			parts = append(parts, fmt.Sprintf("highshelf=f=%d:t=s:w=1:g=%s", trackEQHighHz, formatGain(g)))
+		}
+	}
+	if c := t.Compressor; c != nil {
+		parts = append(parts, fmt.Sprintf("acompressor=threshold=%s:ratio=%s:attack=%s:release=%s:makeup=%s:knee=%s",
+			formatLinear(dbToLinear(c.ThresholdDb)), formatGain(c.Ratio), formatGain(c.AttackMs), formatGain(c.ReleaseMs),
+			formatGain(math.Max(1, dbToLinear(c.MakeupDb))), formatLinear(trackCompKnee)))
+	}
+	if t.Gain != 1 {
+		parts = append(parts, fmt.Sprintf("volume=%s", formatGain(t.Gain)))
+	}
+	if t.Pan != 0 {
+		parts = append(parts, fmt.Sprintf("stereotools=balance_in=%s", formatGain(t.Pan)))
+	}
+	if len(parts) == 0 {
+		parts = append(parts, "anull")
+	}
+	return parts
+}
+
+func dbToLinear(db float64) float64 { return math.Pow(10, db/20) }
+
+// formatLinear keeps 6 decimals: acompressor's threshold floor (0.000976563)
+// would round to 0.001 at 3 decimals.
+func formatLinear(v float64) string { return strconv.FormatFloat(v, 'f', 6, 64) }
 
 // audioSegChain builds one audio clip's chain → [label].
 func audioSegChain(ac StudioExportAudioSeg, label string) string {

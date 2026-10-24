@@ -421,6 +421,9 @@ type StudioAudioConfig struct {
 	DuckAmountDb     float64 `json:"duckAmountDb"`
 	DuckAttackMs     float64 `json:"duckAttackMs"`
 	DuckReleaseMs    float64 `json:"duckReleaseMs"`
+	// MasterGain (part 19) is the project master fader, 0..2 (default 1). A
+	// pointer so "absent" is distinguishable and old projects stay byte-stable.
+	MasterGain *float64 `json:"masterGain,omitempty"`
 }
 
 // StudioAsset is an ingested source file plus its derived proxy + filmstrip and

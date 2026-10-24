@@ -728,7 +728,12 @@ func SanitizeAudioConfig(a *StudioAudioConfig) *StudioAudioConfig {
 	if a == nil {
 		return nil
 	}
+	var master *float64
+	if a.MasterGain != nil {
+		master = ptrF(clampF(*a.MasterGain, 0, studioMaxVolume))
+	}
 	return &StudioAudioConfig{
+		MasterGain:       master,
 		DuckingEnabled:   a.DuckingEnabled,
 		DuckVoiceTrackID: a.DuckVoiceTrackID,
 		DuckAmountDb:     clampF(a.DuckAmountDb, 0, 24),

@@ -1,0 +1,21 @@
+{
+  "_doc": "Shared truth table for track audibility. Identical copy lives at media-manipulator-ui/lib/studio/trackAudibility.fixture.json; both repos test it.",
+  "anySolo": [
+    { "name": "no tracks", "tracks": [], "expect": false },
+    { "name": "no solo", "tracks": [{ "kind": "audio" }, { "kind": "video" }], "expect": false },
+    { "name": "audio solo", "tracks": [{ "kind": "audio", "solo": true }], "expect": true },
+    { "name": "video solo flag ignored", "tracks": [{ "kind": "video", "solo": true }], "expect": false }
+  ],
+  "audible": [
+    { "name": "plain audio, no solo", "track": { "kind": "audio" }, "soloActive": false, "expect": true },
+    { "name": "muted audio, no solo", "track": { "kind": "audio", "muted": true }, "soloActive": false, "expect": false },
+    { "name": "plain video, no solo", "track": { "kind": "video" }, "soloActive": false, "expect": true },
+    { "name": "muted video, no solo", "track": { "kind": "video", "muted": true }, "soloActive": false, "expect": false },
+    { "name": "hidden video, no solo", "track": { "kind": "video", "hidden": true }, "soloActive": false, "expect": true },
+    { "name": "solo beats mute", "track": { "kind": "audio", "solo": true, "muted": true }, "soloActive": true, "expect": true },
+    { "name": "soloed audio", "track": { "kind": "audio", "solo": true }, "soloActive": true, "expect": true },
+    { "name": "non-soloed audio while solo active", "track": { "kind": "audio" }, "soloActive": true, "expect": false },
+    { "name": "video embedded audio while solo active", "track": { "kind": "video" }, "soloActive": true, "expect": false },
+    { "name": "video with solo flag while solo active", "track": { "kind": "video", "solo": true }, "soloActive": true, "expect": false }
+  ]
+}

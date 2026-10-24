@@ -158,9 +158,14 @@ func renderVariant(id, leg string, p goldenProject, g *goldenFile, fixturesDir, 
 		ducking = &services.StudioDucking{AmountDb: a.DuckAmountDb, AttackMs: a.DuckAttackMs, ReleaseMs: a.DuckReleaseMs}
 		voiceTrackID = a.DuckVoiceTrackID
 	}
+	var masterGain *float64
+	if p.Audio != nil {
+		masterGain = models.SanitizeAudioConfig(p.Audio).MasterGain
+	}
 	plan := services.AssembleExportPlan(refs, services.StudioPlanSpec{
 		Width: p.Width, Height: p.Height, FPS: p.FPS, Duration: duration,
 		Ducking: ducking, VoiceTrackID: voiceTrackID,
+		MasterGain: masterGain,
 		LocalByKey: localByKey, LutPaths: lutPaths,
 	})
 

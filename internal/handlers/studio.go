@@ -1358,7 +1358,7 @@ func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef
 	// tracks mix in.
 	plan := services.AssembleExportPlan(refs, services.StudioPlanSpec{
 		Width: width, Height: height, FPS: fps, Duration: duration,
-		Ducking: exportCfg.ducking, VoiceTrackID: exportCfg.voiceTrackID, Loudness: exportCfg.loudness,
+		Ducking: exportCfg.ducking, VoiceTrackID: exportCfg.voiceTrackID, Loudness: exportCfg.loudness, MasterGain: exportCfg.masterGain,
 		LocalByKey: localByKey, LutPaths: lutLocalByAssetID,
 	})
 
@@ -1697,6 +1697,7 @@ type studioExportConfig struct {
 	ducking      *services.StudioDucking
 	loudness     string
 	voiceTrackID string
+	masterGain   *float64 // part 19: project master fader (nil = unity)
 	// Caption burn-in (when enabled + present).
 	captions     []models.StudioCaptionCue
 	captionStyle *models.StudioCaptionStyle
@@ -1709,6 +1710,9 @@ func buildStudioExportConfig(project *models.StudioProject, assetByID map[string
 	if a := project.Audio; a != nil && a.DuckingEnabled && strings.TrimSpace(a.DuckVoiceTrackID) != "" {
 		cfg.ducking = &services.StudioDucking{AmountDb: a.DuckAmountDb, AttackMs: a.DuckAttackMs, ReleaseMs: a.DuckReleaseMs}
 		cfg.voiceTrackID = a.DuckVoiceTrackID
+	}
+	if a := project.Audio; a != nil {
+		cfg.masterGain = a.MasterGain
 	}
 	if project.CaptionsEnabled && len(project.Captions) > 0 {
 		cfg.captions = project.Captions
