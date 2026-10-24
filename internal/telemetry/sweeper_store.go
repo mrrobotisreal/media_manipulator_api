@@ -300,16 +300,17 @@ func (s *Store) ParkMetadataReport(ctx context.Context, owner LedgerRow, size in
 	return err
 }
 
-// unparkMetadataQuery makes parked reports due again once their owner has
-// turned "delete metadata reports" on. Runs hourly; the sweeper then deletes them.
+// unparkMetadataQuery makes parked reports due again once their owner deletes
+// reports with the files: an explicit delete_metadata_reports = true, or no
+// settings row at all (the default is delete). Runs hourly; the sweeper then
+// deletes them. A row with delete_metadata_reports = false keeps its reports.
 const unparkMetadataQuery = `
 UPDATE mm_retained_objects o
 SET expires_at = $1, next_attempt_at = NULL
-FROM mm_user_settings s
-WHERE o.owner_user_id = s.user_id
-  AND o.kind = 'metadata_report' AND o.keep_with_account AND o.deleted_at IS NULL
+WHERE o.kind = 'metadata_report' AND o.keep_with_account AND o.deleted_at IS NULL
+  AND o.owner_user_id IS NOT NULL
   AND o.expires_at > $1
-  AND s.delete_metadata_reports`
+  AND COALESCE((SELECT s.delete_metadata_reports FROM mm_user_settings s WHERE s.user_id = o.owner_user_id), true)`
 
 // UnparkMetadataReports expires parked reports of users who opted to delete them.
 func (s *Store) UnparkMetadataReports(ctx context.Context, now time.Time) (int64, error) {
@@ -326,8 +327,8 @@ func (s *Store) UnparkMetadataReports(ctx context.Context, now time.Time) (int64
 }
 
 // OwnerKeepsMetadataReports reports whether the user keeps metadata reports past
-// file expiry. No settings row means the default (keep: delete_metadata_reports
-// defaults to false).
+// file expiry. No settings row means the default (delete: delete_metadata_reports
+// defaults to true), so the answer is false.
 func (s *Store) OwnerKeepsMetadataReports(ctx context.Context, userID string) (bool, error) {
 	if !s.Enabled() {
 		return false, ErrNoStore
@@ -340,7 +341,7 @@ func (s *Store) OwnerKeepsMetadataReports(ctx context.Context, userID string) (b
 	var del bool
 	err := s.Pool.QueryRow(ctx, `SELECT delete_metadata_reports FROM mm_user_settings WHERE user_id = $1::uuid`, userID).Scan(&del)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return true, nil
+		return false, nil
 	}
 	if err != nil {
 		return false, err

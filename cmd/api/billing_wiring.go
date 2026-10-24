@@ -19,7 +19,7 @@ func newBillingHandler(cfg *config.Config, store *telemetry.Store, registry *tie
 	if !cfg.BillingConfigured() {
 		return handlers.NewBillingHandler(nil, nil, nil, registry, cfg, log)
 	}
-	client := billing.NewStripeClient(cfg.StripeSecretKey, cfg.StripeWebhookSecret, cfg.StripeAPIVersion)
+	client := billing.NewStripeClient(cfg.StripeSecretKey, cfg.StripeWebhookSecret, cfg.StripeAPIVersion, cfg.StripeAutomaticTax)
 	log.Info("billing enabled", "stripeApiVersion", billing.PinnedAPIVersion(), "graceDays", cfg.BillingGraceDays)
 	proc := &billing.Processor{
 		Store:   store,

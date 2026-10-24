@@ -26,11 +26,13 @@ type stripeClient struct {
 	webhookSecret string
 	// versionOverride, when set, replaces the Stripe-Version header per request.
 	versionOverride string
+	// automaticTax asks Checkout to compute Stripe Tax (STRIPE_AUTOMATIC_TAX).
+	automaticTax bool
 }
 
 // NewStripeClient builds the real client. apiVersion may be empty (use the SDK's).
-func NewStripeClient(secretKey, webhookSecret, apiVersion string) BillingClient {
-	return &stripeClient{sc: stripe.NewClient(secretKey), webhookSecret: webhookSecret, versionOverride: apiVersion}
+func NewStripeClient(secretKey, webhookSecret, apiVersion string, automaticTax bool) BillingClient {
+	return &stripeClient{sc: stripe.NewClient(secretKey), webhookSecret: webhookSecret, versionOverride: apiVersion, automaticTax: automaticTax}
 }
 
 func (c *stripeClient) params(ctx context.Context) stripe.Params {
@@ -99,13 +101,31 @@ func (c *stripeClient) CreateCheckoutSession(ctx context.Context, req CheckoutRe
 		SubscriptionData: &stripe.CheckoutSessionCreateSubscriptionDataParams{
 			Metadata: subscriptionMetadata(req),
 		},
-		// Deliberately NO AutomaticTax and no trial (ticket decision 7).
+		// No trial (ticket decision 7).
 	}
+	applyAutomaticTax(p, c.automaticTax)
 	s, err := c.sc.V1CheckoutSessions.Create(ctx, p)
 	if err != nil {
 		return "", "", wrapErr(err)
 	}
 	return s.ID, s.URL, nil
+}
+
+// applyAutomaticTax turns on Stripe Tax for a Checkout Session. Tax is added on
+// top of the price (the Stripe Prices must be tax_behavior "exclusive"). Stripe
+// Tax needs a customer address: the session already uses an existing Customer
+// with CustomerUpdate.Address = "auto", which saves the address Checkout
+// collects, and BillingAddressCollection "auto" lets Checkout collect it when
+// the payment method does not. TaxIDCollection is deliberately NOT set: for an
+// existing Customer it also requires CustomerUpdate.Name = "auto", and business
+// tax IDs are not part of this consumer plan. When off, the params are untouched
+// (Stripe errors on automatic tax for accounts without Stripe Tax activated).
+func applyAutomaticTax(p *stripe.CheckoutSessionCreateParams, on bool) {
+	if !on {
+		return
+	}
+	p.AutomaticTax = &stripe.CheckoutSessionCreateAutomaticTaxParams{Enabled: stripe.Bool(true)}
+	p.BillingAddressCollection = stripe.String(string(stripe.CheckoutSessionBillingAddressCollectionAuto))
 }
 
 func (c *stripeClient) CreatePortalSession(ctx context.Context, customerID, returnURL string) (string, error) {

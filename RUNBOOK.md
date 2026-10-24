@@ -201,7 +201,7 @@ after changing them.
 3. **`JobManager.CleanupOldJobs`** (`RETENTION_JOB_MAP_MAX_AGE_HOURS`, default 24) trims finished jobs from the in-memory map. Account history no longer depends on that map: it reads `mm_conversion_jobs` plus the ledger, so it survives restarts.
 4. **Postgres purges**, at most once an hour, 5,000 rows per statement: `mm_usage_counters` older than 400 days; `mm_safety_incidents` with `retention_until < now()` and `legal_hold = false`; raw IPs (`ip`, `cf_connecting_ip`, `x_forwarded_for`) set to NULL on `mm_api_requests` and `ip` on `mm_rate_limit_events` older than 90 days; `mm_cleanup_runs` older than 180 days (their path rows cascade); ledger rows that were stamped `deleted_at` more than 30 days ago.
 
-**Metadata reports (ADR-0010, proposal).** For a signed-in owner whose `delete_metadata_reports` is `false` (the default), sweeping an `output_dir` removes everything **except** `metadata.json` / `metadata.result.json`, after first writing a parked `metadata_report` ledger row (`keep_with_account = true`, `expires_at = 9999-12-31`). The account history "Metadata" button keeps working after the media is gone. Turning `delete_metadata_reports` on makes the hourly purge pass un-park those rows; the next sweep deletes the documents. Guests keep nothing. Mitch has not confirmed this default yet (design METADATA_INSPECTOR section 7 Q2); to change it, flip the default of `delete_metadata_reports` and the "keeps" branch in `Sweeper.preserveMetadata`.
+**Metadata reports (ADR-0010; default changed 2026-10-24: delete with the file).** The default is now to delete a job's `metadata.json` / `metadata.result.json` together with its files: `mm_user_settings.delete_metadata_reports` defaults to `true` (migration `20261024003_default_delete_metadata_reports`) and a signed-in user with no settings row is treated the same. Only an owner who explicitly set `delete_metadata_reports` to `false` ("keep") keeps reports: sweeping their `output_dir` removes everything **except** the metadata documents, after first writing a parked `metadata_report` ledger row (`keep_with_account = true`, `expires_at = 9999-12-31`), and the account history "Metadata" button keeps working after the media is gone. The migration also switches existing rows that were never edited (`updated_at = created_at`, i.e. their `false` was the old automatic default, not a choice); rows a user edited keep their value, so an explicit "keep" is never overridden. The hourly purge pass un-parks parked rows of owners with `delete_metadata_reports = true` **or no settings row**; the next sweep deletes the documents. Guests keep nothing.
 
 **Knobs** (all in `internal/config/config.go`):
 
@@ -600,10 +600,12 @@ Billing is **off** until `BILLING_ENABLED=true` AND all four values below are se
 | `STRIPE_PRICE_PREMIUM_MONTHLY` | - | Stripe Price id for the monthly plan. The client never sends a price id. |
 | `STRIPE_PRICE_PREMIUM_YEARLY` | - | Stripe Price id for the yearly plan. |
 | `STRIPE_API_VERSION` | SDK constant | Optional override of the `Stripe-Version` header. Leave unset. |
+| `STRIPE_AUTOMATIC_TAX` | `true` | Adds Stripe Tax on top of the price at Checkout (`automatic_tax.enabled`, `billing_address_collection=auto`). Set `false` if Stripe rejects sessions before Stripe Tax is activated. |
 | `BILLING_GRACE_DAYS` | `7` | How long Premium survives `past_due` / `invoice.payment_failed`. |
 | `BILLING_PUBLIC_BASE_URL` | `https://media-manipulator.com` | Prefix for Checkout success/cancel and Portal return URLs. |
 | `BILLING_PRICE_MONTHLY_USD` / `BILLING_PRICE_YEARLY_USD` | `7` / `70` | Display-only numbers for `/api/tiers`; the charge is whatever the Stripe Price says. |
 
+* Stripe Tax must be activated in the Stripe Dashboard (origin address and tax registrations) before `STRIPE_AUTOMATIC_TAX=true` works, and both Prices must have tax behaviour `exclusive` so tax lands on top of $7/mo and $70/yr.
 * Pinned Stripe API version (stripe-go v87.0.0): `2026-09-30.endive`. Create the
   webhook endpoint at that version. The API still verifies events from another
   release train (see `internal/billing/stripe_client.go`), because it re-fetches the

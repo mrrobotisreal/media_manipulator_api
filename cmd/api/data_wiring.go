@@ -70,7 +70,7 @@ func wireDataControls(ctx context.Context, cfg *config.Config, store *telemetry.
 	// the no-op ender reports "skipped".
 	var ender billing.SubscriptionEnder = billing.NoopEnder{}
 	if cfg.BillingConfigured() {
-		ender = billing.NewSubscriptionEnder(billing.NewStripeClient(cfg.StripeSecretKey, cfg.StripeWebhookSecret, cfg.StripeAPIVersion))
+		ender = billing.NewSubscriptionEnder(billing.NewStripeClient(cfg.StripeSecretKey, cfg.StripeWebhookSecret, cfg.StripeAPIVersion, cfg.StripeAutomaticTax))
 	}
 	var dsr analyticsemit.DSRClient
 	if c := analyticsemit.NewHTTPDSRClient(cfg.AnalyticsIngestURL, 0); c != nil {

@@ -519,6 +519,7 @@ func TestSweepUnknownKindIsLoggedAndLeft(t *testing.T) {
 
 func TestSweepOutputDirKeepsMetadataDocumentsForAccountsThatKeepThem(t *testing.T) {
 	e := newSweepEnv(t)
+	e.db.keepMeta[user1] = true // explicit "keep" (delete_metadata_reports = false)
 	dir := e.jobDir(e.outputs, "job-m", "converted.mp4", "metadata.json", "metadata.result.json", "frames.zip")
 	e.db.add(telemetry.LedgerRow{Kind: KindOutputDir, Locator: "job-m", JobID: "job-m", OwnerUserID: user1})
 
@@ -549,6 +550,19 @@ func TestSweepOutputDirKeepsMetadataDocumentsForAccountsThatKeepThem(t *testing.
 	}
 }
 
+func TestSweepOutputDirDeletesMetadataByDefaultWithNoSettingsRow(t *testing.T) {
+	e := newSweepEnv(t) // no keepMeta entry for user1 = no settings row
+	dir := e.jobDir(e.outputs, "job-m", "converted.mp4", "metadata.json", "metadata.result.json")
+	e.db.add(telemetry.LedgerRow{Kind: KindOutputDir, Locator: "job-m", JobID: "job-m", OwnerUserID: user1})
+	e.sweep()
+	if exists(dir) {
+		t.Error("default: reports go with their files")
+	}
+	if len(e.db.parked) != 0 {
+		t.Error("nothing is parked by default")
+	}
+}
+
 func TestSweepOutputDirDeletesMetadataWhenAccountOptedIn(t *testing.T) {
 	e := newSweepEnv(t)
 	e.db.keepMeta[user1] = false // delete_metadata_reports = true
@@ -575,6 +589,7 @@ func TestSweepOutputDirGuestMetadataGoesWithTheFiles(t *testing.T) {
 
 func TestSweepMetadataParkFailureLeavesDirectoryIntact(t *testing.T) {
 	e := newSweepEnv(t)
+	e.db.keepMeta[user1] = true
 	dir := e.jobDir(e.outputs, "job-m", "converted.mp4", "metadata.json")
 	e.db.failOn["park"] = errBoom
 	row := e.db.add(telemetry.LedgerRow{Kind: KindOutputDir, Locator: "job-m", JobID: "job-m", OwnerUserID: user1})
@@ -589,6 +604,7 @@ func TestSweepMetadataParkFailureLeavesDirectoryIntact(t *testing.T) {
 
 func TestSweepSettingsErrorNeverDeletesMetadata(t *testing.T) {
 	e := newSweepEnv(t)
+	e.db.keepMeta[user1] = true
 	dir := e.jobDir(e.outputs, "job-m", "converted.mp4", "metadata.json")
 	e.db.failOn["settings"] = errBoom
 	row := e.db.add(telemetry.LedgerRow{Kind: KindOutputDir, Locator: "job-m", JobID: "job-m", OwnerUserID: user1})
@@ -613,8 +629,22 @@ func TestSweepParkedMetadataDeletedWhenAccountOptsIn(t *testing.T) {
 	}
 }
 
+// A report parked before the default flipped: the hourly un-park pass (see
+// internal/telemetry TestUnparkQueryReleasesDefaultAndOptInOwners) makes it due;
+// for an owner on the default the sweeper then deletes it.
+func TestSweepParkedMetadataDeletedForOwnerOnTheDefault(t *testing.T) {
+	e := newSweepEnv(t) // no settings row
+	dir := e.jobDir(e.outputs, "job-m", "metadata.json", "metadata.result.json")
+	row := e.db.add(telemetry.LedgerRow{Kind: KindMetadata, Locator: "job-m", JobID: "job-m", OwnerUserID: user1, KeepWithAccount: true})
+	e.sweep()
+	if row.DeletedAt == nil || exists(dir) {
+		t.Errorf("released parked report must be deleted: %+v", row)
+	}
+}
+
 func TestSweepDueMetadataRowForKeepingAccountIsRestampedNotDeleted(t *testing.T) {
 	e := newSweepEnv(t)
+	e.db.keepMeta[user1] = true
 	dir := e.jobDir(e.outputs, "job-m", "metadata.json")
 	row := e.db.add(telemetry.LedgerRow{Kind: KindMetadata, Locator: "job-m", JobID: "job-m", OwnerUserID: user1})
 	e.sweep()
