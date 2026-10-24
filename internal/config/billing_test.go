@@ -45,13 +45,13 @@ func TestBillingDefaultsAreDark(t *testing.T) {
 	}
 }
 
-func TestStripeAutomaticTaxDefaultsOnAndCanBeDisabled(t *testing.T) {
+func TestStripeAutomaticTaxDefaultsOffAndCanBeEnabled(t *testing.T) {
 	t.Setenv("STRIPE_AUTOMATIC_TAX", "")
-	if !Load().StripeAutomaticTax {
-		t.Fatal("must default to true")
-	}
-	t.Setenv("STRIPE_AUTOMATIC_TAX", "false")
 	if Load().StripeAutomaticTax {
-		t.Fatal("false must disable")
+		t.Fatal("must default to false (no Stripe Tax)")
+	}
+	t.Setenv("STRIPE_AUTOMATIC_TAX", "true")
+	if !Load().StripeAutomaticTax {
+		t.Fatal("true must enable")
 	}
 }

@@ -608,12 +608,12 @@ history before it is not counted.
 | `STRIPE_PRICE_PREMIUM_MONTHLY` | - | Stripe Price id for the monthly plan. The client never sends a price id. |
 | `STRIPE_PRICE_PREMIUM_YEARLY` | - | Stripe Price id for the yearly plan. |
 | `STRIPE_API_VERSION` | SDK constant | Optional override of the `Stripe-Version` header. Leave unset. |
-| `STRIPE_AUTOMATIC_TAX` | `true` | Adds Stripe Tax on top of the price at Checkout (`automatic_tax.enabled`, `billing_address_collection=auto`). Set `false` if Stripe rejects sessions before Stripe Tax is activated. |
+| `STRIPE_AUTOMATIC_TAX` | `false` | Off by decision (2026-10-24): no tax is added at Checkout; customers pay the listed $7 / $70. `true` adds Stripe Tax (`automatic_tax.enabled`, `billing_address_collection=auto`) and only works after Stripe Tax is activated with tax registrations. |
 | `BILLING_GRACE_DAYS` | `7` | How long Premium survives `past_due` / `invoice.payment_failed`. |
 | `BILLING_PUBLIC_BASE_URL` | `https://media-manipulator.com` | Prefix for Checkout success/cancel and Portal return URLs. |
 | `BILLING_PRICE_MONTHLY_USD` / `BILLING_PRICE_YEARLY_USD` | `7` / `70` | Display-only numbers for `/api/tiers`; the charge is whatever the Stripe Price says. |
 
-* Stripe Tax must be activated in the Stripe Dashboard (origin address and tax registrations) before `STRIPE_AUTOMATIC_TAX=true` works, and both Prices must have tax behaviour `exclusive` so tax lands on top of $7/mo and $70/yr.
+* Stripe Tax is not used (Mitch, 2026-10-24: individual seller, no tax registrations). Leave `STRIPE_AUTOMATIC_TAX` unset. If that ever changes: activate Stripe Tax with registrations in the Dashboard, set both Prices to tax behaviour `exclusive`, then set `STRIPE_AUTOMATIC_TAX=true`.
 * Pinned Stripe API version (stripe-go v87.0.0): `2026-09-30.endive`. Create the
   webhook endpoint at that version. The API still verifies events from another
   release train (see `internal/billing/stripe_client.go`), because it re-fetches the

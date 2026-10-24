@@ -257,8 +257,9 @@ type Config struct {
 	// (default: the stripe-go constant). Empty = use the SDK's.
 	StripeAPIVersion string
 	// StripeAutomaticTax adds Stripe Tax on top of the price at Checkout
-	// (STRIPE_AUTOMATIC_TAX, default true). Turn it off if Stripe rejects sessions
-	// because Stripe Tax is not activated in the Dashboard yet.
+	// (STRIPE_AUTOMATIC_TAX, default false). Off by decision (Mitch, 2026-10-24):
+	// Stripe Tax needs tax registrations and is not used. Only turn it on after
+	// activating Stripe Tax with registrations in the Dashboard.
 	StripeAutomaticTax bool
 	// BillingGraceDays is how long Premium survives a failed payment.
 	BillingGraceDays int
@@ -678,7 +679,7 @@ func Load() *Config {
 		StripePricePremiumMonthly: strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_MONTHLY", "")),
 		StripePricePremiumYearly:  strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_YEARLY", "")),
 		StripeAPIVersion:          strings.TrimSpace(getEnv("STRIPE_API_VERSION", "")),
-		StripeAutomaticTax:        getEnvBool("STRIPE_AUTOMATIC_TAX", true),
+		StripeAutomaticTax:        getEnvBool("STRIPE_AUTOMATIC_TAX", false),
 		BillingGraceDays:          getEnvInt("BILLING_GRACE_DAYS", 7),
 		EmailEnabled:              getEnvBool("EMAIL_ENABLED", false),
 		EmailProviderAPIKey:       strings.TrimSpace(getEnv("EMAIL_PROVIDER_API_KEY", "")),
