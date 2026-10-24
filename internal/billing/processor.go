@@ -22,6 +22,12 @@ type Store interface {
 	SetUserTier(ctx context.Context, firebaseUID, tier, source, grantedBy, reason string, expiresAt *time.Time) (*models.User, error)
 	InsertBillingEvent(ctx context.Context, eventID, eventType string) (alreadyProcessed bool, err error)
 	MarkBillingEvent(ctx context.Context, eventID string, processed bool, note string) error
+	// AttributeBillingEvent stamps a recorded event with the user and Stripe
+	// subscription it belongs to (invoice.paid only, MM33).
+	AttributeBillingEvent(ctx context.Context, eventID, userID, subscriptionID string) error
+	// CountPaidPeriods counts processed, attributed invoice.paid events for this
+	// user and subscription: the periods paid so far. No Stripe call.
+	CountPaidPeriods(ctx context.Context, userID, subscriptionID string) (int, error)
 }
 
 // Emitter is the slice of *analyticsemit.Emitter the processor uses. A nil
@@ -144,6 +150,16 @@ func (p *Processor) apply(ctx context.Context, ev Event) (note string, err error
 	if user == nil {
 		p.logger().Warn("billing: event for unknown user", "eventId", ev.ID, "type", ev.Type)
 		return NoteUnknownUser, nil
+	}
+
+	// MM33: remember whose invoice this was so the status route can count paid
+	// periods without asking Stripe. A failure here must not fail the webhook's
+	// tier handling, but it is retried by Stripe like any other error so the
+	// count never silently misses a period.
+	if ev.Type == EventInvoicePaid {
+		if err := p.Store.AttributeBillingEvent(ctx, ev.ID, user.ID, sub.ID); err != nil {
+			return "", fmt.Errorf("attribute billing event: %w", err)
+		}
 	}
 
 	if user.StripeCustomerID == "" && sub.CustomerID != "" {

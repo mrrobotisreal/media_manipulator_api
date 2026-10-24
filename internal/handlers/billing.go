@@ -217,6 +217,11 @@ type billingStatusResponse struct {
 	CancelAtPeriodEnd bool             `json:"cancelAtPeriodEnd"`
 	PortalAvailable   bool             `json:"portalAvailable"`
 	ManualGrant       *manualGrantInfo `json:"manualGrant"`
+	// PeriodsPaid is the number of paid billing periods on the current MONTHLY
+	// subscription (processed invoice.paid rows in mm_billing_events, no Stripe
+	// call). Omitted for yearly or no subscription, and when the count is
+	// unavailable.
+	PeriodsPaid *int `json:"periodsPaid,omitempty"`
 }
 
 func strPtr(s string) *string {
@@ -245,6 +250,13 @@ func (h *BillingHandler) Status(c *gin.Context) {
 	if user.TierSource == "subscription" && user.TierExpiresAt != nil {
 		s := user.TierExpiresAt.UTC().Format(time.RFC3339)
 		out.RenewsAt = &s
+	}
+	if h.available() && user.BillingInterval == "monthly" && user.StripeSubscriptionID != "" {
+		if n, err := h.store.CountPaidPeriods(c.Request.Context(), user.ID, user.StripeSubscriptionID); err != nil {
+			h.logger.Warn("billing: periodsPaid unavailable", "error", err.Error())
+		} else {
+			out.PeriodsPaid = &n
+		}
 	}
 	if liveManualGrant(user, now) {
 		info := &manualGrantInfo{}

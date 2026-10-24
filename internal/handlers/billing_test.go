@@ -432,3 +432,50 @@ func TestSessionReturnAppliesPaidCheckoutWithoutWebhook(t *testing.T) {
 		t.Fatalf("late webhook changed tier: %+v", again)
 	}
 }
+
+// MM33: periodsPaid on GET /billing/status.
+func TestStatusPeriodsPaid(t *testing.T) {
+	monthly := bUser("u1", "fb1")
+	monthly.SubscriptionStatus, monthly.BillingInterval, monthly.StripeCustomerID, monthly.StripeSubscriptionID = "active", "monthly", "cus_1", "sub_1"
+	yearly := bUser("u2", "fb2")
+	yearly.SubscriptionStatus, yearly.BillingInterval, yearly.StripeCustomerID, yearly.StripeSubscriptionID = "active", "yearly", "cus_2", "sub_2"
+	none := bUser("u3", "fb3")
+	b := newBillingRig(t, billingCfg(true), monthly, yearly, none)
+	b.r = gin.New()
+	RegisterBillingRoutes(b.r.Group("/api"), NewBillingHandler(b.store, b.fc, nil, tiers.New(b.cfg), b.cfg, nil), fakeVerifier{principals: map[string]*middleware.Principal{
+		"tok-u1": {UID: "fb1", Email: "a@example.com", EmailVerified: true},
+		"tok-u2": {UID: "fb2", Email: "b@example.com", EmailVerified: true},
+		"tok-u3": {UID: "fb3", Email: "c@example.com", EmailVerified: true},
+	}})
+	paid := func(id, user, sub string) {
+		b.store.Events[id] = &billing.FakeEvent{Type: "invoice.paid", Processed: true, UserID: user, SubID: sub}
+	}
+	paid("e1", "u1", "sub_1")
+	paid("e2", "u1", "sub_1")
+	paid("e3", "u1", "sub_1")
+	paid("e4", "u1", "sub_old")                                                                   // previous subscription
+	paid("e5", "u2", "sub_2")                                                                     // yearly user's invoice
+	b.store.Events["e6"] = &billing.FakeEvent{Type: "invoice.paid", UserID: "u1", SubID: "sub_1"} // unprocessed
+	b.store.Events["e7"] = &billing.FakeEvent{Type: "invoice.payment_failed", Processed: true, UserID: "u1", SubID: "sub_1"}
+
+	m := jsonBody(t, b.do("GET", "/api/billing/status", "tok-u1", ""))
+	if m["periodsPaid"] != float64(3) {
+		t.Fatalf("monthly: want periodsPaid 3, got %v", m)
+	}
+	for _, tok := range []string{"tok-u2", "tok-u3"} {
+		if _, has := jsonBody(t, b.do("GET", "/api/billing/status", tok, ""))["periodsPaid"]; has {
+			t.Fatalf("%s: periodsPaid must be omitted for yearly / no subscription", tok)
+		}
+	}
+	// Count unavailable: omitted, status still 200.
+	b.store.FailCount = errors.New("db down")
+	w := b.do("GET", "/api/billing/status", "tok-u1", "")
+	if _, has := jsonBody(t, w)["periodsPaid"]; w.Code != 200 || has {
+		t.Fatalf("count failure: %d %s", w.Code, w.Body)
+	}
+	// Billing off: omitted.
+	off := newBillingRig(t, billingCfg(false), monthly)
+	if _, has := jsonBody(t, off.do("GET", "/api/billing/status", "tok-u1", ""))["periodsPaid"]; has {
+		t.Fatal("billing off must omit periodsPaid")
+	}
+}

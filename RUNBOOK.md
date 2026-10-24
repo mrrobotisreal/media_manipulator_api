@@ -592,6 +592,14 @@ Billing is **off** until `BILLING_ENABLED=true` AND all four values below are se
 `billing_unavailable` (except `GET /billing/status`, which reports
 `purchasable:false`) and `/api/tiers` reports `premiumPurchasable:false`.
 
+`GET /billing/status` also returns `periodsPaid` (MM33 yearly nudge): the count of
+processed `invoice.paid` rows in `mm_billing_events` for the user's current
+subscription, monthly plans only (omitted for yearly / no subscription / billing
+off). No Stripe call. Migration `20261024006_billing_events_attribution` (server
+only, not yet run) adds `user_id` + `subscription_id` to `mm_billing_events`; the
+processor stamps them on `invoice.paid`, so the count starts at deploy and
+history before it is not counted.
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `BILLING_ENABLED` | `false` | Master switch. |

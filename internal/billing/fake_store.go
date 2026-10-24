@@ -23,6 +23,7 @@ type FakeStore struct {
 	Events      map[string]*FakeEvent
 	TierWrites  []TierWrite
 	FailSetTier error
+	FailCount   error
 }
 
 // FakeEvent mirrors a mm_billing_events row.
@@ -30,6 +31,8 @@ type FakeEvent struct {
 	Type      string
 	Processed bool
 	Note      string
+	UserID    string
+	SubID     string
 }
 
 // NewFakeStore returns an empty FakeStore.
@@ -129,6 +132,32 @@ func (f *FakeStore) MarkBillingEvent(_ context.Context, id string, processed boo
 	}
 	e.Processed, e.Note = processed, note
 	return nil
+}
+
+func (f *FakeStore) AttributeBillingEvent(_ context.Context, id, userID, subID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	e := f.Events[id]
+	if e == nil {
+		return errors.New("no such event")
+	}
+	e.UserID, e.SubID = userID, subID
+	return nil
+}
+
+func (f *FakeStore) CountPaidPeriods(_ context.Context, userID, subID string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.FailCount != nil {
+		return 0, f.FailCount
+	}
+	n := 0
+	for _, e := range f.Events {
+		if e.Type == "invoice.paid" && e.Processed && e.UserID == userID && e.SubID == subID {
+			n++
+		}
+	}
+	return n, nil
 }
 
 // User returns a copy of the stored user (test helper).

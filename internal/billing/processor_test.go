@@ -479,3 +479,32 @@ func TestPaymentFailedWithoutMailerStillProcesses(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// MM33: invoice.paid events are attributed to the user + subscription, other
+// events are not, and a Stripe replay does not double count a period.
+func TestInvoicePaidIsAttributedAndCountedOncePerEvent(t *testing.T) {
+	r := newRig(freeUser())
+	r.fc.PutSubscription(activeSub(t0.Add(48 * time.Hour)))
+	inv := `{"id":"in_0","customer":"cus_1","parent":{"subscription_details":{"subscription":"sub_1","metadata":{"user_id":"u1"}}}}`
+	for _, id := range []string{"evt_p1", "evt_p2", "evt_p3", "evt_p3"} { // evt_p3 replayed
+		if err := r.deliver(t, id, EventInvoicePaid, inv); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := r.deliver(t, "evt_pf", EventInvoicePaymentFailed, inv); err != nil {
+		t.Fatal(err)
+	}
+	if e := r.store.Events["evt_p1"]; e.UserID != "u1" || e.SubID != "sub_1" {
+		t.Fatalf("not attributed: %+v", e)
+	}
+	if e := r.store.Events["evt_pf"]; e.UserID != "" {
+		t.Fatalf("payment_failed must not be attributed: %+v", e)
+	}
+	n, err := r.store.CountPaidPeriods(context.Background(), "u1", "sub_1")
+	if err != nil || n != 3 {
+		t.Fatalf("periods = %d (%v), want 3", n, err)
+	}
+	if n, _ := r.store.CountPaidPeriods(context.Background(), "u1", "sub_other"); n != 0 {
+		t.Fatalf("a different subscription must start at 0, got %d", n)
+	}
+}

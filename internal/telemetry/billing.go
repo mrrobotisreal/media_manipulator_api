@@ -43,6 +43,16 @@ INSERT INTO mm_billing_events (event_id, type) VALUES ($1, $2)
 ON CONFLICT (event_id) DO NOTHING`
 	billingEventProcessedQuery = `SELECT processed_at IS NOT NULL FROM mm_billing_events WHERE event_id = $1`
 
+	attributeBillingEventQuery = `
+UPDATE mm_billing_events SET user_id = $2::uuid, subscription_id = $3 WHERE event_id = $1`
+	// countPaidPeriodsQuery counts distinct processed invoice.paid events for
+	// one user's one subscription. event_id is the primary key, so replays
+	// cannot double count.
+	countPaidPeriodsQuery = `
+SELECT count(*) FROM mm_billing_events
+WHERE type = 'invoice.paid' AND processed_at IS NOT NULL
+  AND user_id = $1::uuid AND subscription_id = $2`
+
 	markBillingEventQuery = `
 UPDATE mm_billing_events
 SET processed_at = CASE WHEN $2 THEN now() ELSE NULL END,
@@ -124,4 +134,28 @@ func (s *Store) MarkBillingEvent(ctx context.Context, eventID string, processed 
 	defer cancel()
 	_, err := s.Pool.Exec(ctx, markBillingEventQuery, eventID, processed, note)
 	return err
+}
+
+// AttributeBillingEvent records which user and subscription an event belongs to.
+func (s *Store) AttributeBillingEvent(ctx context.Context, eventID, userID, subscriptionID string) error {
+	if !s.Enabled() {
+		return ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	_, err := s.Pool.Exec(ctx, attributeBillingEventQuery, eventID, userID, subscriptionID)
+	return err
+}
+
+// CountPaidPeriods returns the number of paid billing periods recorded for the
+// user's subscription (processed, attributed invoice.paid events).
+func (s *Store) CountPaidPeriods(ctx context.Context, userID, subscriptionID string) (int, error) {
+	if !s.Enabled() {
+		return 0, ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	var n int
+	err := s.Pool.QueryRow(ctx, countPaidPeriodsQuery, userID, subscriptionID).Scan(&n)
+	return n, err
 }
