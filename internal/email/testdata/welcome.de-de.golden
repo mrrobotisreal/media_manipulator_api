@@ -1,20 +1,20 @@
-Subject: Welcome to Media Manipulator
+Subject: Willkommen bei Media Manipulator
 
-Hi Alina,
+Hallo Alina,
 
-Your account is ready. Here is what it gives you:
+Dein Konto ist bereit. Das bekommst du damit:
 
-- A history of your conversions, so you can find and download results again.
-- A retention choice: you decide how long we keep your files, from 24 hours up to 2 years (6 months by default).
-- Darkroom projects saved to your account, so your edits are there when you come back.
+- Einen Verlauf deiner Konvertierungen, damit du Ergebnisse jederzeit wiederfinden und erneut herunterladen kannst.
+- Eine Aufbewahrungsoption: Du entscheidest, wie lange wir deine Dateien behalten – von 24 Stunden bis zu 2 Jahren (standardmäßig 6 Monate).
+- Darkroom-Projekte, die in deinem Konto gespeichert werden, sodass deine Bearbeitungen da sind, wenn du zurückkommst.
 
-Open your account: https://media-manipulator.com/de/account
+Konto öffnen: https://media-manipulator.com/de/account
 
-You can choose which emails you get in your account settings:
+Du kannst in deinen Kontoeinstellungen festlegen, welche E-Mails du erhältst:
 
-Manage email preferences: https://media-manipulator.com/de/account?tab=profile
+E-Mail-Einstellungen verwalten: https://media-manipulator.com/de/account?tab=profile
 
-The Media Manipulator team
+Das Media-Manipulator-Team
 
 --- html ---
-<!doctype html><html lang="de-de" dir="ltr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>Welcome to Media Manipulator</title></head><body style="margin:0;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;"><div style="max-width:560px;margin:0 auto;"><p style="margin:0 0 16px;">Hi Alina,</p><p style="margin:0 0 16px;">Your account is ready. Here is what it gives you:</p><ul style="padding-inline-start:20px;margin:0 0 16px;"><li style="margin:0 0 6px;">A history of your conversions, so you can find and download results again.</li><li style="margin:0 0 6px;">A retention choice: you decide how long we keep your files, from 24 hours up to 2 years (6 months by default).</li><li style="margin:0 0 6px;">Darkroom projects saved to your account, so your edits are there when you come back.</li></ul><p style="margin:24px 0;"><a href="https://media-manipulator.com/de/account" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Open your account</a></p><p style="margin:16px 0 4px;font-size:13px;opacity:.75;">You can choose which emails you get in your account settings:</p><p style="margin:0 0 16px;font-size:13px;"><a href="https://media-manipulator.com/de/account?tab=profile" style="color:#2563eb;">Manage email preferences</a></p><p style="margin:24px 0 0;">The Media Manipulator team</p></div></body></html>
+<!doctype html><html lang="de-de" dir="ltr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>Willkommen bei Media Manipulator</title></head><body style="margin:0;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;"><div style="max-width:560px;margin:0 auto;"><p style="margin:0 0 16px;">Hallo Alina,</p><p style="margin:0 0 16px;">Dein Konto ist bereit. Das bekommst du damit:</p><ul style="padding-inline-start:20px;margin:0 0 16px;"><li style="margin:0 0 6px;">Einen Verlauf deiner Konvertierungen, damit du Ergebnisse jederzeit wiederfinden und erneut herunterladen kannst.</li><li style="margin:0 0 6px;">Eine Aufbewahrungsoption: Du entscheidest, wie lange wir deine Dateien behalten – von 24 Stunden bis zu 2 Jahren (standardmäßig 6 Monate).</li><li style="margin:0 0 6px;">Darkroom-Projekte, die in deinem Konto gespeichert werden, sodass deine Bearbeitungen da sind, wenn du zurückkommst.</li></ul><p style="margin:24px 0;"><a href="https://media-manipulator.com/de/account" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Konto öffnen</a></p><p style="margin:16px 0 4px;font-size:13px;opacity:.75;">Du kannst in deinen Kontoeinstellungen festlegen, welche E-Mails du erhältst:</p><p style="margin:0 0 16px;font-size:13px;"><a href="https://media-manipulator.com/de/account?tab=profile" style="color:#2563eb;">E-Mail-Einstellungen verwalten</a></p><p style="margin:24px 0 0;">Das Media-Manipulator-Team</p></div></body></html>

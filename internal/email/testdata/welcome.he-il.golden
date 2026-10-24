@@ -1,20 +1,20 @@
-Subject: Welcome to Media Manipulator
+Subject: ברוכים הבאים ל־Media Manipulator
 
-Hi Alina,
+שלום Alina,
 
-Your account is ready. Here is what it gives you:
+החשבון שלכם מוכן. הנה מה שהוא נותן לכם:
 
-- A history of your conversions, so you can find and download results again.
-- A retention choice: you decide how long we keep your files, from 24 hours up to 2 years (6 months by default).
-- Darkroom projects saved to your account, so your edits are there when you come back.
+- היסטוריה של ההמרות שלכם, כדי שתוכלו למצוא ולהוריד שוב תוצאות.
+- בחירת משך שמירה: אתם מחליטים כמה זמן נשמור את הקבצים שלכם, מ־24 שעות ועד שנתיים (6 חודשים כברירת מחדל).
+- פרויקטים של Darkroom שנשמרים בחשבון, כך שהעריכות שלכם יחכו לכם כשתחזרו.
 
-Open your account: https://media-manipulator.com/he/account
+פתיחת החשבון: https://media-manipulator.com/he/account
 
-You can choose which emails you get in your account settings:
+אפשר לבחור אילו הודעות דוא״ל לקבל בהגדרות החשבון:
 
-Manage email preferences: https://media-manipulator.com/he/account?tab=profile
+ניהול העדפות דוא״ל: https://media-manipulator.com/he/account?tab=profile
 
-The Media Manipulator team
+צוות Media Manipulator
 
 --- html ---
-<!doctype html><html lang="he-il" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>Welcome to Media Manipulator</title></head><body style="margin:0;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;"><div style="max-width:560px;margin:0 auto;"><p style="margin:0 0 16px;">Hi Alina,</p><p style="margin:0 0 16px;">Your account is ready. Here is what it gives you:</p><ul style="padding-inline-start:20px;margin:0 0 16px;"><li style="margin:0 0 6px;">A history of your conversions, so you can find and download results again.</li><li style="margin:0 0 6px;">A retention choice: you decide how long we keep your files, from 24 hours up to 2 years (6 months by default).</li><li style="margin:0 0 6px;">Darkroom projects saved to your account, so your edits are there when you come back.</li></ul><p style="margin:24px 0;"><a href="https://media-manipulator.com/he/account" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Open your account</a></p><p style="margin:16px 0 4px;font-size:13px;opacity:.75;">You can choose which emails you get in your account settings:</p><p style="margin:0 0 16px;font-size:13px;"><a href="https://media-manipulator.com/he/account?tab=profile" style="color:#2563eb;">Manage email preferences</a></p><p style="margin:24px 0 0;">The Media Manipulator team</p></div></body></html>
+<!doctype html><html lang="he-il" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>ברוכים הבאים ל־Media Manipulator</title></head><body style="margin:0;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;"><div style="max-width:560px;margin:0 auto;"><p style="margin:0 0 16px;">שלום Alina,</p><p style="margin:0 0 16px;">החשבון שלכם מוכן. הנה מה שהוא נותן לכם:</p><ul style="padding-inline-start:20px;margin:0 0 16px;"><li style="margin:0 0 6px;">היסטוריה של ההמרות שלכם, כדי שתוכלו למצוא ולהוריד שוב תוצאות.</li><li style="margin:0 0 6px;">בחירת משך שמירה: אתם מחליטים כמה זמן נשמור את הקבצים שלכם, מ־24 שעות ועד שנתיים (6 חודשים כברירת מחדל).</li><li style="margin:0 0 6px;">פרויקטים של Darkroom שנשמרים בחשבון, כך שהעריכות שלכם יחכו לכם כשתחזרו.</li></ul><p style="margin:24px 0;"><a href="https://media-manipulator.com/he/account" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">פתיחת החשבון</a></p><p style="margin:16px 0 4px;font-size:13px;opacity:.75;">אפשר לבחור אילו הודעות דוא״ל לקבל בהגדרות החשבון:</p><p style="margin:0 0 16px;font-size:13px;"><a href="https://media-manipulator.com/he/account?tab=profile" style="color:#2563eb;">ניהול העדפות דוא״ל</a></p><p style="margin:24px 0 0;">צוות Media Manipulator</p></div></body></html>

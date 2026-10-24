@@ -1,48 +1,48 @@
 {
   "email": {
+    "accountDeleted": {
+      "body": "Your Media Manipulator account and the files saved to it have been deleted, as you requested. Any active subscription was cancelled.",
+      "contact": "If you did not request this, reply to this email and tell us.",
+      "subject": "Your account has been deleted"
+    },
+    "aiJobFinished": {
+      "completed": "Your AI job has finished and the result is ready.",
+      "cta": "View in history",
+      "failed": "Your AI job has finished, but it could not be completed. Open your history for details.",
+      "reason": "You are getting this because you turned on AI job emails in your settings.",
+      "subject": "Your AI job has finished"
+    },
     "common": {
       "brand": "Media Manipulator",
       "greeting": "Hi {{name}},",
       "greetingNoName": "Hi,",
-      "preferencesNote": "You can choose which emails you get in your account settings:",
       "preferencesLink": "Manage email preferences",
+      "preferencesNote": "You can choose which emails you get in your account settings:",
       "signoff": "The Media Manipulator team"
     },
-    "welcome": {
-      "subject": "Welcome to Media Manipulator",
-      "intro": "Your account is ready. Here is what it gives you:",
-      "history": "A history of your conversions, so you can find and download results again.",
-      "retention": "A retention choice: you decide how long we keep your files, from 24 hours up to 2 years (6 months by default).",
-      "darkroom": "Darkroom projects saved to your account, so your edits are there when you come back.",
-      "cta": "Open your account"
-    },
-    "aiJobFinished": {
-      "subject": "Your AI job has finished",
-      "completed": "Your AI job has finished and the result is ready.",
-      "failed": "Your AI job has finished, but it could not be completed. Open your history for details.",
-      "cta": "View in history",
-      "reason": "You are getting this because you turned on AI job emails in your settings."
-    },
     "expiryDigest": {
-      "subject_one": "{{count}} saved item expires soon",
-      "subject_other": "{{count}} saved items expire soon",
+      "cta": "Review your files",
       "intro_one": "{{count}} of your saved items will be deleted within {{days}} days:",
       "intro_other": "{{count}} of your saved items will be deleted within {{days}} days:",
-      "unnamed": "Untitled item",
       "more": "and {{count}} more",
       "outro": "Open your account to download what you want to keep, or keep it longer.",
-      "cta": "Review your files",
-      "reason": "You are getting this because expiry reminders are turned on in your settings."
+      "reason": "You are getting this because expiry reminders are turned on in your settings.",
+      "subject_one": "{{count}} saved item expires soon",
+      "subject_other": "{{count}} saved items expire soon",
+      "unnamed": "Untitled item"
     },
     "paymentFailed": {
-      "subject": "We could not process your payment",
       "body": "Your latest Media Manipulator payment did not go through. Please update your payment method so your plan stays active.",
-      "cta": "Update payment method"
+      "cta": "Update payment method",
+      "subject": "We could not process your payment"
     },
-    "accountDeleted": {
-      "subject": "Your account has been deleted",
-      "body": "Your Media Manipulator account and the files saved to it have been deleted, as you requested. Any active subscription was cancelled.",
-      "contact": "If you did not request this, reply to this email and tell us."
+    "welcome": {
+      "cta": "Open your account",
+      "darkroom": "Darkroom projects saved to your account, so your edits are there when you come back.",
+      "history": "A history of your conversions, so you can find and download results again.",
+      "intro": "Your account is ready. Here is what it gives you:",
+      "retention": "A retention choice: you decide how long we keep your files, from 24 hours up to 2 years (6 months by default).",
+      "subject": "Welcome to Media Manipulator"
     }
   }
 }

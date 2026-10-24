@@ -1,0 +1,48 @@
+{
+  "email": {
+    "accountDeleted": {
+      "body": "Dein Media-Manipulator-Konto und die darin gespeicherten Dateien wurden auf deinen Wunsch gelöscht. Ein aktives Abonnement wurde gekündigt.",
+      "contact": "Falls du das nicht veranlasst hast, antworte auf diese E-Mail und teile es uns mit.",
+      "subject": "Dein Konto wurde gelöscht"
+    },
+    "aiJobFinished": {
+      "completed": "Deine KI-Aufgabe ist abgeschlossen und das Ergebnis liegt bereit.",
+      "cta": "Im Verlauf ansehen",
+      "failed": "Deine KI-Aufgabe ist beendet, konnte aber nicht abgeschlossen werden. Details findest du in deinem Verlauf.",
+      "reason": "Du erhältst diese E-Mail, weil du KI-Aufgaben-E-Mails in deinen Einstellungen eingeschaltet hast.",
+      "subject": "Deine KI-Aufgabe ist abgeschlossen"
+    },
+    "common": {
+      "brand": "Media Manipulator",
+      "greeting": "Hallo {{name}},",
+      "greetingNoName": "Hallo,",
+      "preferencesLink": "E-Mail-Einstellungen verwalten",
+      "preferencesNote": "Du kannst in deinen Kontoeinstellungen festlegen, welche E-Mails du erhältst:",
+      "signoff": "Das Media-Manipulator-Team"
+    },
+    "expiryDigest": {
+      "cta": "Dateien ansehen",
+      "intro_one": "{{count}} deiner gespeicherten Elemente wird innerhalb von {{days}} Tagen gelöscht:",
+      "intro_other": "{{count}} deiner gespeicherten Elemente werden innerhalb von {{days}} Tagen gelöscht:",
+      "more": "und {{count}} weitere",
+      "outro": "Öffne dein Konto, um herunterzuladen, was du behalten möchtest, oder verlängere die Aufbewahrung.",
+      "reason": "Du erhältst diese E-Mail, weil Ablauf-Erinnerungen in deinen Einstellungen eingeschaltet sind.",
+      "subject_one": "{{count}} gespeichertes Element läuft bald ab",
+      "subject_other": "{{count}} gespeicherte Elemente laufen bald ab",
+      "unnamed": "Element ohne Titel"
+    },
+    "paymentFailed": {
+      "body": "Deine letzte Zahlung an Media Manipulator ist nicht durchgegangen. Bitte aktualisiere deine Zahlungsmethode, damit dein Tarif aktiv bleibt.",
+      "cta": "Zahlungsmethode aktualisieren",
+      "subject": "Wir konnten deine Zahlung nicht verarbeiten"
+    },
+    "welcome": {
+      "cta": "Konto öffnen",
+      "darkroom": "Darkroom-Projekte, die in deinem Konto gespeichert werden, sodass deine Bearbeitungen da sind, wenn du zurückkommst.",
+      "history": "Einen Verlauf deiner Konvertierungen, damit du Ergebnisse jederzeit wiederfinden und erneut herunterladen kannst.",
+      "intro": "Dein Konto ist bereit. Das bekommst du damit:",
+      "retention": "Eine Aufbewahrungsoption: Du entscheidest, wie lange wir deine Dateien behalten – von 24 Stunden bis zu 2 Jahren (standardmäßig 6 Monate).",
+      "subject": "Willkommen bei Media Manipulator"
+    }
+  }
+}

@@ -1,20 +1,20 @@
-Subject: Welcome to Media Manipulator
+Subject: Добро пожаловать в Media Manipulator
 
-Hi Alina,
+Здравствуйте, Alina!
 
-Your account is ready. Here is what it gives you:
+Ваш аккаунт готов. Вот что он вам даёт:
 
-- A history of your conversions, so you can find and download results again.
-- A retention choice: you decide how long we keep your files, from 24 hours up to 2 years (6 months by default).
-- Darkroom projects saved to your account, so your edits are there when you come back.
+- История ваших конвертаций, чтобы вы могли снова найти и скачать результаты.
+- Выбор срока хранения: вы сами решаете, как долго мы храним ваши файлы, — от 24 часов до 2 лет (по умолчанию 6 месяцев).
+- Проекты Darkroom, сохранённые в аккаунте, — ваши правки будут на месте, когда вы вернётесь.
 
-Open your account: https://media-manipulator.com/ru/account
+Открыть аккаунт: https://media-manipulator.com/ru/account
 
-You can choose which emails you get in your account settings:
+Выбрать, какие письма вы получаете, можно в настройках аккаунта:
 
-Manage email preferences: https://media-manipulator.com/ru/account?tab=profile
+Управлять настройками писем: https://media-manipulator.com/ru/account?tab=profile
 
-The Media Manipulator team
+Команда Media Manipulator
 
 --- html ---
-<!doctype html><html lang="ru-ru" dir="ltr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>Welcome to Media Manipulator</title></head><body style="margin:0;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;"><div style="max-width:560px;margin:0 auto;"><p style="margin:0 0 16px;">Hi Alina,</p><p style="margin:0 0 16px;">Your account is ready. Here is what it gives you:</p><ul style="padding-inline-start:20px;margin:0 0 16px;"><li style="margin:0 0 6px;">A history of your conversions, so you can find and download results again.</li><li style="margin:0 0 6px;">A retention choice: you decide how long we keep your files, from 24 hours up to 2 years (6 months by default).</li><li style="margin:0 0 6px;">Darkroom projects saved to your account, so your edits are there when you come back.</li></ul><p style="margin:24px 0;"><a href="https://media-manipulator.com/ru/account" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Open your account</a></p><p style="margin:16px 0 4px;font-size:13px;opacity:.75;">You can choose which emails you get in your account settings:</p><p style="margin:0 0 16px;font-size:13px;"><a href="https://media-manipulator.com/ru/account?tab=profile" style="color:#2563eb;">Manage email preferences</a></p><p style="margin:24px 0 0;">The Media Manipulator team</p></div></body></html>
+<!doctype html><html lang="ru-ru" dir="ltr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>Добро пожаловать в Media Manipulator</title></head><body style="margin:0;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;"><div style="max-width:560px;margin:0 auto;"><p style="margin:0 0 16px;">Здравствуйте, Alina!</p><p style="margin:0 0 16px;">Ваш аккаунт готов. Вот что он вам даёт:</p><ul style="padding-inline-start:20px;margin:0 0 16px;"><li style="margin:0 0 6px;">История ваших конвертаций, чтобы вы могли снова найти и скачать результаты.</li><li style="margin:0 0 6px;">Выбор срока хранения: вы сами решаете, как долго мы храним ваши файлы, — от 24 часов до 2 лет (по умолчанию 6 месяцев).</li><li style="margin:0 0 6px;">Проекты Darkroom, сохранённые в аккаунте, — ваши правки будут на месте, когда вы вернётесь.</li></ul><p style="margin:24px 0;"><a href="https://media-manipulator.com/ru/account" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Открыть аккаунт</a></p><p style="margin:16px 0 4px;font-size:13px;opacity:.75;">Выбрать, какие письма вы получаете, можно в настройках аккаунта:</p><p style="margin:0 0 16px;font-size:13px;"><a href="https://media-manipulator.com/ru/account?tab=profile" style="color:#2563eb;">Управлять настройками писем</a></p><p style="margin:24px 0 0;">Команда Media Manipulator</p></div></body></html>
