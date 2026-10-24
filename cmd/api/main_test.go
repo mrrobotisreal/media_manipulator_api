@@ -423,3 +423,33 @@ func TestQuotaOperatorIsUncounted(t *testing.T) {
 		t.Fatalf("operator usage landed in the ledger: %v", store.counts)
 	}
 }
+
+// MM34: /api/system/health is registered, public, and never reaches the quota
+// or route-limit POST dispatchers (they only act on POSTs / listed paths).
+func TestSystemHealthRouteIsPublicAndNotQuotaCharged(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := config.Load()
+	cfg.OutputDir = t.TempDir()
+	cfg.TierQuotaEnabled = true
+	router := setupRouter(
+		cfg, nil, nil, nil, nil, nil, nil, tiers.New(cfg), nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, limits.New(nil, cfg, nil, nil), metrics.New(), nil,
+	)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/system/health", nil))
+	// No database in tests: down is the correct answer, with a JSON body.
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 with no database, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"status":"down"`) || !strings.Contains(w.Body.String(), `"storage":"ok"`) {
+		t.Fatalf("unexpected body: %s", w.Body.String())
+	}
+	if w.Header().Get(middleware.HeaderQuotaLimit) != "" {
+		t.Fatal("health must not carry quota headers")
+	}
+	for _, r := range quotaRoutes {
+		if strings.Contains(r.path, "system/health") {
+			t.Fatal("health must not be a quota route")
+		}
+	}
+}

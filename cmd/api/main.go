@@ -522,6 +522,11 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "healthy", "service": "media_manipulator_api"})
 		})
+		// MM34: public, cached, coarse dependency health for the /status page.
+		// Not in quotaRoutes (quota only spends on POSTs) and not in the
+		// route-limit rules (only POSTs plus /api/share GETs), so it is never
+		// quota-charged; the global per-IP guard above still applies.
+		handlers.NewSystemHealthHandler(systemHealthProbes(cfg, store, limiter)).Register(api)
 		// Conversion routes — register first so per-route rate limits can
 		// be layered onto specific groups.
 		handlers.RegisterConversionRoutes(api, conversionHandler)
@@ -815,6 +820,29 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 		}
 		c.Next()
 	}
+}
+
+// systemHealthProbes wires the real dependency checks for /api/system/health.
+// Each probe is shallow (a ping or a temp-file write); the handler bounds them.
+func systemHealthProbes(cfg *config.Config, store *telemetry.Store, limiter *limits.Limiter) handlers.SystemHealthProbes {
+	p := handlers.SystemHealthProbes{
+		Database: func(ctx context.Context) error {
+			if !store.Enabled() {
+				return errors.New("no database")
+			}
+			return store.Pool.Ping(ctx)
+		},
+		Storage: handlers.StorageWritableProbe(cfg.OutputDir),
+		Queue: func() handlers.HealthQueue {
+			snap := services.SharedGPUScheduler().Snapshot()
+			return handlers.HealthQueue{GPUEnabled: snap.Enabled, Running: snap.Running, Waiting: snap.Waiting}
+		},
+	}
+	if limiter != nil && limiter.Redis != nil {
+		rc := limiter.Redis
+		p.Redis = func(ctx context.Context) error { return rc.Ping(ctx).Err() }
+	}
+	return p
 }
 
 func mountPProf(r *gin.Engine) {

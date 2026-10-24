@@ -762,6 +762,7 @@ All routes live under `/api/` except `/healthz`.
 | --- | --- | --- | --- |
 | GET | `/healthz` | Process liveness. | No |
 | GET | `/api/health` | Same, namespaced under `/api`. | No |
+| GET | `/api/system/health` | MM34 status-page feed: `{status healthy/degraded/down, service, version, uptimeSeconds, checks{database, redis (omitted if unconfigured), storage: ok/fail}, queue{gpuEnabled, running, waiting}}`. 200 for healthy/degraded, 503 for down (body still valid). down = DB ping fails; degraded = Redis ping or output-dir write fails. 1 s probe timeouts, 5 s cache, no error strings/hosts/paths. Public, never quota-charged. | No |
 | POST | `/api/metadata/inspect` | Inspect a file's metadata with exiftool/ffprobe (no job created). | No (sync, each tool capped at 20 s) |
 | POST | `/api/upload` | Multipart upload + conversion. Returns `{jobId}`. | Yes (goroutine) |
 | POST | `/api/video-upload/presign` | Presigned S3 PUT URL for the UI to upload a video directly. | No |
