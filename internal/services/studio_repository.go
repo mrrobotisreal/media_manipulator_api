@@ -316,7 +316,7 @@ INSERT INTO studio_assets (
   project_id, original_file_name, s3_key_original, media_kind, duration_seconds,
   width, height, fps, video_codec, audio_codec, has_audio, sample_rate, channels, probe_json
 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-RETURNING id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks,
+RETURNING id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks, s3_key_proxy_reversed,
           media_kind, duration_seconds, width, height, fps, video_codec, audio_codec,
           has_audio, sample_rate, channels, probe_json, created_at,
        coalesce(display_name, ''), coalesce(folder, ''), coalesce(label, '')
@@ -346,9 +346,17 @@ UPDATE studio_assets SET s3_key_peaks = $2 WHERE id = $1
 	return err
 }
 
+// SetAssetReversedProxy records the reversed preview proxy S3 key (part 17).
+func (r *StudioRepository) SetAssetReversedProxy(ctx context.Context, assetID, key string) error {
+	_, err := r.pool.Exec(ctx, `
+UPDATE studio_assets SET s3_key_proxy_reversed = $2 WHERE id = $1
+`, assetID, nullableStr(key))
+	return err
+}
+
 func (r *StudioRepository) GetAsset(ctx context.Context, id string) (*models.StudioAsset, error) {
 	row := r.pool.QueryRow(ctx, `
-SELECT id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks,
+SELECT id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks, s3_key_proxy_reversed,
        media_kind, duration_seconds, width, height, fps, video_codec, audio_codec,
        has_audio, sample_rate, channels, probe_json, created_at,
        coalesce(display_name, ''), coalesce(folder, ''), coalesce(label, '')
@@ -363,7 +371,7 @@ FROM studio_assets WHERE id = $1
 
 func (r *StudioRepository) ListAssets(ctx context.Context, projectID string) ([]*models.StudioAsset, error) {
 	rows, err := r.pool.Query(ctx, `
-SELECT id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks,
+SELECT id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks, s3_key_proxy_reversed,
        media_kind, duration_seconds, width, height, fps, video_codec, audio_codec,
        has_audio, sample_rate, channels, probe_json, created_at,
        coalesce(display_name, ''), coalesce(folder, ''), coalesce(label, '')
@@ -431,10 +439,10 @@ func scanProject(row scannable) (*models.StudioProject, error) {
 func scanAsset(row scannable) (*models.StudioAsset, error) {
 	var a models.StudioAsset
 	var kind string
-	var proxyKey, spriteKey, peaksKey, videoCodec, audioCodec *string
+	var proxyKey, spriteKey, peaksKey, reversedKey, videoCodec, audioCodec *string
 	var probe []byte
 	if err := row.Scan(
-		&a.ID, &a.ProjectID, &a.OriginalFileName, &a.S3KeyOriginal, &proxyKey, &spriteKey, &peaksKey,
+		&a.ID, &a.ProjectID, &a.OriginalFileName, &a.S3KeyOriginal, &proxyKey, &spriteKey, &peaksKey, &reversedKey,
 		&kind, &a.DurationSeconds, &a.Width, &a.Height, &a.FPS, &videoCodec, &audioCodec,
 		&a.HasAudio, &a.SampleRate, &a.Channels, &probe, &a.CreatedAt,
 		&a.DisplayName, &a.Folder, &a.Label,
@@ -450,6 +458,9 @@ func scanAsset(row scannable) (*models.StudioAsset, error) {
 	}
 	if peaksKey != nil {
 		a.S3KeyPeaks = *peaksKey
+	}
+	if reversedKey != nil {
+		a.S3KeyProxyReversed = *reversedKey
 	}
 	if videoCodec != nil {
 		a.VideoCodec = *videoCodec
@@ -477,7 +488,7 @@ func computeProjectDuration(tracks []models.StudioTrack) float64 {
 	var end float64
 	for _, t := range tracks {
 		for _, c := range t.Clips {
-			clipEnd := c.TimelineStart + (c.SourceOut - c.SourceIn)
+			clipEnd := c.TimelineStart + models.ClipTimelineDuration(c)
 			if clipEnd > end {
 				end = clipEnd
 			}
@@ -511,7 +522,7 @@ UPDATE studio_assets SET
   folder       = CASE WHEN $4::bool THEN $5::text ELSE folder END,
   label        = CASE WHEN $6::bool THEN $7::text ELSE label END
 WHERE id = $1
-RETURNING id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks,
+RETURNING id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks, s3_key_proxy_reversed,
           media_kind, duration_seconds, width, height, fps, video_codec, audio_codec,
           has_audio, sample_rate, channels, probe_json, created_at,
           coalesce(display_name, ''), coalesce(folder, ''), coalesce(label, '')

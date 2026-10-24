@@ -760,6 +760,17 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 				return strings.HasPrefix(path, "/api/studio/assets/") && strings.HasSuffix(path, "/derive")
 			},
 		},
+		// Reversed preview proxy (part 17): a small 720p ffmpeg encode, so it
+		// rides the transcode bucket like the export (not the AI one).
+		{
+			routeKey:     "studio_asset_reverse_proxy",
+			tool:         "studio_reverse_proxy",
+			sessionLimit: cfg.RateLimitTranscodesPerSessionPerHour,
+			ipLimit:      cfg.RateLimitTranscodesPerIPPerHour,
+			matches: func(path string) bool {
+				return strings.HasPrefix(path, "/api/studio/assets/") && strings.HasSuffix(path, "/reverse-proxy")
+			},
+		},
 		// Version-history checkpoints (part 09) are cheap DB writes, but the
 		// client fires them on a timer — share the generous upload bucket
 		// rather than minting a new limiter type. Only POSTs are dispatched,

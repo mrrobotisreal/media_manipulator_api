@@ -601,3 +601,63 @@ func TestSanitizeTracks_ImageHoldUnbounded7200(t *testing.T) {
 		t.Errorf("sourceOut clamped: %v", got[0].Clips[0].SourceOut)
 	}
 }
+
+func TestSanitizeTracks_SpeedControls(t *testing.T) {
+	speed := 25.0
+	low := 0.01
+	tracks := []StudioTrack{{ID: "t", Kind: StudioTrackKindVideo, Clips: []StudioClip{
+		{ID: "hi", AssetID: "a", SourceOut: 4, Speed: &speed, Reverse: true},
+		{ID: "lo", AssetID: "a", SourceOut: 4, Speed: &low},
+		{ID: "fz", AssetID: "a", SourceOut: 2, Speed: &speed, Reverse: true, Freeze: &StudioFreeze{SourceTime: -3}},
+		{ID: "ti", Title: &StudioTitle{Layers: []StudioTitleLayer{{Type: StudioTitleLayerLine}}}, SourceOut: 2, Speed: &speed, Reverse: true},
+	}}}
+	got := SanitizeTracks(tracks)[0].Clips
+	if *got[0].Speed != 10 || !got[0].Reverse {
+		t.Errorf("speed should clamp to 10 and keep reverse: %+v", got[0])
+	}
+	if *got[1].Speed != 0.1 {
+		t.Errorf("speed should clamp to 0.1: %v", *got[1].Speed)
+	}
+	if got[2].Speed != nil || got[2].Reverse || got[2].Freeze.SourceTime != 0 {
+		t.Errorf("freeze wins and clamps sourceTime: %+v", got[2])
+	}
+	if got[3].Speed != nil || got[3].Reverse {
+		t.Errorf("title clips carry no speed/reverse: %+v", got[3])
+	}
+}
+
+func TestClipTimelineDuration(t *testing.T) {
+	two := 2.0
+	half := 0.5
+	cases := []struct {
+		name string
+		c    StudioClip
+		want float64
+	}{
+		{"default", StudioClip{SourceIn: 1, SourceOut: 5}, 4},
+		{"2x", StudioClip{SourceIn: 1, SourceOut: 5, Speed: &two}, 2},
+		{"0.5x", StudioClip{SourceIn: 0, SourceOut: 3, Speed: &half}, 6},
+		{"reverse keeps length", StudioClip{SourceIn: 0, SourceOut: 3, Reverse: true, Speed: &two}, 1.5},
+		{"freeze ignores speed", StudioClip{SourceIn: 0, SourceOut: 3, Speed: &two, Freeze: &StudioFreeze{SourceTime: 1}}, 3},
+		{"inverted span", StudioClip{SourceIn: 5, SourceOut: 1}, 0},
+	}
+	for _, c := range cases {
+		if got := ClipTimelineDuration(c.c); got != c.want {
+			t.Errorf("%s: got %v want %v", c.name, got, c.want)
+		}
+	}
+	if !ClipMaintainsPitch(StudioClip{}) {
+		t.Error("pitch preservation defaults on")
+	}
+}
+
+func TestSanitizeTracksForAssets_ImageDropsSpeedControls(t *testing.T) {
+	sp := 2.0
+	tracks := []StudioTrack{{ID: "t", Kind: StudioTrackKindVideo, Clips: []StudioClip{
+		{ID: "img", AssetID: "i", SourceOut: 5, Speed: &sp, Reverse: true},
+	}}}
+	got := SanitizeTracksForAssets(tracks, map[string]StudioMediaKind{"i": StudioMediaKindImage})[0].Clips[0]
+	if got.Speed != nil || got.Reverse || got.Freeze != nil {
+		t.Errorf("image clips must lose speed controls: %+v", got)
+	}
+}

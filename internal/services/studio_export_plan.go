@@ -85,7 +85,7 @@ func CollectExportRefs(p *models.StudioProject, assets map[string]*models.Studio
 			if clip.Volume != nil {
 				volume = *clip.Volume
 			}
-			contributesAudio := !track.Muted && asset.HasAudio &&
+			contributesAudio := !track.Muted && asset.HasAudio && clip.Freeze == nil &&
 				(volume > 0 || len(clip.VolumeKeyframes) > 0 || clipHasVolumeLane(clip))
 			if track.Kind != models.StudioTrackKindVideo && !contributesAudio {
 				continue // muted/silent audio clip — nothing to render
@@ -210,6 +210,20 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 				Title:         r.Clip.Title,
 				SourceKind:    sourceKind,
 			}
+			// Speed controls (part 17). Only non-default values are carried so
+			// every pre-v3 plan stays identical.
+			// Image clips never retime (MM15: SanitizeTracksForAssets clears
+			// the fields; this guard keeps a caller that skipped it honest).
+			if sourceKind != StudioSegKindImage {
+				if sp := models.ClipSpeed(r.Clip); sp != 1 {
+					seg.Speed = sp
+				}
+				seg.Reverse = r.Clip.Reverse && r.Clip.Freeze == nil
+				if r.Clip.Freeze != nil {
+					ft := r.Clip.Freeze.SourceTime
+					seg.FreezeAt = &ft
+				}
+			}
 			// Typed entrance transition (part 14): crossDissolve keeps the
 			// legacy linear-alpha FadeIn path (byte-stable v1/v2 graphs); every
 			// other type is carried by TransitionType/Dur and emitted by the
@@ -229,13 +243,13 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 			seg.TransOutDur = r.TransOutDur
 			plan.Video = append(plan.Video, seg)
 		}
-		if !r.TrackMuted && r.Asset.HasAudio &&
+		if !r.TrackMuted && r.Asset.HasAudio && r.Clip.Freeze == nil &&
 			(volume > 0 || len(r.Clip.VolumeKeyframes) > 0 || clipHasVolumeLane(r.Clip)) {
 			pan := 0.0
 			if r.Clip.Pan != nil {
 				pan = *r.Clip.Pan
 			}
-			plan.Audio = append(plan.Audio, StudioExportAudioSeg{
+			aseg := StudioExportAudioSeg{
 				InputIndex: idx, SourceIn: r.Clip.SourceIn, SourceOut: r.Clip.SourceOut,
 				TimelineStart: r.Clip.TimelineStart, Volume: volume,
 				FadeIn: r.FadeIn, FadeOut: r.FadeOut,
@@ -243,7 +257,9 @@ func AssembleExportPlan(refs []StudioClipRef, spec StudioPlanSpec) StudioExportP
 				Voice:         spec.Ducking != nil && r.TrackID == spec.VoiceTrackID,
 				ClipKeyframes: r.Clip.Keyframes,
 				SegIndex:      len(plan.Audio),
-			})
+			}
+			ApplyAudioSpeed(&aseg, r.Clip)
+			plan.Audio = append(plan.Audio, aseg)
 		}
 	}
 	return plan
@@ -266,11 +282,9 @@ func clampFade(d, clipDur float64) float64 {
 	return d
 }
 
+// clipEffectiveDur is the clip's TIMELINE duration (speed-aware, part 17).
 func clipEffectiveDur(c models.StudioClip) float64 {
-	if d := c.SourceOut - c.SourceIn; d > 0 {
-		return d
-	}
-	return 0
+	return models.ClipTimelineDuration(c)
 }
 
 // imageInputPre is the per-input option block for a looped still image:

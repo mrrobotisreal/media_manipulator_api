@@ -98,6 +98,10 @@ func RegisterStudioRoutes(r gin.IRouter, h *StudioHandler) {
 	studio.POST("/assets/complete", h.CompleteAsset)
 	// AI-derived audio assets (clean voice / split vocals|music) → new asset.
 	studio.POST("/assets/:id/derive", h.DeriveAsset)
+	// Reversed preview proxy (part 17): pure ffmpeg, built in place on the
+	// asset. A sibling of /derive so it rides the transcode rate bucket, not
+	// the AI one.
+	studio.POST("/assets/:id/reverse-proxy", h.ReverseProxy)
 	// Bin organization (rename/folder/label) and delete. Usage protection is the
 	// client's job; see studio_assets_manage.go.
 	studio.PATCH("/assets/:id", h.PatchAsset)
@@ -108,6 +112,7 @@ func RegisterStudioRoutes(r gin.IRouter, h *StudioHandler) {
 	// with no mid-session URL expiry.
 	studio.GET("/assets/:id/proxy", h.ServeProxy)
 	studio.GET("/assets/:id/sprite", h.ServeSprite)
+	studio.GET("/assets/:id/proxy-reversed", h.ServeProxyReversed)
 	// Audio waveform peaks JSON (generated at ingest or backfilled on demand).
 	studio.GET("/assets/:id/peaks", h.ServePeaks)
 	// Raw original passthrough (used to fetch .cube LUT assets for the compositor).
@@ -868,6 +873,101 @@ func (h *StudioHandler) runDeriveJob(scope retention.Scope, jobID string, asset 
 	}
 }
 
+// ReverseProxy handles POST /api/studio/assets/:id/reverse-proxy: builds the
+// reversed preview proxy for a video/audio asset (the derive-job pattern, but
+// pure ffmpeg and in place — the asset row gains s3_key_proxy_reversed instead
+// of a new asset being created). Idempotent: an asset that already has one
+// returns a completed no-op job. Response mirrors CompleteAsset
+// ({asset, jobId}); the client polls the job like an ingest.
+func (h *StudioHandler) ReverseProxy(c *gin.Context) {
+	if h.s3Client == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "S3 is not configured"})
+		return
+	}
+	if !h.dbReady(c) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+	src, err := h.repo.GetAsset(ctx, strings.TrimSpace(c.Param("id")))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
+		return
+	}
+	if !h.requireProjectAccess(c, src.ProjectID) {
+		return
+	}
+	if src.MediaKind != models.StudioMediaKindVideo && src.MediaKind != models.StudioMediaKindAudio {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Only video and audio assets can be reversed"})
+		return
+	}
+	if src.S3KeyProxy == "" {
+		c.JSON(http.StatusConflict, gin.H{"error": "The preview proxy is not ready yet"})
+		return
+	}
+
+	job := h.jobManager.CreateJob(
+		models.OriginalFileInfo{Name: src.OriginalFileName, Size: 0, Type: "video/mp4"},
+		map[string]interface{}{"mode": "studio_reverse_proxy"},
+	)
+	_ = h.jobManager.SetMode(job.ID, "studio_reverse_proxy")
+	recordJobCreated(c, h.jobManager, job, services.JobFacts{
+		Tool:         "studio_reverse_proxy",
+		Mode:         "studio_reverse_proxy",
+		MediaKind:    string(models.FileTypeVideo),
+		SourceFormat: formatOf(src.OriginalFileName),
+		TargetFormat: "mp4",
+	})
+	if src.S3KeyProxyReversed != "" {
+		_ = h.jobManager.UpdateJobResult(job.ID, "/api/studio/assets/"+src.ID+"/proxy-reversed")
+		_ = h.jobManager.UpdateJobStatus(job.ID, models.StatusCompleted)
+		c.JSON(http.StatusOK, models.StudioAssetCompleteResponse{Asset: src, JobID: job.ID})
+		return
+	}
+	registerJobDirs(c, job.ID, true, false)
+	go h.runReverseProxyJob(retentionScopeFor(c, job.ID, src.ProjectID), job.ID, src)
+	c.JSON(http.StatusOK, models.StudioAssetCompleteResponse{Asset: src, JobID: job.ID})
+}
+
+func (h *StudioHandler) runReverseProxyJob(scope retention.Scope, jobID string, asset *models.StudioAsset) {
+	if err := h.jobManager.UpdateJobStatus(jobID, models.StatusProcessing); err != nil {
+		log.Printf("studio reverse: failed to mark job %s processing: %v", jobID, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(retention.WithScope(context.Background(), scope), h.cfg.CommandTimeout)
+	defer cancel()
+
+	workDir := filepath.Join(h.cfg.UploadDir, jobID, "reverse")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		_ = h.jobManager.UpdateJobError(jobID, "Failed to prepare workspace")
+		return
+	}
+	defer func() { _ = os.RemoveAll(workDir) }()
+
+	// Reverse the PROXY, not the original: it is already 720p, so the segmented
+	// reverse stays small and fast.
+	inPath := filepath.Join(workDir, "proxy"+strings.ToLower(filepath.Ext(asset.S3KeyProxy)))
+	if err := h.downloadS3Object(ctx, asset.S3KeyProxy, inPath); err != nil {
+		log.Printf("studio reverse: download proxy failed: %v", err)
+		_ = h.jobManager.UpdateJobError(jobID, "Failed to download preview proxy")
+		return
+	}
+	key, err := h.ingest.GenerateReversedProxy(ctx, jobID, asset.S3KeyOriginal, asset.ID, asset.MediaKind, asset.HasAudio, inPath, asset.DurationSeconds)
+	if err != nil {
+		log.Printf("studio reverse: job %s failed: %v", jobID, err)
+		_ = h.jobManager.UpdateJobError(jobID, err.Error())
+		return
+	}
+	if err := h.repo.SetAssetReversedProxy(ctx, asset.ID, key); err != nil {
+		_ = h.jobManager.UpdateJobError(jobID, "Failed to record reversed proxy")
+		return
+	}
+	_ = h.jobManager.UpdateJobResult(jobID, "/api/studio/assets/"+asset.ID+"/proxy-reversed")
+	if err := h.jobManager.UpdateJobStatus(jobID, models.StatusCompleted); err != nil {
+		log.Printf("studio reverse: failed to mark job %s completed: %v", jobID, err)
+	}
+}
+
 func (h *StudioHandler) uploadLocalToS3(ctx context.Context, localPath, key, contentType string) error {
 	f, err := os.Open(localPath)
 	if err != nil {
@@ -911,7 +1011,13 @@ func deriveAssetName(orig, op string) string {
 
 func (h *StudioHandler) ServeProxy(c *gin.Context)  { h.serveAssetDerivative(c, "proxy") }
 func (h *StudioHandler) ServeSprite(c *gin.Context) { h.serveAssetDerivative(c, "sprite") }
-func (h *StudioHandler) ServeFile(c *gin.Context)   { h.serveAssetDerivative(c, "file") }
+
+// ServeProxyReversed streams the reversed preview proxy (part 17); 404 until
+// the reverse_proxy job has produced it.
+func (h *StudioHandler) ServeProxyReversed(c *gin.Context) {
+	h.serveAssetDerivative(c, "proxy_reversed")
+}
+func (h *StudioHandler) ServeFile(c *gin.Context) { h.serveAssetDerivative(c, "file") }
 
 func (h *StudioHandler) serveAssetDerivative(c *gin.Context, which string) {
 	if h.s3Client == nil {
@@ -941,6 +1047,8 @@ func (h *StudioHandler) serveAssetDerivative(c *gin.Context, which string) {
 		key = asset.ThumbnailSpriteURL // stores the sprite's S3 key
 	case "file":
 		key = asset.S3KeyOriginal
+	case "proxy_reversed":
+		key = asset.S3KeyProxyReversed
 	default:
 		key = asset.S3KeyProxy
 	}
@@ -1399,7 +1507,7 @@ func (h *StudioHandler) runCaptionsJob(job *models.ConversionJob, projectID stri
 	// plan (timeline-aligned, so segment times == timeline times).
 	localByKey := make(map[string]string)
 	for _, r := range refs {
-		if r.TrackMuted || !r.Asset.HasAudio {
+		if r.TrackMuted || !r.Asset.HasAudio || r.Clip.Freeze != nil {
 			continue
 		}
 		key := r.Asset.S3KeyOriginal
@@ -1417,7 +1525,7 @@ func (h *StudioHandler) runCaptionsJob(job *models.ConversionJob, projectID stri
 
 	plan := services.StudioExportPlan{Duration: duration}
 	for _, r := range refs {
-		if r.TrackMuted || !r.Asset.HasAudio {
+		if r.TrackMuted || !r.Asset.HasAudio || r.Clip.Freeze != nil {
 			continue
 		}
 		volume := 1.0
@@ -1433,11 +1541,13 @@ func (h *StudioHandler) runCaptionsJob(job *models.ConversionJob, projectID stri
 		}
 		idx := len(plan.Inputs)
 		plan.Inputs = append(plan.Inputs, services.ExportInput{Path: localByKey[r.Asset.S3KeyOriginal]})
-		plan.Audio = append(plan.Audio, services.StudioExportAudioSeg{
+		seg := services.StudioExportAudioSeg{
 			InputIndex: idx, SourceIn: r.Clip.SourceIn, SourceOut: r.Clip.SourceOut,
 			TimelineStart: r.Clip.TimelineStart, Volume: volume,
 			VolumeKeyframes: r.Clip.VolumeKeyframes, Pan: pan,
-		})
+		}
+		services.ApplyAudioSpeed(&seg, r.Clip) // captions follow the retimed audio
+		plan.Audio = append(plan.Audio, seg)
 	}
 	if len(plan.Audio) == 0 {
 		_ = h.jobManager.UpdateJobError(jobID, "Project has no audio to transcribe")
