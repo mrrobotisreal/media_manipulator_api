@@ -689,6 +689,31 @@ func (jm *JobManager) SetStrippedCount(jobID string, n int) error {
 	return nil
 }
 
+// AddQueueWait adds time spent waiting for a GPU slot to the job's queueWaitMs.
+// Only call it for an Acquire that actually queued; a job that never queued
+// keeps a nil QueueWaitMs, which the API omits.
+func (jm *JobManager) AddQueueWait(jobID string, wait time.Duration) {
+	if jm == nil || jobID == "" {
+		return
+	}
+	jm.mu.Lock()
+	job, ok := jm.jobs[jobID]
+	if !ok {
+		jm.mu.Unlock()
+		return
+	}
+	ms := wait.Milliseconds()
+	if ms < 0 {
+		ms = 0
+	}
+	if job.QueueWaitMs != nil {
+		ms += *job.QueueWaitMs
+	}
+	job.QueueWaitMs = &ms
+	jm.mu.Unlock()
+	jm.notifySubscribers(jobID)
+}
+
 // SetResultMime records the sniffed MIME type of the job's result file.
 func (jm *JobManager) SetResultMime(jobID, mime string) error {
 	jm.mu.Lock()

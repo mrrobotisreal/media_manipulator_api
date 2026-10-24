@@ -507,7 +507,7 @@ func (s *RestoreService) runRestoreModel(ctx context.Context, req RestoreRequest
 		force := s.cfg.AIRestoreCUDAGPU
 		gpuReq.ForceIndex = &force
 	}
-	gpuIdx, releaseGPU, err := SharedGPUScheduler().Acquire(ctx, gpuReq)
+	gpuIdx, releaseGPU, err := acquireGPUForJob(ctx, s.jobManager, req.JobID, gpuReq)
 	if err != nil {
 		return finishFailed("Timed out waiting for a free GPU", err)
 	}

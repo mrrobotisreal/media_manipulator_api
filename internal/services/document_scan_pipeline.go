@@ -365,7 +365,7 @@ func (s *DocumentScanService) precleanDocumentPages(ctx context.Context, req Doc
 		PreferredOrder: []int{s.cfg.AIRestoreVulkanGPU, s.cfg.AIRestoreCUDAGPU},
 		Priority:       req.GPUPriority,
 	}
-	_, releaseGPU, err := SharedGPUScheduler().Acquire(ctx, gpuReq)
+	_, releaseGPU, err := acquireGPUForJob(ctx, s.jobManager, req.JobID, gpuReq)
 	if err != nil {
 		return err
 	}
@@ -438,7 +438,7 @@ func (s *DocumentScanService) runCPUWrapper(ctx context.Context, req DocumentSca
 func (s *DocumentScanService) runWrapperWithGPU(ctx context.Context, req DocumentScanRequest, paths documentScanPaths, stageKey, mode string, extra []string, floor, ceil, cudaIndex int, task gpu.TaskType, vramMiB int64) error {
 	if cudaIndex >= 0 {
 		force := cudaIndex
-		_, releaseGPU, err := SharedGPUScheduler().Acquire(ctx, GPURequest{
+		_, releaseGPU, err := acquireGPUForJob(ctx, s.jobManager, req.JobID, GPURequest{
 			Kind:            "document-scan-" + mode,
 			VRAMRequiredMiB: vramMiB,
 			ForceIndex:      &force,

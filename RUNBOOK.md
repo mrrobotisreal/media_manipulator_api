@@ -592,6 +592,14 @@ Billing is **off** until `BILLING_ENABLED=true` AND all four values below are se
 `billing_unavailable` (except `GET /billing/status`, which reports
 `purchasable:false`) and `/api/tiers` reports `premiumPurchasable:false`.
 
+`GET /billing/status` also returns `periodsPaid` (MM33 yearly nudge): the count of
+processed `invoice.paid` rows in `mm_billing_events` for the user's current
+subscription, monthly plans only (omitted for yearly / no subscription / billing
+off). No Stripe call. Migration `20261024006_billing_events_attribution` (server
+only, not yet run) adds `user_id` + `subscription_id` to `mm_billing_events`; the
+processor stamps them on `invoice.paid`, so the count starts at deploy and
+history before it is not counted.
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `BILLING_ENABLED` | `false` | Master switch. |
@@ -762,6 +770,7 @@ All routes live under `/api/` except `/healthz`.
 | --- | --- | --- | --- |
 | GET | `/healthz` | Process liveness. | No |
 | GET | `/api/health` | Same, namespaced under `/api`. | No |
+| GET | `/api/system/health` | MM34 status-page feed: `{status healthy/degraded/down, service, version, uptimeSeconds, checks{database, redis (omitted if unconfigured), storage: ok/fail}, queue{gpuEnabled, running, waiting}}`. 200 for healthy/degraded, 503 for down (body still valid). down = DB ping fails; degraded = Redis ping or output-dir write fails. 1 s probe timeouts, 5 s cache, no error strings/hosts/paths. Public, never quota-charged. | No |
 | POST | `/api/metadata/inspect` | Inspect a file's metadata with exiftool/ffprobe (no job created). | No (sync, each tool capped at 20 s) |
 | POST | `/api/upload` | Multipart upload + conversion. Returns `{jobId}`. | Yes (goroutine) |
 | POST | `/api/video-upload/presign` | Presigned S3 PUT URL for the UI to upload a video directly. | No |
@@ -778,7 +787,7 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/image-restore/:jobId/result/:resultId` | Stream one result PNG inline (id resolved from the manifest only). | No |
 | GET | `/api/video-restore/:jobId/results` | Listing for a completed restore job: `{jobId, original, models[]}` (failed models carry no `fileName`). | No |
 | GET | `/api/video-restore/:jobId/result/:name` | Stream one kept MP4 inline with range; `:name` is `original` or a completed model id from the manifest only. Accepts `?sid=`. | No |
-| GET | `/api/job/:jobId` | Poll a job's full JSON state. | No |
+| GET | `/api/job/:jobId` | Poll a job's full JSON state. `queueWaitMs` (ms, MM33) is the total time the job parked in the shared GPU scheduler (`GPUScheduler.AcquireTimed`, enqueue to acquire, summed across GPU stages); omitted when the job never queued (also on the SSE status). | No |
 | GET | `/api/job/:jobId/events` | SSE event stream of job state changes. Closes on completed/failed. | Yes (open connection) |
 | GET | `/api/download/:jobId` | Stream the converted output file for jobs that produced one locally (image/audio/video convert + transcribe). | No |
 | GET | `/api/result/:jobId` | Same file as `/download`, served inline with its sniffed MIME and HTTP range (`206`/`416`); unsafe types fall back to an octet-stream attachment. Accepts `?sid=`. | No |

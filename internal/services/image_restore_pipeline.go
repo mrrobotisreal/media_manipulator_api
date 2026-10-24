@@ -476,7 +476,7 @@ func (s *ImageRestoreService) runImageUnit(ctx context.Context, req ImageRestore
 		force := cudaIndex
 		gpuReq.ForceIndex = &force
 	}
-	_, releaseGPU, err := SharedGPUScheduler().Acquire(ctx, gpuReq)
+	_, releaseGPU, err := acquireGPUForJob(ctx, s.jobManager, req.JobID, gpuReq)
 	if err != nil {
 		return err, "Timed out waiting for a free GPU"
 	}
