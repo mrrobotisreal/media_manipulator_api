@@ -225,6 +225,10 @@ func (h *DataHandler) KeepJobLonger(c *gin.Context) {
 	})
 }
 
+func ledgerFilterForAsset(id string) telemetry.LedgerFilter {
+	return telemetry.LedgerFilter{AssetID: id}
+}
+
 func ledgerFilterForProject(id string) telemetry.LedgerFilter {
 	return telemetry.LedgerFilter{ProjectID: id}
 }

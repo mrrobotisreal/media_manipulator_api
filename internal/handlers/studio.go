@@ -98,6 +98,10 @@ func RegisterStudioRoutes(r gin.IRouter, h *StudioHandler) {
 	studio.POST("/assets/complete", h.CompleteAsset)
 	// AI-derived audio assets (clean voice / split vocals|music) → new asset.
 	studio.POST("/assets/:id/derive", h.DeriveAsset)
+	// Bin organization (rename/folder/label) and delete. Usage protection is the
+	// client's job; see studio_assets_manage.go.
+	studio.PATCH("/assets/:id", h.PatchAsset)
+	studio.DELETE("/assets/:id", h.DeleteAsset)
 	// Serve the preview proxy + filmstrip to the browser. Passthrough (not
 	// presigned) so the <video> element gets reliable Range support + the API's
 	// CORS headers (needed for crossorigin="anonymous" Web Audio in Phase 3),
@@ -617,6 +621,10 @@ func (h *StudioHandler) CompleteAsset(c *gin.Context) {
 			probe = &models.VideoProbeResponse{}
 		}
 		totalSeconds = probe.DurationSeconds
+		// Voiceover (MediaRecorder) uploads are audio-only WebM/Opus, which
+		// content sniffing reports as video/webm. Trust the probe: no video
+		// stream means an audio asset (no video proxy, no filmstrip).
+		kind = studioEffectiveKind(kind, probe)
 
 		asset = &models.StudioAsset{
 			ProjectID:        projectID,
@@ -665,6 +673,19 @@ func (h *StudioHandler) CompleteAsset(c *gin.Context) {
 	go h.runIngestJob(retentionScopeFor(c, job.ID, projectID), job.ID, created, key, kind, uploadPath, totalSeconds)
 
 	c.JSON(http.StatusOK, models.StudioAssetCompleteResponse{Asset: created, JobID: job.ID})
+}
+
+// studioEffectiveKind corrects a sniffed "video" kind for containers that hold
+// only audio (audio-only WebM/MP4 from MediaRecorder). Anything with a video
+// stream, or a probe that found no audio, keeps the sniffed kind.
+func studioEffectiveKind(kind models.StudioMediaKind, probe *models.VideoProbeResponse) models.StudioMediaKind {
+	if kind != models.StudioMediaKindVideo || probe == nil {
+		return kind
+	}
+	if probe.HasAudio && probe.VideoCodec == "" && probe.Width == 0 && probe.Height == 0 {
+		return models.StudioMediaKindAudio
+	}
+	return kind
 }
 
 func (h *StudioHandler) runIngestJob(scope retention.Scope, jobID string, asset *models.StudioAsset, originalKey string, kind models.StudioMediaKind, inputPath string, totalSeconds float64) {
