@@ -435,3 +435,47 @@ func TestSubscriptionEventAmountOmittedWhenUnknown(t *testing.T) {
 		t.Fatalf("interval lost: %v", p)
 	}
 }
+
+type recMailer struct {
+	mu    sync.Mutex
+	users []string
+}
+
+func (m *recMailer) PaymentFailed(u *models.User) {
+	m.mu.Lock()
+	m.users = append(m.users, u.ID)
+	m.mu.Unlock()
+}
+
+// MM31: only invoice.payment_failed mails, once per delivered event, and a nil
+// Mailer changes nothing.
+func TestPaymentFailedSendsEmailOnlyForThatEvent(t *testing.T) {
+	r := newRig(freeUser())
+	m := &recMailer{}
+	r.p.Mailer = m
+	r.fc.PutSubscription(activeSub(t0.Add(48 * time.Hour)))
+	if err := r.deliver(t, "evt_paid", EventInvoicePaid, `{"id":"in_0","customer":"cus_1","parent":{"subscription_details":{"subscription":"sub_1","metadata":{"user_id":"u1"}}}}`); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.users) != 0 {
+		t.Fatalf("invoice.paid mailed: %v", m.users)
+	}
+	body := `{"id":"in_1","customer":"cus_1","parent":{"subscription_details":{"subscription":"sub_1","metadata":{"user_id":"u1"}}}}`
+	if err := r.deliver(t, "evt_pf", EventInvoicePaymentFailed, body); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.deliver(t, "evt_pf", EventInvoicePaymentFailed, body); err != nil { // Stripe replay
+		t.Fatal(err)
+	}
+	if len(m.users) != 1 || m.users[0] != "u1" {
+		t.Fatalf("mailer calls = %v, want one for u1", m.users)
+	}
+}
+
+func TestPaymentFailedWithoutMailerStillProcesses(t *testing.T) {
+	r := newRig(freeUser())
+	r.fc.PutSubscription(activeSub(t0.Add(48 * time.Hour)))
+	if err := r.deliver(t, "evt_pf", EventInvoicePaymentFailed, `{"id":"in_1","customer":"cus_1","parent":{"subscription_details":{"subscription":"sub_1","metadata":{"user_id":"u1"}}}}`); err != nil {
+		t.Fatal(err)
+	}
+}

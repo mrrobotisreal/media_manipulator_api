@@ -18,6 +18,7 @@ import (
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/email"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
@@ -48,6 +49,7 @@ type AccountHandler struct {
 	// analytics receives `server_signup_completed`. Attached by a setter; nil is a
 	// supported configuration.
 	analytics *analyticsemit.Emitter
+	mailer    WelcomeMailer
 	// billing, when attached, has its /billing/* routes mounted by
 	// RegisterAccountRoutes (MM17). Kept here so cmd/api wiring stays one line.
 	billing *BillingHandler
@@ -98,6 +100,18 @@ func (h *AccountHandler) SetAccountData(d *AccountDataHandler) {
 func (h *AccountHandler) SetBilling(b *BillingHandler) {
 	if h != nil {
 		h.billing = b
+	}
+}
+
+// WelcomeMailer sends the welcome email on first account creation (MM31).
+type WelcomeMailer interface {
+	Welcome(u *models.User, visitorID, sessionID string)
+}
+
+// SetMailer attaches the welcome mailer (nil = none).
+func (h *AccountHandler) SetMailer(m WelcomeMailer) {
+	if h != nil {
+		h.mailer = m
 	}
 }
 
@@ -255,6 +269,8 @@ func (h *AccountHandler) Sync(c *gin.Context) {
 	var body struct {
 		DisplayName  string `json:"displayName"`
 		SignupSource string `json:"signupSource"`
+		// Locale (MM31) is the UI language, so mail goes out in it. Optional.
+		Locale string `json:"locale"`
 	}
 	_ = c.ShouldBindJSON(&body) // Optional; an empty body is a valid sync.
 
@@ -264,6 +280,7 @@ func (h *AccountHandler) Sync(c *gin.Context) {
 		EmailVerified: principal.EmailVerified,
 		DisplayName:   body.DisplayName,
 		SignupSource:  body.SignupSource,
+		Locale:        email.NormalizeLocale(body.Locale),
 	})
 	if err != nil {
 		h.logger.Error("account: sync failed", "error", err.Error())
@@ -272,6 +289,9 @@ func (h *AccountHandler) Sync(c *gin.Context) {
 	}
 	if created {
 		h.emitSignupCompleted(c, principal.UID, user, body.SignupSource)
+		if h.mailer != nil {
+			h.mailer.Welcome(user, strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")), strings.TrimSpace(c.GetHeader("X-MM-Session-ID")))
+		}
 	}
 
 	// Claim the Content Studio projects this visitor created while signed out.

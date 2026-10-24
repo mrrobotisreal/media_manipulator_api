@@ -239,6 +239,7 @@ func (h *ConversionHandler) GetJobStatus(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
 		return
 	}
+	h.jobManager.TouchJobPoll(jobID) // MM31: a tab is watching this job
 	c.JSON(http.StatusOK, h.withMetadataFields(job))
 }
 

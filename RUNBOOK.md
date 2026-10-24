@@ -703,6 +703,55 @@ Stub: the live-mode switch, webhook endpoint creation and Portal configuration
 checklist is written in MM21. Env vars and behaviour are in the section 4.11
 "Billing add-on" above.
 
+### 4.14 Transactional email (MM31)
+
+Five emails through Resend (`POST https://api.resend.com/emails`, plain `net/http`, no SDK):
+`welcome`, `ai_job_finished`, `expiry_digest`, `payment_failed`, `account_deleted`.
+Code: `internal/email`; log table `mm_email_log` (migration `20261024004`).
+
+**Off by default.** Unless `EMAIL_ENABLED=true` AND `EMAIL_PROVIDER_API_KEY` AND `EMAIL_FROM`
+are all set, a `NoopSender` is used: it logs `email disabled` once (with the reason, never a
+secret) and every trigger is a no-op that touches neither the database nor analytics.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `EMAIL_ENABLED` | `false` | Master switch. |
+| `EMAIL_PROVIDER_API_KEY` | *(empty)* | **Secret.** Resend API key. Never logged, never in errors or log rows. |
+| `EMAIL_FROM` | *(empty)* | From header, e.g. `Media Manipulator <hello@your-domain>`. The domain must be verified in Resend. |
+| `EMAIL_REPLY_TO` | *(empty)* | Optional Reply-To. |
+| `EMAIL_PUBLIC_BASE_URL` | `BILLING_PUBLIC_BASE_URL`, else `https://media-manipulator.com` | Prefix of links inside emails. |
+| `EMAIL_DIGEST_INTERVAL_HOURS` | `24` | How often the expiry-digest worker scans. `0` disables the worker. |
+
+| Email | Trigger | Dedupe key (`mm_email_log`) | Toggle |
+| --- | --- | --- | --- |
+| `welcome` | first creation of the `mm_users` row (`POST /api/account/sync`), verified address only | `once` | none |
+| `ai_job_finished` | AI job (ai_ops tools or `options.ai`) that ran > 120 s, signed-in owner, no status read (GET status or SSE) in the last 60 s at completion | job id | `email_ai_job_finished`, default **off** |
+| `expiry_digest` | worker; live `output_dir`/`studio_project` ledger rows expiring within 3 days (parked and 9999 rows never match); counts + top 5 names | 3-day window (`w<unix/259200>`) | `email_expiry_digest`, default **on** |
+| `payment_failed` | Stripe `invoice.payment_failed` in `internal/billing` | 3-day window (Stripe retries with new event ids) | none |
+| `account_deleted` | `DELETE /api/account` finished in one pass; sent to the address captured before the row was deleted; no links | `deleted` | none |
+
+Delivery: best-effort goroutine, 10 s timeout, at most 3 attempts per log row (backoff 2 s, 8 s),
+then `status='failed'`. A 4xx other than 408/429 is permanent and not retried. A `pending` row
+abandoned by a crash is re-claimable after 10 minutes. No bodies are stored. Analytics:
+`server_email_sent {kind, status}`; server events without browser ids are dropped by the
+emitter (welcome has them from the sync request; background sends do not), so `mm_email_log`
+is the real record: `SELECT kind, status, count(*) FROM mm_email_log GROUP BY 1,2;`.
+
+Locales: strings come from `internal/email/locales/<locale>.json`, generated from the UI repo
+(`media-manipulator-ui/i18n/locales/<locale>/interface/email.json`) with
+`go run ./scripts/gen-email-locales` (`-check` fails on drift). A missing locale or key falls
+back to `en-us`. The user's language is `mm_users.locale`, set from the optional `locale` field
+of `POST /api/account/sync`. After changing a template or locale file run
+`go test ./internal/email -update` and review the golden diffs.
+
+Settings API (additive): `GET/PATCH /api/account/settings` also carry `emailAiJobFinished` (default `false`) and `emailExpiryDigest` (default `true`); an email-only PATCH is valid. **Deploy:** run migration `20261024004_add_transactional_email` before this build serves traffic (settings reads select the new columns and `mm_users.locale`).
+
+**Go-live checklist (Mitch):** verify the sending domain in Resend (add the DKIM CNAME/TXT and
+SPF TXT records Resend shows, optionally DMARC), create an API key with "sending access" only,
+set `EMAIL_PROVIDER_API_KEY`, `EMAIL_FROM`, `EMAIL_ENABLED=true` in the server env (never in a
+repo), run migration `20261024004`, restart, then send yourself a test by signing up with a
+fresh verified account. Roll back by setting `EMAIL_ENABLED=false`.
+
 ---
 
 ## 5. HTTP API surface

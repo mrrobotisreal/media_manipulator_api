@@ -33,6 +33,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/cmdaudit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/db"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/email"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/geo"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/gpu"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/handlers"
@@ -340,15 +341,23 @@ func main() {
 		accountPresign = s3.NewPresignClient(s3Client)
 	}
 	accountHandler := handlers.NewAccountHandler(store, tierRegistry, cfg, logging, accountPresign, jobManager)
+	// MM31 transactional email. A logged no-op unless EMAIL_ENABLED=true and the
+	// provider key + From address are set; every send is a best-effort goroutine.
+	emailSvc := email.New(store, email.NewSender(cfg, logging), cfg.EmailPublicBaseURL, analyticsEmitter, logging)
+	accountHandler.SetMailer(emailSvc)
+	jobManager.SetJobFinishedNotifier(emailSvc)
+	if cfg.EmailDigestInterval > 0 {
+		go emailSvc.RunDigestWorker(ctx, cfg.EmailDigestInterval)
+	}
 	// `server_signup_completed` — the exact signup number, which only the account
 	// sync can produce (see AccountHandler.emitSignupCompleted).
 	accountHandler.SetAnalyticsEmitter(analyticsEmitter)
 	// Billing (MM17) ships dark: every /api/billing route answers 503
 	// billing_unavailable unless BILLING_ENABLED and all Stripe settings are set.
-	accountHandler.SetBilling(newBillingHandler(cfg, store, tierRegistry, analyticsEmitter, logging))
+	accountHandler.SetBilling(newBillingHandler(cfg, store, tierRegistry, analyticsEmitter, emailSvc, logging))
 	// MM24: per-item delete, keep longer, delete-all, export, sign-out-everywhere and
 	// account deletion; also the Postgres-backed fallback for /api/download after a restart.
-	wireDataControls(ctx, cfg, store, jobManager, s3Client, conversionHandler, studioHandler, accountHandler, limiter, metricsReg, analyticsEmitter, logging)
+	wireDataControls(ctx, cfg, store, jobManager, s3Client, conversionHandler, studioHandler, accountHandler, limiter, metricsReg, analyticsEmitter, emailSvc, logging)
 
 	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg, analyticsEmitter)
 
