@@ -616,3 +616,37 @@ func TestRetainRefusals(t *testing.T) {
 		t.Fatalf("502: %d %s", w.Code, w.Body)
 	}
 }
+
+// Regression (Mitch, 2026-10-24): a portal cancellation made before cancel_at was
+// understood left the stored mirror at cancel_at_period_end=false, and status
+// trusted the mirror, so the site kept saying "Renews on". Status must read
+// Stripe for any live subscription, report the cancellation, and repair the mirror.
+func TestStatusDetectsCancellationMissingFromMirror(t *testing.T) {
+	b, end := retainRig(t, 10*24*time.Hour, nil)
+	u, _ := b.store.UserByID(context.Background(), "u1")
+	u.CancelAtPeriodEnd = false // stale mirror, as in production
+	cents := int64(800)
+	b.fc.PutSubscription(&billing.Subscription{ID: "sub_1", CustomerID: "cus_1", Status: "active",
+		CancelAt: end, CurrentPeriodEnd: end, Interval: "monthly", UnitAmountCents: &cents, Currency: "usd",
+		ItemID: "si_1", PriceID: "price_monthly_cfg", UserID: "u1"})
+
+	m := jsonBody(t, b.do("GET", "/api/billing/status", "tok-u1", ""))
+	e := end.Format(time.RFC3339)
+	off, _ := m["offer"].(map[string]any)
+	if m["cancelAtPeriodEnd"] != true || m["endsAt"] != e || off == nil || off["kind"] != "retain7" {
+		t.Fatalf("status = %v", m)
+	}
+	if again, _ := b.store.UserByID(context.Background(), "u1"); !again.CancelAtPeriodEnd {
+		t.Fatal("mirror was not repaired")
+	}
+
+	// Un-cancelled in Stripe but the mirror still says cancelled: report active.
+	b2, _ := retainRig(t, 10*24*time.Hour, nil)
+	b2.fc.PutSubscription(&billing.Subscription{ID: "sub_1", CustomerID: "cus_1", Status: "active",
+		CurrentPeriodEnd: end, Interval: "monthly", UnitAmountCents: &cents, Currency: "usd",
+		ItemID: "si_1", PriceID: "price_monthly_cfg", UserID: "u1"})
+	m = jsonBody(t, b2.do("GET", "/api/billing/status", "tok-u1", ""))
+	if m["cancelAtPeriodEnd"] != false || m["endsAt"] != nil || m["offer"] != nil || m["renewsAt"] != e {
+		t.Fatalf("resumed status = %v", m)
+	}
+}

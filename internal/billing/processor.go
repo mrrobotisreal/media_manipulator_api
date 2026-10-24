@@ -121,6 +121,23 @@ func (p *Processor) ApplyCheckout(ctx context.Context, sess *CheckoutSession) er
 	return err
 }
 
+// Resync re-applies a subscription read from Stripe when the stored mirror is
+// stale (for example a cancel_at set before the API understood it). Same path
+// as a customer.subscription.updated webhook; idempotent.
+func (p *Processor) Resync(ctx context.Context, sub *Subscription, userID string) error {
+	if sub == nil || sub.ID == "" {
+		return nil
+	}
+	_, err := p.apply(ctx, Event{
+		ID:             "status-resync:" + sub.ID,
+		Type:           EventSubscriptionUpdated,
+		CustomerID:     sub.CustomerID,
+		SubscriptionID: sub.ID,
+		UserID:         userID,
+	})
+	return err
+}
+
 // ApplyRetained applies a subscription the retention flow just un-cancelled,
 // exactly like ApplyCheckout, so the UI flips without waiting for the
 // customer.subscription.updated webhook (which then finds identical state), and

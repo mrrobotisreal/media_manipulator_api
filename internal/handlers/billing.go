@@ -259,6 +259,13 @@ func toRetentionOffer(o *billing.Offer) *retentionOffer {
 }
 
 // cancelledActive: the mirror says the subscription is active and ending.
+// liveSubscription: the user has a Stripe subscription that still grants
+// access (active or trialing), cancelled or not.
+func liveSubscription(u *models.User) bool {
+	return u.StripeSubscriptionID != "" &&
+		(u.SubscriptionStatus == billing.StatusActive || u.SubscriptionStatus == billing.StatusTrialing)
+}
+
 func cancelledActive(u *models.User) bool {
 	return u.CancelAtPeriodEnd && u.StripeSubscriptionID != "" &&
 		(u.SubscriptionStatus == billing.StatusActive || u.SubscriptionStatus == billing.StatusTrialing)
@@ -284,25 +291,41 @@ func (h *BillingHandler) buildStatus(ctx context.Context, user *models.User) (bi
 		}
 	}
 	var fetched *billing.Subscription
-	if h.available() && cancelledActive(user) {
+	// Read Stripe for every live subscription, not only rows already flagged as
+	// cancelled: a cancellation made before this code shipped (Stripe's
+	// cancel_at) is not in the stored mirror, so trusting the mirror alone hides
+	// it until the next webhook. When Stripe disagrees with the mirror, repair
+	// the mirror through the processor (same path as a webhook).
+	if h.available() && liveSubscription(user) {
 		if sub, err := h.client.GetSubscription(ctx, user.StripeSubscriptionID); err != nil {
 			h.logger.Warn("billing: status subscription fetch failed", "error", err.Error())
 		} else {
 			fetched = sub
-			if sub.UnitAmountCents != nil && sub.Currency == "usd" {
-				v := float64(*sub.UnitAmountCents) / 100
-				out.PriceMonthlyUSD = &v
+			if user.CancelAtPeriodEnd != sub.IsCancelling(now) && h.processor != nil {
+				if err := h.processor.Resync(ctx, sub, user.ID); err != nil {
+					h.logger.Warn("billing: status mirror resync failed", "error", err.Error())
+				}
 			}
-			if end, ok := billing.CancelledEnd(sub, now); ok {
-				e := end.Format(time.RFC3339)
-				out.EndsAt, out.RenewsAt, out.CancelAtPeriodEnd = &e, &e, true
+			out.CancelAtPeriodEnd = sub.IsCancelling(now)
+			if !out.CancelAtPeriodEnd {
+				out.EndsAt = nil // Stripe says it renews; the mirror's end date is stale
 			}
-			fallback := float64(h.cfg.BillingPriceMonthlyUSD)
-			if sub.Interval == billing.IntervalYearly {
-				fallback = float64(h.cfg.BillingPriceYearlyUSD)
-			}
-			out.Offer = toRetentionOffer(billing.ComputeRetentionOffer(sub, now, h.retentionPrices(), fallback))
 		}
+	}
+	if sub := fetched; sub != nil && sub.IsCancelling(now) {
+		if sub.UnitAmountCents != nil && sub.Currency == "usd" {
+			v := float64(*sub.UnitAmountCents) / 100
+			out.PriceMonthlyUSD = &v
+		}
+		if end, ok := billing.CancelledEnd(sub, now); ok {
+			e := end.Format(time.RFC3339)
+			out.EndsAt, out.RenewsAt, out.CancelAtPeriodEnd = &e, &e, true
+		}
+		fallback := float64(h.cfg.BillingPriceMonthlyUSD)
+		if sub.Interval == billing.IntervalYearly {
+			fallback = float64(h.cfg.BillingPriceYearlyUSD)
+		}
+		out.Offer = toRetentionOffer(billing.ComputeRetentionOffer(sub, now, h.retentionPrices(), fallback))
 	}
 	if h.available() && user.BillingInterval == "monthly" && user.StripeSubscriptionID != "" {
 		if n, err := h.store.CountPaidPeriods(ctx, user.ID, user.StripeSubscriptionID); err != nil {
