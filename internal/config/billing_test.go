@@ -37,7 +37,7 @@ func TestBillingDefaultsAreDark(t *testing.T) {
 	if c.BillingEnabled || c.BillingConfigured() {
 		t.Fatal("billing must default off")
 	}
-	if c.BillingGraceDays != 7 || c.BillingPriceMonthlyUSD != 7 || c.BillingPriceYearlyUSD != 70 {
+	if c.BillingGraceDays != 7 || c.BillingPriceMonthlyUSD != 8 || c.BillingPriceYearlyUSD != 80 {
 		t.Fatalf("defaults wrong: %+v", c)
 	}
 	if c.BillingPublicBaseURL != "https://media-manipulator.com" {

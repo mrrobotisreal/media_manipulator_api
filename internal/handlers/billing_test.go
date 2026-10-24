@@ -56,8 +56,8 @@ func billingCfg(on bool) *config.Config {
 		StripePricePremiumYearly:  "price_yearly_cfg",
 		BillingGraceDays:          7,
 		BillingPublicBaseURL:      "https://media-manipulator.com",
-		BillingPriceMonthlyUSD:    7,
-		BillingPriceYearlyUSD:     70,
+		BillingPriceMonthlyUSD:    8,
+		BillingPriceYearlyUSD:     80,
 		OperatorEmails:            []string{"owner@example.com"},
 	}
 	return cfg
@@ -392,7 +392,7 @@ func TestTiersResponseIsConfigDriven(t *testing.T) {
 		return jsonBody(t, w)
 	}
 	on := get(billingCfg(true))
-	if on["premiumPurchasable"] != true || on["premiumPriceUSD"] != float64(7) || on["premiumPriceYearlyUSD"] != float64(70) {
+	if on["premiumPurchasable"] != true || on["premiumPriceUSD"] != float64(8) || on["premiumPriceYearlyUSD"] != float64(80) {
 		t.Fatalf("on: %v", on)
 	}
 	partial := billingCfg(true)
@@ -400,7 +400,7 @@ func TestTiersResponseIsConfigDriven(t *testing.T) {
 	if m := get(partial); m["premiumPurchasable"] != false {
 		t.Fatalf("incomplete: %v", m)
 	}
-	if m := get(billingCfg(false)); m["premiumPurchasable"] != false || m["premiumPriceYearlyUSD"] != float64(70) {
+	if m := get(billingCfg(false)); m["premiumPurchasable"] != false || m["premiumPriceYearlyUSD"] != float64(80) {
 		t.Fatalf("off: %v", m)
 	}
 }

@@ -690,8 +690,8 @@ func Load() *Config {
 		EmailDigestInterval: time.Duration(getEnvInt("EMAIL_DIGEST_INTERVAL_HOURS", 24)) * time.Hour,
 
 		BillingPublicBaseURL:   strings.TrimRight(strings.TrimSpace(getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com")), "/"),
-		BillingPriceMonthlyUSD: getEnvInt("BILLING_PRICE_MONTHLY_USD", 7),
-		BillingPriceYearlyUSD:  getEnvInt("BILLING_PRICE_YEARLY_USD", 70),
+		BillingPriceMonthlyUSD: getEnvInt("BILLING_PRICE_MONTHLY_USD", 8),
+		BillingPriceYearlyUSD:  getEnvInt("BILLING_PRICE_YEARLY_USD", 80),
 
 		// FFmpeg validation
 		MaxVideoDurationSeconds: getEnvInt("MAX_VIDEO_DURATION_SECONDS", 7200),
