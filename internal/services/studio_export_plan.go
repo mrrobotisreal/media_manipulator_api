@@ -354,3 +354,36 @@ func audioTrackFor(r StudioClipRef) (StudioExportAudioTrack, bool) {
 	}
 	return tr, true
 }
+
+// AudioOnlyRefs narrows the refs for an audio-only export (part 20): only clips
+// that can contribute sound survive, so no video-only source is downloaded or
+// becomes an ffmpeg input (AssembleExportPlan builds one input per ref). The
+// timeline length still comes from CollectExportRefs' full walk.
+func AudioOnlyRefs(refs []StudioClipRef) []StudioClipRef {
+	out := make([]StudioClipRef, 0, len(refs))
+	for _, r := range refs {
+		if r.Clip.Title != nil || r.TrackMuted || r.Asset == nil || !r.Asset.HasAudio || r.Clip.Freeze != nil {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// FrameRefs narrows the refs to the VIDEO-track clips on screen at timeline
+// time t (part 20 frame export), preserving the neighbour-derived fields
+// CollectExportRefs already computed (transitions, fades). Audio is dropped.
+func FrameRefs(refs []StudioClipRef, t float64) []StudioClipRef {
+	out := make([]StudioClipRef, 0, len(refs))
+	for _, r := range refs {
+		if r.TrackKind != models.StudioTrackKindVideo {
+			continue
+		}
+		start := r.Clip.TimelineStart
+		end := start + clipEffectiveDur(r.Clip)
+		if t >= start && t < end {
+			out = append(out, r)
+		}
+	}
+	return out
+}

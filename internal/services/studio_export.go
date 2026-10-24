@@ -234,6 +234,14 @@ type StudioExportPlan struct {
 	Loudness    string // '' | streaming | podcast | broadcast
 	// CaptionsASSPath, when set, is burned in as the final video filter (Phase 7).
 	CaptionsASSPath string
+	// Format (part 20) selects the output: "" / "h264" (MP4), "hevc" (MP4), or
+	// the audio-only "mp3" / "wav". The video graph is skipped entirely for the
+	// audio formats (see IsAudioFormat).
+	Format string
+	// OutHeight (part 20) is the requested OUTPUT height in pixels; 0 = the
+	// canvas (Height). Applied as the LAST video filter, after caption burn-in,
+	// so the composed frame is scaled as a whole (aspect preserved).
+	OutHeight int
 	// SendCmdPath, when set, is the keyframe sidecar (part 15) written by the
 	// runner from GenerateStudioSendCmd. It rides ONE timeline-clocked sendcmd
 	// instance on [vbase] (asendcmd on the mix for audio-only projects) and
@@ -245,8 +253,12 @@ type StudioExportPlan struct {
 // (studio_render_completed/failed). Facts about the ffmpeg invocation only —
 // nothing content-derived.
 type StudioRenderStats struct {
-	// Encoder in the analytics vocabulary: "nvenc" | "x264".
+	// Encoder in the analytics vocabulary: "nvenc" | "x264" | "x265" | "audio".
 	Encoder string
+	// Format is the plan's output format (part 20): h264 | hevc | mp3 | wav.
+	Format string
+	// OutHeight is the requested output height (0 = canvas).
+	OutHeight int
 	// FilterCount is the number of statements in the -filter_complex graph,
 	// the proxy for compositing complexity.
 	FilterCount int
@@ -257,17 +269,63 @@ type StudioRenderStats struct {
 // telemetry wants the same encoder/complexity dimensions as success.
 func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan StudioExportPlan, quality, outputPath string) (StudioRenderStats, error) {
 	assertStudioSendCmdSupport() // one-time ffmpeg ≥ 4.4 check, log-only (part 15)
-	encoder := studioH264Encoder(s.cfg)
+	format := NormalizeExportFormat(plan.Format)
+	stats := StudioRenderStats{Format: format, OutHeight: plan.OutHeight}
+	var encoder string
+	switch {
+	case IsAudioFormat(format):
+		encoder = "audio"
+	case format == "hevc":
+		enc, err := studioHEVCEncoder(s.cfg)
+		if err != nil {
+			stats.Encoder = "x265"
+			return stats, err
+		}
+		encoder = enc
+	default:
+		encoder = studioH264Encoder(s.cfg)
+	}
 	args := buildMultiTrackExportArgs(plan, encoder, quality, s.cfg.ContentStudioFontFile, s.cfg.ContentStudioFontsDir, outputPath)
-	stats := StudioRenderStats{Encoder: encoderAnalyticsName(encoder), FilterCount: countFilterStatements(args)}
+	stats.Encoder = encoderAnalyticsName(encoder)
+	stats.FilterCount = countFilterStatements(args)
+	if IsAudioFormat(format) && !argsHaveAudioMap(args) {
+		return stats, fmt.Errorf("project has no audio to export")
+	}
 	return stats, runStudioFFmpeg(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, plan.Duration, args...)
 }
 
-// encoderAnalyticsName maps the ffmpeg encoder id onto the two-value analytics
-// vocabulary the catalog documents.
+// RunFrame renders one still frame (part 20) of the plan at timeline time t to
+// a PNG at outputPath, synchronously. The caller reduces the refs to the clips
+// visible at t BEFORE assembling the plan (so only those sources are
+// downloaded) and generates the sendcmd sidecar from THAT plan. The frame goes through the same filter graph as the export, from
+// originals — it is not the proxy.
+func (s *StudioExportService) RunFrame(ctx context.Context, plan StudioExportPlan, t float64, outputPath string) error {
+	assertStudioSendCmdSupport()
+	args := buildFrameExportArgs(plan, t, s.cfg.ContentStudioFontFile, s.cfg.ContentStudioFontsDir, outputPath)
+	return runStudioFFmpeg(ctx, nil, "", s.cfg.ContentStudioGPUIndex, 0, args...)
+}
+
+// argsHaveAudioMap reports whether the built args map an audio stream (an
+// audio-format export of a silent project would otherwise write an empty file).
+func argsHaveAudioMap(args []string) bool {
+	for i, a := range args {
+		if a == "-map" && i+1 < len(args) && strings.HasPrefix(args[i+1], "[aout") {
+			return true
+		}
+	}
+	return false
+}
+
+// encoderAnalyticsName maps the ffmpeg encoder id onto the analytics
+// vocabulary the catalog documents: nvenc | x264 | x265 | audio.
 func encoderAnalyticsName(encoder string) string {
-	if encoder == "h264_nvenc" {
+	switch encoder {
+	case "h264_nvenc", "hevc_nvenc":
 		return "nvenc"
+	case "libx265":
+		return "x265"
+	case "audio":
+		return "audio"
 	}
 	return "x264"
 }
@@ -323,6 +381,106 @@ func buildAudioMixArgs(plan StudioExportPlan, outputPath string) (args []string,
 // (title font resolution consults the fonts directory on disk, falling back to
 // fontFile — pass a fixed fontsDir in tests).
 func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile, fontsDir, outputPath string) []string {
+	format := NormalizeExportFormat(plan.Format)
+	audioOnly := IsAudioFormat(format)
+	if audioOnly {
+		// No video graph at all: drop every video seg and the blank canvas so
+		// buildExportGraph produces the audio section only (and the keyframe
+		// sidecar rides asendcmd, never the absent [vbase]).
+		plan.Video = nil
+		plan.BlankVideo = false
+	}
+	args, stmts, videoOut, audioOut, durStr := buildExportGraph(plan, fontFile, fontsDir)
+
+	// Output resolution (part 20): scale the composed canvas as the last video
+	// filter. Skipped when it would be a no-op (0 or equal to the canvas).
+	if videoOut != "" {
+		if sc := outputScaleFilter(plan); sc != "" {
+			stmts = append(stmts, fmt.Sprintf("[%s]%s[vscaled]", videoOut, sc))
+			videoOut = "vscaled"
+		}
+	}
+
+	args = append(args, "-filter_complex", strings.Join(stmts, ";"))
+	if videoOut != "" {
+		args = append(args, "-map", "["+videoOut+"]")
+	}
+	if audioOut != "" {
+		args = append(args, "-map", "["+audioOut+"]")
+	}
+	if videoOut != "" {
+		if format == StudioFormatHEVC {
+			args = append(args, hevcEncodeArgs(encoder, quality)...)
+		} else {
+			args = append(args, h264EncodeArgs(encoder, quality)...)
+		}
+	}
+	if audioOnly {
+		switch format {
+		case StudioFormatWAV:
+			args = append(args, "-vn", "-c:a", "pcm_s16le")
+		default: // mp3
+			args = append(args, "-vn", "-c:a", "libmp3lame", "-b:a", "192k")
+		}
+		args = append(args, "-t", durStr, outputPath)
+		return args
+	}
+	if audioOut != "" {
+		args = append(args, "-c:a", "aac", "-b:a", "192k")
+	}
+	args = append(args, "-t", durStr, "-movflags", "+faststart", outputPath)
+	return args
+}
+
+// buildFrameExportArgs builds the single-frame PNG render: the same graph as
+// the export (from originals), audio dropped, seeking the OUTPUT to t and
+// emitting exactly one frame. The caller passes a plan already reduced to the
+// clips visible at t; Duration is raised so the base canvas covers t. The base
+// color source is cheap, but each visible clip still trims from its source
+// start, so a clip deep into a long source decodes up to its in-point.
+func buildFrameExportArgs(plan StudioExportPlan, t float64, fontFile, fontsDir, outputPath string) []string {
+	if t < 0 {
+		t = 0
+	}
+	plan.Audio, plan.AudioTracks, plan.Ducking, plan.Loudness = nil, nil, nil, ""
+	plan.BlankVideo = true // always produce a frame, black when nothing is visible at t
+	plan.Duration = t + 1.0 // one second of canvas past t; -frames:v 1 stops long before
+	args, stmts, videoOut, _, _ := buildExportGraph(plan, fontFile, fontsDir)
+	if sc := outputScaleFilter(plan); sc != "" {
+		stmts = append(stmts, fmt.Sprintf("[%s]%s[vscaled]", videoOut, sc))
+		videoOut = "vscaled"
+	}
+	args = append(args, "-filter_complex", strings.Join(stmts, ";"),
+		"-map", "["+videoOut+"]",
+		"-ss", formatSeconds(t), "-frames:v", "1", "-an", outputPath)
+	return args
+}
+
+// outputScaleFilter is the part-20 resolution step ("" when not needed): scale
+// to OutHeight keeping the canvas aspect, width rounded to an even number
+// (yuv420p needs even dimensions), square pixels.
+func outputScaleFilter(plan StudioExportPlan) string {
+	w, h := OutputDimensions(plan.Width, plan.Height, plan.OutHeight)
+	cw, ch := plan.Width, plan.Height
+	if cw <= 0 {
+		cw = 1920
+	}
+	if ch <= 0 {
+		ch = 1080
+	}
+	if w == cw && h == ch {
+		return ""
+	}
+	return fmt.Sprintf("scale=%d:%d:flags=lanczos,setsar=1", w, h)
+}
+
+// buildExportGraph assembles the input args and the filter statements shared by
+// the export and the frame render: video composite (+ caption burn-in), the
+// audio mix, and the audio-only sendcmd carrier. It returns the leading ffmpeg
+// args (-y and every input), the statements, the final video/audio labels
+// ("" when absent) and the formatted duration. Byte-identical to the pre-part-20
+// inline construction.
+func buildExportGraph(plan StudioExportPlan, fontFile, fontsDir string) (args []string, stmts []string, videoOut, audioOut, durStr string) {
 	width, height := plan.Width, plan.Height
 	if width <= 0 {
 		width = 1920
@@ -334,18 +492,17 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 	if fpsStr == "" {
 		fpsStr = "30"
 	}
-	durStr := formatSeconds(plan.Duration)
+	durStr = formatSeconds(plan.Duration)
 
-	args := []string{"-y"}
+	args = []string{"-y"}
 	for _, in := range plan.Inputs {
 		args = append(args, in.Pre...)
 		args = append(args, "-i", in.Path)
 	}
 
-	stmts := make([]string, 0, len(plan.Video)*2+len(plan.Audio)+4)
+	stmts = make([]string, 0, len(plan.Video)*2+len(plan.Audio)+4)
 
 	// --- video composite ---
-	videoOut := ""
 	if len(plan.Video) > 0 || plan.BlankVideo {
 		segs := sortVideoSegs(plan.Video)
 		// The keyframe sidecar rides the base color source: CFR at the project
@@ -387,7 +544,8 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 	}
 
 	// --- audio mix ---
-	audioStmts, audioOut := buildAudioSection(plan, durStr)
+	var audioStmts []string
+	audioStmts, audioOut = buildAudioSection(plan, durStr)
 	stmts = append(stmts, audioStmts...)
 
 	// Audio-only project with keyframed pan: no [vbase] exists to carry the
@@ -397,21 +555,7 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 		audioOut = "aoutsc"
 	}
 
-	args = append(args, "-filter_complex", strings.Join(stmts, ";"))
-	if videoOut != "" {
-		args = append(args, "-map", "["+videoOut+"]")
-	}
-	if audioOut != "" {
-		args = append(args, "-map", "["+audioOut+"]")
-	}
-	if videoOut != "" {
-		args = append(args, h264EncodeArgs(encoder, quality)...)
-	}
-	if audioOut != "" {
-		args = append(args, "-c:a", "aac", "-b:a", "192k")
-	}
-	args = append(args, "-t", durStr, "-movflags", "+faststart", outputPath)
-	return args
+	return args, stmts, videoOut, audioOut, durStr
 }
 
 // buildVideoClipChain builds the filter statements for one video clip and
@@ -1624,4 +1768,53 @@ func formatSeconds(s float64) string {
 
 func formatGain(v float64) string {
 	return strconv.FormatFloat(v, 'f', 3, 64)
+}
+
+// Export formats (part 20), mirrored from models.StudioExportFormat*.
+const (
+	StudioFormatH264 = "h264"
+	StudioFormatHEVC = "hevc"
+	StudioFormatMP3  = "mp3"
+	StudioFormatWAV  = "wav"
+)
+
+// NormalizeExportFormat maps "" (the pre-part-20 request) and anything unknown
+// to h264. The handler rejects unknown values before they get here.
+func NormalizeExportFormat(f string) string {
+	switch strings.ToLower(strings.TrimSpace(f)) {
+	case StudioFormatHEVC:
+		return StudioFormatHEVC
+	case StudioFormatMP3:
+		return StudioFormatMP3
+	case StudioFormatWAV:
+		return StudioFormatWAV
+	}
+	return StudioFormatH264
+}
+
+// IsAudioFormat reports the audio-only formats (no video graph).
+func IsAudioFormat(f string) bool {
+	f = NormalizeExportFormat(f)
+	return f == StudioFormatMP3 || f == StudioFormatWAV
+}
+
+// OutputDimensions resolves the rendered frame size for a requested output
+// height: outHeight <= 0 (or equal to the canvas) keeps the canvas; otherwise
+// the canvas aspect is preserved, with the width rounded to the nearest even
+// number (never below 2).
+func OutputDimensions(width, height, outHeight int) (int, int) {
+	if width <= 0 {
+		width = 1920
+	}
+	if height <= 0 {
+		height = 1080
+	}
+	if outHeight <= 0 || outHeight == height {
+		return width, height
+	}
+	w := int(math.Round(float64(width)*float64(outHeight)/float64(height)/2.0)) * 2
+	if w < 2 {
+		w = 2
+	}
+	return w, outHeight
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
@@ -119,6 +120,11 @@ func RegisterStudioRoutes(r gin.IRouter, h *StudioHandler) {
 	studio.GET("/assets/:id/file", h.ServeFile)
 	// Export the EDL to MP4 via NVENC on the dedicated GPU.
 	studio.POST("/projects/:id/export", h.ExportProject)
+	// Export depth (part 20): persistent history, render-again with the stored
+	// options, and a synchronous single-frame PNG.
+	studio.GET("/projects/:id/exports", h.ListStudioExports)
+	studio.POST("/projects/:id/exports/:exportId/again", h.RenderExportAgain)
+	studio.POST("/projects/:id/frame", h.ExportFrame)
 	// Auto-captions: transcribe the timeline-aligned audio mix with whisper.
 	studio.POST("/projects/:id/captions/generate", h.GenerateCaptions)
 }
@@ -150,9 +156,14 @@ func (h *StudioHandler) owner(c *gin.Context) services.StudioOwner {
 	return out
 }
 
-// ExportHeightLookup returns the persisted height of the project an export
-// request targets, for ExportHeightGate. ok=false (no DB, unknown project, not
-// the caller's) leaves the decision to ExportProject, which 404s as usual.
+// ExportHeightLookup returns the output height a Studio export request would
+// render, for ExportHeightGate. ok=false (no DB, unknown project, not the
+// caller's) leaves the decision to the handler, which 404s as usual.
+//
+// The height is the PERSISTED project's, unless the request picks a resolution
+// rung (part 20), in which case that rung is what gets rendered and what the
+// tier cap applies to. Audio formats render no video, so they are never
+// refused. A render-again request takes its options from the stored export row.
 func (h *StudioHandler) ExportHeightLookup(c *gin.Context) (int, bool) {
 	if h == nil || h.repo == nil || !h.repo.Enabled() {
 		return 0, false
@@ -170,7 +181,17 @@ func (h *StudioHandler) ExportHeightLookup(c *gin.Context) (int, bool) {
 	if err != nil || project == nil {
 		return 0, false
 	}
-	return project.Height, true
+	var req models.StudioExportRequest
+	if exportID := strings.TrimSpace(c.Param("exportId")); exportID != "" {
+		stored, err := h.repo.GetExport(ctx, projectID, exportID)
+		if err != nil {
+			return 0, false
+		}
+		req = models.StudioExportRequest{Format: stored.Format, Resolution: stored.Resolution}
+	} else {
+		req = peekExportRequest(c)
+	}
+	return effectiveExportHeight(req, project.Height), true
 }
 
 // requireProjectAccess is the gate on every project-scoped endpoint. It answers
@@ -1220,6 +1241,15 @@ func (h *StudioHandler) backfillPeaks(ctx context.Context, asset *models.StudioA
 // ----------------------------------------------------------------------- //
 
 func (h *StudioHandler) ExportProject(c *gin.Context) {
+	var req models.StudioExportRequest
+	_ = c.ShouldBindJSON(&req) // body is optional
+	h.launchExport(c, strings.TrimSpace(c.Param("id")), req)
+}
+
+// launchExport is the shared body of POST /export and POST /exports/:id/again:
+// ownership, validation, the output-height gate, the part-09 checkpoint, the
+// studio_exports row, and the async render job. It writes the response.
+func (h *StudioHandler) launchExport(c *gin.Context, projectID string, req models.StudioExportRequest) {
 	if h.s3Client == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "S3 is not configured"})
 		return
@@ -1227,14 +1257,14 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	if !h.dbReady(c) {
 		return
 	}
-	var req models.StudioExportRequest
-	_ = c.ShouldBindJSON(&req) // body is optional
-
 	loadCtx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	projectID := strings.TrimSpace(c.Param("id"))
 	if !h.requireProjectAccess(c, projectID) {
+		return
+	}
+	if msg := validateExportRequest(&req); msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
 	project, err := h.repo.GetProject(loadCtx, projectID)
@@ -1252,10 +1282,12 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	for _, a := range assets {
 		assetByID[a.ID] = a
 	}
-	// Plan output height: read from the PERSISTED project (never the request).
-	// The quota dispatcher already ran ExportHeightGate; this is the
-	// authoritative check, before the checkpoint and before any job exists.
-	if refuseOutputHeight(c, project.Height) {
+	// Output height: read from the PERSISTED project (never the request's
+	// geometry) plus the resolution rung the request picked. The quota
+	// dispatcher already ran ExportHeightGate; this is the authoritative check,
+	// before the checkpoint and before any job exists. Audio formats render no
+	// video and are never height-gated.
+	if refuseOutputHeight(c, effectiveExportHeight(req, project.Height)) {
 		return
 	}
 	// Sanitize the (possibly pre-v2 or hand-edited) EDL before building the
@@ -1265,6 +1297,14 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no clip to export"})
 		return
+	}
+	format := services.NormalizeExportFormat(req.Format)
+	if services.IsAudioFormat(format) {
+		refs = services.AudioOnlyRefs(refs)
+		if len(refs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no audio to export"})
+			return
+		}
 	}
 
 	// Version-history auto-checkpoint (part 09): snapshot the EDL this render
@@ -1276,18 +1316,19 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 
 	exportCfg := buildStudioExportConfig(project, assetByID, req)
 	quality := normalizeExportQuality(req.Preset)
-	baseName := safeFilename(firstNonEmpty(req.FileName, project.Name, "export")) + ".mp4"
+	ext, mime, mediaKind := exportContainer(format)
+	baseName := safeFilename(firstNonEmpty(req.FileName, project.Name, "export")) + ext
 
 	job := h.jobManager.CreateJob(
-		models.OriginalFileInfo{Name: baseName, Size: 0, Type: "video/mp4"},
-		map[string]interface{}{"mode": "studio_export", "format": "mp4"},
+		models.OriginalFileInfo{Name: baseName, Size: 0, Type: mime},
+		map[string]interface{}{"mode": "studio_export", "format": strings.TrimPrefix(ext, ".")},
 	)
 	recordJobCreated(c, h.jobManager, job, services.JobFacts{
 		Tool:      "studio_export",
 		Mode:      "studio_export",
-		MediaKind: string(models.FileTypeVideo),
+		MediaKind: mediaKind,
 		// The source is a multi-track timeline, not one file.
-		TargetFormat: "mp4",
+		TargetFormat: strings.TrimPrefix(ext, "."),
 	})
 	jobOutputDir := filepath.Join(h.cfg.OutputDir, job.ID)
 	if err := os.MkdirAll(jobOutputDir, 0o755); err != nil {
@@ -1295,19 +1336,66 @@ func (h *StudioHandler) ExportProject(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare export"})
 		return
 	}
-	registerJobDirs(c, job.ID, true, true) // output + the downloaded sources under uploads/<jobId>/
-	// converted.mp4 is what ConversionHandler.DownloadFile resolves for a
-	// default video job, so /api/download/:jobId serves it unchanged.
-	outputPath := filepath.Join(jobOutputDir, "converted.mp4")
+	// MM22: every export output (video, HEVC, mp3/wav) lands in outputs/<jobId>/
+	// and is registered here, under the requesting owner, so it expires with the
+	// owner's retention window. The downloaded sources live under uploads/<jobId>/.
+	registerJobDirs(c, job.ID, true, true)
+	// converted.<ext> is what ConversionHandler.DownloadFile resolves for this
+	// job (its extension follows Options["format"]), so /api/download/:jobId
+	// serves it unchanged.
+	outputPath := filepath.Join(jobOutputDir, "converted"+ext)
 
-	go h.runExportJob(job.ID, refs, exportCfg, project.Width, project.Height, project.FPS, duration, quality, outputPath)
+	// History row, inserted before the job runs so a page leave (or an API
+	// restart) can never lose track of a render. Best-effort: the render must
+	// not fail because bookkeeping did.
+	exportCaptions := effectiveCaptionsMode(req.CaptionsMode, len(exportCfg.captions) > 0 && !services.IsAudioFormat(format))
+	if _, iErr := h.repo.InsertExport(loadCtx, models.StudioExport{
+		ProjectID: projectID, JobID: job.ID, FileName: strings.TrimSuffix(baseName, ext), Preset: quality,
+		Format: format, Resolution: req.Resolution, CaptionsMode: exportCaptions, Loudness: exportCfg.loudness,
+	}); iErr != nil {
+		log.Printf("studio export: history row failed for job %s: %v", job.ID, iErr)
+	}
+
+	spec := studioRenderSpec{
+		format: format, outHeight: req.Resolution,
+		width: project.Width, height: project.Height, fps: project.FPS, duration: duration, quality: quality,
+	}
+	go h.runExportJob(job.ID, refs, exportCfg, spec, outputPath)
 
 	c.JSON(http.StatusOK, models.UploadResponse{JobID: job.ID})
 }
 
-func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef, exportCfg studioExportConfig, width, height int, fps, duration float64, quality, outputPath string) {
+// studioRenderSpec is the geometry + format a render job needs beyond the refs.
+type studioRenderSpec struct {
+	format    string
+	outHeight int // requested output height; 0 = canvas
+	width     int
+	height    int
+	fps       float64
+	duration  float64
+	quality   string
+}
+
+func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef, exportCfg studioExportConfig, spec studioRenderSpec, outputPath string) {
+	// Settle the studio_exports row on EVERY exit path. errClass is a coarse
+	// class (analyticsemit.ErrorType), never raw ffmpeg text.
+	succeeded, errClass := false, ""
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := h.repo.SettleExport(sctx, jobID, succeeded, errClass); err != nil {
+			log.Printf("studio export: settle history row for job %s failed: %v", jobID, err)
+		}
+	}()
+	failJob := func(msg string) {
+		errClass = analyticsemit.ErrorType(msg)
+		_ = h.jobManager.UpdateJobError(jobID, msg)
+	}
+
+	width, height, fps, duration, quality := spec.width, spec.height, spec.fps, spec.duration, spec.quality
 	if err := h.jobManager.UpdateJobStatus(jobID, models.StatusProcessing); err != nil {
 		log.Printf("studio export: failed to mark job %s processing: %v", jobID, err)
+		errClass = analyticsemit.ErrorType("")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), h.cfg.CommandTimeout)
@@ -1333,7 +1421,7 @@ func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef
 		local := filepath.Join(h.cfg.UploadDir, jobID, fmt.Sprintf("export_%d%s", len(localByKey), strings.ToLower(filepath.Ext(key))))
 		if err := h.downloadS3Object(ctx, key, local); err != nil {
 			log.Printf("studio export: download original failed: %v", err)
-			_ = h.jobManager.UpdateJobError(jobID, "Failed to download source media")
+			failJob("Failed to download source media")
 			return
 		}
 		localByKey[key] = local
@@ -1361,10 +1449,15 @@ func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef
 		Ducking: exportCfg.ducking, VoiceTrackID: exportCfg.voiceTrackID, Loudness: exportCfg.loudness, MasterGain: exportCfg.masterGain,
 		LocalByKey: localByKey, LutPaths: lutLocalByAssetID,
 	})
+	plan.Format = spec.format
+	plan.OutHeight = spec.outHeight
 
 	// Caption burn-in: write the .ass into the job output dir and point the plan
 	// at it (the compiler appends the subtitles filter after the overlay cascade).
-	if len(exportCfg.captions) > 0 {
+	// Authored at the CANVAS size; the output-resolution scale is applied after
+	// the burn, so captions scale with the frame. Audio-only formats and the
+	// none/sidecar modes have exportCfg.captions empty.
+	if len(exportCfg.captions) > 0 && !services.IsAudioFormat(spec.format) {
 		assPath := filepath.Join(filepath.Dir(outputPath), "captions.ass")
 		ass := services.BuildASS(exportCfg.captions, exportCfg.captionStyle, width, height, "")
 		if err := os.WriteFile(assPath, []byte(ass), 0o644); err != nil {
@@ -1397,17 +1490,18 @@ func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef
 	if err != nil {
 		log.Printf("studio export: job %s failed: %v", jobID, err)
 		h.jobManager.EmitStudioRender(jobID, stats, renderSeconds, duration, err)
-		_ = h.jobManager.UpdateJobError(jobID, err.Error())
+		failJob(err.Error())
 		return
 	}
 	h.jobManager.EmitStudioRender(jobID, stats, renderSeconds, duration, nil)
 	if err := h.jobManager.UpdateJobResult(jobID, "/api/download/"+jobID); err != nil {
-		_ = h.jobManager.UpdateJobError(jobID, "Failed to update job result")
+		failJob("Failed to update job result")
 		return
 	}
 	if err := h.jobManager.UpdateJobStatus(jobID, models.StatusCompleted); err != nil {
 		log.Printf("studio export: failed to mark job %s completed: %v", jobID, err)
 	}
+	succeeded = true
 }
 
 // ----------------------------------------------------------------------- //
@@ -1714,7 +1808,14 @@ func buildStudioExportConfig(project *models.StudioProject, assetByID map[string
 	if a := project.Audio; a != nil {
 		cfg.masterGain = a.MasterGain
 	}
-	if project.CaptionsEnabled && len(project.Captions) > 0 {
+	// Part 20 captions choice: only the legacy ('' = burn in when enabled) and
+	// explicit burn_in modes put captions into the render. none and sidecar
+	// leave the picture clean (sidecar SRT/VTT are generated client-side).
+	// An explicit burn_in honors the project's captions even when its
+	// "captions enabled" toggle is off: the export dialog choice is the intent.
+	mode := req.CaptionsMode
+	burn := (mode == "" && project.CaptionsEnabled) || mode == models.StudioCaptionsBurnIn
+	if burn && len(project.Captions) > 0 {
 		cfg.captions = project.Captions
 		cfg.captionStyle = project.CaptionStyle
 	}
