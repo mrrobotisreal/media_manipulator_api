@@ -30,6 +30,12 @@ type Emitter interface {
 	Emit(analyticsemit.Event)
 }
 
+// Mailer is the slice of *email.Service the processor uses (MM31). Sends are
+// best-effort goroutines inside the implementation; they never fail a webhook.
+type Mailer interface {
+	PaymentFailed(*models.User)
+}
+
 // GrantedByStripe is mm_tier_grants.granted_by for every webhook-driven change.
 const GrantedByStripe = "stripe"
 
@@ -39,8 +45,10 @@ type Processor struct {
 	Store   Store
 	Client  BillingClient
 	Emitter Emitter
-	Grace   time.Duration
-	Log     *slog.Logger
+	// Mailer sends the payment-failed email. Nil = no email.
+	Mailer Mailer
+	Grace  time.Duration
+	Log    *slog.Logger
 	// Now is injectable for tests.
 	Now func() time.Time
 }
@@ -201,6 +209,11 @@ func (p *Processor) apply(ctx context.Context, ev Event) (note string, err error
 	}
 	if ev.Type == EventInvoicePaymentFailed {
 		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionPaymentFailed, subProps(sub, ev, "due"), "")
+		// MM31: best-effort, deduped per user per 3-day window (Stripe retries the
+		// invoice several times, each with its own event id).
+		if p.Mailer != nil {
+			p.Mailer.PaymentFailed(user)
+		}
 	}
 	return note, nil
 }

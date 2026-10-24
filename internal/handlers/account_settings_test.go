@@ -53,7 +53,7 @@ func (f *fakeSettingsStore) GetOrCreateUserSettings(_ context.Context, id string
 		return s, nil
 	}
 	f.writes++
-	s := &telemetry.UserSettings{UserID: id, RetentionHours: def, RetentionScope: "all", HistoryVisibility: "full", UpdatedAt: time.Now()}
+	s := &telemetry.UserSettings{UserID: id, RetentionHours: def, RetentionScope: "all", HistoryVisibility: "full", EmailExpiryDigest: true, UpdatedAt: time.Now()}
 	f.settings[id] = s
 	return s, nil
 }
@@ -82,6 +82,12 @@ func (f *fakeSettingsStore) ApplyUserSettings(ctx context.Context, id string, de
 	}
 	if p.DeleteMetadataReports != nil {
 		s.DeleteMetadataReports = *p.DeleteMetadataReports
+	}
+	if p.EmailAIJobFinished != nil {
+		s.EmailAIJobFinished = *p.EmailAIJobFinished
+	}
+	if p.EmailExpiryDigest != nil {
+		s.EmailExpiryDigest = *p.EmailExpiryDigest
 	}
 	return s, n, nil
 }
@@ -292,5 +298,40 @@ func TestSettingsPreviewAndDryRunWriteNothing(t *testing.T) {
 		if w := doReq(r, "GET", "/api/account/settings/preview"+q, "alice", ""); w.Code != 400 {
 			t.Errorf("preview%s = %d, want 400", q, w.Code)
 		}
+	}
+}
+
+// MM31: additive email preferences. Defaults: ai_job_finished off, expiry_digest on.
+func TestSettingsEmailPreferences(t *testing.T) {
+	now := time.Now().UTC()
+	st := newSettingsStore(now)
+	r := settingsRouter(st, now)
+	var got map[string]any
+	w := doReq(r, "GET", "/api/account/settings", "alice", "")
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if _, ok := got["emailAiJobFinished"]; !ok {
+		t.Fatalf("emailAiJobFinished missing: %v", got)
+	}
+	if got["emailAiJobFinished"] != false {
+		t.Errorf("emailAiJobFinished default = %v, want false", got["emailAiJobFinished"])
+	}
+	if _, ok := got["emailExpiryDigest"]; !ok {
+		t.Errorf("emailExpiryDigest missing: %v", got)
+	}
+
+	w = doReq(r, "PATCH", "/api/account/settings", "alice", `{"emailAiJobFinished":true,"emailExpiryDigest":false}`)
+	if w.Code != 200 {
+		t.Fatalf("patch %d: %s", w.Code, w.Body)
+	}
+	p := st.applied[len(st.applied)-1]
+	if p.EmailAIJobFinished == nil || !*p.EmailAIJobFinished || p.EmailExpiryDigest == nil || *p.EmailExpiryDigest {
+		t.Errorf("patch not forwarded: %+v", p)
+	}
+	if p.RetentionHours != nil {
+		t.Errorf("an email-only patch must not touch retention: %+v", p)
+	}
+	// Existing contract unchanged: an empty body is still rejected.
+	if w := doReq(r, "PATCH", "/api/account/settings", "alice", `{}`); w.Code != 400 {
+		t.Errorf("empty patch = %d, want 400", w.Code)
 	}
 }

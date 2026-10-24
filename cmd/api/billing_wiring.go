@@ -15,7 +15,7 @@ import (
 // newBillingHandler builds the Stripe client only when billing is fully
 // configured; otherwise the handler is returned without one and every guarded
 // route answers 503 billing_unavailable.
-func newBillingHandler(cfg *config.Config, store *telemetry.Store, registry *tiers.Registry, emitter *analyticsemit.Emitter, log *slog.Logger) *handlers.BillingHandler {
+func newBillingHandler(cfg *config.Config, store *telemetry.Store, registry *tiers.Registry, emitter *analyticsemit.Emitter, mailer billing.Mailer, log *slog.Logger) *handlers.BillingHandler {
 	if !cfg.BillingConfigured() {
 		return handlers.NewBillingHandler(nil, nil, nil, registry, cfg, log)
 	}
@@ -25,6 +25,7 @@ func newBillingHandler(cfg *config.Config, store *telemetry.Store, registry *tie
 		Store:   store,
 		Client:  client,
 		Emitter: emitter,
+		Mailer:  mailer,
 		Grace:   time.Duration(cfg.BillingGraceDays) * 24 * time.Hour,
 		Log:     log,
 	}

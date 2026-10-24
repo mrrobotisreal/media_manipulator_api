@@ -68,3 +68,12 @@ const ServerRetentionSwept = "server_retention_swept"
 // the mm_account_deletions tombstone are the durable record. The analytics-side
 // catalog entry is MM26's.
 const ServerAccountDeleted = "server_account_deleted"
+
+// Transactional email (MM31). Emitted by internal/email once per delivery attempt
+// outcome: {kind: welcome|ai_job_finished|expiry_digest|payment_failed|
+// account_deleted, status: sent|failed}. KNOWN LIMIT (same as the billing and
+// retention events): background sends have no browser ids unless the trigger had a
+// request (welcome does), and Emit drops identity-less events, so mm_email_log is
+// the durable record and this is a lower bound. The analytics-side catalog entry
+// is in media-manipulator-analytics (branch mm-m6-transactional-email).
+const ServerEmailSent = "server_email_sent"

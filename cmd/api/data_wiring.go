@@ -26,7 +26,7 @@ import (
 func wireDataControls(ctx context.Context, cfg *config.Config, store *telemetry.Store, jobManager *services.JobManager,
 	s3Client *s3.Client, conversion *handlers.ConversionHandler, studio *handlers.StudioHandler,
 	account *handlers.AccountHandler, limiter *limits.Limiter, m *metrics.Registry,
-	emitter *analyticsemit.Emitter, log *slog.Logger) {
+	emitter *analyticsemit.Emitter, mailer handlers.AccountDeletedMailer, log *slog.Logger) {
 
 	var objStore retention.ObjectStore
 	if s3Client != nil {
@@ -80,7 +80,7 @@ func wireDataControls(ctx context.Context, cfg *config.Config, store *telemetry.
 	}
 	acct.SetAccountDeletion(handlers.AccountDeleteConfig{
 		Store: store, Expirer: sweeper, Stripe: ender, Analytics: dsr, Firebase: fb,
-		Metrics: func(result string) { m.AccountDeleted(result) }, Emitter: emitter,
+		Metrics: func(result string) { m.AccountDeleted(result) }, Emitter: emitter, Mailer: mailer,
 	})
 	account.SetAccountData(acct)
 }

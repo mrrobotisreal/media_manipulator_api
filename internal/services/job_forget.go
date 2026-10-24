@@ -22,6 +22,8 @@ func (jm *JobManager) ForgetJob(jobID string) bool {
 	jm.emitMu.Lock()
 	delete(jm.emitOwners, jobID)
 	delete(jm.ownerByJob, jobID)
+	delete(jm.lastPoll, jobID)
+	delete(jm.notified, jobID)
 	jm.emitMu.Unlock()
 	return true
 }

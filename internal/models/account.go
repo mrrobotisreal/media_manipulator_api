@@ -15,9 +15,11 @@ type User struct {
 	TierExpiresAt *time.Time `json:"tierExpiresAt,omitempty"`
 	DisplayName   string     `json:"displayName,omitempty"`
 	SignupSource  string     `json:"signupSource,omitempty"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	UpdatedAt     time.Time  `json:"updatedAt"`
-	LastSeenAt    *time.Time `json:"lastSeenAt,omitempty"`
+	// Locale is the BCP-47 language mail is sent in (MM31); empty = en-us.
+	Locale     string     `json:"-"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
+	LastSeenAt *time.Time `json:"lastSeenAt,omitempty"`
 
 	// Billing mirror (MM17). Stripe ids never leave the API (json:"-"); the
 	// status endpoint exposes only the derived, non-identifying fields.

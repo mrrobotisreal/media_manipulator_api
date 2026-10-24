@@ -96,6 +96,14 @@ type AccountDeleteConfig struct {
 	Metrics func(result string)
 	// Emitter gets server_account_deleted (dropped without visitor ids).
 	Emitter *analyticsemit.Emitter
+	// Mailer sends the confirmation email (MM31); nil = none.
+	Mailer AccountDeletedMailer
+}
+
+// AccountDeletedMailer sends the account-deleted confirmation. It receives the
+// row captured BEFORE deletion, because the mm_users row no longer exists after.
+type AccountDeletedMailer interface {
+	AccountDeleted(*models.User)
 }
 
 type accountDeleteDeps struct{ AccountDeleteConfig }
@@ -198,6 +206,9 @@ func (h *AccountDataHandler) DeleteAccount(c *gin.Context) {
 	}
 	if rep.Status == "completed" {
 		h.emitAccountDeleted(c, d, p, rep)
+		if d.Mailer != nil && user != nil {
+			d.Mailer.AccountDeleted(user) // best-effort goroutine; never blocks the response
+		}
 		c.JSON(http.StatusOK, rep)
 		return
 	}

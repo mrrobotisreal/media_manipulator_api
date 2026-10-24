@@ -320,3 +320,39 @@ func TestUIDHashIsStableAndNotTheUID(t *testing.T) {
 		t.Errorf("hash %q", a)
 	}
 }
+
+type recDelMailer struct{ got []*models.User }
+
+func (m *recDelMailer) AccountDeleted(u *models.User) { m.got = append(m.got, u) }
+
+// MM31: the confirmation goes to the row captured BEFORE deletion, only when the
+// deletion completed.
+func TestAccountDeletionSendsConfirmationOnlyOnCompletion(t *testing.T) {
+	f := newDelFixture(t)
+	f.user.Email = "pat@example.com"
+	m := &recDelMailer{}
+	store := &delStore{delRec: f.rec, user: f.user}
+	f.h.SetAccountDeletion(AccountDeleteConfig{Store: store, Expirer: f.rec, Stripe: f.rec, Analytics: f.rec, Firebase: f.rec,
+		Metrics: func(r string) { f.result = r }, Mailer: m})
+
+	f.rec.fail["firebase"] = errors.New("firebase down")
+	if code, _ := f.del(confirmBody, delHeaders); code == 200 {
+		t.Fatal("expected an incomplete run")
+	}
+	if len(m.got) != 0 {
+		t.Fatalf("mailed on an incomplete deletion: %v", m.got)
+	}
+	// A resumed run no longer has the row (the address is gone with it), so a
+	// completed resume sends nothing; a first-pass completion sends one.
+	g := newDelFixture(t)
+	g.user.Email = "pat@example.com"
+	gs := &delStore{delRec: g.rec, user: g.user}
+	g.h.SetAccountDeletion(AccountDeleteConfig{Store: gs, Expirer: g.rec, Stripe: g.rec, Analytics: g.rec, Firebase: g.rec,
+		Metrics: func(r string) { g.result = r }, Mailer: m})
+	if code, body := g.del(confirmBody, delHeaders); code != 200 {
+		t.Fatalf("%d %s", code, body)
+	}
+	if len(m.got) != 1 || m.got[0].Email != "pat@example.com" {
+		t.Fatalf("confirmation = %+v", m.got)
+	}
+}

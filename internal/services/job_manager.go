@@ -112,6 +112,13 @@ type JobManager struct {
 	// exactly as long as the job in jm.jobs (swept by CleanupOldJobs). Guarded
 	// by emitMu.
 	ownerByJob map[string]JobOwner
+
+	// MM31: lastPoll is when a client last read a job's status (GET status, or an
+	// open SSE stream). notifier gets the one "AI job finished" callback for long
+	// jobs nobody was watching. Both guarded by emitMu.
+	lastPoll map[string]time.Time
+	notified map[string]struct{}
+	notifier JobFinishedNotifier
 }
 
 func NewJobManager() *JobManager {
@@ -123,6 +130,8 @@ func NewJobManager() *JobManager {
 		recFlush:    make(chan chan struct{}, 4),
 		emitOwners:  make(map[string]jobEmitContext),
 		ownerByJob:  make(map[string]JobOwner),
+		lastPoll:    make(map[string]time.Time),
+		notified:    make(map[string]struct{}),
 	}
 	go jm.handleProgressUpdates()
 	return jm
@@ -346,7 +355,7 @@ func (jm *JobManager) recordTransition(jobID string) {
 	recorder := jm.recorder
 	jm.recMu.RUnlock()
 	emitter := jm.analytics()
-	if recorder == nil && emitter == nil {
+	if recorder == nil && emitter == nil && !jm.hasNotifier() {
 		return
 	}
 
@@ -379,7 +388,10 @@ func (jm *JobManager) recordTransition(jobID string) {
 	resultFileName := job.ResultFileName
 	resultSize := job.ResultSizeBytes
 	errMsg := job.Error
+	optsAI := optionsEnableAI(job.Options)
 	jm.mu.RUnlock()
+
+	jm.maybeNotifyFinished(jobID, status, optsAI)
 
 	if recorder != nil {
 		jm.enqueueRecord(rec)
@@ -778,6 +790,16 @@ func (jm *JobManager) CleanupOldJobs(maxAge time.Duration) {
 	for jobID := range jm.ownerByJob {
 		if _, ok := live[jobID]; !ok {
 			delete(jm.ownerByJob, jobID)
+		}
+	}
+	for jobID := range jm.lastPoll {
+		if _, ok := live[jobID]; !ok {
+			delete(jm.lastPoll, jobID)
+		}
+	}
+	for jobID := range jm.notified {
+		if _, ok := live[jobID]; !ok {
+			delete(jm.notified, jobID)
 		}
 	}
 	jm.emitMu.Unlock()

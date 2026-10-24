@@ -42,6 +42,7 @@ func (h *ConversionHandler) StreamJobEvents(c *gin.Context) {
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no")
 
+	h.jobManager.TouchJobPoll(jobID) // MM31
 	ch := h.jobManager.Subscribe(jobID)
 	defer h.jobManager.Unsubscribe(jobID, ch)
 
@@ -61,6 +62,7 @@ func (h *ConversionHandler) StreamJobEvents(c *gin.Context) {
 		case <-ctx.Done():
 			return
 		case <-keepalive.C:
+			h.jobManager.TouchJobPoll(jobID) // an open stream is a watching tab
 			if _, err := io.WriteString(c.Writer, ": keepalive\n\n"); err != nil {
 				return
 			}
@@ -72,6 +74,7 @@ func (h *ConversionHandler) StreamJobEvents(c *gin.Context) {
 			if snapshot == nil {
 				continue
 			}
+			h.jobManager.TouchJobPoll(jobID)
 			if err := writeSSEEvent(c.Writer, "update", h.withMetadataFields(snapshot)); err != nil {
 				return
 			}
