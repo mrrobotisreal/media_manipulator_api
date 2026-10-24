@@ -25,7 +25,8 @@ const userColumns = `id::text, firebase_uid, coalesce(email, ''), email_verified
 	tier, tier_source, tier_expires_at, coalesce(display_name, ''),
 	coalesce(signup_source, ''), created_at, updated_at, last_seen_at,
 	coalesce(stripe_customer_id, ''), coalesce(stripe_subscription_id, ''),
-	coalesce(subscription_status, ''), coalesce(billing_interval, ''), cancel_at_period_end`
+	coalesce(subscription_status, ''), coalesce(billing_interval, ''), cancel_at_period_end,
+	coalesce(locale, '')`
 
 func scanUser(row pgx.Row) (*models.User, error) {
 	var u models.User
@@ -34,7 +35,7 @@ func scanUser(row pgx.Row) (*models.User, error) {
 		&u.Tier, &u.TierSource, &u.TierExpiresAt, &u.DisplayName,
 		&u.SignupSource, &u.CreatedAt, &u.UpdatedAt, &u.LastSeenAt,
 		&u.StripeCustomerID, &u.StripeSubscriptionID, &u.SubscriptionStatus,
-		&u.BillingInterval, &u.CancelAtPeriodEnd,
+		&u.BillingInterval, &u.CancelAtPeriodEnd, &u.Locale,
 	)
 	if err != nil {
 		return nil, err
@@ -57,7 +58,7 @@ func scanUserWithCreated(row pgx.Row) (*models.User, bool, error) {
 		&u.Tier, &u.TierSource, &u.TierExpiresAt, &u.DisplayName,
 		&u.SignupSource, &u.CreatedAt, &u.UpdatedAt, &u.LastSeenAt,
 		&u.StripeCustomerID, &u.StripeSubscriptionID, &u.SubscriptionStatus,
-		&u.BillingInterval, &u.CancelAtPeriodEnd,
+		&u.BillingInterval, &u.CancelAtPeriodEnd, &u.Locale,
 	)
 	if err != nil {
 		return nil, false, err
@@ -90,6 +91,8 @@ type UserSyncInput struct {
 	EmailVerified bool
 	DisplayName   string
 	SignupSource  string
+	// Locale is optional (MM31); an empty value never overwrites a stored one.
+	Locale string
 }
 
 // UpsertUser creates or refreshes the account for a verified principal and
@@ -125,7 +128,7 @@ func (s *Store) UpsertUser(ctx context.Context, in UserSyncInput) (*models.User,
 	defer cancel()
 
 	row := s.Pool.QueryRow(ctx, upsertUserQuery,
-		in.FirebaseUID, in.Email, in.EmailVerified, in.DisplayName, in.SignupSource)
+		in.FirebaseUID, in.Email, in.EmailVerified, in.DisplayName, in.SignupSource, in.Locale)
 	return scanUserWithCreated(row)
 }
 
@@ -134,12 +137,13 @@ func (s *Store) UpsertUser(ctx context.Context, in UserSyncInput) (*models.User,
 // from `xmax = 0` (not from a racy preceding SELECT), and that it is the FIRST
 // returned column, matching scanUserWithCreated's Scan order.
 const upsertUserQuery = `
-INSERT INTO mm_users (firebase_uid, email, email_verified, display_name, signup_source, last_seen_at)
-VALUES ($1, nullif($2, ''), $3, nullif($4, ''), nullif($5, ''), now())
+INSERT INTO mm_users (firebase_uid, email, email_verified, display_name, signup_source, locale, last_seen_at)
+VALUES ($1, nullif($2, ''), $3, nullif($4, ''), nullif($5, ''), nullif($6, ''), now())
 ON CONFLICT (firebase_uid) DO UPDATE SET
 	email          = COALESCE(nullif(EXCLUDED.email, ''), mm_users.email),
 	email_verified = EXCLUDED.email_verified,
 	display_name   = COALESCE(nullif(EXCLUDED.display_name, ''), mm_users.display_name),
+	locale         = COALESCE(nullif(EXCLUDED.locale, ''), mm_users.locale),
 	updated_at     = now(),
 	last_seen_at   = now()
 RETURNING (xmax = 0) AS created, ` + userColumns

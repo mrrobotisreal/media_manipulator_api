@@ -50,12 +50,16 @@ type settingsLimits struct {
 }
 
 type settingsResponse struct {
-	RetentionHours        int            `json:"retentionHours"`
-	RetentionScope        string         `json:"retentionScope"`
-	DeleteMetadataReports bool           `json:"deleteMetadataReports"`
-	HistoryVisibility     string         `json:"historyVisibility"`
-	UpdatedAt             time.Time      `json:"updatedAt"`
-	Limits                settingsLimits `json:"limits"`
+	RetentionHours        int    `json:"retentionHours"`
+	RetentionScope        string `json:"retentionScope"`
+	DeleteMetadataReports bool   `json:"deleteMetadataReports"`
+	HistoryVisibility     string `json:"historyVisibility"`
+	// MM31: additive email preferences. Welcome, payment-failed and account-deleted
+	// mail are transactional and have no toggle.
+	EmailAIJobFinished bool           `json:"emailAiJobFinished"`
+	EmailExpiryDigest  bool           `json:"emailExpiryDigest"`
+	UpdatedAt          time.Time      `json:"updatedAt"`
+	Limits             settingsLimits `json:"limits"`
 	// Restamped is the number of live items whose expiry moved. PATCH only.
 	Restamped *int64 `json:"restamped,omitempty"`
 }
@@ -87,6 +91,8 @@ func toSettingsResponse(s *telemetry.UserSettings, defaultHours int) settingsRes
 		RetentionScope:        s.RetentionScope,
 		DeleteMetadataReports: s.DeleteMetadataReports,
 		HistoryVisibility:     s.HistoryVisibility,
+		EmailAIJobFinished:    s.EmailAIJobFinished,
+		EmailExpiryDigest:     s.EmailExpiryDigest,
 		UpdatedAt:             s.UpdatedAt,
 		Limits:                limitsFor(defaultHours),
 	}
@@ -137,11 +143,14 @@ type settingsPatchBody struct {
 	RetentionScope        *string `json:"retentionScope"`
 	DeleteMetadataReports *bool   `json:"deleteMetadataReports"`
 	HistoryVisibility     *string `json:"historyVisibility"`
+	EmailAIJobFinished    *bool   `json:"emailAiJobFinished"`
+	EmailExpiryDigest     *bool   `json:"emailExpiryDigest"`
 }
 
 // validate returns the first field-level problem, or nil.
 func (b settingsPatchBody) validate() *settingsError {
-	if b.RetentionHours == nil && b.RetentionScope == nil && b.DeleteMetadataReports == nil && b.HistoryVisibility == nil {
+	if b.RetentionHours == nil && b.RetentionScope == nil && b.DeleteMetadataReports == nil && b.HistoryVisibility == nil &&
+		b.EmailAIJobFinished == nil && b.EmailExpiryDigest == nil {
 		return &settingsError{Error: "No settings provided"}
 	}
 	if b.RetentionHours != nil && !retention.ValidHours(*b.RetentionHours) {
@@ -241,6 +250,8 @@ func (h *SettingsHandler) Patch(c *gin.Context) {
 		RetentionHours:        body.RetentionHours,
 		DeleteMetadataReports: body.DeleteMetadataReports,
 		HistoryVisibility:     body.HistoryVisibility,
+		EmailAIJobFinished:    body.EmailAIJobFinished,
+		EmailExpiryDigest:     body.EmailExpiryDigest,
 	}, h.now().UTC())
 	if err != nil {
 		h.logger.Error("account settings: update failed", "error", err.Error())
