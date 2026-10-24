@@ -64,34 +64,41 @@ const revokeSharesQuery = `
 UPDATE mm_share_links SET revoked_at = now()
 WHERE job_id = $1::uuid AND revoked_at IS NULL AND expires_at > now()`
 
-// CreateShareLink inserts a link and revokes any live link the job already had,
-// in one transaction, so a job never has two live links (the plaintext of the
-// old one cannot be re-shown, so a repeat share rotates). It returns how many
-// links it revoked.
-func (s *Store) CreateShareLink(ctx context.Context, l ShareLinkNew) (int64, error) {
+// ErrShareLimit means the job already has the maximum number of live links.
+var ErrShareLimit = errors.New("telemetry: share link limit reached")
+
+// CreateShareLink inserts a link unless the job already has maxLive live ones.
+// Links are additive on purpose: the plaintext of an earlier link cannot be
+// re-shown, and silently rotating it would kill a link the owner already sent.
+func (s *Store) CreateShareLink(ctx context.Context, l ShareLinkNew, maxLive int) error {
 	if !s.Enabled() {
-		return 0, ErrNoStore
+		return ErrNoStore
 	}
 	ctx, cancel := s.ctx(ctx)
 	defer cancel()
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	tag, err := tx.Exec(ctx, revokeSharesQuery, l.JobID)
-	if err != nil {
-		return 0, err
+	// Serialise concurrent creates for one job so the cap cannot be raced.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "mm_share:"+l.JobID); err != nil {
+		return err
+	}
+	var live int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM mm_share_links WHERE job_id = $1::uuid AND revoked_at IS NULL AND expires_at > now()`, l.JobID).Scan(&live); err != nil {
+		return err
+	}
+	if maxLive > 0 && live >= maxLive {
+		return ErrShareLimit
 	}
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO mm_share_links (token_hash, job_id, owner_id, expires_at) VALUES ($1, $2::uuid, $3, $4)`,
 		l.TokenHash, l.JobID, l.OwnerID, l.ExpiresAt); err != nil {
-		return 0, err
+		return err
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return 0, err
-	}
-	return tag.RowsAffected(), nil
+	return tx.Commit(ctx)
 }
 
 // resolveShareQuery returns the link only when it is unrevoked and unexpired;

@@ -19,6 +19,7 @@ func TestMM24RoutesAreRegistered(t *testing.T) {
 	jm := services.NewJobManager()
 	conv := &handlers.ConversionHandler{}
 	conv.SetDataHandler(handlers.NewDataHandler(nil, nil, jm, nil))
+	conv.SetShareHandler(handlers.NewShareHandler(conv, nil, jm, &config.Config{}, nil))
 	handlers.RegisterConversionRoutes(api, conv)
 
 	studio := &handlers.StudioHandler{}
@@ -42,6 +43,11 @@ func TestMM24RoutesAreRegistered(t *testing.T) {
 		"DELETE /api/account",
 		"GET /api/download/:jobId",
 		"GET /api/result/:jobId",
+		// MM32
+		"POST /api/jobs/:jobId/share",
+		"DELETE /api/jobs/:jobId/share",
+		"GET /api/share/:token",
+		"GET /api/share/:token/file",
 	} {
 		if !have[want] {
 			t.Errorf("route not registered: %s", want)

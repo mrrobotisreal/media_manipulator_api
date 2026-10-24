@@ -91,23 +91,37 @@ func (h *DataHandler) ready() bool {
 // caller's user id and session on success. 401 when the caller has no identity
 // at all (no account, no session header).
 func (h *DataHandler) requireJobOwner(c *gin.Context, jobID string) (userID, session string, ok bool) {
+	return requireJobOwner(c, h.store, h.jobs, h.logger, jobID)
+}
+
+// requireJobOwner is the MM24 strict, database-backed owner check shared by every
+// route that acts on a job on the owner's behalf (delete, keep longer, MM32 share
+// and revoke): the durable record merged with the in-memory owner map, then
+// ownsRecord. A stranger gets the same 404 a missing job gets.
+func requireJobOwner(c *gin.Context, store JobRecordSource, jobs *services.JobManager, logger *slog.Logger, jobID string) (userID, session string, ok bool) {
+	userID, session, _, ok = requireJobOwnerRec(c, store, jobs, logger, jobID)
+	return userID, session, ok
+}
+
+// requireJobOwnerRec is requireJobOwner that also hands back the merged record.
+func requireJobOwnerRec(c *gin.Context, store JobRecordSource, jobs *services.JobManager, logger *slog.Logger, jobID string) (userID, session string, rec telemetry.JobRecord, ok bool) {
 	userID, session = callerIdentity(c)
 	if userID == "" && session == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
-		return "", "", false
+		return "", "", rec, false
 	}
-	rec, err := h.store.JobRecord(c.Request.Context(), jobID)
+	rec, err := store.JobRecord(c.Request.Context(), jobID)
 	if err != nil {
-		h.logger.Warn("data: job lookup failed", "error", err.Error())
+		logger.Warn("data: job lookup failed", "error", err.Error())
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Job lookup is temporarily unavailable"})
-		return "", "", false
+		return "", "", rec, false
 	}
-	rec = mergeJobOwner(rec, h.jobs, jobID)
+	rec = mergeJobOwner(rec, jobs, jobID)
 	if !ownsRecord(rec, userID, session) {
 		denyJobAccess(c)
-		return "", "", false
+		return "", "", rec, false
 	}
-	return userID, session, true
+	return userID, session, rec, true
 }
 
 // DeleteJob handles DELETE /api/jobs/:jobId.
