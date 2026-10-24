@@ -607,12 +607,25 @@ history before it is not counted.
 | `STRIPE_WEBHOOK_SECRET` | - | Signing secret of the webhook endpoint (`whsec_...`). Secret. |
 | `STRIPE_PRICE_PREMIUM_MONTHLY` | - | Stripe Price id for the monthly plan. The client never sends a price id. |
 | `STRIPE_PRICE_PREMIUM_YEARLY` | - | Stripe Price id for the yearly plan. |
+| `STRIPE_PRICE_PREMIUM_MONTHLY_RETAIN7` | - | Optional. Monthly $7.00 retention price id (lookup key `premium_monthly_retain7`). Unset = the $7 offer is never shown. |
+| `STRIPE_PRICE_PREMIUM_MONTHLY_RETAIN6` | - | Optional. Monthly $6.00 retention price id (lookup key `premium_monthly_retain6`). Unset = the $6 offer is never shown. |
 | `STRIPE_API_VERSION` | SDK constant | Optional override of the `Stripe-Version` header. Leave unset. |
 | `STRIPE_AUTOMATIC_TAX` | `false` | Off by decision (2026-10-24): no tax is added at Checkout; customers pay the listed $8 / $80. `true` adds Stripe Tax (`automatic_tax.enabled`, `billing_address_collection=auto`) and only works after Stripe Tax is activated with tax registrations. |
 | `BILLING_GRACE_DAYS` | `7` | How long Premium survives `past_due` / `invoice.payment_failed`. |
 | `BILLING_PUBLIC_BASE_URL` | `https://media-manipulator.com` | Prefix for Checkout success/cancel and Portal return URLs. |
 | `BILLING_PRICE_MONTHLY_USD` / `BILLING_PRICE_YEARLY_USD` | `8` / `80` | Display-only numbers for `/api/tiers`; the charge is whatever the Stripe Price says. |
 
+* Cancellation state and retention offer (`docs/design/BILLING_RETENTION_OFFER.md`). The Customer Portal
+  cancels at period end, so `status` stays `active` with `cancel_at_period_end` and/or `cancel_at`; the API
+  treats either as cancelled (mirror column `cancel_at_period_end`, tier stays Premium until
+  `current_period_end`, `customer.subscription.deleted` then downgrades to Free). `GET /billing/status` adds
+  `endsAt`, `priceMonthlyUSD` and `offer`; for a cancelled-but-active plan it makes ONE Stripe
+  Subscription retrieve (plus no other Stripe call). `POST /billing/retain {offer}` makes one
+  Subscription update (`cancel_at_period_end=false`, `cancel_at` unset, item price swap,
+  `proration_behavior=none`, `billing_cycle_anchor=unchanged`, idempotency key `retain-<subId>-<offer>`).
+  The **restricted Stripe key now needs "Subscriptions: Write"** (it had Read). Create the two monthly
+  prices on the existing Premium product and keep them OUT of the Customer Portal's switchable plans. No
+  migration. Analytics: `server_subscription_retained`.
 * Stripe Tax is not used (Mitch, 2026-10-24: individual seller, no tax registrations). Leave `STRIPE_AUTOMATIC_TAX` unset. If that ever changes: activate Stripe Tax with registrations in the Dashboard, set both Prices to tax behaviour `exclusive`, then set `STRIPE_AUTOMATIC_TAX=true`.
 * Pinned Stripe API version (stripe-go v87.0.0): `2026-09-30.endive`. Create the
   webhook endpoint at that version. The API still verifies events from another

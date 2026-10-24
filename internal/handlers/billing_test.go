@@ -479,3 +479,140 @@ func TestStatusPeriodsPaid(t *testing.T) {
 		t.Fatal("billing off must omit periodsPaid")
 	}
 }
+
+// retainRig builds a rig whose handler clock is fixed, with a monthly,
+// cancelled-but-active subscriber (u1) and a stranger (u2) with no subscription.
+func retainRig(t *testing.T, left time.Duration, cfgMut func(*config.Config)) (*billingRig, time.Time) {
+	t.Helper()
+	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	end := now.Add(left)
+	u := bUser("u1", "fb1")
+	u.Tier, u.TierSource, u.TierExpiresAt = "premium", "subscription", &end
+	u.SubscriptionStatus, u.BillingInterval, u.CancelAtPeriodEnd = "active", "monthly", true
+	u.StripeCustomerID, u.StripeSubscriptionID = "cus_1", "sub_1"
+	cfg := billingCfg(true)
+	cfg.StripePricePremiumMonthlyRetain7, cfg.StripePricePremiumMonthlyRetain6 = "price_r7", "price_r6"
+	if cfgMut != nil {
+		cfgMut(cfg)
+	}
+	b := newBillingRig(t, cfg, u, bUser("u2", "fb2"))
+	cents := int64(800)
+	b.fc.PutSubscription(&billing.Subscription{ID: "sub_1", CustomerID: "cus_1", Status: "active", CancelAtPeriodEnd: true,
+		CurrentPeriodEnd: end, Interval: "monthly", UnitAmountCents: &cents, Currency: "usd", ItemID: "si_1", PriceID: "price_monthly_cfg", UserID: "u1"})
+	b.fc.PriceCents = map[string]int64{"price_r7": 700, "price_r6": 600}
+	proc := &billing.Processor{Store: b.store, Client: b.fc, Emitter: b.em, Grace: 7 * 24 * time.Hour, Now: func() time.Time { return now }}
+	h := NewBillingHandler(b.store, b.fc, proc, tiers.New(cfg), cfg, nil)
+	h.now = func() time.Time { return now }
+	v := fakeVerifier{principals: map[string]*middleware.Principal{
+		"tok-u1": {UID: "fb1", Email: "a@example.com", EmailVerified: true},
+		"tok-u2": {UID: "fb2", Email: "b@example.com", EmailVerified: true},
+	}}
+	b.r = gin.New()
+	RegisterBillingRoutes(b.r.Group("/api"), h, v)
+	return b, end
+}
+
+func TestStatusShowsCancelledStateAndOffer(t *testing.T) {
+	b, end := retainRig(t, 10*24*time.Hour, nil)
+	m := jsonBody(t, b.do("GET", "/api/billing/status", "tok-u1", ""))
+	off, _ := m["offer"].(map[string]any)
+	e := end.Format(time.RFC3339)
+	if m["cancelAtPeriodEnd"] != true || m["endsAt"] != e || m["renewsAt"] != e || m["priceMonthlyUSD"] != float64(8) ||
+		off == nil || off["kind"] != "retain7" || off["priceUSD"] != float64(7) || off["nextChargeAt"] != e {
+		t.Fatalf("status = %v", m)
+	}
+	// Stranger with no subscription: nulls.
+	m = jsonBody(t, b.do("GET", "/api/billing/status", "tok-u2", ""))
+	if m["endsAt"] != nil || m["offer"] != nil || m["priceMonthlyUSD"] != nil {
+		t.Fatalf("stranger = %v", m)
+	}
+	// RETAIN7 unset -> resume only.
+	b, _ = retainRig(t, 10*24*time.Hour, func(c *config.Config) { c.StripePricePremiumMonthlyRetain7 = "" })
+	m = jsonBody(t, b.do("GET", "/api/billing/status", "tok-u1", ""))
+	if off, _ := m["offer"].(map[string]any); off == nil || off["kind"] != "resume" || off["priceUSD"] != float64(8) {
+		t.Fatalf("unset: %v", m)
+	}
+}
+
+func TestRetainSuccessAppliesTier(t *testing.T) {
+	b, end := retainRig(t, 10*24*time.Hour, nil)
+	w := b.do("POST", "/api/billing/retain", "tok-u1", `{"offer":"retain7"}`)
+	if w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	st, _ := jsonBody(t, w)["status"].(map[string]any)
+	if st == nil || st["cancelAtPeriodEnd"] != false || st["endsAt"] != nil || st["offer"] != nil || st["renewsAt"] != end.Format(time.RFC3339) || st["status"] != "active" {
+		t.Fatalf("status = %v", st)
+	}
+	if len(b.fc.ResumeCalls) != 1 || b.fc.ResumeCalls[0] != (billing.ResumeCall{SubID: "sub_1", ItemID: "si_1", NewPriceID: "price_r7", Offer: "retain7"}) {
+		t.Fatalf("calls = %+v", b.fc.ResumeCalls)
+	}
+	u := b.store.User("u1")
+	if u.CancelAtPeriodEnd || u.Tier != "premium" || u.TierExpiresAt == nil || !u.TierExpiresAt.Equal(end) {
+		t.Fatalf("user = %+v", u)
+	}
+	retained := false
+	for _, n := range b.em.names {
+		retained = retained || n == analyticsemit.ServerSubscriptionRetained
+	}
+	if !retained {
+		t.Fatalf("events = %v", b.em.names)
+	}
+	// Second click: already resumed -> not_cancelled.
+	w = b.do("POST", "/api/billing/retain", "tok-u1", `{"offer":"retain7"}`)
+	if w.Code != 409 || jsonBody(t, w)["error"] != "not_cancelled" {
+		t.Fatalf("again: %d %s", w.Code, w.Body)
+	}
+}
+
+func TestRetainResumeKeepsPriceAndSixDollarWindow(t *testing.T) {
+	b, _ := retainRig(t, 24*time.Hour, nil)
+	// Stale client asks for $7 but the server now says $6.
+	w := b.do("POST", "/api/billing/retain", "tok-u1", `{"offer":"retain7"}`)
+	m := jsonBody(t, w)
+	off, _ := m["offer"].(map[string]any)
+	if w.Code != 409 || m["error"] != "offer_changed" || off == nil || off["kind"] != "retain6" {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if len(b.fc.ResumeCalls) != 0 {
+		t.Fatal("no Stripe write on offer_changed")
+	}
+	w = b.do("POST", "/api/billing/retain", "tok-u1", `{"offer":"resume"}`)
+	if w.Code != 200 || len(b.fc.ResumeCalls) != 1 || b.fc.ResumeCalls[0].NewPriceID != "" {
+		t.Fatalf("resume: %d %s %+v", w.Code, w.Body, b.fc.ResumeCalls)
+	}
+}
+
+func TestRetainRefusals(t *testing.T) {
+	b, _ := retainRig(t, 10*24*time.Hour, nil)
+	// Not cancelled.
+	b.fc.Subscriptions["sub_1"].CancelAtPeriodEnd = false
+	w := b.do("POST", "/api/billing/retain", "tok-u1", `{"offer":"resume"}`)
+	if w.Code != 409 || jsonBody(t, w)["error"] != "not_cancelled" {
+		t.Fatalf("not_cancelled: %d %s", w.Code, w.Body)
+	}
+	// Stranger (no subscription of their own) can never touch u1's.
+	if w := b.do("POST", "/api/billing/retain", "tok-u2", `{"offer":"resume"}`); w.Code != 404 {
+		t.Fatalf("stranger: %d %s", w.Code, w.Body)
+	}
+	// Anonymous / bad token.
+	for _, tok := range []string{"", "nope"} {
+		if w := b.do("POST", "/api/billing/retain", tok, `{"offer":"resume"}`); w.Code != 401 {
+			t.Fatalf("anon %q: %d", tok, w.Code)
+		}
+	}
+	if w := b.do("POST", "/api/billing/retain", "tok-u1", `{"offer":"free-money"}`); w.Code != 400 {
+		t.Fatalf("bad offer: %d", w.Code)
+	}
+	// Billing off.
+	off := newBillingRig(t, billingCfg(false), bUser("u1", "fb1"))
+	if w := off.do("POST", "/api/billing/retain", "tok-u1", `{"offer":"resume"}`); w.Code != 503 {
+		t.Fatalf("off: %d", w.Code)
+	}
+	// Provider error.
+	b2, _ := retainRig(t, 10*24*time.Hour, nil)
+	b2.fc.ResumeErr = errors.New("stripe down")
+	if w := b2.do("POST", "/api/billing/retain", "tok-u1", `{"offer":"retain7"}`); w.Code != 502 || jsonBody(t, w)["error"] != "billing_provider_error" {
+		t.Fatalf("502: %d %s", w.Code, w.Body)
+	}
+}
