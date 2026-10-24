@@ -356,17 +356,17 @@ func (s *Store) StudioAssetKeys(ctx context.Context, assetID string) ([]string, 
 	}
 	ctx, cancel := s.ctx(ctx)
 	defer cancel()
-	var orig, proxy, sprite, peaks string
+	var orig, proxy, sprite, peaks, reversed string
 	err := s.Pool.QueryRow(ctx, `
-SELECT s3_key_original, coalesce(s3_key_proxy, ''), coalesce(thumbnail_sprite_url, ''), coalesce(s3_key_peaks, '')
-FROM studio_assets WHERE id = $1::uuid`, assetID).Scan(&orig, &proxy, &sprite, &peaks)
+SELECT s3_key_original, coalesce(s3_key_proxy, ''), coalesce(thumbnail_sprite_url, ''), coalesce(s3_key_peaks, ''), coalesce(s3_key_proxy_reversed, '')
+FROM studio_assets WHERE id = $1::uuid`, assetID).Scan(&orig, &proxy, &sprite, &peaks, &reversed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, false, nil
 	}
 	if err != nil {
 		return nil, false, err
 	}
-	return nonEmpty(orig, proxy, sprite, peaks), true, nil
+	return nonEmpty(orig, proxy, sprite, peaks, reversed), true, nil
 }
 
 // DeleteStudioAssetRow removes one asset row.
@@ -397,19 +397,19 @@ func (s *Store) DeleteStudioProjectRows(ctx context.Context, projectID string) (
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	rows, err := tx.Query(ctx, `
-SELECT s3_key_original, coalesce(s3_key_proxy, ''), coalesce(thumbnail_sprite_url, ''), coalesce(s3_key_peaks, '')
+SELECT s3_key_original, coalesce(s3_key_proxy, ''), coalesce(thumbnail_sprite_url, ''), coalesce(s3_key_peaks, ''), coalesce(s3_key_proxy_reversed, '')
 FROM studio_assets WHERE project_id = $1::uuid`, projectID)
 	if err != nil {
 		return nil, err
 	}
 	var keys []string
 	for rows.Next() {
-		var a, b, c, d string
-		if err := rows.Scan(&a, &b, &c, &d); err != nil {
+		var a, b, c, d, e string
+		if err := rows.Scan(&a, &b, &c, &d, &e); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		keys = append(keys, nonEmpty(a, b, c, d)...)
+		keys = append(keys, nonEmpty(a, b, c, d, e)...)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {

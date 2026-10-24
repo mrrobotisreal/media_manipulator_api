@@ -254,6 +254,13 @@ func sanitizeClip(c StudioClip) StudioClip {
 		c.Title = nil
 	}
 
+	// Title clips are generated, not sourced: no rate, direction or held frame.
+	if c.Title != nil {
+		c.Speed = nil
+		c.Reverse = false
+		c.Freeze = nil
+	}
+
 	// Freeze is mutually exclusive with speed/reverse; freeze wins.
 	if c.Freeze != nil {
 		if c.Freeze.SourceTime < 0 {

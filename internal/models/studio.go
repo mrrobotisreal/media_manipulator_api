@@ -427,13 +427,16 @@ type StudioAudioConfig struct {
 // the ffprobe-derived metadata. `ProbeJSON` keeps the full payload for
 // debugging and is stored in studio_assets.probe_json.
 type StudioAsset struct {
-	ID                 string          `json:"id"`
-	ProjectID          string          `json:"projectId"`
-	OriginalFileName   string          `json:"originalFileName"`
-	S3KeyOriginal      string          `json:"s3KeyOriginal"`
-	S3KeyProxy         string          `json:"s3KeyProxy,omitempty"`
-	ThumbnailSpriteURL string          `json:"thumbnailSpriteUrl,omitempty"` // filmstrip
-	S3KeyPeaks         string          `json:"s3KeyPeaks,omitempty"`         // audio waveform peaks JSON
+	ID                 string `json:"id"`
+	ProjectID          string `json:"projectId"`
+	OriginalFileName   string `json:"originalFileName"`
+	S3KeyOriginal      string `json:"s3KeyOriginal"`
+	S3KeyProxy         string `json:"s3KeyProxy,omitempty"`
+	ThumbnailSpriteURL string `json:"thumbnailSpriteUrl,omitempty"` // filmstrip
+	S3KeyPeaks         string `json:"s3KeyPeaks,omitempty"`         // audio waveform peaks JSON
+	// S3KeyProxyReversed is the 720p reversed preview proxy (part 17); present
+	// once a reverse_proxy derive job has finished.
+	S3KeyProxyReversed string          `json:"s3KeyProxyReversed,omitempty"`
 	MediaKind          StudioMediaKind `json:"mediaKind"`
 	DurationSeconds    float64         `json:"durationSeconds"`
 	Width              *int            `json:"width,omitempty"`
@@ -545,6 +548,9 @@ const (
 	StudioDeriveVoiceClean        = "voice_clean"
 	StudioDeriveSplitVocals       = "split_vocals"
 	StudioDeriveSplitInstrumental = "split_instrumental"
+	// StudioDeriveReverseProxy is pure ffmpeg (no AI): it builds the reversed
+	// preview proxy IN PLACE on the source asset (part 17).
+	StudioDeriveReverseProxy = "reverse_proxy"
 )
 
 // StudioExportRequest is the body for POST /api/studio/projects/:id/export.

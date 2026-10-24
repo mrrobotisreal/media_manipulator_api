@@ -89,6 +89,29 @@ type StudioExportVideoSeg struct {
 	// starts from a color= source. Empty means video so existing literals and
 	// goldens are unchanged.
 	SourceKind string
+
+	// Speed controls (part 17). Speed is the constant rate (0 = unset = 1x);
+	// Reverse plays the trimmed span backwards; FreezeAt (source seconds) turns
+	// the seg into a held frame lasting SourceOut-SourceIn. All zero values
+	// leave the chain byte-identical to pre-v3 graphs.
+	Speed    float64
+	Reverse  bool
+	FreezeAt *float64
+}
+
+// timelineDur is the seg's on-timeline length: the source span divided by the
+// speed (a freeze or an unset speed is 1x).
+func (vc StudioExportVideoSeg) timelineDur() float64 {
+	return speedAdjustedDur(vc.SourceIn, vc.SourceOut, vc.Speed)
+}
+
+// speedAdjustedDur is (out-in)/speed with speed<=0 meaning 1x, clamped >= 0.
+func speedAdjustedDur(in, out, speed float64) float64 {
+	d := clampDurExport(in, out)
+	if speed > 0 && speed != 1 {
+		return d / speed
+	}
+	return d
 }
 
 // Seg source kinds (StudioExportVideoSeg.SourceKind).
@@ -124,6 +147,26 @@ type StudioExportAudioSeg struct {
 	// SegIndex is this seg's index within plan.Audio — the stable suffix for
 	// its stereotools@pan<i> instance name (chain labels vary with ducking).
 	SegIndex int
+
+	// Speed controls (part 17): see StudioExportVideoSeg. PitchOff selects the
+	// resample path (asetrate+aresample) over the pitch-preserving atempo chain.
+	Speed    float64
+	Reverse  bool
+	PitchOff bool
+}
+
+// timelineDur is the seg's on-timeline length (source span / speed).
+func (ac StudioExportAudioSeg) timelineDur() float64 {
+	return speedAdjustedDur(ac.SourceIn, ac.SourceOut, ac.Speed)
+}
+
+// ApplyAudioSpeed copies a clip's speed controls onto its audio seg.
+func ApplyAudioSpeed(seg *StudioExportAudioSeg, c models.StudioClip) {
+	if sp := models.ClipSpeed(c); sp != 1 {
+		seg.Speed = sp
+	}
+	seg.Reverse = c.Reverse && c.Freeze == nil
+	seg.PitchOff = !models.ClipMaintainsPitch(c)
 }
 
 // StudioDucking is the resolved auto-ducking config for an export.
@@ -380,11 +423,13 @@ func buildVideoClipChain(vc StudioExportVideoSeg, k, width, height int, fpsStr, 
 			fmt.Sprintf("[%d:v]format=rgba", vc.InputIndex),
 			fmt.Sprintf("setpts=PTS-STARTPTS+%s/TB", tsStr),
 		)
+	} else if vc.FreezeAt != nil {
+		chain = append(chain, freezeChainParts(vc, tsStr)...)
 	} else {
 		chain = append(chain,
 			fmt.Sprintf("[%d:v]trim=start=%s:end=%s", vc.InputIndex, formatSeconds(vc.SourceIn), formatSeconds(vc.SourceOut)),
-			fmt.Sprintf("setpts=PTS-STARTPTS+%s/TB", tsStr),
 		)
+		chain = append(chain, speedPtsParts(vc.Speed, vc.Reverse, tsStr)...)
 	}
 	if c := cropArg(vc.Crop); c != "" {
 		chain = append(chain, c)
@@ -506,7 +551,7 @@ func compositeStep(last, clipLabel string, vc StudioExportVideoSeg, k, width, he
 		enableStart += vc.TransitionDur / 2
 	}
 	tsStr := formatSeconds(enableStart)
-	teStr := formatSeconds(vc.TimelineStart + clampDurExport(vc.SourceIn, vc.SourceOut))
+	teStr := formatSeconds(vc.TimelineStart + vc.timelineDur())
 	xExpr, yExpr := overlayPosWithTransitions(vc, width, height)
 
 	mode := vc.BlendMode
@@ -626,12 +671,13 @@ func audioSegChain(ac StudioExportAudioSeg, label string) string {
 	if delayMs < 0 {
 		delayMs = 0
 	}
-	dur := clampDurExport(ac.SourceIn, ac.SourceOut)
+	dur := ac.timelineDur()
 	parts := []string{
 		fmt.Sprintf("[%d:a]atrim=start=%s:end=%s", ac.InputIndex, formatSeconds(ac.SourceIn), formatSeconds(ac.SourceOut)),
 		"asetpts=PTS-STARTPTS",
 		"aformat=sample_rates=48000:channel_layouts=stereo",
 	}
+	parts = append(parts, audioSpeedParts(ac.Speed, ac.Reverse, ac.PitchOff)...)
 	if v3vol := keyframesOf(ac.ClipKeyframes).Volume; hasLane(v3vol) {
 		// v3 lane (part 15): eased piecewise expression; wins over the legacy
 		// linear lane (the client keeps both mirrored). t is post-asetpts
@@ -687,6 +733,95 @@ func sortVideoSegs(in []StudioExportVideoSeg) []StudioExportVideoSeg {
 		}
 	}
 	return out
+}
+
+// speedPtsParts is the video retime tail of a trimmed clip chain (part 17):
+// optional `reverse` (after the trim, so the buffered span is clip-length), then
+// the setpts that divides timeline time by the speed and places the clip. With
+// no speed and no reverse it is the exact pre-v3 `setpts=PTS-STARTPTS+<ts>/TB`.
+func speedPtsParts(speed float64, reverse bool, tsStr string) []string {
+	var out []string
+	if reverse {
+		out = append(out, "setpts=PTS-STARTPTS", "reverse")
+	}
+	if speed > 0 && speed != 1 {
+		out = append(out, fmt.Sprintf("setpts=(PTS-STARTPTS)/%s+%s/TB", formatTempo(speed), tsStr))
+	} else {
+		out = append(out, fmt.Sprintf("setpts=PTS-STARTPTS+%s/TB", tsStr))
+	}
+	return out
+}
+
+// freezeChainParts is a held-frame clip: trim to the single frame at
+// freeze.sourceTime, then `tpad=stop_mode=clone` extends it to the clip's
+// duration. tpad was chosen over `loop` (which buffers the frame count it is
+// told to and needs a size argument); it is stateless and cheap, and the
+// project-rate `fps` stage that follows normalizes the cloned frames.
+func freezeChainParts(vc StudioExportVideoSeg, tsStr string) []string {
+	return []string{
+		fmt.Sprintf("[%d:v]trim=start=%s", vc.InputIndex, formatSeconds(*vc.FreezeAt)),
+		"setpts=PTS-STARTPTS",
+		"trim=end_frame=1",
+		fmt.Sprintf("tpad=stop_mode=clone:stop_duration=%s", formatSeconds(clampDurExport(vc.SourceIn, vc.SourceOut))),
+		fmt.Sprintf("setpts=PTS-STARTPTS+%s/TB", tsStr),
+	}
+}
+
+// audioSpeedParts retimes a trimmed, 48k-stereo audio clip (part 17). Reverse
+// comes first (clip-length buffer). Pitch preserved (default): an `atempo`
+// chain factored into steps within atempo's portable 0.5..2.0 range. Pitch
+// off: resample trick (asetrate to speed*48k, aresample back), which shifts
+// pitch with speed like a tape.
+func audioSpeedParts(speed float64, reverse, pitchOff bool) []string {
+	var out []string
+	if reverse {
+		out = append(out, "areverse")
+	}
+	if speed > 0 && speed != 1 {
+		if pitchOff {
+			out = append(out,
+				fmt.Sprintf("asetrate=%d", int(math.Round(48000*speed))),
+				"aresample=48000",
+			)
+		} else {
+			for _, f := range atempoFactors(speed) {
+				out = append(out, "atempo="+formatTempo(f))
+			}
+		}
+	}
+	if len(out) > 0 {
+		// Re-zero so volume/fade expressions keep reading clip-local TIMELINE time.
+		out = append(out, "asetpts=PTS-STARTPTS")
+	}
+	return out
+}
+
+// atempoFactors splits a rate into atempo steps each within [0.5, 2.0] whose
+// product is the rate: whole 2.0 (or 0.5) steps, then one remainder step.
+func atempoFactors(speed float64) []float64 {
+	if speed <= 0 || speed == 1 {
+		return nil
+	}
+	var fs []float64
+	rem := speed
+	for rem > 2.0+1e-9 {
+		fs = append(fs, 2.0)
+		rem /= 2.0
+	}
+	for rem < 0.5-1e-9 {
+		fs = append(fs, 0.5)
+		rem /= 0.5
+	}
+	if math.Abs(rem-1) > 1e-9 {
+		fs = append(fs, rem)
+	}
+	return fs
+}
+
+// formatTempo prints a rate with enough precision for the setpts/atempo math
+// (formatGain's 3 decimals would drift a factored chain).
+func formatTempo(v float64) string {
+	return strconv.FormatFloat(v, 'f', 6, 64)
 }
 
 func clampDurExport(in, out float64) float64 {
