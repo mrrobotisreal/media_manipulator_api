@@ -45,6 +45,12 @@ type Subscription struct {
 	CustomerID        string
 	Status            string
 	CancelAtPeriodEnd bool
+	// CancelAt is Stripe's scheduled cancellation date (the portal sets it on
+	// newer API versions); zero = none.
+	CancelAt time.Time
+	// ItemID / PriceID are the first (only) item's ids, needed to swap its price.
+	ItemID  string
+	PriceID string
 	// CurrentPeriodEnd is items.data[0].current_period_end. The Subscription-level
 	// field was removed in recent API versions; the item-level one is valid on all.
 	CurrentPeriodEnd time.Time
@@ -59,6 +65,21 @@ type Subscription struct {
 	// VisitorID / SessionID are the browser analytics ids stamped by Checkout.
 	VisitorID string
 	SessionID string
+}
+
+// IsCancelling reports a subscription that ends on its own: cancel_at_period_end,
+// or a cancel_at that is still in the future.
+//
+// A cancel_at beyond the current period end does not count: the subscription
+// still renews at least once, so it is not "ending" yet.
+func (s *Subscription) IsCancelling(now time.Time) bool {
+	if s.CancelAtPeriodEnd {
+		return true
+	}
+	if s.CancelAt.IsZero() || !s.CancelAt.After(now) {
+		return false
+	}
+	return s.CurrentPeriodEnd.IsZero() || !s.CancelAt.After(s.CurrentPeriodEnd)
 }
 
 // IsTerminal reports whether the status can never become active again
@@ -129,6 +150,12 @@ type BillingClient interface {
 	// ConstructEvent verifies the Stripe-Signature header (5 minute tolerance)
 	// against the raw body and returns the reduced event.
 	ConstructEvent(payload []byte, signatureHeader string) (Event, error)
+	// ResumeSubscription un-cancels a subscription in ONE Stripe update:
+	// cancel_at_period_end=false, cancel_at cleared, and (when newPriceID != "")
+	// the single item's price swapped, with no proration and the billing cycle
+	// anchor unchanged. Idempotency key retain-<subID>-<offer>. Returns the
+	// updated subscription.
+	ResumeSubscription(ctx context.Context, subID, itemID, newPriceID, offer string) (*Subscription, error)
 }
 
 // UI locales the site ships, as URL prefixes.

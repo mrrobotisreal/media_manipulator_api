@@ -18,7 +18,7 @@ type Decision struct {
 //	canceled|unpaid|incomplete_expired|paused      -> free, source default, no expiry
 //	incomplete (and anything unknown)              -> no change
 //
-// cancel_at_period_end is deliberately ignored: the tier stays premium until
+// cancel_at_period_end is deliberately ignored (cancel_at only shortens the expiry): the tier stays premium until
 // the period ends and tiers.Resolve downgrades it by expiry.
 func Entitlement(sub *Subscription, now time.Time, grace time.Duration) Decision {
 	if sub == nil {
@@ -31,6 +31,10 @@ func Entitlement(sub *Subscription, now time.Time, grace time.Duration) Decision
 			return Decision{}
 		}
 		end := sub.CurrentPeriodEnd.UTC()
+		// A scheduled cancel_at inside this period is when Premium really ends.
+		if !sub.CancelAt.IsZero() && sub.CancelAt.After(now) && sub.CancelAt.Before(end) {
+			end = sub.CancelAt.UTC()
+		}
 		return Decision{Change: true, Tier: "premium", Source: "subscription", ExpiresAt: &end}
 	case StatusPastDue:
 		end := now.Add(grace).UTC()

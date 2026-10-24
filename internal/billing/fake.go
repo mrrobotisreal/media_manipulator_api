@@ -26,6 +26,7 @@ type FakeClient struct {
 	PortalErr         error
 	GetSubErr         error
 	CancelErr         error // MM24
+	ResumeErr         error
 
 	// Recorded calls.
 	CustomersCreated int
@@ -33,9 +34,17 @@ type FakeClient struct {
 	PortalCalls      []string
 	GetSubCalls      []string
 	CancelCalls      []string // MM24
+	ResumeCalls      []ResumeCall
+
+	// PriceCents maps a price id to its unit amount; ResumeSubscription applies
+	// it to the stored subscription when the price is swapped.
+	PriceCents map[string]int64
 
 	customers map[string]string // user id -> customer id (idempotency key semantics)
 }
+
+// ResumeCall records one ResumeSubscription call.
+type ResumeCall struct{ SubID, ItemID, NewPriceID, Offer string }
 
 // NewFakeClient returns a FakeClient with a webhook secret.
 func NewFakeClient(webhookSecret string) *FakeClient {
@@ -126,6 +135,29 @@ func (f *FakeClient) GetCheckoutSession(_ context.Context, id string) (*Checkout
 
 func (f *FakeClient) ConstructEvent(payload []byte, signatureHeader string) (Event, error) {
 	return constructEvent(f.WebhookSecret, payload, signatureHeader)
+}
+
+func (f *FakeClient) ResumeSubscription(_ context.Context, subID, itemID, newPriceID, offer string) (*Subscription, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ResumeCalls = append(f.ResumeCalls, ResumeCall{subID, itemID, newPriceID, offer})
+	if f.ResumeErr != nil {
+		return nil, f.ResumeErr
+	}
+	s, ok := f.Subscriptions[subID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	s.CancelAtPeriodEnd = false
+	s.CancelAt = time.Time{}
+	if newPriceID != "" {
+		s.PriceID = newPriceID
+		if c, ok := f.PriceCents[newPriceID]; ok {
+			s.UnitAmountCents = &c
+		}
+	}
+	cp := *s
+	return &cp, nil
 }
 
 // SignPayload builds a valid Stripe-Signature header for payload with secret at
