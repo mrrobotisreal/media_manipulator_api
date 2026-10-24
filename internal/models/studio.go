@@ -446,6 +446,11 @@ type StudioAsset struct {
 	Channels           *int            `json:"channels,omitempty"`
 	ProbeJSON          any             `json:"probeJson"` // full ffprobe payload for debugging
 	CreatedAt          time.Time       `json:"createdAt"`
+	// Bin organization (part 21): server state, not part of the EDL. Empty =
+	// unset (display falls back to originalFileName / no folder / no label).
+	DisplayName string `json:"displayName,omitempty"`
+	Folder      string `json:"folder,omitempty"`
+	Label       string `json:"label,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

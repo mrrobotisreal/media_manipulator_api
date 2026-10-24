@@ -42,6 +42,11 @@ type fakeData struct {
 	pinRows    int64
 	detached   []string
 	rowDeletes []string
+	// part 21 asset delete
+	assetProj   string
+	assetFound  bool
+	assetKeys   []string
+	assetRowDel []string
 }
 
 func (f *fakeData) JobRecord(context.Context, string) (telemetry.JobRecord, error) { return f.rec, nil }
@@ -59,6 +64,16 @@ func (f *fakeData) ProjectOwner(context.Context, string) (string, string, bool, 
 func (f *fakeData) DeleteStudioProjectRows(_ context.Context, id string) ([]string, error) {
 	f.rowDeletes = append(f.rowDeletes, id)
 	return nil, nil
+}
+func (f *fakeData) AssetProject(context.Context, string) (string, bool, error) {
+	return f.assetProj, f.assetFound, nil
+}
+func (f *fakeData) StudioAssetKeys(context.Context, string) ([]string, bool, error) {
+	return f.assetKeys, len(f.assetKeys) > 0, nil
+}
+func (f *fakeData) DeleteStudioAssetRow(_ context.Context, id string) error {
+	f.assetRowDel = append(f.assetRowDel, id)
+	return nil
 }
 func (f *fakeData) ExpireNow(_ context.Context, fl telemetry.LedgerFilter) (retention.ExpireResult, error) {
 	f.filters = append(f.filters, fl)
@@ -82,6 +97,7 @@ func dataRouter(f *fakeData, user *models.User) (*gin.Engine, *services.JobManag
 	r.DELETE("/jobs/:jobId", dh.DeleteJob)
 	r.PATCH("/jobs/:jobId/retention", dh.KeepJobLonger)
 	r.DELETE("/studio/projects/:id", sh.DeleteProject)
+	r.DELETE("/studio/assets/:id", sh.DeleteAsset)
 	return r, jm
 }
 

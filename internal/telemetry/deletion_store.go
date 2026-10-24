@@ -25,12 +25,15 @@ type LedgerFilter struct {
 	SessionID string
 	JobID     string
 	ProjectID string
+	// AssetID narrows to one Darkroom asset's own ledger row (kind studio_asset,
+	// locator = the asset id). Part 21 asset delete.
+	AssetID string
 }
 
 // Valid reports whether the filter is safe to run.
 func (f LedgerFilter) Valid() bool {
 	return strings.TrimSpace(f.UserID) != "" || strings.TrimSpace(f.SessionID) != "" ||
-		strings.TrimSpace(f.JobID) != "" || strings.TrimSpace(f.ProjectID) != ""
+		strings.TrimSpace(f.JobID) != "" || strings.TrimSpace(f.ProjectID) != "" || strings.TrimSpace(f.AssetID) != ""
 }
 
 // where renders the filter as SQL conditions over mm_retained_objects (alias o)
@@ -54,6 +57,10 @@ func (f LedgerFilter) where(start int) (string, []any) {
 	}
 	if strings.TrimSpace(f.ProjectID) != "" {
 		add("o.project_id = $%d::uuid", f.ProjectID)
+	}
+	if strings.TrimSpace(f.AssetID) != "" {
+		conds = append(conds, "o.kind = 'studio_asset'")
+		add("o.locator = $%d", f.AssetID)
 	}
 	return strings.Join(conds, " AND "), args
 }
@@ -160,6 +167,24 @@ SELECT count(*), max(expires_at) FROM upd`, userID, jobID, until).Scan(&n, &late
 		return n, time.Time{}, err
 	}
 	return n, *latest, nil
+}
+
+// AssetProject returns the project an asset belongs to. found is false when the
+// asset does not exist (or the id is not a uuid).
+func (s *Store) AssetProject(ctx context.Context, assetID string) (projectID string, found bool, err error) {
+	if !s.Enabled() {
+		return "", false, ErrNoStore
+	}
+	if uuidOrNil(assetID) == nil {
+		return "", false, nil
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	err = s.Pool.QueryRow(ctx, `SELECT project_id::text FROM studio_assets WHERE id = $1::uuid`, assetID).Scan(&projectID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	return projectID, err == nil, err
 }
 
 // ProjectOwner reads a Darkroom project's owner columns. found is false when the

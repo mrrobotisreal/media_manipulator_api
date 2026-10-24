@@ -318,7 +318,8 @@ INSERT INTO studio_assets (
 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 RETURNING id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks,
           media_kind, duration_seconds, width, height, fps, video_codec, audio_codec,
-          has_audio, sample_rate, channels, probe_json, created_at
+          has_audio, sample_rate, channels, probe_json, created_at,
+       coalesce(display_name, ''), coalesce(folder, ''), coalesce(label, '')
 `,
 		a.ProjectID, a.OriginalFileName, a.S3KeyOriginal, string(a.MediaKind), a.DurationSeconds,
 		a.Width, a.Height, a.FPS, nullableStr(a.VideoCodec), nullableStr(a.AudioCodec), a.HasAudio,
@@ -349,7 +350,8 @@ func (r *StudioRepository) GetAsset(ctx context.Context, id string) (*models.Stu
 	row := r.pool.QueryRow(ctx, `
 SELECT id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks,
        media_kind, duration_seconds, width, height, fps, video_codec, audio_codec,
-       has_audio, sample_rate, channels, probe_json, created_at
+       has_audio, sample_rate, channels, probe_json, created_at,
+       coalesce(display_name, ''), coalesce(folder, ''), coalesce(label, '')
 FROM studio_assets WHERE id = $1
 `, id)
 	a, err := scanAsset(row)
@@ -363,7 +365,8 @@ func (r *StudioRepository) ListAssets(ctx context.Context, projectID string) ([]
 	rows, err := r.pool.Query(ctx, `
 SELECT id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks,
        media_kind, duration_seconds, width, height, fps, video_codec, audio_codec,
-       has_audio, sample_rate, channels, probe_json, created_at
+       has_audio, sample_rate, channels, probe_json, created_at,
+       coalesce(display_name, ''), coalesce(folder, ''), coalesce(label, '')
 FROM studio_assets WHERE project_id = $1 ORDER BY created_at
 `, projectID)
 	if err != nil {
@@ -434,6 +437,7 @@ func scanAsset(row scannable) (*models.StudioAsset, error) {
 		&a.ID, &a.ProjectID, &a.OriginalFileName, &a.S3KeyOriginal, &proxyKey, &spriteKey, &peaksKey,
 		&kind, &a.DurationSeconds, &a.Width, &a.Height, &a.FPS, &videoCodec, &audioCodec,
 		&a.HasAudio, &a.SampleRate, &a.Channels, &probe, &a.CreatedAt,
+		&a.DisplayName, &a.Folder, &a.Label,
 	); err != nil {
 		return nil, err
 	}
@@ -480,4 +484,41 @@ func computeProjectDuration(tracks []models.StudioTrack) float64 {
 		}
 	}
 	return end
+}
+
+// StudioAssetMetaPatch is a partial update of the bin-organization columns.
+// A nil field is left alone; a non-nil empty string clears the column.
+type StudioAssetMetaPatch struct {
+	DisplayName *string
+	Folder      *string
+	Label       *string
+}
+
+// UpdateAssetMeta applies patch to one asset and returns the updated row.
+func (r *StudioRepository) UpdateAssetMeta(ctx context.Context, id string, patch StudioAssetMetaPatch) (*models.StudioAsset, error) {
+	pick := func(p *string) (any, bool) {
+		if p == nil {
+			return nil, false
+		}
+		return nullableStr(*p), true
+	}
+	dn, dnSet := pick(patch.DisplayName)
+	fo, foSet := pick(patch.Folder)
+	lb, lbSet := pick(patch.Label)
+	row := r.pool.QueryRow(ctx, `
+UPDATE studio_assets SET
+  display_name = CASE WHEN $2::bool THEN $3::text ELSE display_name END,
+  folder       = CASE WHEN $4::bool THEN $5::text ELSE folder END,
+  label        = CASE WHEN $6::bool THEN $7::text ELSE label END
+WHERE id = $1
+RETURNING id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks,
+          media_kind, duration_seconds, width, height, fps, video_codec, audio_codec,
+          has_audio, sample_rate, channels, probe_json, created_at,
+          coalesce(display_name, ''), coalesce(folder, ''), coalesce(label, '')
+`, id, dnSet, dn, foSet, fo, lbSet, lb)
+	a, err := scanAsset(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrStudioNotFound
+	}
+	return a, err
 }

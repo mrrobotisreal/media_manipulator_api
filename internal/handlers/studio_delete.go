@@ -8,13 +8,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// MM24: DELETE /api/studio/projects/:id. Separate from part 21's asset-level
-// delete, which this does not touch.
+// MM24: DELETE /api/studio/projects/:id. The asset-level delete (part 21) lives
+// in studio_assets_manage.go and shares this store and the sweeper.
 
 // ProjectDeleteStore is the slice of *telemetry.Store project deletion needs.
 type ProjectDeleteStore interface {
 	ProjectOwner(ctx context.Context, projectID string) (userID, sessionID string, found bool, err error)
 	DeleteStudioProjectRows(ctx context.Context, projectID string) ([]string, error)
+	// Part 21 asset delete.
+	AssetProject(ctx context.Context, assetID string) (projectID string, found bool, err error)
+	StudioAssetKeys(ctx context.Context, assetID string) ([]string, bool, error)
+	DeleteStudioAssetRow(ctx context.Context, assetID string) error
 }
 
 // SetDeletion attaches the inline sweeper and the store. nil = the route 503s.
