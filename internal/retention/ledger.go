@@ -22,6 +22,9 @@ const (
 	KindStudioProject = telemetry.RetainedStudioProject
 	KindMetadata      = telemetry.RetainedMetadata
 	KindJobRow        = telemetry.RetainedJobRow
+	// KindVectorProject is a Motion project row (MM43); its thumbnail is an
+	// s3_object row carrying the project id.
+	KindVectorProject = telemetry.RetainedVectorProject
 )
 
 // Store is the slice of *telemetry.Store the ledger needs. Tests pass a fake.

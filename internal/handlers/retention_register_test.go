@@ -97,6 +97,18 @@ func producers() []producer {
 			invoke: func(c *gin.Context) { studio.registerKey(c, "sess-1", "studio/20261023/sess-1/d.wav", "", "proj-1", 0) }},
 		{name: "studio export dirs", file: "studio.go", call: "registerJobDirs(c, job.ID, true, true)", kind: "output_dir", locator: job,
 			invoke: func(c *gin.Context) { registerJobDirs(c, job, false, true) }},
+		// MM43 Motion: the project row and its thumbnail (an S3 child of the project).
+		{name: "vector create project", file: "vector.go", call: "Kind: retention.KindVectorProject, Locator: p.ID", kind: "vector_project", locator: "vp-1",
+			invoke: func(c *gin.Context) {
+				retention.Default().Register(detachedCtx(c), retention.RegisterInput{
+					Kind: retention.KindVectorProject, Locator: "vp-1", Owner: retentionOwnerFor(c), ProjectID: "vp-1"})
+			}},
+		{name: "vector thumbnail key", file: "vector.go", call: "RegisterS3(detachedCtx(c), retentionOwnerFor(c), key", kind: "s3_object", locator: "vector/u/vp-1/thumb.png",
+			invoke: func(c *gin.Context) {
+				retention.Default().RegisterS3(detachedCtx(c), retentionOwnerFor(c), "vector/u/vp-1/thumb.png", "", "", "vp-1", 1)
+			}},
+		{name: "vector vectorize dirs", file: "vector_vectorize.go", call: "registerJobDirs(c, job.ID, true, true)", kind: "upload_dir", locator: job,
+			invoke: func(c *gin.Context) { registerJobDirs(c, job, true, false) }},
 	}
 }
 

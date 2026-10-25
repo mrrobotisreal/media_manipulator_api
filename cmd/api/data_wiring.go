@@ -25,7 +25,7 @@ import (
 // the caller just asked to delete.
 func wireDataControls(ctx context.Context, cfg *config.Config, store *telemetry.Store, jobManager *services.JobManager,
 	s3Client *s3.Client, conversion *handlers.ConversionHandler, studio *handlers.StudioHandler,
-	account *handlers.AccountHandler, limiter *limits.Limiter, m *metrics.Registry,
+	vector *handlers.VectorHandler, account *handlers.AccountHandler, limiter *limits.Limiter, m *metrics.Registry,
 	emitter *analyticsemit.Emitter, mailer handlers.AccountDeletedMailer, log *slog.Logger) {
 
 	var objStore retention.ObjectStore
@@ -35,7 +35,7 @@ func wireDataControls(ctx context.Context, cfg *config.Config, store *telemetry.
 	sweeper := retention.NewSweeper(store, retention.OSDisk{}, objStore, jobManager.ActiveJobIDs,
 		retention.NewMeter(m), log, retention.SweepConfig{
 			UploadDir: cfg.UploadDir, OutputDir: cfg.OutputDir, Bucket: cfg.S3Bucket,
-			AllowedPrefixes: []string{"videos", cfg.S3ResultPrefix, cfg.ContentStudioS3Prefix},
+			AllowedPrefixes: retentionS3Prefixes(cfg),
 			Batch:           cfg.RetentionSweepBatch, Budget: cfg.RetentionSweepBudget,
 			MaxAttempts: cfg.RetentionMaxAttempts,
 		})
@@ -49,6 +49,8 @@ func wireDataControls(ctx context.Context, cfg *config.Config, store *telemetry.
 	conversion.SetShareHandler(handlers.NewShareHandler(conversion, store, jobManager, cfg, log))
 	studio.SetDeletion(sweeper, store)
 	studio.SetDeletionMetric(func(scope string) { m.DataDeleted(scope) })
+	vector.SetDeletion(sweeper)
+	vector.SetDeletionMetric(func(scope string) { m.DataDeleted(scope) })
 
 	// Account-wide: delete-all, export, revoke, account deletion.
 	acct := handlers.NewAccountDataHandler(store, sweeper, jobManager, log)

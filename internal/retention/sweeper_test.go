@@ -740,3 +740,42 @@ func TestJobDirPathContainment(t *testing.T) {
 		t.Error("unset root must not resolve")
 	}
 }
+
+// MM43: a Motion project row sweeps row first, then its thumbnail (named by the
+// row AND by its s3_object ledger row; both resolve to the same key).
+func TestSweepVectorProjectRowThenThumbnail(t *testing.T) {
+	e := newSweepEnv(t)
+	e.cfg.AllowedPrefixes = append(e.cfg.AllowedPrefixes, "vector")
+	thumb := "vector/user-1/vp-1/thumb.png"
+	e.db.vectors["vp-1"] = thumb
+	e.db.add(telemetry.LedgerRow{Kind: KindS3Object, Locator: thumb, ProjectID: "vp-1", OwnerUserID: "user-1",
+		ExpiresAt: sweepT0.Add(time.Hour)})
+	row := e.db.add(telemetry.LedgerRow{Kind: KindVectorProject, Locator: "vp-1", ProjectID: "vp-1", OwnerUserID: "user-1"})
+
+	e.sweep()
+
+	if _, still := e.db.vectors["vp-1"]; still {
+		t.Error("vector project row must be deleted")
+	}
+	if row.DeletedAt == nil {
+		t.Fatal("vector project ledger row should be done")
+	}
+	if !e.s3.gone[thumb] {
+		t.Errorf("thumbnail %s not deleted (calls %v)", thumb, e.s3.calls)
+	}
+	if e.db.byLocator(KindS3Object, thumb).DeletedAt == nil {
+		t.Error("thumbnail ledger row should be stamped")
+	}
+}
+
+// The thumbnail key outside the sweeper's allowed prefixes is refused and the
+// project row stays retryable: the vector/ prefix must be wired in boot config.
+func TestSweepVectorProjectThumbnailNeedsAllowedPrefix(t *testing.T) {
+	e := newSweepEnv(t)
+	e.db.vectors["vp-2"] = "vector/user-1/vp-2/thumb.png"
+	row := e.db.add(telemetry.LedgerRow{Kind: KindVectorProject, Locator: "vp-2", ProjectID: "vp-2", OwnerUserID: "user-1"})
+	e.sweep()
+	if row.DeletedAt != nil || row.Attempts != 1 {
+		t.Fatalf("a refused thumbnail delete must leave the row retryable: %+v", row)
+	}
+}

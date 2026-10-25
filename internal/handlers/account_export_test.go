@@ -40,8 +40,11 @@ func (f *fakeExport) ExportJobs(context.Context, string) ([]telemetry.ExportJob,
 	return f.jobs, f.err
 }
 func (f *fakeExport) ExportProjects(context.Context, string) ([]telemetry.ExportProject, error) {
-	return []telemetry.ExportProject{{ID: "p1", Name: "My cut", AssetCount: 3, DurationSeconds: 12.5,
-		CreatedAt: time.Unix(1, 0), UpdatedAt: time.Unix(2, 0)}}, nil
+	return []telemetry.ExportProject{{Kind: "studio", ID: "p1", Name: "My cut", AssetCount: 3, DurationSeconds: 12.5,
+		CreatedAt: time.Unix(1, 0), UpdatedAt: time.Unix(2, 0)},
+		// MM43: a Motion project rides the same projects.json.
+		{Kind: "vector", ID: "vp1", Name: "Logo loop", DurationSeconds: 3,
+			CreatedAt: time.Unix(3, 0), UpdatedAt: time.Unix(4, 0)}}, nil
 }
 func (f *fakeExport) ExportFiles(_ context.Context, _ string, now time.Time) ([]telemetry.ExportFile, error) {
 	// Same rule as the SQL: deleted rows are not returned; expired are filtered here.
@@ -106,6 +109,9 @@ func TestExportZipMembersAndContent(t *testing.T) {
 			{Kind: "output_dir", JobID: "job-1", SizeBytes: 100, CreatedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)},
 			{Kind: "s3_object", JobID: "job-0", SizeBytes: 5, CreatedAt: now.Add(-48 * time.Hour), ExpiresAt: now.Add(-time.Hour)}, // expired
 			{Kind: "metadata_report", JobID: "job-1", SizeBytes: 1, CreatedAt: now, ExpiresAt: telemetry.ParkedExpiry, Parked: true},
+			// MM43: a Motion project row and its thumbnail are held files too.
+			{Kind: "vector_project", ProjectID: "vp1", SizeBytes: 900, CreatedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)},
+			{Kind: "s3_object", ProjectID: "vp1", SizeBytes: 20000, CreatedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)},
 		},
 		meta: []string{"job-1", "../etc"},
 	}
@@ -138,8 +144,26 @@ func TestExportZipMembersAndContent(t *testing.T) {
 		Files []map[string]any `json:"files"`
 	}
 	_ = json.Unmarshal(content["files.json"], &files)
-	if len(files.Files) != 2 {
+	if len(files.Files) != 4 {
 		t.Fatalf("expired and deleted objects must be excluded: %d files %s", len(files.Files), content["files.json"])
+	}
+	var sawVectorRow, sawThumb bool
+	for _, fl := range files.Files {
+		if fl["projectId"] == "vp1" {
+			sawVectorRow = sawVectorRow || fl["kind"] == "vector_project"
+			sawThumb = sawThumb || fl["kind"] == "s3_object"
+		}
+	}
+	if !sawVectorRow || !sawThumb {
+		t.Errorf("files.json must list the Motion project and its thumbnail: %s", content["files.json"])
+	}
+	var projs []map[string]any
+	_ = json.Unmarshal(content["projects.json"], &projs)
+	if len(projs) != 2 || projs[0]["kind"] != "studio" || projs[1]["kind"] != "vector" || projs[1]["name"] != "Logo loop" {
+		t.Errorf("projects.json must carry both kinds: %s", content["projects.json"])
+	}
+	if strings.Contains(string(content["projects.json"]), "vector/") {
+		t.Error("projects.json must not expose the thumbnail storage key")
 	}
 	for _, fl := range files.Files {
 		if fl["jobId"] == "job-0" {

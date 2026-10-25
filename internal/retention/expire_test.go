@@ -189,3 +189,38 @@ func TestExpireNowDeletesMetadataReportsEvenWhenOwnerKeepsThem(t *testing.T) {
 		t.Errorf("nothing may be parked by a user delete: %v", e.db.parked)
 	}
 }
+
+// MM43: account deletion (and delete-all) expire every ledger row of the user;
+// a Motion project row and its thumbnail object are among them and both go.
+func TestExpireNowByUserCoversVectorProjectAndThumbnail(t *testing.T) {
+	e := newSweepEnv(t)
+	e.cfg.AllowedPrefixes = append(e.cfg.AllowedPrefixes, "vector")
+	future := sweepT0.Add(24 * time.Hour)
+	thumb := "vector/" + user1 + "/vp-1/thumb.png"
+	e.db.vectors["vp-1"] = thumb
+	e.db.add(telemetry.LedgerRow{Kind: KindVectorProject, Locator: "vp-1", ProjectID: "vp-1", OwnerUserID: user1, ExpiresAt: future})
+	e.db.add(telemetry.LedgerRow{Kind: KindS3Object, Locator: thumb, ProjectID: "vp-1", OwnerUserID: user1, ExpiresAt: future})
+	// Another user's Motion project is untouched.
+	e.db.vectors["vp-2"] = ""
+	e.db.add(telemetry.LedgerRow{Kind: KindVectorProject, Locator: "vp-2", ProjectID: "vp-2", OwnerUserID: "someone-else", ExpiresAt: future})
+
+	res, err := e.sweeper().ExpireNow(context.Background(), telemetry.LedgerFilter{UserID: user1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Pending != 0 {
+		t.Fatalf("pending %d", res.Pending)
+	}
+	if _, still := e.db.vectors["vp-1"]; still {
+		t.Error("the user's Motion project row must be gone")
+	}
+	if !has(e.s3.allKeys(), thumb) {
+		t.Errorf("the thumbnail must be deleted: %v", e.s3.allKeys())
+	}
+	if _, kept := e.db.vectors["vp-2"]; !kept {
+		t.Error("another user's Motion project must stay")
+	}
+	if e.db.byLocator(KindVectorProject, "vp-1").DeletedAt == nil || e.db.byLocator(KindS3Object, thumb).DeletedAt == nil {
+		t.Error("both ledger rows must be stamped")
+	}
+}

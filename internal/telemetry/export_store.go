@@ -28,6 +28,8 @@ type ExportJob struct {
 
 // ExportProject is one Darkroom project of the user.
 type ExportProject struct {
+	// Kind is "studio" (Darkroom) or "vector" (Motion, MM43).
+	Kind            string
 	ID              string
 	Name            string
 	CreatedAt       time.Time
@@ -96,13 +98,30 @@ FROM studio_projects p WHERE p.user_id = $1::uuid ORDER BY p.updated_at DESC`, u
 	defer rows.Close()
 	var out []ExportProject
 	for rows.Next() {
-		var e ExportProject
+		e := ExportProject{Kind: "studio"}
 		if err := rows.Scan(&e.ID, &e.Name, &e.CreatedAt, &e.UpdatedAt, &e.DurationSeconds, &e.AssetCount); err != nil {
 			return out, err
 		}
 		out = append(out, e)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return out, err
+	}
+	rows.Close()
+	// MM43: Motion projects (no assets; duration from the document).
+	vrows, err := s.Pool.Query(ctx, vectorExportProjectsSQL, userID)
+	if err != nil {
+		return out, err
+	}
+	defer vrows.Close()
+	for vrows.Next() {
+		e := ExportProject{Kind: "vector"}
+		if err := vrows.Scan(&e.ID, &e.Name, &e.CreatedAt, &e.UpdatedAt, &e.DurationSeconds, &e.AssetCount); err != nil {
+			return out, err
+		}
+		out = append(out, e)
+	}
+	return out, vrows.Err()
 }
 
 // ExportFiles lists the user's live ledger rows (expired-but-unswept rows are

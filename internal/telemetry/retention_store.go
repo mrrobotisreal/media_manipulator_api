@@ -33,6 +33,8 @@ const (
 	RetainedStudioProject = "studio_project"
 	RetainedMetadata      = "metadata_report"
 	RetainedJobRow        = "job_row"
+	// RetainedVectorProject ("vector_project", MM43) is declared in
+	// vector_store.go next to the table it ledgers.
 )
 
 // UserSettings mirrors mm_user_settings.
@@ -210,13 +212,13 @@ func (s *Store) ApplyUserSettings(ctx context.Context, userID string, defaultHou
 }
 
 // previewShrinkQuery counts the live rows whose created_at + window is already
-// past now. Read-only. Results = job output dirs, Projects = Darkroom projects,
-// Other = everything else (uploads, S3 objects, assets, metadata).
+// past now. Read-only. Results = job output dirs, Projects = Darkroom and Motion
+// projects, Other = everything else (uploads, S3 objects, assets, metadata).
 const previewShrinkQuery = `
 SELECT
 	count(*) FILTER (WHERE kind = 'output_dir'),
-	count(*) FILTER (WHERE kind = 'studio_project'),
-	count(*) FILTER (WHERE kind NOT IN ('output_dir', 'studio_project')),
+	count(*) FILTER (WHERE kind IN ('studio_project', 'vector_project')),
+	count(*) FILTER (WHERE kind NOT IN ('output_dir', 'studio_project', 'vector_project')),
 	coalesce(sum(size_bytes), 0)
 FROM mm_retained_objects
 WHERE owner_user_id = $1 AND deleted_at IS NULL
