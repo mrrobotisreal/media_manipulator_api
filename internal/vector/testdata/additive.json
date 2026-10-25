@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 128,
+    "height": 128,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 128,
+      "height": 128
+    },
+    "background": "transparent",
+    "futureGrid": {
+      "size": 8
+    }
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "type": "group",
+      "id": "g1",
+      "locked": true,
+      "attrs": {
+        "data-role": "badge",
+        "paint-order": "stroke"
+      },
+      "children": [
+        {
+          "type": "rect",
+          "id": "r1",
+          "x": 8,
+          "y": 8,
+          "width": 112,
+          "height": 112,
+          "rx": 16,
+          "fill": "#f97316",
+          "futureBlendMode": "multiply"
+        },
+        {
+          "type": "image",
+          "id": "img1",
+          "x": 32,
+          "y": 32,
+          "width": 64,
+          "height": 64,
+          "href": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+          "preserveAspectRatio": "xMidYMid meet"
+        }
+      ]
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": [],
+    "futurePatterns": []
+  },
+  "animations": [],
+  "futureMeta": {
+    "author": "a newer build"
+  }
+}

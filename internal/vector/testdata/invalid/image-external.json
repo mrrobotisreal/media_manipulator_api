@@ -1,0 +1,1 @@
+{ "version": 1, "layers": [{ "type": "image", "id": "i", "x": 0, "y": 0, "width": 1, "height": 1, "href": "https://example.com/a.png" }] }

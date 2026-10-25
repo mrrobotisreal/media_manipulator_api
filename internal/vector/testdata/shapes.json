@@ -1,105 +1,110 @@
 {
   "version": 1,
   "canvas": {
-    "width": 512,
-    "height": 512,
-    "viewBox": "0 0 512 512",
+    "width": 200,
+    "height": 120,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 120
+    },
     "background": "transparent"
   },
   "duration": 3000,
   "fps": 24,
   "layers": [
     {
-      "id": "r1",
       "type": "rect",
-      "name": "Card",
-      "x": 32,
-      "y": 32,
-      "width": 200,
-      "height": 120,
-      "rx": 12,
+      "id": "box",
+      "x": 10,
+      "y": 10,
+      "width": 60,
+      "height": 40,
+      "rx": 6,
+      "fill": "#ff6600",
+      "stroke": "#222",
+      "strokeWidth": 2.5
+    },
+    {
+      "type": "ellipse",
+      "id": "ellipse-1",
+      "cx": 110,
+      "cy": 30,
+      "rx": 20,
+      "ry": 20,
+      "opacity": 0.5,
+      "fill": "#09f"
+    },
+    {
+      "type": "ellipse",
+      "id": "ellipse-2",
+      "cx": 160,
+      "cy": 30,
+      "rx": 25,
       "ry": 12,
-      "fill": "#3366ff",
-      "stroke": "#001133",
-      "strokeWidth": 2,
-      "opacity": 0.9,
+      "fill": "none",
+      "stroke": "black",
+      "strokeDasharray": [
+        4,
+        2
+      ]
+    },
+    {
+      "type": "line",
+      "id": "line-1",
+      "x1": 10,
+      "y1": 80,
+      "x2": 70,
+      "y2": 110,
+      "stroke": "#333",
+      "strokeLinecap": "round"
+    },
+    {
+      "type": "polyline",
+      "id": "polyline-1",
+      "points": [
+        80,
+        80,
+        100,
+        110,
+        120,
+        80
+      ],
+      "fill": "none",
+      "stroke": "green"
+    },
+    {
+      "type": "polygon",
+      "id": "polygon-1",
+      "name": "Triangle",
+      "points": [
+        140,
+        80,
+        190,
+        80,
+        165,
+        115
+      ],
+      "fill": "purple"
+    },
+    {
+      "type": "path",
+      "id": "path-1",
+      "d": "M10 10L30 10L30 30L10 30ZM50 10C60 0 70 20 80 10C90 0 90 20 100 10",
+      "fill": "#0c0",
+      "fillRule": "evenodd",
       "transform": {
-        "x": 10,
+        "x": 5,
         "y": 5,
         "scaleX": 1,
         "scaleY": 1,
-        "rotation": 0
+        "rotation": 15,
+        "skewX": 0,
+        "skewY": 0,
+        "anchorX": 0,
+        "anchorY": 0
       }
-    },
-    {
-      "id": "e1",
-      "type": "ellipse",
-      "cx": 350,
-      "cy": 100,
-      "rx": 80,
-      "ry": 50,
-      "fill": "#ff8800",
-      "opacity": 0.75
-    },
-    {
-      "id": "l1",
-      "type": "line",
-      "x1": 20,
-      "y1": 200,
-      "x2": 240,
-      "y2": 260,
-      "stroke": "#222222",
-      "strokeWidth": 4
-    },
-    {
-      "id": "pl1",
-      "type": "polyline",
-      "points": [
-        260,
-        200,
-        300,
-        260,
-        340,
-        200,
-        380,
-        260
-      ],
-      "fill": "none",
-      "stroke": "#009966",
-      "strokeWidth": 3
-    },
-    {
-      "id": "pg1",
-      "type": "polygon",
-      "points": "400,200 460,230 440,290 380,280",
-      "fill": "#cc2255",
-      "transform": {
-        "x": 0,
-        "y": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "rotation": 15
-      }
-    },
-    {
-      "id": "p1",
-      "type": "path",
-      "d": "M 40 400 C 120 320 200 480 280 400 S 440 320 480 400",
-      "fill": "none",
-      "stroke": "#6600cc",
-      "strokeWidth": 5
-    },
-    {
-      "id": "t1",
-      "type": "text",
-      "text": "Hello <Motion> & friends",
-      "x": 40,
-      "y": 480,
-      "fontSize": 32,
-      "fontFamily": "Inter, sans-serif",
-      "fontWeight": "700",
-      "textAnchor": "start",
-      "fill": "#111111"
     }
   ],
   "defs": {

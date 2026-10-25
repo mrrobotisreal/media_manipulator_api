@@ -1,0 +1,1 @@
+{ "version": 1, "layers": [], "defs": { "symbols": [{ "id": "s1", "layers": [{ "type": "use", "id": "u1", "ref": "s2" }] }, { "id": "s2", "layers": [{ "type": "use", "id": "u2", "ref": "s1" }] }] } }

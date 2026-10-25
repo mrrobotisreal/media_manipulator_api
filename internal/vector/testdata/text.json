@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 320,
+    "height": 120,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 320,
+      "height": 120
+    },
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "type": "text",
+      "id": "text-1",
+      "x": 20,
+      "y": 40,
+      "text": "Hello & welcome",
+      "fontFamily": "Inter, sans-serif",
+      "fontSize": 24,
+      "fontWeight": "700",
+      "fill": "#111"
+    },
+    {
+      "type": "text",
+      "id": "text-2",
+      "x": 160,
+      "y": 80,
+      "text": "centred line",
+      "fontSize": 18,
+      "fontStyle": "italic",
+      "textAnchor": "middle",
+      "letterSpacing": 2,
+      "fill": "#555"
+    },
+    {
+      "type": "raw",
+      "id": "raw-1",
+      "markup": "<text x=\"20\" y=\"110\" fill=\"#900\"><tspan x=\"20\" dy=\"0\">two</tspan><tspan x=\"20\" dy=\"1.2em\">lines</tspan></text>"
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": []
+}

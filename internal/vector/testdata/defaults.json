@@ -3,7 +3,12 @@
   "canvas": {
     "width": 512,
     "height": 512,
-    "viewBox": "0 0 512 512",
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 512,
+      "height": 512
+    },
     "background": "transparent"
   },
   "duration": 3000,

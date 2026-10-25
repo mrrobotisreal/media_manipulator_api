@@ -1,0 +1,1 @@
+{ "version": 1, "layers": [{ "type": "raw", "id": "x", "markup": "<g><script>alert(1)</script></g>" }] }

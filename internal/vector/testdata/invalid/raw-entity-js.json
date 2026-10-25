@@ -1,0 +1,1 @@
+{ "version": 1, "layers": [{ "type": "raw", "id": "x", "markup": "<a href=\"#\"><set attributeName=\"href\" to=\"&#106;avascript:alert(1)\"/></a>" }] }

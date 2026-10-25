@@ -1,74 +1,116 @@
 {
   "version": 1,
   "canvas": {
-    "width": 512,
-    "height": 512,
-    "viewBox": "0 0 512 512",
+    "width": 256,
+    "height": 256,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 256
+    },
     "background": "transparent"
   },
   "duration": 3000,
   "fps": 24,
   "layers": [
     {
-      "id": "g1",
       "type": "group",
-      "name": "Level 1",
-      "transform": {
-        "x": 10,
-        "y": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "rotation": 0
-      },
+      "id": "svg-root-1",
+      "name": "SVG",
+      "fill": "none",
+      "strokeLinejoin": "round",
       "children": [
         {
-          "id": "g2",
           "type": "group",
-          "name": "Level 2",
+          "id": "outer",
+          "name": "Outer",
           "opacity": 0.9,
+          "transform": {
+            "x": 112,
+            "y": 112,
+            "scaleX": 2,
+            "scaleY": 2,
+            "rotation": 30,
+            "skewX": 0,
+            "skewY": 0,
+            "anchorX": 16,
+            "anchorY": 16
+          },
           "children": [
             {
-              "id": "g3",
               "type": "group",
-              "name": "Level 3",
+              "id": "inner",
+              "stroke": "#0af",
+              "strokeWidth": 2,
               "transform": {
-                "x": 0,
-                "y": 0,
+                "x": 4,
+                "y": 4,
                 "scaleX": 1,
                 "scaleY": 1,
-                "rotation": 10
+                "rotation": 0,
+                "skewX": 0,
+                "skewY": 0,
+                "anchorX": 0,
+                "anchorY": 0
               },
               "children": [
                 {
-                  "id": "g4",
+                  "type": "rect",
+                  "id": "rect-1",
+                  "x": 0,
+                  "y": 0,
+                  "width": 24,
+                  "height": 24,
+                  "rx": 4
+                },
+                {
                   "type": "group",
-                  "name": "Level 4",
+                  "id": "hidden-bit",
+                  "hidden": true,
                   "children": [
                     {
-                      "id": "deep",
-                      "type": "rect",
-                      "x": 100,
-                      "y": 100,
-                      "width": 50,
-                      "height": 50,
-                      "fill": "#00aa88"
+                      "type": "ellipse",
+                      "id": "ellipse-1",
+                      "cx": 12,
+                      "cy": 12,
+                      "rx": 3,
+                      "ry": 3,
+                      "fill": "#0af"
                     }
                   ]
                 }
               ]
             }
           ]
+        },
+        {
+          "type": "group",
+          "id": "group-1",
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scaleX": 1,
+            "scaleY": -1,
+            "rotation": 0,
+            "skewX": 10,
+            "skewY": 0,
+            "anchorX": 0,
+            "anchorY": 0
+          },
+          "children": [
+            {
+              "type": "rect",
+              "id": "rect-2",
+              "x": 10,
+              "y": -60,
+              "width": 30,
+              "height": 30,
+              "fill": "#f0a"
+            }
+          ]
         }
       ]
-    },
-    {
-      "id": "top",
-      "type": "ellipse",
-      "cx": 400,
-      "cy": 400,
-      "rx": 30,
-      "ry": 30,
-      "fill": "#aa0000"
     }
   ],
   "defs": {

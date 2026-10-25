@@ -1,73 +1,124 @@
 {
   "version": 1,
   "canvas": {
-    "width": 512,
-    "height": 512,
-    "viewBox": "0 0 512 512",
+    "width": 300,
+    "height": 150,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 300,
+      "height": 150
+    },
     "background": "transparent"
   },
   "duration": 3000,
   "fps": 24,
   "layers": [
     {
-      "id": "bg",
       "type": "rect",
+      "id": "rect-1",
       "x": 0,
       "y": 0,
-      "width": 512,
-      "height": 512,
-      "fill": "url(#lin1)"
+      "width": 140,
+      "height": 150,
+      "fill": "url(#sunset)"
     },
     {
-      "id": "disc",
+      "type": "rect",
+      "id": "rect-2",
+      "x": 150,
+      "y": 0,
+      "width": 70,
+      "height": 70,
+      "fill": "url(#sunset-tilted)"
+    },
+    {
       "type": "ellipse",
-      "cx": 256,
-      "cy": 256,
-      "rx": 120,
-      "ry": 120,
-      "fill": "url( '#rad1' )",
-      "stroke": "url(#lin2)",
-      "strokeWidth": 6
+      "id": "ellipse-1",
+      "cx": 250,
+      "cy": 100,
+      "rx": 45,
+      "ry": 45,
+      "fill": "url(#glow)",
+      "stroke": "red"
     }
   ],
   "defs": {
     "gradients": [
       {
-        "id": "lin1",
-        "kind": "linear",
+        "type": "linear",
+        "id": "sunset",
+        "x1": 0,
+        "y1": 0,
+        "x2": 1,
+        "y2": 0,
         "stops": [
           {
             "offset": 0,
-            "color": "#ff0066"
+            "color": "#ff7e5f"
+          },
+          {
+            "offset": 0.5,
+            "color": "#feb47b",
+            "opacity": 0.8
           },
           {
             "offset": 1,
-            "color": "#3300ff"
+            "color": "#6a3093"
           }
         ]
       },
       {
-        "id": "rad1",
-        "kind": "radial",
+        "type": "linear",
+        "id": "sunset-tilted",
+        "x1": 0,
+        "y1": 0,
+        "x2": 1,
+        "y2": 0,
         "stops": [
           {
             "offset": 0,
-            "color": "#ffffff"
+            "color": "#ff7e5f"
           },
           {
-            "offset": 0.6,
-            "color": "#ffcc00"
+            "offset": 0.5,
+            "color": "#feb47b",
+            "opacity": 0.8
           },
           {
             "offset": 1,
-            "color": "#ff6600"
+            "color": "#6a3093"
           }
+        ],
+        "gradientTransform": [
+          0.707,
+          0.707,
+          -0.707,
+          0.707,
+          0.5,
+          -0.207
         ]
       },
       {
-        "id": "lin2",
-        "kind": "linear",
-        "href": "#lin1"
+        "type": "radial",
+        "id": "glow",
+        "cx": 0.5,
+        "cy": 0.5,
+        "r": 0.5,
+        "fx": 0.3,
+        "fy": 0.3,
+        "stops": [
+          {
+            "offset": 0,
+            "color": "white"
+          },
+          {
+            "offset": 1,
+            "color": "#003",
+            "opacity": 0
+          }
+        ],
+        "spreadMethod": "reflect"
       }
     ],
     "masks": [],
