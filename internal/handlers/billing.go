@@ -93,9 +93,10 @@ func (h *BillingHandler) intervalPrice(interval string) (string, bool) {
 	return "", false
 }
 
-// liveManualGrant reports an unexpired (or non-expiring) premium manual grant.
+// liveManualGrant reports an unexpired (or non-expiring) paid (premium or pro)
+// manual grant.
 func liveManualGrant(u *models.User, now time.Time) bool {
-	if u.Tier != "premium" || u.TierSource != "manual_grant" {
+	if !tiers.Paid(tiers.Tier(u.Tier)) || u.TierSource != "manual_grant" {
 		return false
 	}
 	return u.TierExpiresAt == nil || u.TierExpiresAt.After(now)

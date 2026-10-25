@@ -42,6 +42,14 @@ type Mailer interface {
 	PaymentFailed(*models.User)
 }
 
+// Metrics is the slice of *metrics.Registry the processor reports to. Nil = no
+// metrics.
+type Metrics interface {
+	// BillingUnknownPrice counts a granting decision whose price id was not in
+	// the PriceTiers table (mm_billing_unknown_price_total).
+	BillingUnknownPrice()
+}
+
 // GrantedByStripe is mm_tier_grants.granted_by for every webhook-driven change.
 const GrantedByStripe = "stripe"
 
@@ -54,7 +62,12 @@ type Processor struct {
 	// Mailer sends the payment-failed email. Nil = no email.
 	Mailer Mailer
 	Grace  time.Duration
-	Log    *slog.Logger
+	// Prices maps price ids to tiers (NewPriceTiers). Nil = every price is
+	// unknown, i.e. premium.
+	Prices PriceTiers
+	// Metrics counts unknown price ids. Nil = none.
+	Metrics Metrics
+	Log     *slog.Logger
 	// Now is injectable for tests.
 	Now func() time.Time
 }
@@ -228,8 +241,17 @@ func (p *Processor) apply(ctx context.Context, ev Event) (note string, err error
 	}
 
 	now := p.now()
-	d := Entitlement(sub, now, p.Grace)
-	if ev.Type == EventInvoicePaymentFailed && d.Change && d.Tier == "premium" {
+	d := Entitlement(sub, now, p.Grace, p.Prices)
+	if d.UnknownPrice {
+		// A price we do not sell (or a mis-set STRIPE_PRICE_* env): premium,
+		// never pro. Ids only; no customer data.
+		p.logger().Warn("billing: subscription price id is not configured; granting premium",
+			"eventId", ev.ID, "subscriptionId", sub.ID, "priceId", sub.PriceID)
+		if p.Metrics != nil {
+			p.Metrics.BillingUnknownPrice()
+		}
+	}
+	if ev.Type == EventInvoicePaymentFailed && d.Change && tiers.Paid(tiers.Tier(d.Tier)) {
 		if floor := now.Add(p.Grace); d.ExpiresAt == nil || d.ExpiresAt.Before(floor) {
 			d.ExpiresAt = &floor
 		}
@@ -309,17 +331,22 @@ func (p *Processor) resolveUser(ctx context.Context, ev Event, sub *Subscription
 	return nil, nil
 }
 
-// manualGrantWins implements manual-grant precedence: a live manual Premium
-// grant is never touched by a webhook unless the subscription would outlast it.
+// manualGrantWins implements manual-grant precedence: a live manual paid grant
+// (premium or pro) is never touched by a webhook unless the subscription grants
+// at least the same tier and would outlast it.
 func manualGrantWins(u *models.User, d Decision, now time.Time) bool {
-	if u.Tier != "premium" || u.TierSource != "manual_grant" {
+	granted := tiers.Tier(u.Tier)
+	if !tiers.Paid(granted) || u.TierSource != "manual_grant" {
 		return false
 	}
 	if u.TierExpiresAt != nil && !u.TierExpiresAt.After(now) {
 		return false // the grant already lapsed
 	}
-	if d.Tier != "premium" || d.ExpiresAt == nil {
+	if !tiers.Paid(tiers.Tier(d.Tier)) || d.ExpiresAt == nil {
 		return true // never let a webhook downgrade a live manual grant
+	}
+	if tiers.Rank(tiers.Tier(d.Tier)) < tiers.Rank(granted) {
+		return true // a premium subscription never replaces a live manual pro grant
 	}
 	return u.TierExpiresAt == nil || u.TierExpiresAt.After(*d.ExpiresAt)
 }
