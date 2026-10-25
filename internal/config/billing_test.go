@@ -109,3 +109,25 @@ func TestProPurchasable(t *testing.T) {
 		}
 	}
 }
+
+func TestDisplayPrices(t *testing.T) {
+	c := &Config{BillingPriceMonthlyUSD: 8, BillingPriceYearlyUSD: 80, BillingPriceProMonthlyUSD: 15, BillingPriceProYearlyUSD: 150}
+	p := c.DisplayPrices()
+	cases := []struct {
+		plan, interval string
+		want           int
+	}{
+		{PlanPremium, "monthly", 8}, {PlanPremium, "yearly", 80},
+		{PlanPro, "monthly", 15}, {PlanPro, "yearly", 150},
+		{"enterprise", "yearly", 80}, {PlanPro, "", 15},
+	}
+	for _, tc := range cases {
+		if got := p.For(tc.plan, tc.interval); got != tc.want {
+			t.Errorf("For(%q,%q) = %d, want %d", tc.plan, tc.interval, got, tc.want)
+		}
+	}
+	var nilCfg *Config
+	if nilCfg.DisplayPrices() != (DisplayPrices{}) {
+		t.Error("nil config must give zero prices")
+	}
+}

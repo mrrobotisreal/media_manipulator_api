@@ -58,6 +58,10 @@ func billingCfg(on bool) *config.Config {
 		BillingPublicBaseURL:      "https://media-manipulator.com",
 		BillingPriceMonthlyUSD:    8,
 		BillingPriceYearlyUSD:     80,
+		StripePriceProMonthly:     "price_pro_monthly_cfg",
+		StripePriceProYearly:      "price_pro_yearly_cfg",
+		BillingPriceProMonthlyUSD: 15,
+		BillingPriceProYearlyUSD:  150,
 		OperatorEmails:            []string{"owner@example.com"},
 	}
 	return cfg
@@ -402,6 +406,18 @@ func TestTiersResponseIsConfigDriven(t *testing.T) {
 	}
 	if m := get(billingCfg(false)); m["premiumPurchasable"] != false || m["premiumPriceYearlyUSD"] != float64(80) {
 		t.Fatalf("off: %v", m)
+	}
+	// MM39: Pro needs both Pro price ids on top of a configured billing.
+	if on["proPurchasable"] != true || on["proPriceUSD"] != float64(15) || on["proPriceYearlyUSD"] != float64(150) {
+		t.Fatalf("pro on: %v", on)
+	}
+	noPro := billingCfg(true)
+	noPro.StripePriceProYearly = ""
+	if m := get(noPro); m["proPurchasable"] != false || m["premiumPurchasable"] != true {
+		t.Fatalf("pro prices unset must not block premium: %v", m)
+	}
+	if m := get(billingCfg(false)); m["proPurchasable"] != false {
+		t.Fatalf("pro off: %v", m)
 	}
 }
 
