@@ -1,6 +1,7 @@
 package tiers
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -122,6 +123,23 @@ func TestLimitsAreMonotonic(t *testing.T) {
 		{"ExportsPerDay", func(l Limits) int64 { return int64(l.ExportsPerDay) }},
 		{"StudioVersionAutoKeep", func(l Limits) int64 { return int64(l.StudioVersionAutoKeep) }},
 		{"ResultRetentionHours", func(l Limits) int64 { return int64(l.ResultRetentionHours) }},
+		// Motion (MM43).
+		{"VectorExportsPerDay", func(l Limits) int64 { return unlimitedHigh(l.VectorExportsPerDay) }},
+		{"VectorProjects", func(l Limits) int64 { return unlimitedHigh(l.VectorProjects) }},
+		{
+			// 0 = no duration cap, which sorts above every finite cap.
+			"VectorMaxDurationMs",
+			func(l Limits) int64 {
+				if l.VectorMaxDurationMs == 0 {
+					return int64(^uint64(0) >> 1)
+				}
+				return int64(l.VectorMaxDurationMs)
+			},
+		},
+		// Raster caps are plain numbers: a tier with no raster format carries 0.
+		{"VectorVideo.MaxHeight", func(l Limits) int64 { return int64(l.VectorVideo.MaxHeight) }},
+		{"VectorVideo.MaxFps", func(l Limits) int64 { return int64(l.VectorVideo.MaxFps) }},
+		{"VectorVideo.MaxSeconds", func(l Limits) int64 { return int64(l.VectorVideo.MaxSeconds) }},
 		{
 			// -1 means unlimited, which sorts above every finite value.
 			"StudioProjects",
@@ -226,6 +244,8 @@ func TestPublishedMatrix(t *testing.T) {
 			MaxOutputHeight: 1080, MaxLadderHeight: 720,
 			StudioProjects: 1, StudioVersionAutoKeep: 20, PriorityGPU: false,
 			ResultRetentionHours: 24, AdsRemoved: false,
+			VectorExportsPerDay: 2, VectorFormats: "svg_animated", VectorProjects: 1,
+			VectorMaxDurationMs: 10000,
 		},
 		TierFree: {
 			OpsPerDay: 30, AIOpsPerDay: 5, ExportsPerDay: 30,
@@ -233,6 +253,8 @@ func TestPublishedMatrix(t *testing.T) {
 			MaxOutputHeight: 1440, MaxLadderHeight: 1080,
 			StudioProjects: 5, StudioVersionAutoKeep: 20, PriorityGPU: false,
 			ResultRetentionHours: 168, AdsRemoved: false,
+			VectorExportsPerDay: 5, VectorProjects: 3,
+			VectorFormats: "svg_animated,lottie,import_lottie,import_svg_vectorize",
 		},
 		TierPremium: {
 			OpsPerDay: 300, AIOpsPerDay: 60, ExportsPerDay: 300,
@@ -240,6 +262,9 @@ func TestPublishedMatrix(t *testing.T) {
 			MaxOutputHeight: 2160, MaxLadderHeight: 2160,
 			StudioProjects: Unlimited, StudioVersionAutoKeep: 20, PriorityGPU: true,
 			ResultRetentionHours: 720, AdsRemoved: true,
+			VectorExportsPerDay: 30, VectorProjects: 25,
+			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,import_lottie,import_svg_vectorize",
+			VectorVideo:   VectorVideo{MaxHeight: 720, MaxSeconds: 15},
 		},
 		TierPro: {
 			OpsPerDay: 700, AIOpsPerDay: 120, ExportsPerDay: 700,
@@ -247,6 +272,9 @@ func TestPublishedMatrix(t *testing.T) {
 			MaxOutputHeight: 2160, MaxLadderHeight: 2160,
 			StudioProjects: Unlimited, StudioVersionAutoKeep: 20, PriorityGPU: true,
 			ResultRetentionHours: 720, AdsRemoved: true,
+			VectorExportsPerDay: 30, VectorProjects: 25,
+			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,import_lottie,import_svg_vectorize",
+			VectorVideo:   VectorVideo{MaxHeight: 720, MaxSeconds: 15},
 		},
 	}
 
@@ -295,5 +323,107 @@ func TestExportsPerDayOverride(t *testing.T) {
 	}
 	if got := r.For(TierPremium).ExportsPerDay; got != 99 {
 		t.Errorf("premium exports = %d", got)
+	}
+}
+
+// unlimitedHigh sorts the -1 "unlimited" sentinel above every finite value.
+func unlimitedHigh(v int) int64 {
+	if v == Unlimited {
+		return int64(^uint64(0) >> 1)
+	}
+	return int64(v)
+}
+
+// Motion formats are a cumulative ladder: tier N+1 can do everything tier N
+// can (design §3.4 "+ Lottie", "+ code exports"). Operator has every format.
+func TestVectorFormatsAreSupersets(t *testing.T) {
+	r := testRegistry(t)
+	ladder := append(All(), TierOperator)
+	for i := 1; i < len(ladder); i++ {
+		lo, hi := r.For(ladder[i-1]).VectorFormats, r.For(ladder[i]).VectorFormats
+		if !hi.SupersetOf(lo) {
+			t.Errorf("%s formats %v are not a superset of %s formats %v", ladder[i], hi.List(), ladder[i-1], lo.List())
+		}
+	}
+	if got := r.For(TierOperator).VectorFormats.List(); len(got) != len(AllVectorFormats()) {
+		t.Errorf("operator formats = %v, want all %d", got, len(AllVectorFormats()))
+	}
+	for _, tier := range ladder {
+		if r.For(tier).VectorFormats.Has(VectorFormatSVGStatic) {
+			t.Errorf("%s: svg_static is uncounted and must never be in a format set", tier)
+		}
+	}
+}
+
+// An env override can widen a tier but can never make a higher tier lose a
+// format the lower one has (the union keeps the ladder).
+func TestVectorFormatsOverrideKeepsLadder(t *testing.T) {
+	t.Setenv("TIER_FREE_VECTOR_FORMATS", "svg_animated,mp4,bogus")
+	t.Setenv("TIER_PREMIUM_VECTOR_FORMATS", "gif")
+	r := testRegistry(t)
+	free, premium := r.For(TierFree).VectorFormats, r.For(TierPremium).VectorFormats
+	if !free.Has(VectorFormatMP4) || free.Has("bogus") || free.Has(VectorFormatLottie) {
+		t.Fatalf("free formats = %v", free.List())
+	}
+	if !premium.Has(VectorFormatGIF) || !premium.Has(VectorFormatMP4) || !premium.Has(VectorFormatSVGAnimated) {
+		t.Fatalf("premium must keep free's formats: %v", premium.List())
+	}
+}
+
+// Pro's Motion row is MM49's; until then it mirrors Premium exactly.
+func TestProVectorRowMirrorsPremium(t *testing.T) {
+	t.Setenv("TIER_PREMIUM_VECTOR_EXPORTS_PER_DAY", "44")
+	r := testRegistry(t)
+	pro, premium := r.For(TierPro), r.For(TierPremium)
+	if pro.VectorExportsPerDay != 44 || pro.VectorFormats != premium.VectorFormats ||
+		pro.VectorProjects != premium.VectorProjects || pro.VectorVideo != premium.VectorVideo ||
+		pro.VectorMaxDurationMs != premium.VectorMaxDurationMs {
+		t.Fatalf("pro vector row must equal premium's:\n pro     %+v\n premium %+v", pro, premium)
+	}
+}
+
+func TestOperatorVectorRow(t *testing.T) {
+	r := testRegistry(t)
+	op := r.For(TierOperator)
+	if op.VectorExportsPerDay != Unlimited || op.VectorProjects != Unlimited || op.VectorMaxDurationMs != 0 {
+		t.Fatalf("operator vector allowances: %+v", op)
+	}
+	if op.VectorVideo.MaxHeight != DeploymentMaxOutputHeight || op.VectorVideo.MaxFps != DeploymentMaxVectorFps {
+		t.Fatalf("operator video cap = %+v, want the deployment ceilings", op.VectorVideo)
+	}
+}
+
+func TestVectorEnvOverrides(t *testing.T) {
+	t.Setenv("TIER_ANON_VECTOR_EXPORTS_PER_DAY", "4")
+	t.Setenv("TIER_FREE_VECTOR_PROJECTS", "-1")
+	t.Setenv("TIER_PREMIUM_VECTOR_VIDEO_MAX_FPS", "30")
+	r := testRegistry(t)
+	if got := r.For(TierAnonymous).VectorExportsPerDay; got != 4 {
+		t.Errorf("anon vector exports = %d", got)
+	}
+	if got := r.For(TierFree).VectorProjects; got != Unlimited {
+		t.Errorf("free vector projects = %d", got)
+	}
+	if got := r.For(TierPremium).VectorVideo.MaxFps; got != 30 {
+		t.Errorf("premium video fps = %d", got)
+	}
+}
+
+func TestFormatSetJSON(t *testing.T) {
+	set := NewFormatSet("gif", "svg_animated", "gif", "svg_static")
+	b, err := json.Marshal(struct {
+		F FormatSet `json:"f"`
+	}{set})
+	if err != nil || string(b) != `{"f":["svg_animated","gif"]}` {
+		t.Fatalf("marshal = %s, %v", b, err)
+	}
+	var back struct {
+		F FormatSet `json:"f"`
+	}
+	if err := json.Unmarshal(b, &back); err != nil || back.F != set {
+		t.Fatalf("unmarshal = %q, %v", back.F, err)
+	}
+	if b, _ := json.Marshal(FormatSet("")); string(b) != "[]" {
+		t.Fatalf("empty set = %s, want []", b)
 	}
 }

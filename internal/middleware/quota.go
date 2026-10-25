@@ -101,6 +101,11 @@ func limitFor(l tiers.Limits, metric string) int64 {
 		return int64(l.ExportsPerDay)
 	case models.MetricAIOps:
 		return int64(l.AIOpsPerDay)
+	case models.MetricVectorExport:
+		// Motion's own allowance (TIER_*_VECTOR_EXPORTS_PER_DAY). Counted by the
+		// vector handler itself, transactionally with the vector_exports row,
+		// not by RequireQuota; listed here so every reader agrees on the limit.
+		return int64(l.VectorExportsPerDay)
 	default:
 		return 0
 	}

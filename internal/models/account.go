@@ -47,6 +47,10 @@ const (
 	MetricAIOps   = "ai_ops"
 	MetricBytesIn = "bytes_in"
 	MetricExport  = "export"
+	// MetricVectorExport is the Motion export allowance (MM43): counted by
+	// POST /api/vector/exports and /api/vector/vectorize inside the same
+	// transaction that writes the vector_exports row.
+	MetricVectorExport = "vector_export"
 )
 
 // UsageCounter is one (subject, metric, day) row of the quota ledger.
