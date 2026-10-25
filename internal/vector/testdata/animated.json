@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 400,
+    "height": 300,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 400,
+      "height": 300
+    },
+    "background": "#0a0b0d"
+  },
+  "duration": 2500,
+  "fps": 30,
+  "layers": [
+    {
+      "type": "ellipse",
+      "id": "ball",
+      "name": "Ball",
+      "cx": 0,
+      "cy": 0,
+      "rx": 20,
+      "ry": 20,
+      "fill": "#22c55e",
+      "transform": {
+        "x": 40,
+        "y": 150,
+        "scaleX": 1,
+        "scaleY": 1,
+        "rotation": 0,
+        "skewX": 0,
+        "skewY": 0,
+        "anchorX": 0,
+        "anchorY": 0
+      }
+    },
+    {
+      "type": "path",
+      "id": "trail",
+      "d": "M40 150C120 40 280 40 360 150",
+      "fill": "none",
+      "stroke": "url(#trail-grad)",
+      "strokeWidth": 4,
+      "strokeDasharray": [
+        400
+      ],
+      "strokeDashoffset": 400
+    }
+  ],
+  "defs": {
+    "gradients": [
+      {
+        "type": "linear",
+        "id": "trail-grad",
+        "x1": 0,
+        "y1": 0,
+        "x2": 1,
+        "y2": 0,
+        "stops": [
+          {
+            "offset": 0,
+            "color": "#22c55e"
+          },
+          {
+            "offset": 1,
+            "color": "#3b82f6",
+            "opacity": 0.5
+          }
+        ]
+      }
+    ],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": [
+    {
+      "layerId": "ball",
+      "property": "transform.x",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 40,
+          "easing": "easeBoth"
+        },
+        {
+          "t": 1200,
+          "value": 360,
+          "easing": {
+            "cubicBezier": [
+              0.25,
+              0.1,
+              0.25,
+              1
+            ]
+          }
+        },
+        {
+          "t": 2500,
+          "value": 40,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "ball",
+      "property": "fill",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": "#22c55e",
+          "easing": "hold"
+        },
+        {
+          "t": 1200,
+          "value": "#3b82f6",
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "trail",
+      "property": "strokeDashoffset",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 400,
+          "easing": "easeOut"
+        },
+        {
+          "t": 1200,
+          "value": 0,
+          "easing": "easeIn"
+        }
+      ]
+    },
+    {
+      "layerId": "trail",
+      "property": "gradientStop[1].color",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": "#3b82f6",
+          "easing": "linear"
+        },
+        {
+          "t": 2500,
+          "value": "#a855f7",
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "ball",
+      "property": "motionPath",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "linear"
+        },
+        {
+          "t": 2500,
+          "value": 1,
+          "easing": "linear"
+        }
+      ],
+      "extras": {
+        "pathId": "trail",
+        "autoOrient": true
+      }
+    }
+  ]
+}

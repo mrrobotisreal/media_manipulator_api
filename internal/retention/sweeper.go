@@ -68,6 +68,7 @@ type SweepStore interface {
 	StudioAssetKeys(ctx context.Context, assetID string) ([]string, bool, error)
 	DeleteStudioAssetRow(ctx context.Context, assetID string) error
 	DeleteStudioProjectRows(ctx context.Context, projectID string) ([]string, error)
+	DeleteVectorProjectRows(ctx context.Context, projectID string) ([]string, error)
 	AnonymizeJob(ctx context.Context, jobID string) error
 	JobHasLiveRows(ctx context.Context, jobID string) (bool, error)
 }
@@ -327,6 +328,8 @@ func (s *Sweeper) processBatch(ctx context.Context, rows []telemetry.LedgerRow, 
 			s.finish(ctx, row, res, s.deleteStudioAsset(ctx, row))
 		case KindStudioProject:
 			s.finish(ctx, row, res, s.deleteStudioProject(ctx, row))
+		case KindVectorProject:
+			s.finish(ctx, row, res, s.deleteVectorProject(ctx, row))
 		case KindJobRow:
 			s.finish(ctx, row, res, s.deleteJobRow(ctx, row))
 		case KindMetadata:
@@ -751,6 +754,29 @@ func (s *Sweeper) deleteStudioProject(ctx context.Context, row telemetry.LedgerR
 	}
 	if err := s.store.MarkLedgerDeletedByProject(ctx, KindStudioAsset, row.Locator, s.now()); err != nil {
 		s.logger.Warn("retention: marking project assets deleted failed", "error", err.Error())
+	}
+	return outcome{done: true, bytes: row.SizeBytes, files: int64(len(keys))}
+}
+
+// deleteVectorProject removes a Motion project: the row first (it names the
+// thumbnail key), then the thumbnail object(s) from the row and from the
+// ledger's s3_object rows with the project id, so a retry after the row is gone
+// still finds them.
+func (s *Sweeper) deleteVectorProject(ctx context.Context, row telemetry.LedgerRow) outcome {
+	rowKeys, err := s.store.DeleteVectorProjectRows(ctx, row.Locator)
+	if err != nil {
+		return fail(fmt.Errorf("delete vector project row: %w", err))
+	}
+	ledgerRows, err := s.store.ProjectS3Rows(ctx, row.Locator)
+	if err != nil {
+		return fail(fmt.Errorf("read vector project objects: %w", err))
+	}
+	keys := append([]string(nil), rowKeys...)
+	for _, lr := range ledgerRows {
+		keys = append(keys, lr.Locator)
+	}
+	if err := s.deleteKeysWithDerived(ctx, keys); err != nil {
+		return fail(err)
 	}
 	return outcome{done: true, bytes: row.SizeBytes, files: int64(len(keys))}
 }

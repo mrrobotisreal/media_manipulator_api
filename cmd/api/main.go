@@ -198,6 +198,9 @@ func main() {
 	// Postgres (the conversion handler is stateless). It shares the jobManager so
 	// ingest/export progress flows through the same /api/job/:jobId machinery.
 	studioHandler := handlers.NewStudioHandler(jobManager, cfg, inspector, s3Client, pool, transcription)
+	// Motion (MM43): projects + export counter on the telemetry store; the
+	// vectorize route reuses the conversion handler's converter job.
+	vectorHandler := newVectorHandler(cfg, store, tierRegistry, s3Client, conversionHandler, logging)
 	// AI Video Restoration gets a dedicated handler too: its pipeline is the
 	// first consumer of the GPU lease manager and the command-audit runner.
 	videoRestoreHandler := handlers.NewVideoRestoreHandler(jobManager, cfg, s3Client, gpuMgr, store, cmdRunner)
@@ -294,7 +297,7 @@ func main() {
 		worker.Sweeper = retention.NewSweeper(store, retention.OSDisk{}, objStore, jobManager.ActiveJobIDs,
 			retention.NewMeter(metricsReg), logging, retention.SweepConfig{
 				UploadDir: cfg.UploadDir, OutputDir: cfg.OutputDir, Bucket: cfg.S3Bucket,
-				AllowedPrefixes: []string{"videos", cfg.S3ResultPrefix, cfg.ContentStudioS3Prefix},
+				AllowedPrefixes: retentionS3Prefixes(cfg),
 				Batch:           cfg.RetentionSweepBatch, Budget: cfg.RetentionSweepBudget,
 				MaxAttempts: cfg.RetentionMaxAttempts, DryRun: cfg.CleanupDryRun || cfg.RetentionSweepDryRun,
 			})
@@ -357,9 +360,9 @@ func main() {
 	accountHandler.SetBilling(newBillingHandler(cfg, store, tierRegistry, analyticsEmitter, emailSvc, metricsReg, logging))
 	// MM24: per-item delete, keep longer, delete-all, export, sign-out-everywhere and
 	// account deletion; also the Postgres-backed fallback for /api/download after a restart.
-	wireDataControls(ctx, cfg, store, jobManager, s3Client, conversionHandler, studioHandler, accountHandler, limiter, metricsReg, analyticsEmitter, emailSvc, logging)
+	wireDataControls(ctx, cfg, store, jobManager, s3Client, conversionHandler, studioHandler, vectorHandler, accountHandler, limiter, metricsReg, analyticsEmitter, emailSvc, logging)
 
-	router := setupRouter(cfg, conversionHandler, studioHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg, analyticsEmitter)
+	router := setupRouter(cfg, conversionHandler, studioHandler, vectorHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg, analyticsEmitter)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -414,7 +417,7 @@ func newS3Client(cfg *config.Config) *s3.Client {
 	})
 }
 
-func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, accountHandler *handlers.AccountHandler, tierRegistry *tiers.Registry, restoreAuthVerifier middleware.TokenVerifier, firebaseVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, drCommentsHandler *handlers.DrCommentsHandler, drFeedbackHandler *handlers.DrFeedbackHandler, drChatLabHandler *handlers.DrChatLabHandler, drTasksHandler *handlers.DrTasksHandler, drDesktopHandler *handlers.DrDesktopHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry, analyticsEmitter *analyticsemit.Emitter) *gin.Engine {
+func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandler, studioHandler *handlers.StudioHandler, vectorHandler *handlers.VectorHandler, videoRestoreHandler *handlers.VideoRestoreHandler, imageRestoreHandler *handlers.ImageRestoreHandler, documentScanHandler *handlers.DocumentScanHandler, accountHandler *handlers.AccountHandler, tierRegistry *tiers.Registry, restoreAuthVerifier middleware.TokenVerifier, firebaseVerifier middleware.TokenVerifier, drVerifier middleware.ClaimsVerifier, drDocsHandler *handlers.DrDocsHandler, drCommentsHandler *handlers.DrCommentsHandler, drFeedbackHandler *handlers.DrFeedbackHandler, drChatLabHandler *handlers.DrChatLabHandler, drTasksHandler *handlers.DrTasksHandler, drDesktopHandler *handlers.DrDesktopHandler, store *telemetry.Store, enricher *geo.Enricher, limiter *limits.Limiter, m *metrics.Registry, analyticsEmitter *analyticsemit.Emitter) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.Default()
@@ -444,6 +447,9 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		"X-Requested-With",
 		"X-MM-Visitor-ID",
 		"X-MM-Session-ID",
+		// If-Match carries the expected revision on a Motion project save
+		// (PUT /api/vector/projects/:id); Studio sends it in the body instead.
+		"If-Match",
 		// Range lets the Content Studio preview proxy be scrubbed cross-origin
 		// from a <video crossorigin="anonymous"> element (needed for Web Audio).
 		"Range",
@@ -536,6 +542,13 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		handlers.RegisterToolRoutes(api, conversionHandler)
 		// Content Studio (browser NLE) endpoints — projects/assets/export.
 		handlers.RegisterStudioRoutes(api, studioHandler)
+		// Motion (code name vector, MM43): projects, thumbnail presign, the
+		// counted-export endpoint and vectorize. Counting happens inside the
+		// handler (transactional with the vector_exports row), not in
+		// quotaRoutes. A nil handler (tests) mounts nothing.
+		if vectorHandler != nil {
+			handlers.RegisterVectorRoutes(api, vectorHandler)
+		}
 		// AI Video Restoration (multi-model comparison pipeline). The group
 		// carries the Firebase auth seam — a pass-through no-op while
 		// RESTORE_REQUIRE_FIREBASE_AUTH is off (the default).
@@ -763,6 +776,10 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 			ipLimit:      cfg.RateLimitTranscodesPerIPPerHour,
 			matches:      isStudioExportPath,
 		},
+		// Motion vectorize (MM43) runs one potrace conversion job: the upload
+		// bucket, like /api/upload. The counted-export call itself is cheap
+		// and bounded by its own daily allowance.
+		{path: "/api/vector/vectorize", routeKey: "vector_vectorize", tool: "vector_vectorize", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
 		// Frame-as-PNG export (part 20): one synchronous ffmpeg frame render.
 		// Not a job and not an export allowance spend, so it shares the
 		// analysis bucket (like caption generation) rather than the transcode one.

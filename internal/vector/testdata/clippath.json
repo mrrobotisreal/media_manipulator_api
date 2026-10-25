@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 160,
+    "height": 160,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 160,
+      "height": 160
+    },
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "type": "group",
+      "id": "group-1",
+      "clipPath": "porthole",
+      "children": [
+        {
+          "type": "rect",
+          "id": "rect-2",
+          "x": 0,
+          "y": 0,
+          "width": 160,
+          "height": 80,
+          "fill": "#1d4ed8"
+        },
+        {
+          "type": "rect",
+          "id": "rect-3",
+          "x": 0,
+          "y": 80,
+          "width": 160,
+          "height": 80,
+          "fill": "#facc15"
+        }
+      ]
+    },
+    {
+      "type": "rect",
+      "id": "rect-4",
+      "x": 10,
+      "y": 10,
+      "width": 40,
+      "height": 40,
+      "fill": "red",
+      "clipPath": "unit-clip"
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [
+      {
+        "id": "porthole",
+        "layers": [
+          {
+            "type": "ellipse",
+            "id": "ellipse-1",
+            "cx": 80,
+            "cy": 80,
+            "rx": 60,
+            "ry": 60
+          }
+        ]
+      },
+      {
+        "id": "unit-clip",
+        "units": "objectBoundingBox",
+        "transform": [
+          0.5,
+          0,
+          0,
+          0.5,
+          0,
+          0
+        ],
+        "layers": [
+          {
+            "type": "rect",
+            "id": "rect-1",
+            "x": 0,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        ]
+      }
+    ],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": []
+}

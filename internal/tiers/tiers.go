@@ -82,6 +82,21 @@ type Limits struct {
 	// global per-IP RPS guard still applies to everyone because it is DoS
 	// protection, not a usage allowance.
 	RateLimitExempt bool `json:"rateLimitExempt"`
+
+	// Motion (vector, MM43). VectorExportsPerDay is its own daily counter
+	// (metric vector_export), never drawn from OpsPerDay or ExportsPerDay.
+	VectorExportsPerDay int `json:"vectorExportsPerDay"`
+	// VectorFormats is the capability set of countable export formats.
+	VectorFormats FormatSet `json:"vectorFormats"`
+	// VectorProjects is the saved-project cap; -1 means unlimited. The
+	// anonymous value (1) means "one browser-only project": the server never
+	// stores an anonymous Motion project.
+	VectorProjects int `json:"vectorProjects"`
+	// VectorMaxDurationMs caps the animation duration of any counted export;
+	// 0 means no cap (anonymous: 10 s).
+	VectorMaxDurationMs int `json:"vectorMaxDurationMs"`
+	// VectorVideo caps the raster exports (GIF, PNG sequence, MP4, WebM).
+	VectorVideo VectorVideo `json:"vectorVideo"`
 }
 
 // Unlimited is the sentinel StudioProjects, OpsPerDay and AIOpsPerDay use for
@@ -121,6 +136,13 @@ func New(cfg *config.Config) *Registry {
 			PriorityGPU:           false,
 			ResultRetentionHours:  cfg.TierAnonRetentionHours,
 			AdsRemoved:            false,
+			VectorExportsPerDay:   cfg.TierAnonVectorExportsPerDay,
+			VectorFormats:         NewFormatSet(cfg.TierAnonVectorFormats...),
+			VectorProjects:        cfg.TierAnonVectorProjects,
+			VectorMaxDurationMs:   cfg.TierAnonVectorMaxDurationMs,
+			VectorVideo: VectorVideo{
+				MaxHeight: cfg.TierAnonVectorVideoMaxHeight, MaxFps: cfg.TierAnonVectorVideoMaxFps, MaxSeconds: cfg.TierAnonVectorVideoMaxSeconds,
+			},
 		},
 		TierFree: {
 			OpsPerDay:             cfg.TierFreeOpsPerDay,
@@ -137,7 +159,14 @@ func New(cfg *config.Config) *Registry {
 			// Free accounts still see ads. Only Premium removes them — that is
 			// the deal, and weakening it would cost the AdSense inventory the
 			// whole free product is funded by.
-			AdsRemoved: false,
+			AdsRemoved:          false,
+			VectorExportsPerDay: cfg.TierFreeVectorExportsPerDay,
+			VectorFormats:       NewFormatSet(cfg.TierFreeVectorFormats...),
+			VectorProjects:      cfg.TierFreeVectorProjects,
+			VectorMaxDurationMs: cfg.TierFreeVectorMaxDurationMs,
+			VectorVideo: VectorVideo{
+				MaxHeight: cfg.TierFreeVectorVideoMaxHeight, MaxFps: cfg.TierFreeVectorVideoMaxFps, MaxSeconds: cfg.TierFreeVectorVideoMaxSeconds,
+			},
 		},
 		TierPremium: {
 			OpsPerDay:             cfg.TierPremiumOpsPerDay,
@@ -152,6 +181,13 @@ func New(cfg *config.Config) *Registry {
 			PriorityGPU:           true,
 			ResultRetentionHours:  cfg.TierPremiumRetentionHours,
 			AdsRemoved:            true,
+			VectorExportsPerDay:   cfg.TierPremiumVectorExportsPerDay,
+			VectorFormats:         NewFormatSet(cfg.TierPremiumVectorFormats...),
+			VectorProjects:        cfg.TierPremiumVectorProjects,
+			VectorMaxDurationMs:   cfg.TierPremiumVectorMaxDurationMs,
+			VectorVideo: VectorVideo{
+				MaxHeight: cfg.TierPremiumVectorVideoMaxHeight, MaxFps: cfg.TierPremiumVectorVideoMaxFps, MaxSeconds: cfg.TierPremiumVectorVideoMaxSeconds,
+			},
 		},
 		// Pro (MM39): higher ops / AI ops / exports; every other cap equals
 		// Premium by default (TIER_PRO_* env overrides each).
@@ -170,6 +206,27 @@ func New(cfg *config.Config) *Registry {
 			AdsRemoved:            true,
 		},
 	}}
+	// Motion formats are a cumulative ladder ("+ Lottie", "+ code exports" in
+	// the design table): each tier's set is unioned with the one below, so an
+	// env override can add formats to a tier but never make a higher tier
+	// lose one the lower tier has.
+	free := r.limits[TierFree]
+	free.VectorFormats = free.VectorFormats.Union(r.limits[TierAnonymous].VectorFormats)
+	r.limits[TierFree] = free
+	premium := r.limits[TierPremium]
+	premium.VectorFormats = premium.VectorFormats.Union(free.VectorFormats)
+	r.limits[TierPremium] = premium
+	// Pro's Motion row is MM49's (after MM39): until then Pro carries
+	// Premium's vector values exactly, so the ladder holds and MM49 only has
+	// to raise them.
+	pro := r.limits[TierPro]
+	pro.VectorExportsPerDay = premium.VectorExportsPerDay
+	pro.VectorFormats = premium.VectorFormats
+	pro.VectorProjects = premium.VectorProjects
+	pro.VectorMaxDurationMs = premium.VectorMaxDurationMs
+	pro.VectorVideo = premium.VectorVideo
+	r.limits[TierPro] = pro
+
 	// Operator = Pro (the top public rung) with every allowance removed. Not configurable by
 	// env on purpose: there is no economics to tune here, only "the owner can
 	// test everything". The byte and duration caps are the deployment's own
@@ -184,6 +241,15 @@ func New(cfg *config.Config) *Registry {
 	operator.MaxVideoSeconds = cfg.MaxVideoDurationSeconds
 	operator.StudioProjects = Unlimited
 	operator.RateLimitExempt = true
+	// Motion: every format, nothing counted, no project cap, raster caps at the
+	// deployment ceilings only.
+	operator.VectorExportsPerDay = Unlimited
+	operator.VectorFormats = NewFormatSet(AllVectorFormats()...)
+	operator.VectorProjects = Unlimited
+	operator.VectorMaxDurationMs = 0
+	operator.VectorVideo = VectorVideo{
+		MaxHeight: DeploymentMaxOutputHeight, MaxFps: DeploymentMaxVectorFps, MaxSeconds: cfg.MaxVideoDurationSeconds,
+	}
 	r.limits[TierOperator] = operator
 	return r
 }

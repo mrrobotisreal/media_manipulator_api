@@ -26,3 +26,13 @@ The fourth public tier (`tiers.TierPro`, `"pro"`), above Premium: `anonymous < f
 **Pending plan**:
 A plan change that has been scheduled but has not happened yet: the Pro-to-Premium downgrade, a Stripe Subscription Schedule that switches the price at `current_period_end`. Exposed as `pendingPlan {to, at}` on `GET /api/billing/status`; released by `DELETE /api/billing/change-plan` ("Keep Pro"). The tier stays `pro` until the switch; the webhook then reads the Premium price and grants `premium`.
 _Avoid_: "downgrade pending" as a tier or a stored column; nothing about it is stored on our side.
+
+**Naming: the Motion editor**:
+"Motion" is the user-facing brand for the SVG + animation editor (ADR-0012, design `docs/design/MOTION_SVG_ANIMATOR.md` §1). Every backend identifier is `vector`: routes `/api/vector/*`, tables `vector_projects`/`vector_exports`, package `internal/vector`, handler `VectorHandler`, tier fields `Vector*` (`vectorExportsPerDay`, `vectorFormats`, `vectorProjects`, `vectorVideo` in `/api/tiers`), env `TIER_*_VECTOR_*` and `VECTOR_*`, metric `vector_export`, ledger kind `vector_project`. Mirrors the Darkroom/`studio` split; the brand is cosmetic and swappable. Not related to the `motion` npm package.
+_Avoid_: "motion" in route paths, table names or Go identifiers.
+
+**VectorDoc**:
+The persisted Motion document (v1): canvas, a layer tree, `defs` (gradients, masks, clipPaths, filters, symbols) and keyframe `animations` tracks. Zod model in the UI (`lib/vector/vectorTypes.ts`); `internal/vector.Sanitize` is the Go mirror that validates and canonicalises it before storage. Additive-only: unknown fields round-trip, an unknown `version` is refused. The shared fixtures in `internal/vector/testdata/` are the contract.
+
+**Counted Motion export**:
+One export or import conversion spent against the `vector_export` daily allowance by `POST /api/vector/exports` (or `/api/vector/vectorize`), recorded as one `vector_exports` row in the same transaction. Static SVG export is never counted. A unit is spent before the browser runs the exporter and is not refunded on cancel.

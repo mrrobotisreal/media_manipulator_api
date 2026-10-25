@@ -271,6 +271,10 @@ UPDATE mm_media_assets SET original_filename_redacted = NULL, sha256 = NULL, per
 WHERE job_id IN (SELECT job_id FROM mm_conversion_jobs WHERE user_id = $1::uuid)`, userID); err != nil {
 		return 0, err
 	}
+	// MM43: counted Motion exports keep their counts but lose the account link.
+	if _, err := tx.Exec(ctx, anonymizeUserVectorExportsSQL, userID); err != nil {
+		return 0, err
+	}
 	tag, err := tx.Exec(ctx, `
 UPDATE mm_conversion_jobs
 SET result_s3_key = NULL, result_file_name = NULL, result_expires_at = NULL,
@@ -297,7 +301,10 @@ func (s *Store) DeleteUserProjects(ctx context.Context, userID string) (int64, e
 		}
 		n++
 	}
-	return n, nil
+	// MM43: Motion projects go with the account too (their thumbnails are
+	// ledgered s3_object rows the preceding sweep already removed).
+	m, err := s.deleteUserVectorProjects(ctx, userID)
+	return n + m, err
 }
 
 // DeleteUserSettingsAndGrants removes mm_user_settings and mm_tier_grants rows

@@ -245,6 +245,37 @@ type Config struct {
 	TierProRetentionHours        int
 	TierProStudioVersionAutoKeep int
 
+	// Motion (vector, MM43) allowances, per tier. Pro has no vector env yet:
+	// the registry copies Premium's values onto Pro until MM49 adds
+	// TIER_PRO_VECTOR_*. *VectorFormats is a comma list of countable formats
+	// (cumulative: each tier also gets every format of the tier below).
+	// *VectorProjects: -1 = unlimited. *VectorMaxDurationMs and the
+	// *VectorVideo* caps: 0 = no cap on that axis.
+	TierAnonVectorExportsPerDay      int
+	TierAnonVectorFormats            []string
+	TierAnonVectorProjects           int
+	TierAnonVectorMaxDurationMs      int
+	TierAnonVectorVideoMaxHeight     int
+	TierAnonVectorVideoMaxFps        int
+	TierAnonVectorVideoMaxSeconds    int
+	TierFreeVectorExportsPerDay      int
+	TierFreeVectorFormats            []string
+	TierFreeVectorProjects           int
+	TierFreeVectorMaxDurationMs      int
+	TierFreeVectorVideoMaxHeight     int
+	TierFreeVectorVideoMaxFps        int
+	TierFreeVectorVideoMaxSeconds    int
+	TierPremiumVectorExportsPerDay   int
+	TierPremiumVectorFormats         []string
+	TierPremiumVectorProjects        int
+	TierPremiumVectorMaxDurationMs   int
+	TierPremiumVectorVideoMaxHeight  int
+	TierPremiumVectorVideoMaxFps     int
+	TierPremiumVectorVideoMaxSeconds int
+	// VectorMaxDocBytes (VECTOR_MAX_DOC_BYTES, default 4 MiB) caps one saved
+	// Motion document; the sanitizer refuses anything larger.
+	VectorMaxDocBytes int
+
 	// OperatorEmails is the allowlist behind the `operator` tier: the site's
 	// own people, who get no daily allowance, no saved-project cap and no
 	// per-route hourly bucket so they can test every tool without hitting a
@@ -701,6 +732,30 @@ func Load() *Config {
 		TierProAIOpsPerDay:   getEnvInt("TIER_PRO_AI_OPS_PER_DAY", 120),
 		// The remaining TIER_PRO_* default to Premium; filled in after the
 		// literal below, once the Premium values are resolved.
+
+		// Motion (MM43): the design §3.4 matrix, anonymous/free/premium rows.
+		TierAnonVectorExportsPerDay:      getEnvInt("TIER_ANON_VECTOR_EXPORTS_PER_DAY", 2),
+		TierAnonVectorFormats:            splitCSVLower(getEnv("TIER_ANON_VECTOR_FORMATS", "svg_animated")),
+		TierAnonVectorProjects:           getEnvIntDefault("TIER_ANON_VECTOR_PROJECTS", 1),
+		TierAnonVectorMaxDurationMs:      getEnvIntDefault("TIER_ANON_VECTOR_MAX_DURATION_MS", 10000),
+		TierAnonVectorVideoMaxHeight:     getEnvIntDefault("TIER_ANON_VECTOR_VIDEO_MAX_HEIGHT", 0),
+		TierAnonVectorVideoMaxFps:        getEnvIntDefault("TIER_ANON_VECTOR_VIDEO_MAX_FPS", 0),
+		TierAnonVectorVideoMaxSeconds:    getEnvIntDefault("TIER_ANON_VECTOR_VIDEO_MAX_SECONDS", 0),
+		TierFreeVectorExportsPerDay:      getEnvInt("TIER_FREE_VECTOR_EXPORTS_PER_DAY", 5),
+		TierFreeVectorFormats:            splitCSVLower(getEnv("TIER_FREE_VECTOR_FORMATS", "svg_animated,lottie,import_lottie,import_svg_vectorize")),
+		TierFreeVectorProjects:           getEnvIntDefault("TIER_FREE_VECTOR_PROJECTS", 3),
+		TierFreeVectorMaxDurationMs:      getEnvIntDefault("TIER_FREE_VECTOR_MAX_DURATION_MS", 0),
+		TierFreeVectorVideoMaxHeight:     getEnvIntDefault("TIER_FREE_VECTOR_VIDEO_MAX_HEIGHT", 0),
+		TierFreeVectorVideoMaxFps:        getEnvIntDefault("TIER_FREE_VECTOR_VIDEO_MAX_FPS", 0),
+		TierFreeVectorVideoMaxSeconds:    getEnvIntDefault("TIER_FREE_VECTOR_VIDEO_MAX_SECONDS", 0),
+		TierPremiumVectorExportsPerDay:   getEnvInt("TIER_PREMIUM_VECTOR_EXPORTS_PER_DAY", 30),
+		TierPremiumVectorFormats:         splitCSVLower(getEnv("TIER_PREMIUM_VECTOR_FORMATS", "svg_animated,lottie,import_lottie,import_svg_vectorize,react_tsx,js_ts,flutter,gif")),
+		TierPremiumVectorProjects:        getEnvIntDefault("TIER_PREMIUM_VECTOR_PROJECTS", 25),
+		TierPremiumVectorMaxDurationMs:   getEnvIntDefault("TIER_PREMIUM_VECTOR_MAX_DURATION_MS", 0),
+		TierPremiumVectorVideoMaxHeight:  getEnvIntDefault("TIER_PREMIUM_VECTOR_VIDEO_MAX_HEIGHT", 720),
+		TierPremiumVectorVideoMaxFps:     getEnvIntDefault("TIER_PREMIUM_VECTOR_VIDEO_MAX_FPS", 0),
+		TierPremiumVectorVideoMaxSeconds: getEnvIntDefault("TIER_PREMIUM_VECTOR_VIDEO_MAX_SECONDS", 15),
+		VectorMaxDocBytes:                getEnvInt("VECTOR_MAX_DOC_BYTES", 4*1024*1024),
 
 		// Operator allowlist — see the struct doc. Same loader as
 		// DR_ALLOWED_EMAILS so membership is a plain lowercase compare.

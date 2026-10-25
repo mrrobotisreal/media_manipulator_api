@@ -161,7 +161,7 @@ func TestSetupRouterAppliesRateLimitsToRegisteredRoutes(t *testing.T) {
 	// here; the request will fail somewhere in the handler, and that is fine.
 	// What is under test is whether the guard ran at all.
 	router := setupRouter(
-		cfg, nil, nil, nil, nil, nil, nil, tiers.New(cfg), nil, nil, nil,
+		cfg, nil, nil, nil, nil, nil, nil, nil, tiers.New(cfg), nil, nil, nil,
 		nil, nil, nil, nil, nil, nil, nil, nil, limits.New(nil, cfg, nil, nil), metrics.New(),
 		// nil analytics emitter: an unconfigured emitter is a supported state and
 		// every emission is a no-op, which is exactly what this test wants.
@@ -432,7 +432,7 @@ func TestSystemHealthRouteIsPublicAndNotQuotaCharged(t *testing.T) {
 	cfg.OutputDir = t.TempDir()
 	cfg.TierQuotaEnabled = true
 	router := setupRouter(
-		cfg, nil, nil, nil, nil, nil, nil, tiers.New(cfg), nil, nil, nil,
+		cfg, nil, nil, nil, nil, nil, nil, nil, tiers.New(cfg), nil, nil, nil,
 		nil, nil, nil, nil, nil, nil, nil, nil, limits.New(nil, cfg, nil, nil), metrics.New(), nil,
 	)
 	w := httptest.NewRecorder()

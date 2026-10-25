@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 200,
+    "height": 200,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 200
+    },
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "type": "raw",
+      "id": "raw-1",
+      "markup": "<pattern id=\"dots\" width=\"10\" height=\"10\" patternUnits=\"userSpaceOnUse\">\n      <circle cx=\"5\" cy=\"5\" r=\"2\" fill=\"#333\"/>\n    </pattern>",
+      "ids": [
+        "dots"
+      ]
+    },
+    {
+      "type": "raw",
+      "id": "raw-2",
+      "markup": "<filter id=\"shadow\"><feDropShadow dx=\"2\" dy=\"2\" stdDeviation=\"2\"/></filter>",
+      "ids": [
+        "shadow"
+      ]
+    },
+    {
+      "type": "rect",
+      "id": "rect-1",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 100,
+      "fill": "url(#dots)"
+    },
+    {
+      "type": "raw",
+      "id": "raw-3",
+      "markup": "<circle cx=\"50\" cy=\"170\" r=\"20\" fill=\"blue\" filter=\"url(#shadow)\">\n    <animate attributeName=\"r\" values=\"20;25;20\" dur=\"2s\" repeatCount=\"indefinite\"/>\n  </circle>"
+    },
+    {
+      "type": "raw",
+      "id": "raw-4",
+      "markup": "<a><rect x=\"100\" y=\"150\" width=\"40\" height=\"40\" fill=\"red\"/></a>"
+    },
+    {
+      "type": "raw",
+      "id": "raw-5",
+      "markup": "<switch><rect x=\"150\" y=\"150\" width=\"40\" height=\"40\" fill=\"green\"/></switch>"
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": []
+}

@@ -76,17 +76,27 @@ type quotaSubject struct {
 // last line, and the reason a fresh incognito window does not reset the
 // anonymous allowance for free.
 func (q QuotaConfig) resolveSubject(c *gin.Context, user *models.User) quotaSubject {
+	kind, key := QuotaSubjectFor(c, user, q.IPHashSecret)
+	return quotaSubject{kind, key}
+}
+
+// QuotaSubjectFor is resolveSubject for counters kept outside RequireQuota (the
+// Motion export counter, MM43), so every allowance is keyed the same way.
+func QuotaSubjectFor(c *gin.Context, user *models.User, ipHashSecret []byte) (models.UsageSubjectKind, string) {
 	if user != nil && user.ID != "" {
-		return quotaSubject{models.UsageSubjectUser, user.ID}
+		return models.UsageSubjectUser, user.ID
 	}
 	if session := c.GetHeader("X-MM-Session-ID"); session != "" {
-		return quotaSubject{models.UsageSubjectSession, session}
+		return models.UsageSubjectSession, session
 	}
 	h := sha256.New()
-	h.Write(q.IPHashSecret)
+	h.Write(ipHashSecret)
 	h.Write([]byte(c.ClientIP()))
-	return quotaSubject{models.UsageSubjectIP, base64.RawURLEncoding.EncodeToString(h.Sum(nil))[:32]}
+	return models.UsageSubjectIP, base64.RawURLEncoding.EncodeToString(h.Sum(nil))[:32]
 }
+
+// NextUTCMidnight is when every daily counter rolls over.
+func NextUTCMidnight(now time.Time) time.Time { return nextUTCMidnight(now) }
 
 // limitFor returns the daily allowance for a metric under a tier. ops, ai_ops
 // and export are three independent counters. bytes_in is
@@ -101,6 +111,11 @@ func limitFor(l tiers.Limits, metric string) int64 {
 		return int64(l.ExportsPerDay)
 	case models.MetricAIOps:
 		return int64(l.AIOpsPerDay)
+	case models.MetricVectorExport:
+		// Motion's own allowance (TIER_*_VECTOR_EXPORTS_PER_DAY). Counted by the
+		// vector handler itself, transactionally with the vector_exports row,
+		// not by RequireQuota; listed here so every reader agrees on the limit.
+		return int64(l.VectorExportsPerDay)
 	default:
 		return 0
 	}

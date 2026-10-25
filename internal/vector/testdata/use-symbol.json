@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 240,
+    "height": 80,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 80
+    },
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "type": "use",
+      "id": "use-1",
+      "ref": "star",
+      "x": 0,
+      "y": 0,
+      "width": 80,
+      "height": 80,
+      "fill": "gold"
+    },
+    {
+      "type": "use",
+      "id": "use-2",
+      "ref": "star",
+      "x": 80,
+      "y": 0,
+      "width": 80,
+      "height": 80,
+      "fill": "silver"
+    },
+    {
+      "type": "ellipse",
+      "id": "dot",
+      "cx": 200,
+      "cy": 20,
+      "rx": 8,
+      "ry": 8,
+      "fill": "tomato"
+    },
+    {
+      "type": "use",
+      "id": "use-3",
+      "ref": "dot",
+      "y": 40
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": [
+      {
+        "id": "star",
+        "viewBox": {
+          "x": 0,
+          "y": 0,
+          "width": 24,
+          "height": 24
+        },
+        "layers": [
+          {
+            "type": "path",
+            "id": "path-1",
+            "d": "M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26Z"
+          }
+        ]
+      }
+    ]
+  },
+  "animations": []
+}

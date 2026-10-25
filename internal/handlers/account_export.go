@@ -198,8 +198,14 @@ func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *tel
 	}
 	proj := make([]map[string]any, 0, len(projects))
 	for _, p := range projects {
+		kind := p.Kind
+		if kind == "" {
+			kind = "studio"
+		}
 		proj = append(proj, map[string]any{
-			"id": p.ID, "name": p.Name, "createdAt": rfc(p.CreatedAt), "updatedAt": rfc(p.UpdatedAt),
+			// kind: "studio" (Darkroom) or "vector" (Motion, MM43).
+			"kind": kind,
+			"id":   p.ID, "name": p.Name, "createdAt": rfc(p.CreatedAt), "updatedAt": rfc(p.UpdatedAt),
 			"assetCount": p.AssetCount, "durationSeconds": p.DurationSeconds,
 		})
 	}
@@ -332,7 +338,8 @@ Generated ` + now.Format(time.RFC3339) + `
 
 history.json     Every conversion on your account: tool, mode, formats, status, timestamps
                  and the date it will be deleted ("deletesOn", null when nothing is stored).
-projects.json    Your Darkroom projects: name, created/updated, asset count, duration.
+projects.json    Your Darkroom and Motion projects ("kind": studio | vector): name,
+                 created/updated, asset count, duration. Documents are not included.
 files.json       Every file we hold for you right now, with its size and expiry. Files are
                  not included here; re-download them individually from your history while
                  they exist.
