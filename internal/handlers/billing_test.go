@@ -73,7 +73,7 @@ func newBillingRig(t *testing.T, cfg *config.Config, users ...*models.User) *bil
 	st := billing.NewFakeStore(users...)
 	fc := billing.NewFakeClient(billingTestSecret)
 	em := &capEmitter{}
-	proc := &billing.Processor{Store: st, Client: fc, Emitter: em, Grace: 7 * 24 * time.Hour}
+	proc := &billing.Processor{Store: st, Client: fc, Emitter: em, Grace: 7 * 24 * time.Hour, Prices: billing.NewPriceTiers(cfg)}
 	reg := tiers.New(cfg)
 	h := NewBillingHandler(st, fc, proc, reg, cfg, nil)
 	v := fakeVerifier{principals: map[string]*middleware.Principal{
@@ -516,7 +516,7 @@ func retainRig(t *testing.T, left time.Duration, cfgMut func(*config.Config)) (*
 	b.fc.PutSubscription(&billing.Subscription{ID: "sub_1", CustomerID: "cus_1", Status: "active", CancelAtPeriodEnd: true,
 		CurrentPeriodEnd: end, Interval: "monthly", UnitAmountCents: &cents, Currency: "usd", ItemID: "si_1", PriceID: "price_monthly_cfg", UserID: "u1"})
 	b.fc.PriceCents = map[string]int64{"price_r7": 700, "price_r6": 600}
-	proc := &billing.Processor{Store: b.store, Client: b.fc, Emitter: b.em, Grace: 7 * 24 * time.Hour, Now: func() time.Time { return now }}
+	proc := &billing.Processor{Store: b.store, Client: b.fc, Emitter: b.em, Grace: 7 * 24 * time.Hour, Now: func() time.Time { return now }, Prices: billing.NewPriceTiers(cfg)}
 	h := NewBillingHandler(b.store, b.fc, proc, tiers.New(cfg), cfg, nil)
 	h.now = func() time.Time { return now }
 	v := fakeVerifier{principals: map[string]*middleware.Principal{

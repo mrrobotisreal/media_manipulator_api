@@ -51,8 +51,14 @@ const (
 	ServerSubscriptionCancelled     = "server_subscription_cancelled"
 	ServerSubscriptionPaymentFailed = "server_subscription_payment_failed"
 	// ServerSubscriptionRetained: a cancelled-but-active subscription was resumed
-	// (billing retention offer). {interval, offer: retain7|retain6|none}.
+	// (billing retention offer). {interval, offer: retain7|retain6|none, plan}.
 	ServerSubscriptionRetained = "server_subscription_retained"
+	// ServerPlanChanged (MM39): a subscription moved between paid plans, observed
+	// when the price tier differs from the stored tier.
+	// {from, to: premium|pro, source: change_plan|webhook|portal}. Every
+	// server_subscription_* event also carries plan: premium|pro. The
+	// analytics-side catalog entry is MM41's; until then it is stored unknown.
+	ServerPlanChanged = "server_plan_changed"
 )
 
 // Retention (MM23). Emitted by the ledger sweeper once per kind per tick that

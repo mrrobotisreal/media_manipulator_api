@@ -390,7 +390,14 @@ func constructEvent(secret string, payload []byte, signatureHeader string) (Even
 	if e.Data != nil {
 		raw = e.Data.Raw
 	}
-	return parseEvent(e.ID, string(e.Type), raw)
+	ev, err := parseEvent(e.ID, string(e.Type), raw)
+	if err != nil {
+		return ev, err
+	}
+	if e.Request != nil {
+		ev.RequestID, ev.IdempotencyKey = e.Request.ID, e.Request.IdempotencyKey
+	}
+	return ev, nil
 }
 
 // subscriptionMetadata is stamped on the Subscription by Checkout. user_id is the

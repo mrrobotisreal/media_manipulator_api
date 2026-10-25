@@ -171,6 +171,12 @@ type Event struct {
 	AmountPaidCents *int64
 	AmountDueCents  *int64
 	Currency        string
+	// RequestID / IdempotencyKey are the event envelope's request.id and
+	// request.idempotency_key (MM39): empty request id = an automatic change
+	// (e.g. a schedule phase starting); a "plan-" key = this API's change-plan.
+	// They only label server_plan_changed's source; never used for state.
+	RequestID      string
+	IdempotencyKey string
 }
 
 // CheckoutRequest is everything needed to open a Checkout Session. PriceID
