@@ -32,6 +32,7 @@ debug commands.
    - [7.9 Transcode to DASH](#79-transcode-to-dash)
    - [7.10 Job status + SSE event stream](#710-job-status--sse-event-stream)
    - [7.11 Result download](#711-result-download)
+   - [7.12 Motion / vector (MM43)](#712-motion--vector-mm43)
 8. [GPU scheduling](#8-gpu-scheduling)
 9. [External dependencies](#9-external-dependencies)
 10. [Common incidents and recovery](#10-common-incidents-and-recovery)
@@ -622,6 +623,41 @@ What `/pricing` sells is what the server delivers:
   `GPU_SCHED_AGING_MINUTES` is promoted above Premium (oldest aged waiter first).
   Aging is per waiter and logged once (`gpu-scheduler: waiter ... aged`).
 
+#### Motion export allowance and caps (MM43)
+
+Motion (code name `vector`) exports are counted against their **own** daily
+allowance, metric `vector_export` in `mm_usage_counters` (never `ops`, never the
+Studio `export`), by `POST /api/vector/exports` and `POST /api/vector/vectorize`
+(section 7.12). `/api/tiers` exposes `vectorExportsPerDay`, `vectorFormats`
+(array), `vectorProjects`, `vectorMaxDurationMs` and
+`vectorVideo{maxHeight,maxFps,maxSeconds}` for every tier. Formats are a
+cumulative ladder: each tier also gets every format of the tier below, so an
+override can widen a tier but never invert the ladder. Countable formats:
+`svg_animated, lottie, react_tsx, js_ts, flutter, gif, png_sequence, mp4, webm,
+import_lottie, import_svg_vectorize` (`svg_static` is free and never counted).
+**Pro has no `TIER_PRO_VECTOR_*` yet**: it mirrors Premium's Motion row until
+MM49 adds the Pro numbers. Operator: every format, uncounted, unlimited projects,
+raster caps at the deployment ceilings (4320 px, 240 fps, `MAX_VIDEO_DURATION_SECONDS`).
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `TIER_ANON_VECTOR_EXPORTS_PER_DAY` | `2` | Motion exports + import conversions per UTC day, anonymous (session id, else hashed IP). |
+| `TIER_FREE_VECTOR_EXPORTS_PER_DAY` | `5` | Same, free accounts. |
+| `TIER_PREMIUM_VECTOR_EXPORTS_PER_DAY` | `30` | Same, Premium (Pro mirrors it until MM49). |
+| `TIER_ANON_VECTOR_FORMATS` | `svg_animated` | Comma list of countable formats. |
+| `TIER_FREE_VECTOR_FORMATS` | `svg_animated,lottie,import_lottie,import_svg_vectorize` | Same (plus anonymous's). |
+| `TIER_PREMIUM_VECTOR_FORMATS` | free's + `react_tsx,js_ts,flutter,gif` | Same (plus free's). |
+| `TIER_ANON_VECTOR_PROJECTS` | `1` | Saved-project cap; anonymous means "one browser-only project" (the server never stores anonymous Motion projects). `-1` = unlimited. |
+| `TIER_FREE_VECTOR_PROJECTS` | `3` | Saved Motion projects, free. |
+| `TIER_PREMIUM_VECTOR_PROJECTS` | `25` | Saved Motion projects, Premium. |
+| `TIER_ANON_VECTOR_MAX_DURATION_MS` | `10000` | Animation duration cap for every counted export; `0` = none. |
+| `TIER_FREE_VECTOR_MAX_DURATION_MS` | `0` | Same, free. |
+| `TIER_PREMIUM_VECTOR_MAX_DURATION_MS` | `0` | Same, Premium. |
+| `TIER_ANON_VECTOR_VIDEO_MAX_HEIGHT` / `_MAX_FPS` / `_MAX_SECONDS` | `0` / `0` / `0` | Raster export caps (GIF, PNG sequence, MP4, WebM); `0` = no cap on that axis. Anonymous has no raster format. |
+| `TIER_FREE_VECTOR_VIDEO_MAX_HEIGHT` / `_MAX_FPS` / `_MAX_SECONDS` | `0` / `0` / `0` | Same, free (no raster format). |
+| `TIER_PREMIUM_VECTOR_VIDEO_MAX_HEIGHT` / `_MAX_FPS` / `_MAX_SECONDS` | `720` / `0` / `15` | "GIF 720p / 15 s" (no fps cap unless set). |
+| `VECTOR_MAX_DOC_BYTES` | `4194304` (4 MiB) | Largest saved Motion document; the sanitizer refuses anything bigger (422). |
+
 #### Billing add-on (Stripe, MM17) - ships dark
 
 Billing is **off** until `BILLING_ENABLED=true` AND all four values below are set
@@ -882,6 +918,14 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/transcript/:jobId` | Serve the `transcribe_result.json` for a transcribe job. | No |
 | GET | `/api/analysis/:jobId` | Serve the `analysis.json` (transcript summary + safety review) for a transcribe job. | No |
 | GET | `/api/tiers` | Public tier matrix: `tiers[]` (anonymous, free, premium, pro; limits per tier), `premiumPurchasable`, `premiumPriceUSD`, `premiumPriceYearlyUSD`, `proPurchasable`, `proPriceUSD`, `proPriceYearlyUSD` (MM39; display-only numerals). `Cache-Control: public, max-age=300`. | No |
+| GET | `/api/vector/projects` | MM43 Motion. Firebase account required (401 otherwise). `{projects:[{id,name,revision,thumbnailKey?,documentBytes,createdAt,updatedAt}]}`, newest first; never carries `document`. | No |
+| POST | `/api/vector/projects` | MM43. Account required. `{name?, document}` (VectorDoc v1, sanitized; 422 `vector_doc_invalid {code,path,message}`, 413 `vector_doc_too_large`). `201` project with `document`, `revision:1`. 403 `vector_projects_limit {limit,used,upgradePath}` at the tier cap (counted inside the insert transaction). Ledgered as `vector_project`. | No |
+| GET | `/api/vector/projects/:id` | MM43. Owner only (strict, DB-backed; a stranger or an ownerless row gets the same 404). Project with `document`. | No |
+| PUT | `/api/vector/projects/:id` | MM43. Owner only. Header `If-Match: <revision>` (also `"n"` / `W/"n"`); missing 428 `if_match_required`, non-integer 400. Body `{name?, document?, thumbnailKey?}` (`thumbnailKey` must be the caller's own `vector/<uid>/<id>/thumb.png`, `""` clears; else 400). 200 project with `revision+1`; stale 409 `{"error":"revision_conflict","currentRevision":n,"updatedAt":"RFC3339Nano"}` (Studio's keys). | No |
+| DELETE | `/api/vector/projects/:id` | MM43. Owner only. Inline ledger sweep of the project (row + thumbnail) then the row. `200 {deleted:{objects,bytes},pending}`. | No |
+| POST | `/api/vector/projects/:id/thumbnail` | MM43. Owner only. `{sizeBytes (1..524288), contentType?: "image/png"}` -> `201 {uploadUrl, thumbnailKey, contentType, maxBytes, expiresAt}`; presigned PUT (TTL `S3_PRESIGN_TTL_SECONDS`) pinned to that length and `image/png`; key `vector/<ownerUid>/<projectId>/thumb.png`. 413 over 512 KB. Ledgered as an `s3_object` of the project. | No |
+| POST | `/api/vector/exports` | MM43. Optional auth + `X-MM-Session-ID`. `{projectId?, format, durationMs, height, fps}` -> `200 {ok:true, format, tier, limit, remaining (-1 = unlimited), resetsAt}` plus the `X-MM-Quota-*` headers. 400 `vector_format_not_countable` (`svg_static`, unknown); 403 `vector_format_locked {format,tier,upgradePath}`; 422 `vector_cap_exceeded {cap: duration\|height\|fps, max, tier}`; 429 `vector_export_limit {tier,metric,limit,used,resetsAt,upgradePath}`; 503 when the counter cannot be written (fails closed). Call BEFORE running the browser exporter. | No |
+| POST | `/api/vector/vectorize` | MM43. Optional auth. Multipart `file` (raster image, at most the tier's `MaxFileBytes`) + optional `threshold` (1-99), `turd`. Counted as `import_svg_vectorize` through the same checks BEFORE the job exists (403/429 as above, 400 for SVG/non-image input, which costs nothing), then the potrace converter job: `200 {jobId}`; fetch the SVG with `/api/job/:id` + `/api/download/:id`. Upload rate bucket. | Yes (goroutine) |
 | POST | `/api/billing/checkout` | Firebase auth. `{interval: monthly\|yearly, plan?: premium\|pro, locale}` -> `{url}`. 400 `invalid_interval` / `invalid_plan`; 409 `already_subscribed` / `already_on_plan` / `manual_grant_active`; 403 `operator_account`; 503 `billing_unavailable` (also Pro without Pro prices). | No |
 | POST | `/api/billing/change-plan` | MM39. Firebase auth, own live subscription only. `{target: premium\|pro}` -> upgrade `{plan:"pro", pendingPlan:null, timing:"immediate"}` or downgrade `{plan:"pro", pendingPlan:{to:"premium", at}, timing:"period_end"}` (repeat downgrade idempotent). 409 `not_subscription` / `same_plan` / `change_not_available` (cancelling, or a schedule this API did not create); 400 `invalid_plan`; 502 `billing_provider_error`; 503 `billing_unavailable`. | No |
 | DELETE | `/api/billing/change-plan` | MM39. Same guards. Releases the scheduled downgrade -> `{plan, pendingPlan:null}`; 200 no-op when nothing is scheduled. | No |
@@ -889,6 +933,7 @@ All routes live under `/api/` except `/healthz`.
 | POST | `/api/billing/retain` | Firebase auth. Retention offer (`docs/design/BILLING_RETENTION_OFFER.md`). 409 `offer_not_available` for Pro (MM39). | No |
 | GET | `/api/billing/session/:id` | Firebase auth. Checkout return: `{belongsToUser, paid, tierApplied, plan}` (`plan` MM39). | No |
 
+**CORS** allowed request headers include `If-Match` (MM43, Motion saves).
 **CORS** allow-list (in `cmd/api/main.go`): `https://media-manipulator.com`,
 `https://www.media-manipulator.com`, `https://dr.media-manipulator.com`
 (restricted restoration deployment), `http://localhost:5175`. Add origins
@@ -1452,6 +1497,74 @@ switch.
 | Presigned URL returns 404 NoSuchKey | The tarball never made it to S3 (PutObject failed earlier). | Check the job's `stages[].message` for `uploading_result`. |
 
 ---
+
+### 7.12 Motion / vector (MM43)
+
+"Motion" is the brand; everything here is `vector` (ADR-0012, design
+`docs/design/MOTION_SVG_ANIMATOR.md`). Editing happens in the browser; the API
+stores signed-in users' projects and counts exports. **Deploy:** run migration
+`20261025002_vector_projects` on the server (`go run ./internal/migrations up`)
+before this build serves traffic: until then every `/api/vector/*` write fails
+(project routes 503, the export counter fails closed with 503), and the sweeper
+leaves `vector_project` ledger rows it cannot write.
+
+- **Tables.** `vector_projects` (sanitized `document` jsonb up to
+  `VECTOR_MAX_DOC_BYTES`, `revision`, `thumbnail_key`; `owner_uid` = `mm_users.id`;
+  `anon_owner` reserved, never written in v1) and `vector_exports` (one row per
+  counted export: `owner` = `<user|session|ip>:<key>`, `tier`, `format`, `height`,
+  `fps`, `duration_ms`, optional `project_id`; no FK, so deleting a project keeps
+  its export history; account deletion rewrites `owner` to `deleted`).
+- **Counter.** `POST /api/vector/exports` runs the pure `vector.CheckExport`
+  (format lock, then caps), then increments `mm_usage_counters` metric
+  `vector_export` and inserts the `vector_exports` row **in one transaction**; a
+  call over the limit rolls back, so a refused call writes no row and does not
+  count. Day = UTC date; it resets at UTC midnight (`resetsAt`). The browser runs
+  the exporter only after a 200, so **a cancelled or failed export still consumed
+  its unit** (no refunds). The counter fails closed (503) when the DB is down.
+  Operator is never counted (a row is still written, `tier = 'operator'`).
+- **Inspect usage.**
+  ```sql
+  -- today's counts per subject
+  SELECT subject_kind, subject_key, count FROM mm_usage_counters
+   WHERE metric = 'vector_export' AND day = (now() AT TIME ZONE 'UTC')::date ORDER BY count DESC LIMIT 50;
+  -- one user's exports (owner is "user:<mm_users.id>")
+  SELECT created_at, format, tier, height, fps, duration_ms, project_id FROM vector_exports
+   WHERE owner = 'user:' || $1 ORDER BY created_at DESC LIMIT 50;
+  -- format mix, last 7 days
+  SELECT format, tier, count(*) FROM vector_exports WHERE created_at > now() - interval '7 days'
+   GROUP BY 1, 2 ORDER BY 3 DESC;
+  ```
+  Grant a user extra exports today (support): `UPDATE mm_usage_counters SET count = 0
+  WHERE metric = 'vector_export' AND subject_kind = 'user' AND subject_key = $1 AND
+  day = (now() AT TIME ZONE 'UTC')::date;`
+- **Thumbnails.** S3 key `vector/<ownerUid>/<projectId>/thumb.png` (prefix
+  `vector/`, in every sweeper's allowed prefixes), presigned PUT pinned to the
+  declared size (max 512 KB) and `image/png`. The key is server-built from ids,
+  and a save only accepts that exact key, so one user can never point a project at
+  (or overwrite) another user's object. Add `vector/` to the S3 lifecycle backstop
+  rules next to `studio/` (Mitch, one-time).
+- **Retention.** Each project is a ledger row of kind `vector_project`
+  (`mm_retained_objects`), its thumbnail an `s3_object` row with the same
+  `project_id`. The sweeper, `DELETE /api/vector/projects/:id`, delete-all,
+  account deletion (projects step) and the account export (`projects.json`
+  `kind: "vector"`, `files.json`) all cover them.
+- **A user reports a 409 loop** ("This project changed in another tab or
+  device" keeps coming back). Each save must send `If-Match` = the `revision` from
+  the last 200 (or the `currentRevision` from the 409 to take over). A loop means
+  a second open tab/device keeps saving: ask them to close the others. Check the
+  row: `SELECT revision, updated_at FROM vector_projects WHERE id = $1;` — if
+  `updated_at` keeps moving while they are idle, another client is autosaving.
+  Never reset `revision` by hand (it would make the other client's stale save
+  win). There is no server version history in v1; the browser keeps an
+  IndexedDB draft until a save succeeds.
+- **Sanitizer refusals.** 422 `vector_doc_invalid` carries `code` and `path`
+  (e.g. `unsafe_content` at `layers[3].markup`). The Go sanitizer
+  (`internal/vector`) mirrors the UI's Zod model; both are pinned by the shared
+  fixtures in `internal/vector/testdata/` (byte-identical copies of
+  `media-manipulator-ui/lib/vector/fixtures/`). A refusal of a document the
+  editor produced means the two sides drifted: compare against the fixtures.
+- **Vectorize.** Same potrace path as the image-format tool; missing `potrace`
+  surfaces as the job error "vectorization is unavailable on this server".
 
 ### 7.x Retention ledger and user retention setting (MM22)
 
