@@ -24,6 +24,10 @@ const (
 	TierAnonymous Tier = "anonymous"
 	TierFree      Tier = "free"
 	TierPremium   Tier = "premium"
+	// TierPro is the top public rung (MM39, ADR-0011): Premium with higher
+	// daily allowances. Sold through the same Checkout as Premium; granted by
+	// the Stripe Price id (internal/billing.PriceTiers).
+	TierPro Tier = "pro"
 	// TierOperator is the site's own people — the owner and whoever they name
 	// in OPERATOR_EMAILS. Nothing is counted, nothing is capped beyond the
 	// deployment's physical ceilings, and the per-route abuse buckets are
@@ -38,12 +42,12 @@ const (
 // public /api/tiers endpoint so the UI never has to know the list. Operator is
 // deliberately absent: it is not a plan anyone can get, so /pricing must not
 // render it and the ladder's "unlocked by" copy must never name it.
-func All() []Tier { return []Tier{TierAnonymous, TierFree, TierPremium} }
+func All() []Tier { return []Tier{TierAnonymous, TierFree, TierPremium, TierPro} }
 
 // Valid reports whether t is a tier this package knows.
 func Valid(t Tier) bool {
 	switch t {
-	case TierAnonymous, TierFree, TierPremium, TierOperator:
+	case TierAnonymous, TierFree, TierPremium, TierPro, TierOperator:
 		return true
 	}
 	return false
@@ -149,13 +153,29 @@ func New(cfg *config.Config) *Registry {
 			ResultRetentionHours:  cfg.TierPremiumRetentionHours,
 			AdsRemoved:            true,
 		},
+		// Pro (MM39): higher ops / AI ops / exports; every other cap equals
+		// Premium by default (TIER_PRO_* env overrides each).
+		TierPro: {
+			OpsPerDay:             cfg.TierProOpsPerDay,
+			AIOpsPerDay:           cfg.TierProAIOpsPerDay,
+			ExportsPerDay:         cfg.TierProExportsPerDay,
+			MaxFileBytes:          cfg.TierProMaxFileBytes,
+			MaxVideoSeconds:       cfg.TierProMaxVideoSeconds,
+			MaxOutputHeight:       cfg.TierProMaxOutputHeight,
+			MaxLadderHeight:       cfg.TierProMaxLadderHeight,
+			StudioProjects:        cfg.TierProStudioProjects,
+			StudioVersionAutoKeep: cfg.TierProStudioVersionAutoKeep,
+			PriorityGPU:           true,
+			ResultRetentionHours:  cfg.TierProRetentionHours,
+			AdsRemoved:            true,
+		},
 	}}
-	// Operator = Premium with every allowance removed. Not configurable by
+	// Operator = Pro (the top public rung) with every allowance removed. Not configurable by
 	// env on purpose: there is no economics to tune here, only "the owner can
 	// test everything". The byte and duration caps are the deployment's own
 	// physical ceilings, so the UI shows the real number rather than "—", and
 	// the handlers' tighter-wins logic resolves to exactly that ceiling.
-	operator := r.limits[TierPremium]
+	operator := r.limits[TierPro]
 	operator.OpsPerDay = Unlimited
 	operator.AIOpsPerDay = Unlimited
 	operator.ExportsPerDay = Unlimited
@@ -270,8 +290,8 @@ func (r *Registry) For(t Tier) Limits {
 //   - Signed in but no user row → free. The sync call that creates the row may
 //     simply not have landed yet, and a signed-in person should never be
 //     treated as anonymous.
-//   - User row → its tier, unless a premium grant has expired, in which case
-//     free. Expiry is evaluated at read time; nothing rewrites the row, so a
+//   - User row → its tier, unless a paid (premium or pro) grant has expired,
+//     in which case free. Expiry is evaluated at read time; nothing rewrites the row, so a
 //     grant can be extended without repairing state.
 //
 // `signedIn` is the second return of `middleware.PrincipalFrom(c)`. It is a
@@ -292,7 +312,7 @@ func Resolve(signedIn bool, user *models.User) Tier {
 	if !Valid(t) || t == TierAnonymous || t == TierOperator {
 		return TierFree
 	}
-	if t == TierPremium && user.TierExpiresAt != nil && !user.TierExpiresAt.After(time.Now().UTC()) {
+	if Paid(t) && user.TierExpiresAt != nil && !user.TierExpiresAt.After(time.Now().UTC()) {
 		return TierFree
 	}
 	return t

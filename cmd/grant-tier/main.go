@@ -7,6 +7,7 @@
 //
 //	go run ./cmd/grant-tier -uid <firebase-uid> -tier premium -by mitch -reason "founder"
 //	go run ./cmd/grant-tier -uid <firebase-uid> -tier premium -expires 2026-12-31
+//	go run ./cmd/grant-tier -uid <firebase-uid> -tier pro -reason "support"
 //	go run ./cmd/grant-tier -uid <firebase-uid> -tier free -reason "grant revoked"
 package main
 
@@ -32,7 +33,7 @@ import (
 
 func main() {
 	uid := flag.String("uid", "", "Firebase UID of the account (required)")
-	tier := flag.String("tier", string(tiers.TierPremium), "tier to grant: free | premium")
+	tier := flag.String("tier", string(tiers.TierPremium), "tier to grant: free | premium | pro")
 	grantedBy := flag.String("by", "", "who is granting this (defaults to the OS user)")
 	reason := flag.String("reason", "", "why, for the audit trail")
 	expires := flag.String("expires", "", "optional expiry, YYYY-MM-DD (UTC). Omit for no expiry")
@@ -45,9 +46,10 @@ func main() {
 	}
 
 	// Only tiers that can be stored on a user row. 'anonymous' is the absence
-	// of an account, not something that can be granted.
-	if *tier != string(tiers.TierFree) && *tier != string(tiers.TierPremium) {
-		fmt.Fprintf(os.Stderr, "-tier must be %q or %q, got %q\n", tiers.TierFree, tiers.TierPremium, *tier)
+	// of an account, and 'operator' is derived per request from the allowlist,
+	// so neither can be granted.
+	if err := validateGrantTier(*tier); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
 
@@ -118,6 +120,15 @@ func main() {
 	}
 	fmt.Printf("%s (%s)\n  tier:    %s\n  source:  %s\n  expires: %s\n  by:      %s\n",
 		updated.FirebaseUID, updated.Email, updated.Tier, updated.TierSource, expiry, *grantedBy)
+}
+
+// validateGrantTier accepts exactly the storable tiers: free, premium, pro.
+func validateGrantTier(t string) error {
+	tier := tiers.Tier(t)
+	if !tiers.Valid(tier) || tier == tiers.TierAnonymous || tier == tiers.TierOperator {
+		return fmt.Errorf("-tier must be %q, %q or %q, got %q", tiers.TierFree, tiers.TierPremium, tiers.TierPro, t)
+	}
+	return nil
 }
 
 // emitTierChanged sends server_tier_changed through internal/analyticsemit. It is

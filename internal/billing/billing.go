@@ -65,7 +65,62 @@ type Subscription struct {
 	// VisitorID / SessionID are the browser analytics ids stamped by Checkout.
 	VisitorID string
 	SessionID string
+	// Schedule is the attached Subscription Schedule (expanded on retrieve),
+	// nil when there is none or it is no longer live (released, canceled,
+	// completed). MM39: a Pro->Premium downgrade is a two-phase schedule.
+	Schedule *Schedule
 }
+
+// Schedule is the slice of a Stripe Subscription Schedule this API needs.
+type Schedule struct {
+	ID     string
+	Status string // "active" | "not_started" (only live schedules are surfaced)
+	// Phases in order. A downgrade has two: the current price until the
+	// period end, then the lower price.
+	Phases []SchedulePhase
+	// PlanChange is true when this API created the schedule (metadata
+	// mm_plan_change=1), so it may release it once it has fired.
+	PlanChange bool
+}
+
+// SchedulePhase is one phase's single item price and its bounds.
+type SchedulePhase struct {
+	PriceID string
+	Start   time.Time
+	End     time.Time // zero = open-ended
+}
+
+// Schedule statuses that still drive the subscription.
+const (
+	ScheduleStatusActive     = "active"
+	ScheduleStatusNotStarted = "not_started"
+)
+
+// IsLiveScheduleStatus reports a schedule that still controls its subscription.
+func IsLiveScheduleStatus(status string) bool {
+	return status == ScheduleStatusActive || status == ScheduleStatusNotStarted
+}
+
+// Pending returns the first phase that has not started yet: the price it
+// switches to and when. ok=false when nothing is pending (no schedule, or it
+// has already fired and is only running out its last phase).
+func (s *Schedule) Pending(now time.Time) (priceID string, at time.Time, ok bool) {
+	if s == nil {
+		return "", time.Time{}, false
+	}
+	for _, ph := range s.Phases {
+		if ph.Start.After(now) && ph.PriceID != "" {
+			return ph.PriceID, ph.Start.UTC(), true
+		}
+	}
+	return "", time.Time{}, false
+}
+
+// Proration behaviours for UpdateSubscriptionPrice, as Stripe spells them.
+const (
+	ProrationCreate = "create_prorations"
+	ProrationNone   = "none"
+)
 
 // IsCancelling reports a subscription that ends on its own: cancel_at_period_end,
 // or a cancel_at that is still in the future.
@@ -116,6 +171,12 @@ type Event struct {
 	AmountPaidCents *int64
 	AmountDueCents  *int64
 	Currency        string
+	// RequestID / IdempotencyKey are the event envelope's request.id and
+	// request.idempotency_key (MM39): empty request id = an automatic change
+	// (e.g. a schedule phase starting); a "plan-" key = this API's change-plan.
+	// They only label server_plan_changed's source; never used for state.
+	RequestID      string
+	IdempotencyKey string
 }
 
 // CheckoutRequest is everything needed to open a Checkout Session. PriceID
@@ -124,6 +185,9 @@ type CheckoutRequest struct {
 	UserID     string
 	CustomerID string
 	PriceID    string
+	// Plan is "premium" or "pro" (MM39), stamped on subscription metadata
+	// and the success URL. PriceID already encodes it; this is for display.
+	Plan string
 	// Locale is the UI locale (any of en/uk/ru/he/de/es, bare or BCP-47).
 	Locale  string
 	BaseURL string
@@ -156,6 +220,26 @@ type BillingClient interface {
 	// anchor unchanged. Idempotency key retain-<subID>-<offer>. Returns the
 	// updated subscription.
 	ResumeSubscription(ctx context.Context, subID, itemID, newPriceID, offer string) (*Subscription, error)
+
+	// MM39 plan changes.
+
+	// UpdateSubscriptionPrice swaps the single item's price in one update with
+	// the given proration behaviour (ProrationCreate for the Premium->Pro
+	// upgrade) and billing_cycle_anchor unchanged, so the renewal date stays.
+	// Idempotency key plan-<subID>-<newPriceID>. Returns the updated
+	// subscription.
+	UpdateSubscriptionPrice(ctx context.Context, subID, itemID, newPriceID, proration string) (*Subscription, error)
+	// CreateSchedule attaches a two-phase schedule to the subscription:
+	// currentPriceID until switchAt (the current period end), then
+	// nextPriceID, releasing the subscription afterwards. No proration and no
+	// refund. Marked mm_plan_change=1.
+	CreateSchedule(ctx context.Context, subID, currentPriceID, nextPriceID string, switchAt time.Time) (*Schedule, error)
+	// ReleaseSchedule detaches a schedule; the subscription keeps its current
+	// price and renews normally.
+	ReleaseSchedule(ctx context.Context, scheduleID string) error
+	// GetSchedule returns the live schedule attached to a subscription, or
+	// nil when there is none.
+	GetSchedule(ctx context.Context, subID string) (*Schedule, error)
 }
 
 // UI locales the site ships, as URL prefixes.

@@ -64,3 +64,70 @@ func TestRetentionPriceEnvVars(t *testing.T) {
 		t.Fatalf("%q %q", c.StripePricePremiumMonthlyRetain7, c.StripePricePremiumMonthlyRetain6)
 	}
 }
+
+// MM39: Pro price ids are trimmed and optional, display prices default to
+// 15 / 150, and Pro availability never changes BillingConfigured.
+func TestProBillingEnv(t *testing.T) {
+	t.Setenv("STRIPE_PRICE_PRO_MONTHLY", " price_pm ")
+	t.Setenv("STRIPE_PRICE_PRO_YEARLY", "")
+	t.Setenv("BILLING_PRICE_PRO_MONTHLY_USD", "")
+	t.Setenv("BILLING_PRICE_PRO_YEARLY_USD", "")
+	c := Load()
+	if c.StripePriceProMonthly != "price_pm" || c.StripePriceProYearly != "" {
+		t.Fatalf("%q %q", c.StripePriceProMonthly, c.StripePriceProYearly)
+	}
+	if c.BillingPriceProMonthlyUSD != 15 || c.BillingPriceProYearlyUSD != 150 {
+		t.Fatalf("pro display defaults: %d / %d", c.BillingPriceProMonthlyUSD, c.BillingPriceProYearlyUSD)
+	}
+}
+
+func TestProPurchasable(t *testing.T) {
+	full := func() *Config {
+		return &Config{BillingEnabled: true, StripeSecretKey: "k", StripeWebhookSecret: "w",
+			StripePricePremiumMonthly: "price_m", StripePricePremiumYearly: "price_y",
+			StripePriceProMonthly: "price_pm", StripePriceProYearly: "price_py"}
+	}
+	if !full().ProPurchasable() {
+		t.Fatal("fully configured must be purchasable")
+	}
+	var nilCfg *Config
+	if nilCfg.ProPurchasable() {
+		t.Fatal("nil config must be false")
+	}
+	for name, m := range map[string]func(*Config){
+		"no pro monthly": func(c *Config) { c.StripePriceProMonthly = "" },
+		"no pro yearly":  func(c *Config) { c.StripePriceProYearly = "" },
+		"billing off":    func(c *Config) { c.BillingEnabled = false },
+	} {
+		c := full()
+		m(c)
+		if c.ProPurchasable() {
+			t.Errorf("%s: must not be purchasable", name)
+		}
+		if name != "billing off" && !c.BillingConfigured() {
+			t.Errorf("%s: Premium billing must stay configured", name)
+		}
+	}
+}
+
+func TestDisplayPrices(t *testing.T) {
+	c := &Config{BillingPriceMonthlyUSD: 8, BillingPriceYearlyUSD: 80, BillingPriceProMonthlyUSD: 15, BillingPriceProYearlyUSD: 150}
+	p := c.DisplayPrices()
+	cases := []struct {
+		plan, interval string
+		want           int
+	}{
+		{PlanPremium, "monthly", 8}, {PlanPremium, "yearly", 80},
+		{PlanPro, "monthly", 15}, {PlanPro, "yearly", 150},
+		{"enterprise", "yearly", 80}, {PlanPro, "", 15},
+	}
+	for _, tc := range cases {
+		if got := p.For(tc.plan, tc.interval); got != tc.want {
+			t.Errorf("For(%q,%q) = %d, want %d", tc.plan, tc.interval, got, tc.want)
+		}
+	}
+	var nilCfg *Config
+	if nilCfg.DisplayPrices() != (DisplayPrices{}) {
+		t.Error("nil config must give zero prices")
+	}
+}

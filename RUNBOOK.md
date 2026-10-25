@@ -511,7 +511,8 @@ the Firebase ID token the Admin SDK verified, and only when that token carries
 client flag or database row can produce it, and a stranger who registers one
 of the listed addresses with a password (unverified) gets the free tier.
 
-An operator gets Premium's capabilities with every allowance removed: `ops`,
+An operator gets Pro's capabilities (the top public rung, MM39; Pro equals
+Premium on every cap except the daily allowances) with every allowance removed: `ops`,
 `ai_ops` and `export` are uncounted (nothing is written to `mm_usage_counters`),
 the saved-project cap is unlimited, the per-route hourly abuse buckets
 (`RATE_LIMIT_*_PER_HOUR`, `*_RATE_LIMIT_PER_*_PER_HOUR`) are skipped, and the
@@ -552,6 +553,40 @@ Migration `20261023001_add_operator_owner_tier` widens the
 anyone else's (history + retention); apply it with the usual
 `go run ./internal/migrations up` before setting the variable.
 
+#### Pro tier (MM39)
+
+`pro` is the fourth public tier (`anonymous < free < premium < pro`, ADR-0011),
+listed by `GET /api/tiers` and storable on `mm_users` once migration
+`20261025001_add_pro_tier` is applied. It raises the daily allowances; every other
+cap defaults to the **resolved Premium value**, so retuning only `TIER_PREMIUM_*`
+can never make Pro smaller than Premium (`TestLimitsAreMonotonic` walks all four
+tiers). Priority GPU and no ads, like Premium. The operator row is derived from Pro.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `TIER_PRO_OPS_PER_DAY` | `700` | Operations per UTC day. |
+| `TIER_PRO_AI_OPS_PER_DAY` | `120` | AI operations per UTC day. |
+| `TIER_PRO_EXPORTS_PER_DAY` | `TIER_PRO_OPS_PER_DAY` (700) | Studio exports per UTC day. |
+| `TIER_PRO_MAX_FILE_BYTES` | Premium's (5 GiB) | Per-upload cap. |
+| `TIER_PRO_MAX_VIDEO_SECONDS` | Premium's (7200) | Source duration cap. |
+| `TIER_PRO_MAX_OUTPUT_HEIGHT` | Premium's (2160) | Rendered height cap. |
+| `TIER_PRO_MAX_LADDER_HEIGHT` | Premium's (2160) | Tallest transcode rung. |
+| `TIER_PRO_STUDIO_PROJECTS` | Premium's (-1 = unlimited) | Saved Studio projects. |
+| `TIER_PRO_RETENTION_HOURS` | Premium's (720) | Result retention ceiling. |
+| `TIER_PRO_STUDIO_VERSION_AUTO_KEEP` | Premium's (20) | Auto version checkpoints kept. |
+
+Grant it by hand with `go run ./cmd/grant-tier -uid <firebase-uid> -tier pro`
+(`free | premium | pro`; `operator` is still refused). The `mm_tier_grants` row
+names the tier.
+
+**Migration (server only, before deploying MM39):** `20261025001_add_pro_tier`
+widens `mm_users_tier_check` to `('free','premium','pro')` and
+`mm_conversion_jobs_owner_tier_check` to include `'pro'` in one transaction
+(without the second, `UpsertJob` would silently drop every Pro user's job from
+history). Down maps `pro` rows to `premium` first. Apply with
+`go run ./internal/migrations up` **before** the new binary starts; it is
+additive and safe on the running old binary.
+
 #### Tier promises enforced (MM18)
 
 What `/pricing` sells is what the server delivers:
@@ -567,13 +602,15 @@ What `/pricing` sells is what the server delivers:
 | `TIER_ANON_EXPORTS_PER_DAY` | `TIER_ANON_OPS_PER_DAY` (5) | Studio exports per UTC day, anonymous. |
 | `TIER_FREE_EXPORTS_PER_DAY` | `TIER_FREE_OPS_PER_DAY` (30) | Same, free accounts. |
 | `TIER_PREMIUM_EXPORTS_PER_DAY` | `TIER_PREMIUM_OPS_PER_DAY` (300) | Same, Premium. |
+| `TIER_PRO_EXPORTS_PER_DAY` | `TIER_PRO_OPS_PER_DAY` (700) | Same, Pro (MM39). |
 | `GPU_SCHED_AGING_MINUTES` | `10` | A GPU-queue waiter older than this is promoted ahead of every un-aged waiter, so Premium cannot starve free jobs. `0` disables aging (strict precedence). |
 
 - **Output height.** A request whose rendered height exceeds the tier's
   `MaxOutputHeight` (`TIER_ANON_MAX_OUTPUT_HEIGHT` 1080 / `TIER_FREE_MAX_OUTPUT_HEIGHT` 1440 / `TIER_PREMIUM_MAX_OUTPUT_HEIGHT` 2160; operator uncapped
   to the 4320 deployment ceiling) is refused with HTTP 403:
   `{"error":"output_height_limited","message":...,"limit":<px>,"requested":<px>,"upgradePath":"signup"|"premium"}`
-  (`upgradePath` is omitted for Premium, which has nothing higher to buy).
+  (`upgradePath` is omitted for Premium and Pro: Pro does not raise the height,
+  so there is nothing higher to buy).
   Enforced on Studio export (read from the **persisted** project height, checked
   before the export allowance is spent, so a refused export costs nothing) and on
   conversion requests that carry an explicit `height` (`POST /api/upload`,
@@ -614,6 +651,9 @@ history before it is not counted.
 | `BILLING_GRACE_DAYS` | `7` | How long Premium survives `past_due` / `invoice.payment_failed`. |
 | `BILLING_PUBLIC_BASE_URL` | `https://media-manipulator.com` | Prefix for Checkout success/cancel and Portal return URLs. |
 | `BILLING_PRICE_MONTHLY_USD` / `BILLING_PRICE_YEARLY_USD` | `8` / `80` | Display-only numbers for `/api/tiers`; the charge is whatever the Stripe Price says. |
+| `STRIPE_PRICE_PRO_MONTHLY` | - | MM39. Optional. Stripe Price id of Pro monthly ($15, lookup key `pro_monthly`). Pro is sold only when both Pro ids are set (`proPurchasable`); Premium does not need them. |
+| `STRIPE_PRICE_PRO_YEARLY` | - | MM39. Optional. Stripe Price id of Pro yearly ($150, lookup key `pro_yearly`). |
+| `BILLING_PRICE_PRO_MONTHLY_USD` / `BILLING_PRICE_PRO_YEARLY_USD` | `15` / `150` | MM39. Display-only Pro numbers for `/api/tiers`. |
 
 * Cancellation state and retention offer (`docs/design/BILLING_RETENTION_OFFER.md`). The Customer Portal
   cancels at period end, so `status` stays `active` with `cancel_at_period_end` and/or `cancel_at`; the API
@@ -626,6 +666,37 @@ history before it is not counted.
   The **restricted Stripe key now needs "Subscriptions: Write"** (it had Read). Create the two monthly
   prices on the existing Premium product and keep them OUT of the Customer Portal's switchable plans. No
   migration. Analytics: `server_subscription_retained`.
+* **Pro plan (MM39, `docs/design/PRO_TIER.md`).** The webhook's tier now follows the
+  subscription item's **Price id**: the four Premium ids (`STRIPE_PRICE_PREMIUM_MONTHLY`,
+  `_YEARLY`, `_MONTHLY_RETAIN7`, `_MONTHLY_RETAIN6`) grant `premium`, the two Pro ids grant
+  `pro`. An **unknown price id grants `premium`, never `pro`**, logs
+  `billing: subscription price id is not configured; granting premium` (with the
+  subscription and price id) and counts `mm_billing_unknown_price_total`; a non-zero
+  counter means a price env var is wrong or a Dashboard price is being sold that the API
+  does not know. Status rules (grace, revoke) are unchanged.
+  - `POST /billing/checkout {interval, plan?}`: `plan` is `premium` (default) or `pro`;
+    the price id is still only from config.
+  - `POST /billing/change-plan {target}`: Premium->Pro is one Subscription update
+    (same-interval Pro price, `proration_behavior=create_prorations`,
+    `billing_cycle_anchor=unchanged`, idempotency key `plan-<subId>-<priceId>`): the
+    customer pays the difference now and keeps the renewal date. Pro->Premium creates a
+    **Subscription Schedule** (`from_subscription`, then two phases: Pro until
+    `current_period_end`, Premium after, `end_behavior=release`, metadata
+    `mm_plan_change=1`): no refund, Pro until the period ends. `DELETE /billing/change-plan`
+    releases that schedule ("Keep Pro").
+  - `GET /billing/status` reads the schedule in the same Subscription retrieve
+    (`expand[]=schedule`), so no extra Stripe call.
+  - The retention offer stays Premium-only: `POST /billing/retain` answers 409
+    `offer_not_available` for a Pro subscription.
+  - **Restricted key: add "Subscription Schedules: Write"** (Subscriptions: Write is
+    already needed by the retention offer). No new webhook events: the schedule's switch
+    arrives as `customer.subscription.updated`.
+  - Customer Portal: allow switching among all four paid Prices (MM38).
+  - Analytics: `server_plan_changed {from, to, source: change_plan|webhook|portal}`;
+    every `server_subscription_*` event carries `plan`. Catalog entries are MM41's.
+  - Inspect a user: `SELECT tier, tier_source, tier_expires_at FROM mm_users WHERE id = $1;`
+    and `SELECT tier, granted_by, reason, created_at FROM mm_tier_grants WHERE user_id = $1
+    ORDER BY created_at DESC LIMIT 5;` (webhook rows have `granted_by='stripe'`).
 * Stripe Tax is not used (Mitch, 2026-10-24: individual seller, no tax registrations). Leave `STRIPE_AUTOMATIC_TAX` unset. If that ever changes: activate Stripe Tax with registrations in the Dashboard, set both Prices to tax behaviour `exclusive`, then set `STRIPE_AUTOMATIC_TAX=true`.
 * Pinned Stripe API version (stripe-go v87.0.0): `2026-09-30.endive`. Create the
   webhook endpoint at that version. The API still verifies events from another
@@ -810,6 +881,13 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/share/:token/file` | MM32. Public. Same serving code as `/api/result` (ranges, nosniff, unsafe types as attachments); `?download=1` forces an attachment. | No |
 | GET | `/api/transcript/:jobId` | Serve the `transcribe_result.json` for a transcribe job. | No |
 | GET | `/api/analysis/:jobId` | Serve the `analysis.json` (transcript summary + safety review) for a transcribe job. | No |
+| GET | `/api/tiers` | Public tier matrix: `tiers[]` (anonymous, free, premium, pro; limits per tier), `premiumPurchasable`, `premiumPriceUSD`, `premiumPriceYearlyUSD`, `proPurchasable`, `proPriceUSD`, `proPriceYearlyUSD` (MM39; display-only numerals). `Cache-Control: public, max-age=300`. | No |
+| POST | `/api/billing/checkout` | Firebase auth. `{interval: monthly\|yearly, plan?: premium\|pro, locale}` -> `{url}`. 400 `invalid_interval` / `invalid_plan`; 409 `already_subscribed` / `already_on_plan` / `manual_grant_active`; 403 `operator_account`; 503 `billing_unavailable` (also Pro without Pro prices). | No |
+| POST | `/api/billing/change-plan` | MM39. Firebase auth, own live subscription only. `{target: premium\|pro}` -> upgrade `{plan:"pro", pendingPlan:null, timing:"immediate"}` or downgrade `{plan:"pro", pendingPlan:{to:"premium", at}, timing:"period_end"}` (repeat downgrade idempotent). 409 `not_subscription` / `same_plan` / `change_not_available` (cancelling, or a schedule this API did not create); 400 `invalid_plan`; 502 `billing_provider_error`; 503 `billing_unavailable`. | No |
+| DELETE | `/api/billing/change-plan` | MM39. Same guards. Releases the scheduled downgrade -> `{plan, pendingPlan:null}`; 200 no-op when nothing is scheduled. | No |
+| GET | `/api/billing/status` | Firebase auth; answers with billing off (`purchasable:false`). Adds (MM39) `plan` (`premium\|pro\|null`, stored tier of a subscription user) and `pendingPlan` (`{to, at}\|null`, from the Stripe schedule). `offer` is never set for Pro. | No |
+| POST | `/api/billing/retain` | Firebase auth. Retention offer (`docs/design/BILLING_RETENTION_OFFER.md`). 409 `offer_not_available` for Pro (MM39). | No |
+| GET | `/api/billing/session/:id` | Firebase auth. Checkout return: `{belongsToUser, paid, tierApplied, plan}` (`plan` MM39). | No |
 
 **CORS** allow-list (in `cmd/api/main.go`): `https://media-manipulator.com`,
 `https://www.media-manipulator.com`, `https://dr.media-manipulator.com`

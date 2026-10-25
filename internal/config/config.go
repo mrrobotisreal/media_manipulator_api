@@ -231,6 +231,20 @@ type Config struct {
 	TierPremiumRetentionHours        int
 	TierPremiumStudioVersionAutoKeep int
 
+	// Pro (MM39, ADR-0011). Ops 700 / AI ops 120 / exports = ops; every other
+	// TIER_PRO_* defaults to the resolved Premium value so the ladder stays
+	// non-decreasing when only Premium is retuned.
+	TierProOpsPerDay             int
+	TierProExportsPerDay         int
+	TierProAIOpsPerDay           int
+	TierProMaxFileBytes          int64
+	TierProMaxVideoSeconds       int
+	TierProMaxOutputHeight       int
+	TierProMaxLadderHeight       int
+	TierProStudioProjects        int
+	TierProRetentionHours        int
+	TierProStudioVersionAutoKeep int
+
 	// OperatorEmails is the allowlist behind the `operator` tier: the site's
 	// own people, who get no daily allowance, no saved-project cap and no
 	// per-route hourly bucket so they can test every tool without hitting a
@@ -258,6 +272,11 @@ type Config struct {
 	// when one is unset that offer is never shown.
 	StripePricePremiumMonthlyRetain7 string
 	StripePricePremiumMonthlyRetain6 string
+	// StripePriceProMonthly / Yearly are the Pro plan's Price ids
+	// (STRIPE_PRICE_PRO_MONTHLY / _YEARLY, MM39). Optional: Pro is purchasable
+	// only when both are set (ProPurchasable); BillingConfigured ignores them.
+	StripePriceProMonthly string
+	StripePriceProYearly  string
 	// StripeAPIVersion optionally overrides the API version the SDK sends
 	// (default: the stripe-go constant). Empty = use the SDK's.
 	StripeAPIVersion string
@@ -273,6 +292,9 @@ type Config struct {
 	// Display-only prices for GET /api/tiers; the charged amount is the Stripe Price.
 	BillingPriceMonthlyUSD int
 	BillingPriceYearlyUSD  int
+	// Pro display prices (BILLING_PRICE_PRO_MONTHLY_USD / _YEARLY_USD, 15 / 150).
+	BillingPriceProMonthlyUSD int
+	BillingPriceProYearlyUSD  int
 
 	// Transactional email (MM31). Off unless EmailEnabled AND EmailProviderAPIKey
 	// are both set; otherwise every send is a logged no-op.
@@ -511,7 +533,8 @@ func Load() *Config {
 	anonOps := getEnvInt("TIER_ANON_OPS_PER_DAY", 5)
 	freeOps := getEnvInt("TIER_FREE_OPS_PER_DAY", 30)
 	premiumOps := getEnvInt("TIER_PREMIUM_OPS_PER_DAY", 300)
-	return &Config{
+	proOps := getEnvInt("TIER_PRO_OPS_PER_DAY", 700)
+	cfg := &Config{
 		Port:               DefaultPort,
 		UploadDir:          getEnv("UPLOAD_DIR", "uploads"),
 		OutputDir:          getEnv("OUTPUT_DIR", "outputs"),
@@ -673,6 +696,12 @@ func Load() *Config {
 		TierPremiumRetentionHours:        getEnvInt("TIER_PREMIUM_RETENTION_HOURS", 30*24),
 		TierPremiumStudioVersionAutoKeep: getEnvInt("TIER_PREMIUM_STUDIO_VERSION_AUTO_KEEP", 20),
 
+		TierProOpsPerDay:     proOps,
+		TierProExportsPerDay: getEnvInt("TIER_PRO_EXPORTS_PER_DAY", proOps),
+		TierProAIOpsPerDay:   getEnvInt("TIER_PRO_AI_OPS_PER_DAY", 120),
+		// The remaining TIER_PRO_* default to Premium; filled in after the
+		// literal below, once the Premium values are resolved.
+
 		// Operator allowlist — see the struct doc. Same loader as
 		// DR_ALLOWED_EMAILS so membership is a plain lowercase compare.
 		OperatorEmails: splitCSVLower(getEnv("OPERATOR_EMAILS", "")),
@@ -686,6 +715,8 @@ func Load() *Config {
 		StripeAPIVersion:                 strings.TrimSpace(getEnv("STRIPE_API_VERSION", "")),
 		StripePricePremiumMonthlyRetain7: strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_MONTHLY_RETAIN7", "")),
 		StripePricePremiumMonthlyRetain6: strings.TrimSpace(getEnv("STRIPE_PRICE_PREMIUM_MONTHLY_RETAIN6", "")),
+		StripePriceProMonthly:            strings.TrimSpace(getEnv("STRIPE_PRICE_PRO_MONTHLY", "")),
+		StripePriceProYearly:             strings.TrimSpace(getEnv("STRIPE_PRICE_PRO_YEARLY", "")),
 		StripeAutomaticTax:               getEnvBool("STRIPE_AUTOMATIC_TAX", false),
 		BillingGraceDays:                 getEnvInt("BILLING_GRACE_DAYS", 7),
 		EmailEnabled:                     getEnvBool("EMAIL_ENABLED", false),
@@ -696,9 +727,11 @@ func Load() *Config {
 			getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com"))), "/"),
 		EmailDigestInterval: time.Duration(getEnvInt("EMAIL_DIGEST_INTERVAL_HOURS", 24)) * time.Hour,
 
-		BillingPublicBaseURL:   strings.TrimRight(strings.TrimSpace(getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com")), "/"),
-		BillingPriceMonthlyUSD: getEnvInt("BILLING_PRICE_MONTHLY_USD", 8),
-		BillingPriceYearlyUSD:  getEnvInt("BILLING_PRICE_YEARLY_USD", 80),
+		BillingPublicBaseURL:      strings.TrimRight(strings.TrimSpace(getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com")), "/"),
+		BillingPriceMonthlyUSD:    getEnvInt("BILLING_PRICE_MONTHLY_USD", 8),
+		BillingPriceYearlyUSD:     getEnvInt("BILLING_PRICE_YEARLY_USD", 80),
+		BillingPriceProMonthlyUSD: getEnvInt("BILLING_PRICE_PRO_MONTHLY_USD", 15),
+		BillingPriceProYearlyUSD:  getEnvInt("BILLING_PRICE_PRO_YEARLY_USD", 150),
 
 		// FFmpeg validation
 		MaxVideoDurationSeconds: getEnvInt("MAX_VIDEO_DURATION_SECONDS", 7200),
@@ -874,6 +907,22 @@ func Load() *Config {
 		DRDesktopMacIntelKey: getEnv("DR_DESKTOP_MAC_INTEL_KEY", "double-raven/desktop/mac/intel/Double Raven Portal-0.1.0.dmg"),
 		DRDesktopWindowsKey:  getEnv("DR_DESKTOP_WINDOWS_KEY", "double-raven/desktop/windows/Double Raven Portal Setup 0.1.0.exe"),
 	}
+	applyProTierDefaults(cfg)
+	return cfg
+}
+
+// applyProTierDefaults fills the Pro caps that default to the resolved Premium
+// value (MM39, design PRO_TIER.md §2.3): only ops, AI ops and exports differ.
+// Reading Premium after it is resolved keeps Pro >= Premium when an operator
+// retunes only TIER_PREMIUM_*.
+func applyProTierDefaults(c *Config) {
+	c.TierProMaxFileBytes = getEnvInt64("TIER_PRO_MAX_FILE_BYTES", c.TierPremiumMaxFileBytes)
+	c.TierProMaxVideoSeconds = getEnvInt("TIER_PRO_MAX_VIDEO_SECONDS", c.TierPremiumMaxVideoSeconds)
+	c.TierProMaxOutputHeight = getEnvInt("TIER_PRO_MAX_OUTPUT_HEIGHT", c.TierPremiumMaxOutputHeight)
+	c.TierProMaxLadderHeight = getEnvInt("TIER_PRO_MAX_LADDER_HEIGHT", c.TierPremiumMaxLadderHeight)
+	c.TierProStudioProjects = getEnvIntDefault("TIER_PRO_STUDIO_PROJECTS", c.TierPremiumStudioProjects)
+	c.TierProRetentionHours = getEnvInt("TIER_PRO_RETENTION_HOURS", c.TierPremiumRetentionHours)
+	c.TierProStudioVersionAutoKeep = getEnvInt("TIER_PRO_STUDIO_VERSION_AUTO_KEEP", c.TierPremiumStudioVersionAutoKeep)
 }
 
 func getEnv(key, defaultValue string) string {

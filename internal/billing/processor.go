@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
@@ -42,6 +43,14 @@ type Mailer interface {
 	PaymentFailed(*models.User)
 }
 
+// Metrics is the slice of *metrics.Registry the processor reports to. Nil = no
+// metrics.
+type Metrics interface {
+	// BillingUnknownPrice counts a granting decision whose price id was not in
+	// the PriceTiers table (mm_billing_unknown_price_total).
+	BillingUnknownPrice()
+}
+
 // GrantedByStripe is mm_tier_grants.granted_by for every webhook-driven change.
 const GrantedByStripe = "stripe"
 
@@ -54,7 +63,12 @@ type Processor struct {
 	// Mailer sends the payment-failed email. Nil = no email.
 	Mailer Mailer
 	Grace  time.Duration
-	Log    *slog.Logger
+	// Prices maps price ids to tiers (NewPriceTiers). Nil = every price is
+	// unknown, i.e. premium.
+	Prices PriceTiers
+	// Metrics counts unknown price ids. Nil = none.
+	Metrics Metrics
+	Log     *slog.Logger
 	// Now is injectable for tests.
 	Now func() time.Time
 }
@@ -158,10 +172,57 @@ func (p *Processor) ApplyRetained(ctx context.Context, sub *Subscription, userID
 	if p.Emitter != nil {
 		if u, err := p.Store.UserByID(ctx, userID); err == nil && u != nil {
 			p.emit(Event{ID: "retain:" + sub.ID + ":" + offer}, sub, u, analyticsemit.ServerSubscriptionRetained,
-				map[string]any{"interval": sub.Interval, "offer": offer}, "")
+				map[string]any{"interval": sub.Interval, "offer": offer, "plan": p.PlanFor(sub)}, "")
 		}
 	}
 	return nil
+}
+
+// PlanChangeKeyPrefix starts every Stripe idempotency key the change-plan
+// flow uses; an event carrying it was caused by this API (MM39).
+const PlanChangeKeyPrefix = "plan-"
+
+// ApplyPlanChange applies a subscription the change-plan upgrade just
+// re-priced, exactly like ApplyRetained, so the tier flips without waiting for
+// the customer.subscription.updated webhook (which then finds identical state).
+// server_plan_changed is emitted with source change_plan.
+func (p *Processor) ApplyPlanChange(ctx context.Context, sub *Subscription, userID string) error {
+	if sub == nil || sub.ID == "" {
+		return nil
+	}
+	_, err := p.apply(ctx, Event{
+		ID:             "change-plan:" + sub.ID + ":" + sub.PriceID,
+		Type:           EventSubscriptionUpdated,
+		CustomerID:     sub.CustomerID,
+		SubscriptionID: sub.ID,
+		UserID:         userID,
+		IdempotencyKey: PlanChangeKeyPrefix + sub.ID,
+	})
+	return err
+}
+
+// PlanChangeSource labels server_plan_changed: change_plan when this API
+// caused it, webhook for an automatic change (no request, e.g. the downgrade
+// schedule's Premium phase starting), portal for any other request-initiated
+// change (the Customer Portal; a Dashboard edit also lands here).
+func PlanChangeSource(ev Event) string {
+	switch {
+	case strings.HasPrefix(ev.IdempotencyKey, PlanChangeKeyPrefix):
+		return "change_plan"
+	case ev.RequestID == "":
+		return "webhook"
+	default:
+		return "portal"
+	}
+}
+
+// PlanFor is the plan a subscription's price grants (premium for unknown).
+func (p *Processor) PlanFor(sub *Subscription) string {
+	if sub == nil {
+		return ""
+	}
+	tier, _ := p.Prices.TierFor(sub.PriceID)
+	return tier
 }
 
 func (p *Processor) logger() *slog.Logger {
@@ -228,14 +289,24 @@ func (p *Processor) apply(ctx context.Context, ev Event) (note string, err error
 	}
 
 	now := p.now()
-	d := Entitlement(sub, now, p.Grace)
-	if ev.Type == EventInvoicePaymentFailed && d.Change && d.Tier == "premium" {
+	d := Entitlement(sub, now, p.Grace, p.Prices)
+	if d.UnknownPrice {
+		// A price we do not sell (or a mis-set STRIPE_PRICE_* env): premium,
+		// never pro. Ids only; no customer data.
+		p.logger().Warn("billing: subscription price id is not configured; granting premium",
+			"eventId", ev.ID, "subscriptionId", sub.ID, "priceId", sub.PriceID)
+		if p.Metrics != nil {
+			p.Metrics.BillingUnknownPrice()
+		}
+	}
+	if ev.Type == EventInvoicePaymentFailed && d.Change && tiers.Paid(tiers.Tier(d.Tier)) {
 		if floor := now.Add(p.Grace); d.ExpiresAt == nil || d.ExpiresAt.Before(floor) {
 			d.ExpiresAt = &floor
 		}
 	}
 
 	fromTier := string(tiers.Resolve(true, user))
+	storedTier, storedSource := user.Tier, user.TierSource
 	note = ""
 	switch {
 	case !d.Change:
@@ -252,6 +323,12 @@ func (p *Processor) apply(ctx context.Context, ev Event) (note string, err error
 		if toTier := string(tiers.Resolve(true, updated)); toTier != fromTier {
 			p.emit(ev, sub, user, analyticsemit.ServerTierChanged, map[string]any{"from": fromTier, "to": toTier, "source": "subscription"}, toTier)
 		}
+		// MM39: a subscription moving between paid plans (premium <-> pro).
+		if storedSource == "subscription" && tiers.Paid(tiers.Tier(storedTier)) &&
+			tiers.Paid(tiers.Tier(d.Tier)) && storedTier != d.Tier {
+			p.emit(ev, sub, user, analyticsemit.ServerPlanChanged,
+				map[string]any{"from": storedTier, "to": d.Tier, "source": PlanChangeSource(ev)}, d.Tier)
+		}
 	}
 
 	// Subscription lifecycle events. Each is derived from a state TRANSITION in
@@ -259,15 +336,15 @@ func (p *Processor) apply(ctx context.Context, ev Event) (note string, err error
 	// change cannot double count.
 	switch {
 	case adopted && !sub.IsTerminal() && sub.Status != StatusIncomplete:
-		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionCreated, subProps(sub, ev, ""), "")
+		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionCreated, p.subProps(sub, ev, ""), "")
 	case ev.Type == EventInvoicePaid && ev.BillingReason == "subscription_cycle":
-		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionRenewed, subProps(sub, ev, "paid"), "")
+		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionRenewed, p.subProps(sub, ev, "paid"), "")
 	}
 	if sub.IsTerminal() && !wasTerminal && prevStatus != "" && !adopted {
-		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionCancelled, subProps(sub, ev, ""), "")
+		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionCancelled, p.subProps(sub, ev, ""), "")
 	}
 	if ev.Type == EventInvoicePaymentFailed {
-		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionPaymentFailed, subProps(sub, ev, "due"), "")
+		p.emit(ev, sub, user, analyticsemit.ServerSubscriptionPaymentFailed, p.subProps(sub, ev, "due"), "")
 		// MM31: best-effort, deduped per user per 3-day window (Stripe retries the
 		// invoice several times, each with its own event id).
 		if p.Mailer != nil {
@@ -309,17 +386,22 @@ func (p *Processor) resolveUser(ctx context.Context, ev Event, sub *Subscription
 	return nil, nil
 }
 
-// manualGrantWins implements manual-grant precedence: a live manual Premium
-// grant is never touched by a webhook unless the subscription would outlast it.
+// manualGrantWins implements manual-grant precedence: a live manual paid grant
+// (premium or pro) is never touched by a webhook unless the subscription grants
+// at least the same tier and would outlast it.
 func manualGrantWins(u *models.User, d Decision, now time.Time) bool {
-	if u.Tier != "premium" || u.TierSource != "manual_grant" {
+	granted := tiers.Tier(u.Tier)
+	if !tiers.Paid(granted) || u.TierSource != "manual_grant" {
 		return false
 	}
 	if u.TierExpiresAt != nil && !u.TierExpiresAt.After(now) {
 		return false // the grant already lapsed
 	}
-	if d.Tier != "premium" || d.ExpiresAt == nil {
+	if !tiers.Paid(tiers.Tier(d.Tier)) || d.ExpiresAt == nil {
 		return true // never let a webhook downgrade a live manual grant
+	}
+	if tiers.Rank(tiers.Tier(d.Tier)) < tiers.Rank(granted) {
+		return true // a premium subscription never replaces a live manual pro grant
 	}
 	return u.TierExpiresAt == nil || u.TierExpiresAt.After(*d.ExpiresAt)
 }
@@ -335,6 +417,14 @@ func sameTierState(u *models.User, d Decision) bool {
 		return false
 	}
 	return u.TierExpiresAt.Equal(*d.ExpiresAt)
+}
+
+// subProps is subProps plus the plan the subscription's price grants
+// ("premium" | "pro", MM39).
+func (p *Processor) subProps(sub *Subscription, ev Event, kind string) map[string]any {
+	props := subProps(sub, ev, kind)
+	props["plan"] = p.PlanFor(sub)
+	return props
 }
 
 // subProps builds the properties of a server_subscription_* event: interval,

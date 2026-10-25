@@ -354,7 +354,7 @@ func main() {
 	accountHandler.SetAnalyticsEmitter(analyticsEmitter)
 	// Billing (MM17) ships dark: every /api/billing route answers 503
 	// billing_unavailable unless BILLING_ENABLED and all Stripe settings are set.
-	accountHandler.SetBilling(newBillingHandler(cfg, store, tierRegistry, analyticsEmitter, emailSvc, logging))
+	accountHandler.SetBilling(newBillingHandler(cfg, store, tierRegistry, analyticsEmitter, emailSvc, metricsReg, logging))
 	// MM24: per-item delete, keep longer, delete-all, export, sign-out-everywhere and
 	// account deletion; also the Postgres-backed fallback for /api/download after a restart.
 	wireDataControls(ctx, cfg, store, jobManager, s3Client, conversionHandler, studioHandler, accountHandler, limiter, metricsReg, analyticsEmitter, emailSvc, logging)

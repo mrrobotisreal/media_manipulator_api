@@ -41,6 +41,7 @@ type Registry struct {
 	retentionBacklog        *prometheus.GaugeVec
 	accountDeleted          *prometheus.CounterVec
 	dataDeleted             *prometheus.CounterVec
+	billingUnknownPrice     prometheus.Counter
 }
 
 // New creates a fresh Registry with all metrics registered.
@@ -172,7 +173,13 @@ func New() *Registry {
 		Help: "User-initiated deletions by scope: item (a job), project, all (MM24).",
 	}, []string{"scope"})
 
+	r.billingUnknownPrice = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "mm_billing_unknown_price_total",
+		Help: "Webhook entitlement decisions whose Stripe price id is not configured; granted premium, never pro (MM39).",
+	})
+
 	reg.MustRegister(
+		r.billingUnknownPrice,
 		r.accountDeleted, r.dataDeleted,
 		r.retentionSwept, r.retentionWouldDelete, r.retentionSweepErrors, r.retentionGaveUp, r.retentionBacklog,
 		r.httpDuration, r.httpStatus, r.conversionJobs, r.toolUsage,
@@ -416,4 +423,13 @@ func (r *Registry) DataDeleted(scope string) {
 		return
 	}
 	r.dataDeleted.WithLabelValues(scope).Inc()
+}
+
+// BillingUnknownPrice counts a subscription whose price id is not in the
+// configured price -> tier table (granted premium) (MM39).
+func (r *Registry) BillingUnknownPrice() {
+	if r == nil {
+		return
+	}
+	r.billingUnknownPrice.Inc()
 }

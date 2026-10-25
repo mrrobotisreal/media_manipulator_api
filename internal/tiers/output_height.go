@@ -13,8 +13,8 @@ const ErrCodeOutputHeightLimited = "output_height_limited"
 // Refusal is the JSON body of a 403 output_height_limited response. MM19
 // renders it: Limit is the plan's cap in pixels, Requested the height the
 // request would have produced, UpgradePath what to offer next ("signup" for an
-// anonymous caller, "premium" for a free account; omitted for Premium, which
-// has nothing higher to buy).
+// anonymous caller, "premium" for a free account; omitted for Premium and Pro:
+// Pro does not raise the output height, so there is nothing higher to buy).
 type Refusal struct {
 	Error       string `json:"error"`
 	Message     string `json:"message"`
@@ -51,7 +51,7 @@ func EnforceOutputHeight(tier Tier, l Limits, requested int) *Refusal {
 	switch tier {
 	case TierAnonymous:
 		r.UpgradePath = "signup"
-	case TierPremium, TierOperator:
+	case TierPremium, TierPro, TierOperator:
 		// Nothing higher to sell.
 	default:
 		r.UpgradePath = "premium"

@@ -691,14 +691,21 @@ func (h *AccountHandler) Tiers(c *gin.Context) {
 	// Cacheable: this is configuration, identical for every caller, and it
 	// changes only on deploy.
 	c.Header("Cache-Control", "public, max-age=300")
+	prices := h.cfg.DisplayPrices()
 	c.JSON(http.StatusOK, gin.H{
 		"tiers": out,
 		// Config-driven (MM17): true only when BILLING_ENABLED and every Stripe
 		// secret/price id is set. Prices are display-only; the amount charged is
-		// whatever the Stripe Price says.
+		// whatever the Stripe Price says. The *USD names are legacy; MM69 adds
+		// a currency-keyed shape beside them.
 		"premiumPurchasable":    h.cfg.BillingConfigured(),
-		"premiumPriceUSD":       h.cfg.BillingPriceMonthlyUSD,
-		"premiumPriceYearlyUSD": h.cfg.BillingPriceYearlyUSD,
+		"premiumPriceUSD":       prices.PremiumMonthly,
+		"premiumPriceYearlyUSD": prices.PremiumYearly,
+		// MM39: Pro is purchasable only when billing is configured AND both Pro
+		// price ids are set.
+		"proPurchasable":    h.cfg.ProPurchasable(),
+		"proPriceUSD":       prices.ProMonthly,
+		"proPriceYearlyUSD": prices.ProYearly,
 	})
 }
 

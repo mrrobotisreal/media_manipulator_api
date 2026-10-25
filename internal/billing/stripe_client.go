@@ -143,10 +143,17 @@ func (c *stripeClient) CreatePortalSession(ctx context.Context, customerID, retu
 
 func (c *stripeClient) GetSubscription(ctx context.Context, id string) (*Subscription, error) {
 	p := &stripe.SubscriptionRetrieveParams{Params: c.params(ctx)}
+	// MM39: the schedule rides along on the same call, so billing status reads
+	// pendingPlan without a second Stripe request.
+	p.AddExpand("schedule")
 	s, err := c.sc.V1Subscriptions.Retrieve(ctx, id, p)
 	if err != nil {
 		return nil, wrapErr(err)
 	}
+	return toSubscription(s), nil
+}
+
+func toSubscription(s *stripe.Subscription) *Subscription {
 	out := &Subscription{
 		ID:                s.ID,
 		Status:            string(s.Status),
@@ -186,7 +193,133 @@ func (c *stripeClient) GetSubscription(ctx context.Context, id string) (*Subscri
 			}
 		}
 	}
-	return out, nil
+	out.Schedule = toSchedule(s.Schedule)
+	return out
+}
+
+// planChangeMetadataKey marks a schedule this API created (MM39).
+const planChangeMetadataKey = "mm_plan_change"
+
+// toSchedule converts a live, expanded schedule; nil for none, an unexpanded
+// id-only reference, or one that no longer drives the subscription.
+func toSchedule(s *stripe.SubscriptionSchedule) *Schedule {
+	if s == nil || s.ID == "" || !IsLiveScheduleStatus(string(s.Status)) {
+		return nil
+	}
+	out := &Schedule{ID: s.ID, Status: string(s.Status), PlanChange: s.Metadata[planChangeMetadataKey] == "1"}
+	for _, ph := range s.Phases {
+		if ph == nil {
+			continue
+		}
+		sp := SchedulePhase{}
+		if len(ph.Items) > 0 && ph.Items[0] != nil && ph.Items[0].Price != nil {
+			sp.PriceID = ph.Items[0].Price.ID
+		}
+		if ph.StartDate > 0 {
+			sp.Start = time.Unix(ph.StartDate, 0).UTC()
+		}
+		if ph.EndDate > 0 {
+			sp.End = time.Unix(ph.EndDate, 0).UTC()
+		}
+		out.Phases = append(out.Phases, sp)
+	}
+	return out
+}
+
+// UpdateSubscriptionPrice is the Premium->Pro upgrade: one Subscriptions.Update
+// swapping the single item's price, billing_cycle_anchor unchanged (same
+// renewal date), with the caller's proration behaviour.
+func (c *stripeClient) UpdateSubscriptionPrice(ctx context.Context, subID, itemID, newPriceID, proration string) (*Subscription, error) {
+	p := &stripe.SubscriptionUpdateParams{
+		Params:                      c.params(ctx),
+		ProrationBehavior:           stripe.String(proration),
+		BillingCycleAnchorUnchanged: stripe.Bool(true),
+		Items:                       []*stripe.SubscriptionUpdateItemParams{{ID: stripe.String(itemID), Price: stripe.String(newPriceID)}},
+	}
+	p.SetIdempotencyKey("plan-" + subID + "-" + newPriceID)
+	if _, err := c.sc.V1Subscriptions.Update(ctx, subID, p); err != nil {
+		return nil, wrapErr(err)
+	}
+	return c.GetSubscription(ctx, subID)
+}
+
+// CreateSchedule is the Pro->Premium downgrade. Stripe does not accept phases
+// together with from_subscription, so it is two calls: create the schedule
+// from the subscription (which copies the current phase), then rewrite the
+// phases to [current price until switchAt, next price for one interval] with
+// end_behavior=release, so after the switch the subscription is a plain
+// Premium subscription again. No idempotency key: Stripe refuses a second
+// schedule on the same subscription, and a key would replay a released
+// schedule after a quick downgrade -> keep -> downgrade.
+func (c *stripeClient) CreateSchedule(ctx context.Context, subID, currentPriceID, nextPriceID string, switchAt time.Time) (*Schedule, error) {
+	cp := &stripe.SubscriptionScheduleCreateParams{
+		Params:           c.params(ctx),
+		FromSubscription: stripe.String(subID),
+	}
+	cp.AddExpand("phases.items.price")
+	created, err := c.sc.V1SubscriptionSchedules.Create(ctx, cp)
+	if err != nil {
+		return nil, wrapErr(err)
+	}
+	var start int64
+	var duration *stripe.SubscriptionScheduleUpdatePhaseDurationParams
+	if len(created.Phases) > 0 && created.Phases[0] != nil {
+		start = created.Phases[0].StartDate
+		if items := created.Phases[0].Items; len(items) > 0 && items[0] != nil && items[0].Price != nil && items[0].Price.Recurring != nil {
+			r := items[0].Price.Recurring
+			duration = &stripe.SubscriptionScheduleUpdatePhaseDurationParams{Interval: stripe.String(string(r.Interval))}
+			if r.IntervalCount > 0 {
+				duration.IntervalCount = stripe.Int64(r.IntervalCount)
+			}
+		}
+	}
+	current := &stripe.SubscriptionScheduleUpdatePhaseParams{
+		Items:   []*stripe.SubscriptionScheduleUpdatePhaseItemParams{{Price: stripe.String(currentPriceID), Quantity: stripe.Int64(1)}},
+		EndDate: stripe.Int64(switchAt.Unix()),
+	}
+	if start > 0 {
+		current.StartDate = stripe.Int64(start)
+	}
+	next := &stripe.SubscriptionScheduleUpdatePhaseParams{
+		Items:    []*stripe.SubscriptionScheduleUpdatePhaseItemParams{{Price: stripe.String(nextPriceID), Quantity: stripe.Int64(1)}},
+		Duration: duration, // nil = Stripe's default of one billing interval
+	}
+	up := &stripe.SubscriptionScheduleUpdateParams{
+		Params:            c.params(ctx),
+		EndBehavior:       stripe.String(string(stripe.SubscriptionScheduleEndBehaviorRelease)),
+		ProrationBehavior: stripe.String(ProrationNone),
+		Phases:            []*stripe.SubscriptionScheduleUpdatePhaseParams{current, next},
+		Metadata:          map[string]string{planChangeMetadataKey: "1"},
+	}
+	up.AddExpand("phases.items.price")
+	updated, err := c.sc.V1SubscriptionSchedules.Update(ctx, created.ID, up)
+	if err != nil {
+		// Do not leave a half-built schedule attached: release it so the
+		// subscription renews exactly as before. Best effort.
+		_, _ = c.sc.V1SubscriptionSchedules.Release(ctx, created.ID, &stripe.SubscriptionScheduleReleaseParams{Params: c.params(ctx)})
+		return nil, wrapErr(err)
+	}
+	return toSchedule(updated), nil
+}
+
+// ReleaseSchedule detaches the schedule ("Keep Pro"): the subscription keeps
+// its current price and renews normally.
+func (c *stripeClient) ReleaseSchedule(ctx context.Context, scheduleID string) error {
+	p := &stripe.SubscriptionScheduleReleaseParams{Params: c.params(ctx)}
+	p.SetIdempotencyKey("plan-release-" + scheduleID)
+	if _, err := c.sc.V1SubscriptionSchedules.Release(ctx, scheduleID, p); err != nil {
+		return wrapErr(err)
+	}
+	return nil
+}
+
+// GetSchedule reads the subscription's live schedule (nil when none).
+func (c *stripeClient) GetSchedule(ctx context.Context, subID string) (*Schedule, error) {
+	sub, err := c.GetSubscription(ctx, subID)
+	if err != nil {
+		return nil, err
+	}
+	return sub.Schedule, nil
 }
 
 // ResumeSubscription is the retention flow's single Stripe write: one
@@ -257,7 +390,14 @@ func constructEvent(secret string, payload []byte, signatureHeader string) (Even
 	if e.Data != nil {
 		raw = e.Data.Raw
 	}
-	return parseEvent(e.ID, string(e.Type), raw)
+	ev, err := parseEvent(e.ID, string(e.Type), raw)
+	if err != nil {
+		return ev, err
+	}
+	if e.Request != nil {
+		ev.RequestID, ev.IdempotencyKey = e.Request.ID, e.Request.IdempotencyKey
+	}
+	return ev, nil
 }
 
 // subscriptionMetadata is stamped on the Subscription by Checkout. user_id is the
@@ -267,6 +407,9 @@ func constructEvent(secret string, payload []byte, signatureHeader string) (Even
 // requires instead of being dropped. They are not personal data.
 func subscriptionMetadata(req CheckoutRequest) map[string]string {
 	m := map[string]string{"user_id": req.UserID}
+	if req.Plan != "" {
+		m["plan"] = req.Plan
+	}
 	if isUUID(req.VisitorID) && isUUID(req.SessionID) {
 		m["visitor_id"] = req.VisitorID
 		m["session_id"] = req.SessionID

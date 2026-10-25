@@ -27,6 +27,10 @@ type FakeClient struct {
 	GetSubErr         error
 	CancelErr         error // MM24
 	ResumeErr         error
+	UpdatePriceErr    error // MM39
+	ScheduleErr       error // CreateSchedule
+	ReleaseErr        error
+	GetScheduleErr    error
 
 	// Recorded calls.
 	CustomersCreated int
@@ -35,6 +39,9 @@ type FakeClient struct {
 	GetSubCalls      []string
 	CancelCalls      []string // MM24
 	ResumeCalls      []ResumeCall
+	UpdatePriceCalls []UpdatePriceCall // MM39
+	ScheduleCalls    []ScheduleCall
+	ReleaseCalls     []string
 
 	// PriceCents maps a price id to its unit amount; ResumeSubscription applies
 	// it to the stored subscription when the price is swapped.
@@ -45,6 +52,15 @@ type FakeClient struct {
 
 // ResumeCall records one ResumeSubscription call.
 type ResumeCall struct{ SubID, ItemID, NewPriceID, Offer string }
+
+// UpdatePriceCall records one UpdateSubscriptionPrice call.
+type UpdatePriceCall struct{ SubID, ItemID, NewPriceID, Proration string }
+
+// ScheduleCall records one CreateSchedule call.
+type ScheduleCall struct {
+	SubID, CurrentPriceID, NextPriceID string
+	SwitchAt                           time.Time
+}
 
 // NewFakeClient returns a FakeClient with a webhook secret.
 func NewFakeClient(webhookSecret string) *FakeClient {
@@ -119,6 +135,10 @@ func (f *FakeClient) GetSubscription(_ context.Context, id string) (*Subscriptio
 		return nil, ErrNotFound
 	}
 	cp := *s
+	if s.Schedule != nil {
+		sc := *s.Schedule
+		cp.Schedule = &sc
+	}
 	return &cp, nil
 }
 
@@ -157,6 +177,92 @@ func (f *FakeClient) ResumeSubscription(_ context.Context, subID, itemID, newPri
 		}
 	}
 	cp := *s
+	return &cp, nil
+}
+
+// UpdateSubscriptionPrice swaps the stored subscription's price (and its
+// amount, from PriceCents) like Stripe would.
+func (f *FakeClient) UpdateSubscriptionPrice(_ context.Context, subID, itemID, newPriceID, proration string) (*Subscription, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.UpdatePriceCalls = append(f.UpdatePriceCalls, UpdatePriceCall{subID, itemID, newPriceID, proration})
+	if f.UpdatePriceErr != nil {
+		return nil, f.UpdatePriceErr
+	}
+	s, ok := f.Subscriptions[subID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	s.PriceID = newPriceID
+	if c, ok := f.PriceCents[newPriceID]; ok {
+		s.UnitAmountCents = &c
+	}
+	cp := *s
+	return &cp, nil
+}
+
+// CreateSchedule attaches a two-phase schedule. Like Stripe, a subscription
+// that already has a live schedule refuses a second one.
+func (f *FakeClient) CreateSchedule(_ context.Context, subID, currentPriceID, nextPriceID string, switchAt time.Time) (*Schedule, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ScheduleCalls = append(f.ScheduleCalls, ScheduleCall{subID, currentPriceID, nextPriceID, switchAt})
+	if f.ScheduleErr != nil {
+		return nil, f.ScheduleErr
+	}
+	s, ok := f.Subscriptions[subID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	if s.Schedule != nil {
+		return nil, fmt.Errorf("fake: subscription %s already has schedule %s", subID, s.Schedule.ID)
+	}
+	sched := &Schedule{
+		ID:         fmt.Sprintf("sub_sched_fake_%d", len(f.ScheduleCalls)),
+		Status:     ScheduleStatusActive,
+		PlanChange: true,
+		Phases: []SchedulePhase{
+			{PriceID: currentPriceID, End: switchAt.UTC()},
+			{PriceID: nextPriceID, Start: switchAt.UTC()},
+		},
+	}
+	s.Schedule = sched
+	cp := *sched
+	return &cp, nil
+}
+
+// ReleaseSchedule detaches the schedule from whichever subscription has it.
+func (f *FakeClient) ReleaseSchedule(_ context.Context, scheduleID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ReleaseCalls = append(f.ReleaseCalls, scheduleID)
+	if f.ReleaseErr != nil {
+		return f.ReleaseErr
+	}
+	for _, s := range f.Subscriptions {
+		if s.Schedule != nil && s.Schedule.ID == scheduleID {
+			s.Schedule = nil
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
+// GetSchedule returns the subscription's live schedule (nil when none).
+func (f *FakeClient) GetSchedule(_ context.Context, subID string) (*Schedule, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.GetScheduleErr != nil {
+		return nil, f.GetScheduleErr
+	}
+	s, ok := f.Subscriptions[subID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	if s.Schedule == nil {
+		return nil, nil
+	}
+	cp := *s.Schedule
 	return &cp, nil
 }
 

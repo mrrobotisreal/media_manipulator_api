@@ -31,8 +31,10 @@ type BillingHandler struct {
 	processor *billing.Processor
 	registry  *tiers.Registry
 	cfg       *config.Config
-	logger    *slog.Logger
-	now       func() time.Time
+	// prices maps Stripe price ids to plans (MM39); built once from cfg.
+	prices billing.PriceTiers
+	logger *slog.Logger
+	now    func() time.Time
 }
 
 // NewBillingHandler wires the handler. client and processor may be nil when
@@ -41,7 +43,8 @@ func NewBillingHandler(store billing.Store, client billing.BillingClient, proces
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &BillingHandler{store: store, client: client, processor: processor, registry: registry, cfg: cfg, logger: logger, now: time.Now}
+	return &BillingHandler{store: store, client: client, processor: processor, registry: registry, cfg: cfg,
+		prices: billing.NewPriceTiers(cfg), logger: logger, now: time.Now}
 }
 
 func (h *BillingHandler) available() bool {
@@ -83,19 +86,54 @@ func (h *BillingHandler) caller(c *gin.Context) (*middleware.Principal, *models.
 	return principal, user, true
 }
 
+// intervalPrice is the Premium price for an interval (kept for callers that
+// predate plans).
 func (h *BillingHandler) intervalPrice(interval string) (string, bool) {
+	return h.planPrice(config.PlanPremium, interval)
+}
+
+// planPrice is the configured Stripe price id for (plan, interval). It is the
+// only source of a price id: the client names a plan and an interval, never a
+// price. ok=false for an unknown plan or interval; the id may be "" when that
+// plan's price is not configured (Pro without STRIPE_PRICE_PRO_*).
+func (h *BillingHandler) planPrice(plan, interval string) (string, bool) {
+	var monthly, yearly string
+	switch plan {
+	case config.PlanPremium:
+		monthly, yearly = h.cfg.StripePricePremiumMonthly, h.cfg.StripePricePremiumYearly
+	case config.PlanPro:
+		monthly, yearly = h.cfg.StripePriceProMonthly, h.cfg.StripePriceProYearly
+	default:
+		return "", false
+	}
 	switch interval {
 	case billing.IntervalMonthly:
-		return h.cfg.StripePricePremiumMonthly, true
+		return monthly, true
 	case billing.IntervalYearly:
-		return h.cfg.StripePricePremiumYearly, true
+		return yearly, true
 	}
 	return "", false
 }
 
-// liveManualGrant reports an unexpired (or non-expiring) premium manual grant.
+// validPlan is the plan allowlist for checkout and change-plan bodies.
+func validPlan(p string) bool { return p == config.PlanPremium || p == config.PlanPro }
+
+// paidPlan is the caller's current paid plan for the status JSON: the stored
+// tier of a subscription user while it is still in force; "" otherwise.
+func paidPlan(u *models.User) string {
+	if u.TierSource != "subscription" {
+		return ""
+	}
+	if t := tiers.Resolve(true, u); tiers.Paid(t) {
+		return string(t)
+	}
+	return ""
+}
+
+// liveManualGrant reports an unexpired (or non-expiring) paid (premium or pro)
+// manual grant.
 func liveManualGrant(u *models.User, now time.Time) bool {
-	if u.Tier != "premium" || u.TierSource != "manual_grant" {
+	if !tiers.Paid(tiers.Tier(u.Tier)) || u.TierSource != "manual_grant" {
 		return false
 	}
 	return u.TierExpiresAt == nil || u.TierExpiresAt.After(now)
@@ -103,20 +141,35 @@ func liveManualGrant(u *models.User, now time.Time) bool {
 
 type checkoutRequest struct {
 	Interval string `json:"interval"`
-	Locale   string `json:"locale"`
+	// Plan is "premium" (default when omitted) or "pro" (MM39).
+	Plan   string `json:"plan"`
+	Locale string `json:"locale"`
 }
 
 // Checkout creates a hosted Checkout Session. The price id comes from config
-// only; the client chooses just the interval.
+// only; the client chooses just the plan and the interval.
 func (h *BillingHandler) Checkout(c *gin.Context) {
 	var req checkoutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
 		return
 	}
-	priceID, ok := h.intervalPrice(req.Interval)
+	plan := strings.TrimSpace(req.Plan)
+	if plan == "" {
+		plan = config.PlanPremium
+	}
+	if !validPlan(plan) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_plan"})
+		return
+	}
+	priceID, ok := h.planPrice(plan, req.Interval)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_interval"})
+		return
+	}
+	if priceID == "" {
+		// Pro without STRIPE_PRICE_PRO_*: not for sale on this deployment.
+		h.unavailable(c)
 		return
 	}
 	principal, user, ok := h.caller(c)
@@ -138,6 +191,13 @@ func (h *BillingHandler) Checkout(c *gin.Context) {
 	}
 	if user.StripeSubscriptionID != "" && user.SubscriptionStatus != "" && !billing.IsTerminalStatus(user.SubscriptionStatus) {
 		c.JSON(http.StatusConflict, gin.H{"error": "already_subscribed", "reason": "already_subscribed", "portalAvailable": user.StripeCustomerID != ""})
+		return
+	}
+	// Already on this plan or higher without a live subscription (a stale
+	// mirror, or a paid period still running out): buying again would double
+	// charge for nothing.
+	if cur := tiers.Resolve(true, user); tiers.Rank(cur) >= tiers.Rank(tiers.Tier(plan)) {
+		c.JSON(http.StatusConflict, gin.H{"error": "already_on_plan", "reason": "already_on_plan", "plan": string(cur)})
 		return
 	}
 
@@ -164,6 +224,7 @@ func (h *BillingHandler) Checkout(c *gin.Context) {
 		UserID:     user.ID,
 		CustomerID: customerID,
 		PriceID:    priceID,
+		Plan:       plan,
 		Locale:     req.Locale,
 		BaseURL:    h.cfg.BillingPublicBaseURL,
 		VisitorID:  strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
@@ -238,6 +299,45 @@ type billingStatusResponse struct {
 	// call). Omitted for yearly or no subscription, and when the count is
 	// unavailable.
 	PeriodsPaid *int `json:"periodsPaid,omitempty"`
+	// Plan is the subscription user's current paid plan ("premium" | "pro"),
+	// from the stored tier; null for everyone else (MM39).
+	Plan *string `json:"plan"`
+	// PendingPlan is a scheduled plan change (the Pro->Premium downgrade),
+	// read from the Stripe schedule in the same subscription fetch; null when
+	// none or when that read failed.
+	PendingPlan *pendingPlan `json:"pendingPlan"`
+}
+
+// pendingPlan is a scheduled plan change: the plan and when it starts.
+type pendingPlan struct {
+	To string `json:"to"`
+	At string `json:"at"`
+}
+
+// pendingFor is the subscription's scheduled change to a different plan, or
+// nil. A schedule that only changes the price within the same plan (or has
+// already fired) is not a pending plan.
+func (h *BillingHandler) pendingFor(sub *billing.Subscription, now time.Time) *pendingPlan {
+	if sub == nil || sub.Schedule == nil {
+		return nil
+	}
+	price, at, ok := sub.Schedule.Pending(now)
+	if !ok {
+		return nil
+	}
+	cur, _ := h.prices.TierFor(sub.PriceID)
+	next, _ := h.prices.TierFor(price)
+	if next == cur {
+		return nil
+	}
+	return &pendingPlan{To: next, At: at.UTC().Format(time.RFC3339)}
+}
+
+// fallbackPrice is the display numeral for the subscription's plan and
+// interval, used when Stripe's own amount is unknown.
+func (h *BillingHandler) fallbackPrice(sub *billing.Subscription) float64 {
+	plan, _ := h.prices.TierFor(sub.PriceID)
+	return float64(h.cfg.DisplayPrices().For(plan, sub.Interval))
 }
 
 func strPtr(s string) *string {
@@ -282,6 +382,7 @@ func (h *BillingHandler) buildStatus(ctx context.Context, user *models.User) (bi
 		Status:            strPtr(user.SubscriptionStatus),
 		CancelAtPeriodEnd: user.CancelAtPeriodEnd,
 		PortalAvailable:   h.available() && user.StripeCustomerID != "",
+		Plan:              strPtr(paidPlan(user)),
 	}
 	if user.TierSource == "subscription" && user.TierExpiresAt != nil {
 		s := user.TierExpiresAt.UTC().Format(time.RFC3339)
@@ -310,6 +411,7 @@ func (h *BillingHandler) buildStatus(ctx context.Context, user *models.User) (bi
 			if !out.CancelAtPeriodEnd {
 				out.EndsAt = nil // Stripe says it renews; the mirror's end date is stale
 			}
+			out.PendingPlan = h.pendingFor(sub, now)
 		}
 	}
 	if sub := fetched; sub != nil && sub.IsCancelling(now) {
@@ -321,11 +423,11 @@ func (h *BillingHandler) buildStatus(ctx context.Context, user *models.User) (bi
 			e := end.Format(time.RFC3339)
 			out.EndsAt, out.RenewsAt, out.CancelAtPeriodEnd = &e, &e, true
 		}
-		fallback := float64(h.cfg.BillingPriceMonthlyUSD)
-		if sub.Interval == billing.IntervalYearly {
-			fallback = float64(h.cfg.BillingPriceYearlyUSD)
+		// The retention offer is Premium-only (MM39): a cancelling Pro
+		// subscriber is never offered a discount.
+		if plan, _ := h.prices.TierFor(sub.PriceID); plan != billing.TierPro {
+			out.Offer = toRetentionOffer(billing.ComputeRetentionOffer(sub, now, h.retentionPrices(), h.fallbackPrice(sub)))
 		}
-		out.Offer = toRetentionOffer(billing.ComputeRetentionOffer(sub, now, h.retentionPrices(), fallback))
 	}
 	if h.available() && user.BillingInterval == "monthly" && user.StripeSubscriptionID != "" {
 		if n, err := h.store.CountPaidPeriods(ctx, user.ID, user.StripeSubscriptionID); err != nil {
@@ -401,12 +503,15 @@ func (h *BillingHandler) Retain(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "no_subscription"})
 		return
 	}
-	now := h.now().UTC()
-	fallback := float64(h.cfg.BillingPriceMonthlyUSD)
-	if sub.Interval == billing.IntervalYearly {
-		fallback = float64(h.cfg.BillingPriceYearlyUSD)
+	// MM39: the retention offer (and its plain resume) is Premium-only. A
+	// cancelling Pro subscriber is offered the scheduled drop to Premium
+	// (change-plan) instead, never a discount.
+	if plan, _ := h.prices.TierFor(sub.PriceID); plan == billing.TierPro {
+		c.JSON(http.StatusConflict, gin.H{"error": "offer_not_available", "reason": "offer_not_available"})
+		return
 	}
-	offer := billing.ComputeRetentionOffer(sub, now, h.retentionPrices(), fallback)
+	now := h.now().UTC()
+	offer := billing.ComputeRetentionOffer(sub, now, h.retentionPrices(), h.fallbackPrice(sub))
 	if offer == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "not_cancelled", "reason": "not_cancelled"})
 		return
@@ -475,16 +580,20 @@ func (h *BillingHandler) Session(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"belongsToUser": false, "paid": false, "tierApplied": false})
 		return
 	}
-	applied := sess.Paid && tiers.Resolve(true, user) == tiers.TierPremium && user.TierSource == "subscription"
+	applied := sess.Paid && paidPlan(user) != ""
+	plan := paidPlan(user)
 	if sess.Paid && !applied && h.processor != nil {
 		// Don't make a buyer wait on the webhook: apply the paid subscription now.
 		if err := h.processor.ApplyCheckout(c.Request.Context(), sess); err != nil {
 			h.logger.Warn("billing: applying paid checkout on return failed", "error", err.Error())
 		} else if refreshed, err := h.store.UserByID(c.Request.Context(), user.ID); err == nil && refreshed != nil {
-			applied = tiers.Resolve(true, refreshed) == tiers.TierPremium && refreshed.TierSource == "subscription"
+			plan = paidPlan(refreshed)
+			applied = plan != ""
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"belongsToUser": true, "paid": sess.Paid, "tierApplied": applied})
+	// plan (MM39): the paid plan now in force ("premium" | "pro"), null until
+	// applied, so the success landing can say which one was bought.
+	c.JSON(http.StatusOK, gin.H{"belongsToUser": true, "paid": sess.Paid, "tierApplied": applied, "plan": strPtr(plan)})
 }
 
 // Webhook receives Stripe events. Authenticated by signature only.
@@ -526,6 +635,8 @@ func RegisterBillingRoutes(rg *gin.RouterGroup, h *BillingHandler, verifier midd
 	authed.POST("/checkout", h.Checkout)
 	authed.POST("/portal", h.Portal)
 	authed.POST("/retain", h.Retain)
+	authed.POST("/change-plan", h.ChangePlan)
+	authed.DELETE("/change-plan", h.KeepPlan)
 	authed.GET("/session/:id", h.Session)
 
 	// /status stays reachable when billing is off (purchasable:false) so the

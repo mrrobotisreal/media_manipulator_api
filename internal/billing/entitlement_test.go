@@ -36,7 +36,7 @@ func TestEntitlementMatrix(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := Entitlement(&tc.sub, now, grace)
+			got := Entitlement(&tc.sub, now, grace, nil)
 			if got.Change != tc.wantChange || got.Tier != tc.wantTier || got.Source != tc.wantSource {
 				t.Fatalf("got %+v", got)
 			}
@@ -48,7 +48,7 @@ func TestEntitlementMatrix(t *testing.T) {
 			}
 		})
 	}
-	if got := Entitlement(nil, now, grace); got.Change {
+	if got := Entitlement(nil, now, grace, nil); got.Change {
 		t.Fatal("nil subscription must not change the tier")
 	}
 }
@@ -58,7 +58,7 @@ func ptr(t time.Time) *time.Time { return &t }
 func TestEveryStripeStatusIsCovered(t *testing.T) {
 	// Every status in the Stripe enum must be decided deliberately.
 	for _, s := range []string{StatusTrialing, StatusActive, StatusPastDue, StatusCanceled, StatusUnpaid, StatusIncomplete, StatusIncompleteExpired, StatusPaused} {
-		_ = Entitlement(&Subscription{Status: s, CurrentPeriodEnd: time.Now().Add(time.Hour)}, time.Now(), time.Hour)
+		_ = Entitlement(&Subscription{Status: s, CurrentPeriodEnd: time.Now().Add(time.Hour)}, time.Now(), time.Hour, nil)
 	}
 }
 
