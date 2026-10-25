@@ -10,3 +10,10 @@ func (c *Config) BillingConfigured() bool {
 	return c.StripeSecretKey != "" && c.StripeWebhookSecret != "" &&
 		c.StripePricePremiumMonthly != "" && c.StripePricePremiumYearly != ""
 }
+
+// ProPurchasable reports whether Pro can be sold (MM39): billing is configured
+// and both Pro Price ids are set. Separate from BillingConfigured on purpose, so
+// a deployment without Pro prices still sells Premium.
+func (c *Config) ProPurchasable() bool {
+	return c.BillingConfigured() && c.StripePriceProMonthly != "" && c.StripePriceProYearly != ""
+}

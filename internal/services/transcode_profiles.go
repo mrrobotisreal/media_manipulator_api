@@ -108,8 +108,8 @@ func AnonymousLadderAccess() LadderAccess {
 
 func bounds(tier tiers.Tier, limits tiers.Limits) LadderAccess {
 	min := ladderFloorHeight
-	// Operator inherits Premium's limits, so it gets Premium's floor too.
-	if tier == tiers.TierPremium || tier == tiers.TierOperator {
+	// Pro and operator inherit Premium's limits, so they get its floor too.
+	if tier == tiers.TierPremium || tier == tiers.TierPro || tier == tiers.TierOperator {
 		min = 0
 	}
 	return LadderAccess{Tier: tier, MinHeight: min, MaxHeight: limits.MaxLadderHeight}

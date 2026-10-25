@@ -91,13 +91,18 @@ func TestResolveIgnoresStoredOperator(t *testing.T) {
 	}
 }
 
-// Operator is Premium with the allowances removed — never less than Premium
-// on any axis, and uncounted on the ones the quota middleware counts.
+// Operator is Pro (the top public rung, MM39) with the allowances removed —
+// never less than Pro on any axis, and uncounted on the ones the quota
+// middleware counts.
 func TestOperatorLimits(t *testing.T) {
 	cfg := config.Load()
 	cfg.OperatorEmails = []string{"owner@example.com"}
 	r := New(cfg)
-	op, premium := r.For(TierOperator), r.For(TierPremium)
+	op, premium, pro := r.For(TierOperator), r.For(TierPremium), r.For(TierPro)
+	if op.StudioVersionAutoKeep != pro.StudioVersionAutoKeep || op.MaxLadderHeight != pro.MaxLadderHeight ||
+		op.ResultRetentionHours != pro.ResultRetentionHours || op.PriorityGPU != pro.PriorityGPU || op.AdsRemoved != pro.AdsRemoved {
+		t.Errorf("operator must inherit pro's non-overridden fields:\n op  %+v\n pro %+v", op, pro)
+	}
 
 	if op.OpsPerDay != Unlimited || op.AIOpsPerDay != Unlimited || op.StudioProjects != Unlimited {
 		t.Errorf("operator allowances must be Unlimited, got ops=%d ai=%d projects=%d", op.OpsPerDay, op.AIOpsPerDay, op.StudioProjects)
@@ -152,5 +157,20 @@ func TestEligibility(t *testing.T) {
 	}
 	if got := New(config.Load()).Eligibility("owner@example.com", true); got != OperatorEligibilityNone {
 		t.Errorf("empty allowlist: got %q, want none", got)
+	}
+}
+
+// The operator row is derived from Pro (MM39): a Pro-only retune reaches it.
+func TestOperatorDerivesFromPro(t *testing.T) {
+	t.Setenv("TIER_PRO_RETENTION_HOURS", "1000")
+	t.Setenv("TIER_PRO_STUDIO_VERSION_AUTO_KEEP", "50")
+	cfg := config.Load()
+	cfg.OperatorEmails = []string{"owner@example.com"}
+	op := New(cfg).For(TierOperator)
+	if op.ResultRetentionHours != 1000 || op.StudioVersionAutoKeep != 50 {
+		t.Fatalf("operator did not inherit pro: %+v", op)
+	}
+	if op.OpsPerDay != Unlimited || op.AIOpsPerDay != Unlimited || op.ExportsPerDay != Unlimited || !op.RateLimitExempt {
+		t.Fatalf("operator overrides lost: %+v", op)
 	}
 }

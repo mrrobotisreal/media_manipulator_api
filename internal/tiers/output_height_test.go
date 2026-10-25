@@ -9,9 +9,10 @@ func TestEnforceOutputHeightTable(t *testing.T) {
 		TierAnonymous: {1080: true, 1440: false, 2160: false, 4320: false},
 		TierFree:      {1080: true, 1440: true, 2160: false, 4320: false},
 		TierPremium:   {1080: true, 1440: true, 2160: true, 4320: false},
+		TierPro:       {1080: true, 1440: true, 2160: true, 4320: false},
 		TierOperator:  {1080: true, 1440: true, 2160: true, 4320: true},
 	}
-	wantPath := map[Tier]string{TierAnonymous: "signup", TierFree: "premium", TierPremium: "", TierOperator: ""}
+	wantPath := map[Tier]string{TierAnonymous: "signup", TierFree: "premium", TierPremium: "", TierPro: "", TierOperator: ""}
 	for tier, row := range allowed {
 		for h, ok := range row {
 			got := EnforceOutputHeight(tier, r.For(tier), h)
