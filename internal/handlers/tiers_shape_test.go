@@ -67,5 +67,51 @@ func TestTiersResponseShape(t *testing.T) {
 		if _, has := limits["exportsPerDay"]; !has {
 			t.Errorf("%v: exportsPerDay must be present", d["tier"])
 		}
+		assertVectorShape(t, d["tier"], limits)
+	}
+}
+
+// MM43: every public tier carries the Motion fields; vectorFormats is an
+// array, vectorVideo a nested {maxHeight,maxFps,maxSeconds} object, and the
+// tiers without raster video (anonymous, free) carry zeros there.
+func assertVectorShape(t *testing.T, tier any, limits map[string]any) {
+	t.Helper()
+	for _, k := range []string{"vectorExportsPerDay", "vectorProjects", "vectorMaxDurationMs"} {
+		if _, isNum := limits[k].(float64); !isNum {
+			t.Errorf("%v: %s must be a number, got %T", tier, k, limits[k])
+		}
+	}
+	formats, isArr := limits["vectorFormats"].([]any)
+	if !isArr || len(formats) == 0 {
+		t.Errorf("%v: vectorFormats must be a non-empty array, got %#v", tier, limits["vectorFormats"])
+	}
+	for _, f := range formats {
+		if f == "svg_static" {
+			t.Errorf("%v: svg_static is uncounted and must not be listed", tier)
+		}
+	}
+	video, isObj := limits["vectorVideo"].(map[string]any)
+	if !isObj {
+		t.Fatalf("%v: vectorVideo must be an object, got %#v", tier, limits["vectorVideo"])
+	}
+	for _, k := range []string{"maxHeight", "maxFps", "maxSeconds"} {
+		if _, isNum := video[k].(float64); !isNum {
+			t.Errorf("%v: vectorVideo.%s must be a number", tier, k)
+		}
+	}
+	if tier == "anonymous" || tier == "free" {
+		if video["maxHeight"] != 0.0 || video["maxFps"] != 0.0 || video["maxSeconds"] != 0.0 {
+			t.Errorf("%v: no raster video, so vectorVideo must be all zeros: %v", tier, video)
+		}
+	}
+	switch tier {
+	case "anonymous":
+		if limits["vectorExportsPerDay"] != 2.0 || limits["vectorProjects"] != 1.0 || limits["vectorMaxDurationMs"] != 10000.0 {
+			t.Errorf("anonymous vector row = %v", limits)
+		}
+	case "premium":
+		if video["maxHeight"] != 720.0 || video["maxSeconds"] != 15.0 || limits["vectorExportsPerDay"] != 30.0 {
+			t.Errorf("premium vector row = %v / %v", limits, video)
+		}
 	}
 }
