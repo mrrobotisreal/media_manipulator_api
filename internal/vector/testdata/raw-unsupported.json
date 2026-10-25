@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 512,
+    "height": 512,
+    "viewBox": "0 0 512 512",
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "id": "pat",
+      "type": "raw",
+      "name": "Pattern",
+      "markup": "<pattern id=\"dots\" width=\"10\" height=\"10\" patternUnits=\"userSpaceOnUse\"><circle cx=\"5\" cy=\"5\" r=\"2\" fill=\"#888\"/></pattern><rect width=\"100\" height=\"100\" fill=\"url(#dots)\"/><use href=\"#dots\"/>"
+    },
+    {
+      "id": "img",
+      "type": "image",
+      "href": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+      "x": 100,
+      "y": 100,
+      "width": 64,
+      "height": 64
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": []
+}

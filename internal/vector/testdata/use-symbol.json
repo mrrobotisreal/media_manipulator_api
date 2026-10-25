@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 512,
+    "height": 512,
+    "viewBox": "0 0 512 512",
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "id": "u1",
+      "type": "use",
+      "href": "#star",
+      "transform": {
+        "x": 50,
+        "y": 50,
+        "scaleX": 1,
+        "scaleY": 1,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "u2",
+      "type": "use",
+      "href": "#star",
+      "transform": {
+        "x": 250,
+        "y": 50,
+        "scaleX": 2,
+        "scaleY": 2,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "base",
+      "type": "rect",
+      "x": 20,
+      "y": 300,
+      "width": 100,
+      "height": 60,
+      "fill": "#2288aa"
+    },
+    {
+      "id": "u3",
+      "type": "use",
+      "href": "#base",
+      "transform": {
+        "x": 200,
+        "y": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "rotation": 0
+      }
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": [
+      {
+        "id": "star",
+        "children": [
+          {
+            "id": "star-p",
+            "type": "polygon",
+            "points": "50,5 61,40 98,40 68,62 79,96 50,75 21,96 32,62 2,40 39,40",
+            "fill": "#ffdd00",
+            "stroke": "#aa8800",
+            "strokeWidth": 2
+          }
+        ]
+      }
+    ]
+  },
+  "animations": []
+}

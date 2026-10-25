@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 512,
+    "height": 512,
+    "viewBox": "0 0 512 512",
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "id": "g1",
+      "type": "group",
+      "name": "Level 1",
+      "transform": {
+        "x": 10,
+        "y": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "rotation": 0
+      },
+      "children": [
+        {
+          "id": "g2",
+          "type": "group",
+          "name": "Level 2",
+          "opacity": 0.9,
+          "children": [
+            {
+              "id": "g3",
+              "type": "group",
+              "name": "Level 3",
+              "transform": {
+                "x": 0,
+                "y": 0,
+                "scaleX": 1,
+                "scaleY": 1,
+                "rotation": 10
+              },
+              "children": [
+                {
+                  "id": "g4",
+                  "type": "group",
+                  "name": "Level 4",
+                  "children": [
+                    {
+                      "id": "deep",
+                      "type": "rect",
+                      "x": 100,
+                      "y": 100,
+                      "width": 50,
+                      "height": 50,
+                      "fill": "#00aa88"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top",
+      "type": "ellipse",
+      "cx": 400,
+      "cy": 400,
+      "rx": 30,
+      "ry": 30,
+      "fill": "#aa0000"
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": []
+}

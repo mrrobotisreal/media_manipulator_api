@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 512,
+    "height": 512,
+    "viewBox": "0 0 512 512",
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "id": "bg",
+      "type": "rect",
+      "x": 0,
+      "y": 0,
+      "width": 512,
+      "height": 512,
+      "fill": "url(#lin1)"
+    },
+    {
+      "id": "disc",
+      "type": "ellipse",
+      "cx": 256,
+      "cy": 256,
+      "rx": 120,
+      "ry": 120,
+      "fill": "url( '#rad1' )",
+      "stroke": "url(#lin2)",
+      "strokeWidth": 6
+    }
+  ],
+  "defs": {
+    "gradients": [
+      {
+        "id": "lin1",
+        "kind": "linear",
+        "stops": [
+          {
+            "offset": 0,
+            "color": "#ff0066"
+          },
+          {
+            "offset": 1,
+            "color": "#3300ff"
+          }
+        ]
+      },
+      {
+        "id": "rad1",
+        "kind": "radial",
+        "stops": [
+          {
+            "offset": 0,
+            "color": "#ffffff"
+          },
+          {
+            "offset": 0.6,
+            "color": "#ffcc00"
+          },
+          {
+            "offset": 1,
+            "color": "#ff6600"
+          }
+        ]
+      },
+      {
+        "id": "lin2",
+        "kind": "linear",
+        "href": "#lin1"
+      }
+    ],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": []
+}

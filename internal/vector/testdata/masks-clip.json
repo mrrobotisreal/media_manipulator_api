@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 512,
+    "height": 512,
+    "viewBox": "0 0 512 512",
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "id": "photo",
+      "type": "rect",
+      "x": 0,
+      "y": 0,
+      "width": 512,
+      "height": 512,
+      "fill": "#445566",
+      "mask": "url(#fade)",
+      "clipPath": "round"
+    },
+    {
+      "id": "badge",
+      "type": "ellipse",
+      "cx": 400,
+      "cy": 100,
+      "rx": 50,
+      "ry": 50,
+      "fill": "#ffcc00",
+      "mask": "#fade",
+      "clipPath": "#round"
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [
+      {
+        "id": "fade",
+        "children": [
+          {
+            "id": "fade-r",
+            "type": "rect",
+            "x": 0,
+            "y": 0,
+            "width": 512,
+            "height": 512,
+            "fill": "#ffffff",
+            "opacity": 0.6
+          }
+        ]
+      }
+    ],
+    "clipPaths": [
+      {
+        "id": "round",
+        "children": [
+          {
+            "id": "round-e",
+            "type": "ellipse",
+            "cx": 256,
+            "cy": 256,
+            "rx": 240,
+            "ry": 240
+          }
+        ]
+      }
+    ],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": []
+}
