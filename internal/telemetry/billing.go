@@ -35,6 +35,15 @@ SET stripe_subscription_id = nullif($2, ''),
     updated_at = now()
 WHERE id = $1::uuid`
 
+	// setBillingCurrencyQuery mirrors the subscription's Stripe currency (MM69).
+	// Only an allowlisted value is ever written (the CHECK backs it up); it is
+	// overwritten, not COALESCEd, because Stripe is the truth and a brand-new
+	// Customer after an account reset may legitimately differ.
+	setBillingCurrencyQuery = `
+UPDATE mm_users
+SET billing_currency = $2, updated_at = now()
+WHERE id = $1::uuid AND billing_currency IS DISTINCT FROM $2`
+
 	// insertBillingEventQuery is the idempotency gate: the event id is the primary
 	// key, ON CONFLICT DO NOTHING never errors on a replay, and the follow-up
 	// SELECT reports whether an earlier delivery already finished.
@@ -105,6 +114,18 @@ func (s *Store) UpdateSubscriptionState(ctx context.Context, userID, subscriptio
 	ctx, cancel := s.ctx(ctx)
 	defer cancel()
 	_, err := s.Pool.Exec(ctx, updateSubscriptionStateQuery, userID, subscriptionID, status, interval, cancelAtPeriodEnd)
+	return err
+}
+
+// SetBillingCurrency stores the currency Stripe bills the user in ("usd" |
+// "eur"). A no-op when unchanged. Never touches tier columns.
+func (s *Store) SetBillingCurrency(ctx context.Context, userID, currency string) error {
+	if !s.Enabled() {
+		return ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	_, err := s.Pool.Exec(ctx, setBillingCurrencyQuery, userID, currency)
 	return err
 }
 

@@ -47,7 +47,10 @@ type UserSettings struct {
 	// MM31 email preferences. ai_job_finished defaults off, expiry_digest on.
 	EmailAIJobFinished bool
 	EmailExpiryDigest  bool
-	UpdatedAt          time.Time
+	// Currency (MM69) is the chosen billing display currency, "usd" | "eur";
+	// "" = never chosen (the geographic default applies).
+	Currency  string
+	UpdatedAt time.Time
 }
 
 // SettingsPatch is a partial update: nil fields are left alone.
@@ -57,6 +60,8 @@ type SettingsPatch struct {
 	HistoryVisibility     *string
 	EmailAIJobFinished    *bool
 	EmailExpiryDigest     *bool
+	// Currency (MM69): "usd" | "eur". Validated by the handler.
+	Currency *string
 }
 
 // RetainedObject is one ledger row to write.
@@ -89,13 +94,13 @@ type ClaimResult struct {
 }
 
 const settingsColumns = `user_id::text, retention_hours, retention_scope, delete_metadata_reports,
-	history_visibility, email_ai_job_finished, email_expiry_digest, updated_at`
+	history_visibility, email_ai_job_finished, email_expiry_digest, coalesce(currency, ''), updated_at`
 
 func scanSettings(row pgx.Row) (*UserSettings, error) {
 	var s UserSettings
 	if err := row.Scan(&s.UserID, &s.RetentionHours, &s.RetentionScope,
 		&s.DeleteMetadataReports, &s.HistoryVisibility,
-		&s.EmailAIJobFinished, &s.EmailExpiryDigest, &s.UpdatedAt); err != nil {
+		&s.EmailAIJobFinished, &s.EmailExpiryDigest, &s.Currency, &s.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &s, nil
@@ -149,6 +154,7 @@ UPDATE mm_user_settings SET
 	history_visibility      = COALESCE($4, history_visibility),
 	email_ai_job_finished   = COALESCE($5, email_ai_job_finished),
 	email_expiry_digest     = COALESCE($6, email_expiry_digest),
+	currency                = COALESCE($7, currency),
 	updated_at              = now()
 WHERE user_id = $1
 RETURNING ` + settingsColumns
@@ -191,7 +197,7 @@ func (s *Store) ApplyUserSettings(ctx context.Context, userID string, defaultHou
 	}
 	updated, err := scanSettings(tx.QueryRow(ctx, updateSettingsQuery,
 		userID, patch.RetentionHours, patch.DeleteMetadataReports, patch.HistoryVisibility,
-		patch.EmailAIJobFinished, patch.EmailExpiryDigest))
+		patch.EmailAIJobFinished, patch.EmailExpiryDigest, patch.Currency))
 	if err != nil {
 		return nil, 0, err
 	}

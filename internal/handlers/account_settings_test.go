@@ -89,6 +89,9 @@ func (f *fakeSettingsStore) ApplyUserSettings(ctx context.Context, id string, de
 	if p.EmailExpiryDigest != nil {
 		s.EmailExpiryDigest = *p.EmailExpiryDigest
 	}
+	if p.Currency != nil {
+		s.Currency = *p.Currency
+	}
 	return s, n, nil
 }
 func (f *fakeSettingsStore) PreviewRetentionShrink(_ context.Context, id string, hours int, now time.Time) (telemetry.RetentionPreview, error) {
@@ -333,5 +336,42 @@ func TestSettingsEmailPreferences(t *testing.T) {
 	// Existing contract unchanged: an empty body is still rejected.
 	if w := doReq(r, "PATCH", "/api/account/settings", "alice", `{}`); w.Code != 400 {
 		t.Errorf("empty patch = %d, want 400", w.Code)
+	}
+}
+
+// MM69: the chosen billing currency reads as null until set, accepts usd|eur
+// (normalized), refuses anything else, and a currency-only patch touches
+// nothing else.
+func TestSettingsCurrency(t *testing.T) {
+	now := time.Now().UTC()
+	st := newSettingsStore(now)
+	r := settingsRouter(st, now)
+	var got map[string]any
+	w := doReq(r, "GET", "/api/account/settings", "alice", "")
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if v, ok := got["currency"]; !ok || v != nil {
+		t.Fatalf("currency must be present and null before a choice, got %v (present=%v)", v, ok)
+	}
+	for _, bad := range []string{`{"currency":"gbp"}`, `{"currency":""}`, `{"currency":"euro"}`} {
+		w := doReq(r, "PATCH", "/api/account/settings", "alice", bad)
+		if w.Code != 400 || !bytes.Contains(w.Body.Bytes(), []byte(`"field":"currency"`)) {
+			t.Errorf("%s = %d %s, want 400 field currency", bad, w.Code, w.Body)
+		}
+	}
+	w = doReq(r, "PATCH", "/api/account/settings", "alice", `{"currency":"EUR"}`)
+	if w.Code != 200 {
+		t.Fatalf("patch %d: %s", w.Code, w.Body)
+	}
+	p := st.applied[len(st.applied)-1]
+	if p.Currency == nil || *p.Currency != "eur" {
+		t.Errorf("currency not normalized/forwarded: %+v", p)
+	}
+	if p.RetentionHours != nil || p.EmailAIJobFinished != nil || p.HistoryVisibility != nil {
+		t.Errorf("a currency-only patch must not touch other settings: %+v", p)
+	}
+	got = map[string]any{}
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if got["currency"] != "eur" {
+		t.Errorf("response currency = %v, want eur", got["currency"])
 	}
 }

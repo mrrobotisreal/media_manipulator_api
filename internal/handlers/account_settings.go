@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/billing"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
@@ -56,10 +57,13 @@ type settingsResponse struct {
 	HistoryVisibility     string `json:"historyVisibility"`
 	// MM31: additive email preferences. Welcome, payment-failed and account-deleted
 	// mail are transactional and have no toggle.
-	EmailAIJobFinished bool           `json:"emailAiJobFinished"`
-	EmailExpiryDigest  bool           `json:"emailExpiryDigest"`
-	UpdatedAt          time.Time      `json:"updatedAt"`
-	Limits             settingsLimits `json:"limits"`
+	EmailAIJobFinished bool `json:"emailAiJobFinished"`
+	EmailExpiryDigest  bool `json:"emailExpiryDigest"`
+	// Currency (MM69) is the chosen billing currency, "usd" | "eur", or null
+	// when never chosen (the UI then uses the geographic default).
+	Currency  *string        `json:"currency"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+	Limits    settingsLimits `json:"limits"`
 	// Restamped is the number of live items whose expiry moved. PATCH only.
 	Restamped *int64 `json:"restamped,omitempty"`
 }
@@ -93,6 +97,7 @@ func toSettingsResponse(s *telemetry.UserSettings, defaultHours int) settingsRes
 		HistoryVisibility:     s.HistoryVisibility,
 		EmailAIJobFinished:    s.EmailAIJobFinished,
 		EmailExpiryDigest:     s.EmailExpiryDigest,
+		Currency:              strPtr(s.Currency),
 		UpdatedAt:             s.UpdatedAt,
 		Limits:                limitsFor(defaultHours),
 	}
@@ -145,12 +150,15 @@ type settingsPatchBody struct {
 	HistoryVisibility     *string `json:"historyVisibility"`
 	EmailAIJobFinished    *bool   `json:"emailAiJobFinished"`
 	EmailExpiryDigest     *bool   `json:"emailExpiryDigest"`
+	// Currency (MM69): "usd" | "eur". Clearing it is not supported (a choice,
+	// once made, is only ever replaced by the other currency).
+	Currency *string `json:"currency"`
 }
 
 // validate returns the first field-level problem, or nil.
 func (b settingsPatchBody) validate() *settingsError {
 	if b.RetentionHours == nil && b.RetentionScope == nil && b.DeleteMetadataReports == nil && b.HistoryVisibility == nil &&
-		b.EmailAIJobFinished == nil && b.EmailExpiryDigest == nil {
+		b.EmailAIJobFinished == nil && b.EmailExpiryDigest == nil && b.Currency == nil {
 		return &settingsError{Error: "No settings provided"}
 	}
 	if b.RetentionHours != nil && !retention.ValidHours(*b.RetentionHours) {
@@ -165,6 +173,11 @@ func (b settingsPatchBody) validate() *settingsError {
 	if b.HistoryVisibility != nil &&
 		*b.HistoryVisibility != telemetry.HistoryVisibilityFull && *b.HistoryVisibility != telemetry.HistoryVisibilityNames {
 		return &settingsError{Error: "historyVisibility must be \"full\" or \"names_only\"", Field: "historyVisibility"}
+	}
+	if b.Currency != nil {
+		if _, ok := billing.NormalizeCurrency(*b.Currency); !ok {
+			return &settingsError{Error: "currency must be \"usd\" or \"eur\"", Field: "currency"}
+		}
 	}
 	return nil
 }
@@ -246,12 +259,18 @@ func (h *SettingsHandler) Patch(c *gin.Context) {
 		return
 	}
 
+	var currency *string
+	if body.Currency != nil {
+		cur, _ := billing.NormalizeCurrency(*body.Currency) // validated above
+		currency = &cur
+	}
 	updated, restamped, err := h.store.ApplyUserSettings(c.Request.Context(), user.ID, def, telemetry.SettingsPatch{
 		RetentionHours:        body.RetentionHours,
 		DeleteMetadataReports: body.DeleteMetadataReports,
 		HistoryVisibility:     body.HistoryVisibility,
 		EmailAIJobFinished:    body.EmailAIJobFinished,
 		EmailExpiryDigest:     body.EmailExpiryDigest,
+		Currency:              currency,
 	}, h.now().UTC())
 	if err != nil {
 		h.logger.Error("account settings: update failed", "error", err.Error())

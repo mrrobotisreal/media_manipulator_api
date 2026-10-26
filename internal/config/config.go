@@ -330,11 +330,21 @@ type Config struct {
 	// BillingPublicBaseURL prefixes Checkout success/cancel and Portal return URLs.
 	BillingPublicBaseURL string
 	// Display-only prices for GET /api/tiers; the charged amount is the Stripe Price.
+	//
+	// MM69: despite the _USD suffix these are currency-neutral NUMERALS. Prices
+	// are sold in USD and EUR with identical numerals (Premium 8 / 80, Pro
+	// 15 / 150): the same value is served as both prices.usd and prices.eur.
+	// Renaming the env vars is out of scope (PRO_TIER.md §7.1).
 	BillingPriceMonthlyUSD int
 	BillingPriceYearlyUSD  int
 	// Pro display prices (BILLING_PRICE_PRO_MONTHLY_USD / _YEARLY_USD, 15 / 150).
 	BillingPriceProMonthlyUSD int
 	BillingPriceProYearlyUSD  int
+	// BillingEURCountries (BILLING_EUR_COUNTRIES, MM69) are the ISO 3166-1
+	// alpha-2 countries whose visitors see euros by default (upper-case,
+	// comma- or space-separated). Everyone else defaults to US dollars, and
+	// any visitor may switch. Default: DefaultBillingEURCountries.
+	BillingEURCountries []string
 
 	// Transactional email (MM31). Off unless EmailEnabled AND EmailProviderAPIKey
 	// are both set; otherwise every send is a logged no-op.
@@ -796,6 +806,7 @@ func Load() *Config {
 		BillingPriceYearlyUSD:     getEnvInt("BILLING_PRICE_YEARLY_USD", 80),
 		BillingPriceProMonthlyUSD: getEnvInt("BILLING_PRICE_PRO_MONTHLY_USD", 15),
 		BillingPriceProYearlyUSD:  getEnvInt("BILLING_PRICE_PRO_YEARLY_USD", 150),
+		BillingEURCountries:       ParseCountryList(getEnv("BILLING_EUR_COUNTRIES", DefaultBillingEURCountries)),
 
 		// FFmpeg validation
 		MaxVideoDurationSeconds: getEnvInt("MAX_VIDEO_DURATION_SECONDS", 7200),

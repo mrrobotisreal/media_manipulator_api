@@ -389,7 +389,7 @@ func TestTiersResponseIsConfigDriven(t *testing.T) {
 		r.GET("/api/tiers", h.Tiers)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/tiers", nil))
-		if w.Header().Get("Cache-Control") != "public, max-age=300" {
+		if w.Header().Get("Cache-Control") != "private, max-age=300" {
 			t.Fatalf("cache header %q", w.Header().Get("Cache-Control"))
 		}
 		t.Logf("/api/tiers (billing=%v) premium fields: purchasable=%s", cfg.BillingEnabled, w.Body.String()[strings.Index(w.Body.String(), `"premiumPurchasable"`):])

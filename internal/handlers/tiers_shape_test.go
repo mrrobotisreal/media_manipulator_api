@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/geo"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
 
@@ -26,7 +28,8 @@ func TestTiersResponseShape(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status %d", w.Code)
 	}
-	if got := w.Header().Get("Cache-Control"); got != "public, max-age=300" {
+	// MM69: defaultCurrency is per caller, so no shared cache may store it.
+	if got := w.Header().Get("Cache-Control"); got != "private, max-age=300" {
 		t.Fatalf("Cache-Control = %q", got)
 	}
 	var body struct {
@@ -47,7 +50,9 @@ func TestTiersResponseShape(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &top); err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{"premiumPurchasable", "premiumPriceUSD", "premiumPriceYearlyUSD", "proPurchasable", "proPriceUSD", "proPriceYearlyUSD"} {
+	// premiumPriceUSD, premiumPriceYearlyUSD, proPriceUSD, proPriceYearlyUSD are
+	// DEPRECATED since MM69 (use prices.usd); kept for one release.
+	for _, k := range []string{"premiumPurchasable", "premiumPriceUSD", "premiumPriceYearlyUSD", "proPurchasable", "proPriceUSD", "proPriceYearlyUSD", "defaultCurrency", "prices"} {
 		if _, has := top[k]; !has {
 			t.Errorf("missing top-level field %s", k)
 		}
@@ -129,4 +134,73 @@ func assertVectorShape(t *testing.T, tier any, limits map[string]any) {
 			}
 		}
 	}
+}
+
+// MM69: /api/tiers serves both currency maps with identical numerals (equal to
+// the deprecated *USD fields), and defaultCurrency from the caller's country:
+// MaxMind first, then CF-IPCountry, else usd.
+func TestTiersCurrencyShape(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := config.Load()
+	get := func(h *AccountHandler, hdr map[string]string) map[string]any {
+		r := gin.New()
+		r.GET("/api/tiers", h.Tiers)
+		req := httptest.NewRequest(http.MethodGet, "/api/tiers", nil)
+		for k, v := range hdr {
+			req.Header.Set(k, v)
+		}
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		var top map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &top); err != nil {
+			t.Fatal(err)
+		}
+		return top
+	}
+	h := NewAccountHandler(nil, tiers.New(cfg), cfg, nil, nil, nil)
+	top := get(h, nil)
+	if top["defaultCurrency"] != "usd" {
+		t.Errorf("no country signal must default to usd, got %v", top["defaultCurrency"])
+	}
+	prices, _ := top["prices"].(map[string]any)
+	usd, _ := prices["usd"].(map[string]any)
+	eur, _ := prices["eur"].(map[string]any)
+	if len(prices) != 2 || usd == nil || eur == nil {
+		t.Fatalf("prices must have exactly usd and eur: %v", top["prices"])
+	}
+	want := map[string]any{"premiumMonthly": 8.0, "premiumYearly": 80.0, "proMonthly": 15.0, "proYearly": 150.0}
+	for k, v := range want {
+		if usd[k] != v || eur[k] != v {
+			t.Errorf("%s: usd %v eur %v, want %v in both (same numerals)", k, usd[k], eur[k], v)
+		}
+	}
+	for legacy, k := range map[string]string{"premiumPriceUSD": "premiumMonthly", "premiumPriceYearlyUSD": "premiumYearly", "proPriceUSD": "proMonthly", "proPriceYearlyUSD": "proYearly"} {
+		if top[legacy] != usd[k] {
+			t.Errorf("deprecated %s = %v, want prices.usd.%s %v", legacy, top[legacy], k, usd[k])
+		}
+	}
+	for country, want := range map[string]string{"DE": "eur", "fr": "eur", "GB": "eur", "CH": "eur", "US": "usd", "XX": "usd", "T1": "usd", "": "usd"} {
+		if got := get(h, map[string]string{"CF-IPCountry": country})["defaultCurrency"]; got != want {
+			t.Errorf("CF-IPCountry %q: defaultCurrency %v, want %s", country, got, want)
+		}
+	}
+	// MaxMind wins over the header.
+	h.geo = fakeCountry{"IT"}
+	if got := get(h, map[string]string{"CF-IPCountry": "US", "CF-Connecting-IP": "203.0.113.9"})["defaultCurrency"]; got != "eur" {
+		t.Errorf("MaxMind IT must win over CF-IPCountry US, got %v", got)
+	}
+	h.geo = fakeCountry{""}
+	if got := get(h, map[string]string{"CF-IPCountry": "DE", "CF-Connecting-IP": "203.0.113.9"})["defaultCurrency"]; got != "eur" {
+		t.Errorf("an unknown MaxMind country must fall back to the header, got %v", got)
+	}
+	t.Logf("/api/tiers currency fields: defaultCurrency=%v prices=%v", top["defaultCurrency"], top["prices"])
+}
+
+type fakeCountry struct{ code string }
+
+func (f fakeCountry) Lookup(context.Context, string) (*geo.Entry, error) {
+	if f.code == "" {
+		return nil, nil
+	}
+	return &geo.Entry{CountryCode: f.code}, nil
 }

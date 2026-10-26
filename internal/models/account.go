@@ -28,6 +28,10 @@ type User struct {
 	SubscriptionStatus   string `json:"subscriptionStatus,omitempty"`
 	BillingInterval      string `json:"billingInterval,omitempty"`
 	CancelAtPeriodEnd    bool   `json:"cancelAtPeriodEnd"`
+	// BillingCurrency (MM69) is the currency Stripe bills this user in
+	// ("usd" | "eur"), mirrored from the subscription; "" = not known yet.
+	// Once set it is the Stripe Customer's locked currency.
+	BillingCurrency string `json:"-"`
 }
 
 // UsageSubjectKind identifies what a quota counter is keyed on. Preference
