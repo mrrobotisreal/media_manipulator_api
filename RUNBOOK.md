@@ -728,8 +728,23 @@ history before it is not counted.
     already needed by the retention offer). No new webhook events: the schedule's switch
     arrives as `customer.subscription.updated`.
   - Customer Portal: allow switching among all four paid Prices (MM38).
-  - Analytics: `server_plan_changed {from, to, source: change_plan|webhook|portal}`;
-    every `server_subscription_*` event carries `plan`. Catalog entries are MM41's.
+  - Analytics: `server_plan_changed {from, to, source: change_plan|webhook|portal}`
+    plus (MM41) the new price's `interval`, `amount_cents`, `currency` and `plan` (= `to`);
+    every `server_subscription_*` event carries `plan`. Catalog entries: analytics MM41.
+    **Deploy order: analytics MM41 first, then this API, then the UI.** Events sent
+    before the analytics catalog lands are stored `is_unknown=true` and skipped by
+    every rollup; the analytics repo's `docs/RUNTIME_VERIFICATION.md` §20 counts
+    them and has the one-off reclassification. Admin `/revenue` splits MRR, active
+    subscriptions and checkouts by plan from these events (a lower bound; this
+    database is the source of truth). Go-live checklist and queries:
+    `docs/tickets/MM41-pro-analytics-admin-go-live.md` (workspace).
+  - Live-test queries (owner card; replace `$1` with the user id):
+    `SELECT tier, tier_source, tier_expires_at, stripe_subscription_id, subscription_status
+    FROM mm_users WHERE id = $1;` ·
+    `SELECT tier, granted_by, reason, created_at FROM mm_tier_grants WHERE user_id = $1
+    ORDER BY created_at DESC LIMIT 5;` ·
+    `curl -s localhost:59997/metrics | grep mm_billing_unknown_price_total` (must stay 0
+    after the live price ids are set).
   - Inspect a user: `SELECT tier, tier_source, tier_expires_at FROM mm_users WHERE id = $1;`
     and `SELECT tier, granted_by, reason, created_at FROM mm_tier_grants WHERE user_id = $1
     ORDER BY created_at DESC LIMIT 5;` (webhook rows have `granted_by='stripe'`).
