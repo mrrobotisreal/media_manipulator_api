@@ -76,11 +76,11 @@ func TestFakeClientPlanChange(t *testing.T) {
 		t.Fatalf("update = %+v %v", sub, err)
 	}
 	at := time.Unix(1_800_000_000, 0).UTC()
-	sched, err := f.CreateSchedule(ctx, "sub_1", "price_pro", "price_prem", at)
+	sched, err := f.CreateSchedule(ctx, "sub_1", "price_pro", "price_prem", "eur", at)
 	if err != nil || sched == nil || len(sched.Phases) != 2 {
 		t.Fatalf("schedule = %+v %v", sched, err)
 	}
-	if _, err := f.CreateSchedule(ctx, "sub_1", "price_pro", "price_prem", at); err == nil {
+	if _, err := f.CreateSchedule(ctx, "sub_1", "price_pro", "price_prem", "eur", at); err == nil {
 		t.Fatal("a second schedule must be refused, like Stripe")
 	}
 	got, _ := f.GetSchedule(ctx, "sub_1")

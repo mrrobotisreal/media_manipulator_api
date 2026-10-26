@@ -666,3 +666,149 @@ func TestStatusDetectsCancellationMissingFromMirror(t *testing.T) {
 		t.Fatalf("resumed status = %v", m)
 	}
 }
+
+// MM69: Checkout always opens in an explicit currency: the body's when sent
+// (allowlisted), USD for a pre-MM69 body without one.
+func TestCheckoutCurrencyParam(t *testing.T) {
+	b := newBillingRig(t, billingCfg(true), bUser("u1", "fb1"))
+	for body, want := range map[string]string{
+		`{"interval":"monthly","currency":"eur"}`: "eur",
+		`{"interval":"monthly","currency":"EUR"}`: "eur",
+		`{"interval":"monthly","currency":"usd"}`: "usd",
+		`{"interval":"monthly"}`:                  "usd",
+	} {
+		n := len(b.fc.CheckoutCalls)
+		if w := b.do("POST", "/api/billing/checkout", "tok-u1", body); w.Code != 200 {
+			t.Fatalf("%s: %d %s", body, w.Code, w.Body)
+		}
+		if got := b.fc.CheckoutCalls[n].Currency; got != want {
+			t.Errorf("%s: Checkout currency %q, want %q", body, got, want)
+		}
+	}
+	for _, bad := range []string{`{"interval":"monthly","currency":"gbp"}`, `{"interval":"monthly","currency":"euro"}`} {
+		w := b.do("POST", "/api/billing/checkout", "tok-u1", bad)
+		if w.Code != 400 || jsonBody(t, w)["error"] != "invalid_currency" {
+			t.Errorf("%s: %d %s, want 400 invalid_currency", bad, w.Code, w.Body)
+		}
+	}
+}
+
+// MM69 currency_locked matrix: no Customer -> any currency; a Customer whose
+// Stripe currency is EUR asking for USD -> 409 currency_locked {currency:eur};
+// the same Customer asking for EUR (or nothing) -> eur; a Customer Stripe has
+// not fixed yet -> the request; a failed Customer read falls back to the
+// mirrored billing_currency.
+func TestCheckoutCurrencyLocked(t *testing.T) {
+	lapsed := func() *billingRig {
+		u := bUser("u1", "fb1")
+		u.StripeCustomerID, u.StripeSubscriptionID, u.SubscriptionStatus = "cus_1", "sub_old", "canceled"
+		b := newBillingRig(t, billingCfg(true), u)
+		b.fc.CustomerCurrencies = map[string]string{"cus_1": "eur"}
+		return b
+	}
+	b := newBillingRig(t, billingCfg(true), bUser("u1", "fb1"))
+	if w := b.do("POST", "/api/billing/checkout", "tok-u1", `{"interval":"monthly","currency":"usd"}`); w.Code != 200 || len(b.fc.CustomerReads) != 0 {
+		t.Fatalf("no customer: %d reads=%v", w.Code, b.fc.CustomerReads)
+	}
+
+	b = lapsed()
+	w := b.do("POST", "/api/billing/checkout", "tok-u1", `{"interval":"monthly","currency":"usd"}`)
+	if m := jsonBody(t, w); w.Code != 409 || m["reason"] != "currency_locked" || m["currency"] != "eur" {
+		t.Fatalf("eur customer asking usd: %d %s", w.Code, w.Body)
+	}
+	if len(b.fc.CheckoutCalls) != 0 {
+		t.Fatal("a locked refusal must not open a session")
+	}
+	for _, body := range []string{`{"interval":"monthly","currency":"eur"}`, `{"interval":"monthly"}`} {
+		n := len(b.fc.CheckoutCalls)
+		if w := b.do("POST", "/api/billing/checkout", "tok-u1", body); w.Code != 200 || b.fc.CheckoutCalls[n].Currency != "eur" {
+			t.Fatalf("%s: %d %s", body, w.Code, w.Body)
+		}
+	}
+
+	b = lapsed()
+	b.fc.CustomerCurrencies = nil // Customer exists, never invoiced
+	if w := b.do("POST", "/api/billing/checkout", "tok-u1", `{"interval":"monthly","currency":"usd"}`); w.Code != 200 || b.fc.CheckoutCalls[0].Currency != "usd" {
+		t.Fatalf("unfixed customer: %d", w.Code)
+	}
+
+	b = lapsed()
+	b.fc.CustomerCurrencyErr = errors.New("stripe down")
+	b.store.Users["u1"].BillingCurrency = "eur"
+	if w := b.do("POST", "/api/billing/checkout", "tok-u1", `{"interval":"monthly","currency":"usd"}`); w.Code != 409 {
+		t.Fatalf("mirror fallback: %d %s", w.Code, w.Body)
+	}
+}
+
+// MM69 status: currency / currencyLocked for no subscription, an active EUR
+// subscription (backfilling a pre-MM69 null mirror) and a lapsed EUR one.
+func TestStatusCurrencyFields(t *testing.T) {
+	b := newBillingRig(t, billingCfg(true), bUser("u1", "fb1"))
+	m := jsonBody(t, b.do("GET", "/api/billing/status", "tok-u1", ""))
+	if v, ok := m["currency"]; !ok || v != nil || m["currencyLocked"] != false {
+		t.Fatalf("no subscription: currency %v locked %v", m["currency"], m["currencyLocked"])
+	}
+
+	end := time.Now().Add(20 * 24 * time.Hour).UTC()
+	u := bUser("u1", "fb1")
+	u.Tier, u.TierSource, u.TierExpiresAt = "premium", "subscription", &end
+	u.SubscriptionStatus, u.BillingInterval, u.StripeCustomerID, u.StripeSubscriptionID = "active", "monthly", "cus_1", "sub_1"
+	b = newBillingRig(t, billingCfg(true), u)
+	amt := int64(800)
+	b.fc.PutSubscription(&billing.Subscription{ID: "sub_1", CustomerID: "cus_1", Status: "active", CurrentPeriodEnd: end,
+		Interval: "monthly", ItemID: "si_1", PriceID: "price_monthly_cfg", UnitAmountCents: &amt, Currency: "eur"})
+	m = jsonBody(t, b.do("GET", "/api/billing/status", "tok-u1", ""))
+	if m["currency"] != "eur" || m["currencyLocked"] != true {
+		t.Fatalf("active eur: %v", m)
+	}
+	if b.store.User("u1").BillingCurrency != "eur" {
+		t.Error("status must backfill billing_currency when the mirror is null")
+	}
+
+	l := bUser("u1", "fb1")
+	l.StripeCustomerID, l.StripeSubscriptionID, l.SubscriptionStatus = "cus_1", "sub_old", "canceled"
+	b = newBillingRig(t, billingCfg(true), l)
+	b.fc.PutSubscription(&billing.Subscription{ID: "sub_old", CustomerID: "cus_1", Status: "canceled", Currency: "eur"})
+	m = jsonBody(t, b.do("GET", "/api/billing/status", "tok-u1", ""))
+	if m["currency"] != "eur" || m["currencyLocked"] != true {
+		t.Fatalf("lapsed eur customer must stay locked: %v", m)
+	}
+	reads := len(b.fc.GetSubCalls)
+	_ = b.do("GET", "/api/billing/status", "tok-u1", "")
+	if len(b.fc.GetSubCalls) != reads {
+		t.Error("once backfilled, a lapsed status must not read Stripe again")
+	}
+}
+
+// MM69: the retention offer for a EUR subscriber is in euros, with the
+// legacy priceUSD mirror carrying the same numeral; retain passes no
+// currency (the swap keeps the subscription's).
+func TestStatusOfferCurrency(t *testing.T) {
+	end := time.Now().Add(10 * 24 * time.Hour).UTC()
+	u := bUser("u1", "fb1")
+	u.Tier, u.TierSource, u.TierExpiresAt = "premium", "subscription", &end
+	u.SubscriptionStatus, u.BillingInterval, u.CancelAtPeriodEnd, u.StripeCustomerID, u.StripeSubscriptionID = "active", "monthly", true, "cus_1", "sub_1"
+	cfg := billingCfg(true)
+	cfg.StripePricePremiumMonthlyRetain7, cfg.StripePricePremiumMonthlyRetain6 = "price_r7", "price_r6"
+	b := newBillingRig(t, cfg, u)
+	amt := int64(800)
+	b.fc.PutSubscription(&billing.Subscription{ID: "sub_1", CustomerID: "cus_1", Status: "active", CancelAtPeriodEnd: true, CurrentPeriodEnd: end,
+		Interval: "monthly", ItemID: "si_1", PriceID: "price_monthly_cfg", UnitAmountCents: &amt, Currency: "eur"})
+	m := jsonBody(t, b.do("GET", "/api/billing/status", "tok-u1", ""))
+	off, _ := m["offer"].(map[string]any)
+	if off == nil || off["kind"] != "retain7" || off["price"] != 7.0 || off["currency"] != "eur" || off["priceUSD"] != 7.0 {
+		t.Fatalf("offer = %v", m["offer"])
+	}
+	if m["priceMonthly"] != 8.0 || m["priceMonthlyUSD"] != nil {
+		t.Fatalf("eur price: priceMonthly %v priceMonthlyUSD %v", m["priceMonthly"], m["priceMonthlyUSD"])
+	}
+	if w := b.do("POST", "/api/billing/retain", "tok-u1", `{"offer":"retain7"}`); w.Code != 200 {
+		t.Fatalf("retain %d %s", w.Code, w.Body)
+	}
+	if len(b.fc.ResumeCalls) != 1 || b.fc.ResumeCalls[0].NewPriceID != "price_r7" {
+		t.Fatalf("resume calls = %+v", b.fc.ResumeCalls)
+	}
+	if b.fc.Subscriptions["sub_1"].Currency != "eur" {
+		t.Error("retain must keep the subscription's currency")
+	}
+}

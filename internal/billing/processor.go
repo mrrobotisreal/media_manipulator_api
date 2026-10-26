@@ -20,6 +20,8 @@ type Store interface {
 	UserByStripeCustomer(ctx context.Context, customerID string) (*models.User, error)
 	SetStripeCustomer(ctx context.Context, userID, customerID string) (string, error)
 	UpdateSubscriptionState(ctx context.Context, userID, subscriptionID, status, interval string, cancelAtPeriodEnd bool) error
+	// SetBillingCurrency mirrors the currency Stripe bills the user in (MM69).
+	SetBillingCurrency(ctx context.Context, userID, currency string) error
 	SetUserTier(ctx context.Context, firebaseUID, tier, source, grantedBy, reason string, expiresAt *time.Time) (*models.User, error)
 	InsertBillingEvent(ctx context.Context, eventID, eventType string) (alreadyProcessed bool, err error)
 	MarkBillingEvent(ctx context.Context, eventID string, processed bool, note string) error
@@ -286,6 +288,14 @@ func (p *Processor) apply(ctx context.Context, ev Event) (note string, err error
 
 	if err := p.Store.UpdateSubscriptionState(ctx, user.ID, sub.ID, sub.Status, sub.Interval, sub.IsCancelling(p.now())); err != nil {
 		return "", fmt.Errorf("update subscription state: %w", err)
+	}
+	// MM69: mirror the currency Stripe bills this subscription in. It is the
+	// Customer's locked currency from now on (checkout refuses the other one).
+	if cur, ok := NormalizeCurrency(sub.Currency); ok && cur != user.BillingCurrency {
+		if err := p.Store.SetBillingCurrency(ctx, user.ID, cur); err != nil {
+			return "", fmt.Errorf("set billing currency: %w", err)
+		}
+		user.BillingCurrency = cur
 	}
 
 	now := p.now()

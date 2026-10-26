@@ -24,6 +24,8 @@ type FakeStore struct {
 	TierWrites  []TierWrite
 	FailSetTier error
 	FailCount   error
+	// CurrencyWrites counts SetBillingCurrency calls (MM69).
+	CurrencyWrites int
 }
 
 // FakeEvent mirrors a mm_billing_events row.
@@ -93,6 +95,19 @@ func (f *FakeStore) UpdateSubscriptionState(_ context.Context, userID, subID, st
 		return errors.New("no such user")
 	}
 	u.StripeSubscriptionID, u.SubscriptionStatus, u.BillingInterval, u.CancelAtPeriodEnd = subID, status, interval, cancel
+	return nil
+}
+
+// SetBillingCurrency mirrors the subscription currency (MM69).
+func (f *FakeStore) SetBillingCurrency(_ context.Context, userID, currency string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u := f.Users[userID]
+	if u == nil {
+		return errors.New("no such user")
+	}
+	f.CurrencyWrites++
+	u.BillingCurrency = currency
 	return nil
 }
 

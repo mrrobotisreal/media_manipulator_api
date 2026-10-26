@@ -36,7 +36,7 @@ func planRig(t *testing.T, plan, interval string, cfgMut func(*config.Config)) (
 	u.StripeCustomerID, u.StripeSubscriptionID = "cus_1", "sub_1"
 	b := newBillingRig(t, cfg, u, bUser("u2", "fb2"))
 	b.fc.PutSubscription(&billing.Subscription{ID: "sub_1", CustomerID: "cus_1", Status: "active", CurrentPeriodEnd: end,
-		Interval: interval, ItemID: "si_1", PriceID: price, UserID: "u1"})
+		Interval: interval, ItemID: "si_1", PriceID: price, UserID: "u1", Currency: "usd"})
 	proc := &billing.Processor{Store: b.store, Client: b.fc, Emitter: b.em, Grace: 7 * 24 * time.Hour,
 		Now: func() time.Time { return now }, Prices: billing.NewPriceTiers(cfg)}
 	h := NewBillingHandler(b.store, b.fc, proc, tiers.New(cfg), cfg, nil)
@@ -103,7 +103,7 @@ func TestChangePlanDowngradeScheduleAndRelease(t *testing.T) {
 	if w.Code != 200 || m["plan"] != "pro" || m["timing"] != "period_end" || pp == nil || pp["to"] != "premium" || pp["at"] != at {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
-	want := billing.ScheduleCall{SubID: "sub_1", CurrentPriceID: "price_pro_yearly_cfg", NextPriceID: "price_yearly_cfg", SwitchAt: end}
+	want := billing.ScheduleCall{SubID: "sub_1", CurrentPriceID: "price_pro_yearly_cfg", NextPriceID: "price_yearly_cfg", Currency: "usd", SwitchAt: end}
 	if len(b.fc.ScheduleCalls) != 1 || b.fc.ScheduleCalls[0] != want {
 		t.Fatalf("schedule calls = %+v", b.fc.ScheduleCalls)
 	}
@@ -358,5 +358,35 @@ func TestStatusPlanFields(t *testing.T) {
 	d.fc.GetSubErr = errors.New("stripe down")
 	if m := jsonBody(t, d.do("GET", "/api/billing/status", "tok-u1", "")); m["pendingPlan"] != nil || m["plan"] != "pro" {
 		t.Fatalf("failed read = %v", m)
+	}
+}
+
+// MM69: plan changes stay in the subscription's currency. The upgrade swaps
+// only the price id (Stripe keeps the subscription's currency; nothing to
+// pass), and the downgrade schedule pins both phases to the subscription's
+// currency, never to the caller's display setting or a Price default.
+func TestChangePlanKeepsSubscriptionCurrency(t *testing.T) {
+	b, end := planRig(t, "pro", "monthly", nil)
+	sub := b.fc.Subscriptions["sub_1"]
+	sub.Currency = "eur"
+	w := b.do("POST", "/api/billing/change-plan", "tok-u1", `{"target":"premium"}`)
+	if w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	want := billing.ScheduleCall{SubID: "sub_1", CurrentPriceID: "price_pro_monthly_cfg", NextPriceID: "price_monthly_cfg", Currency: "eur", SwitchAt: end}
+	if len(b.fc.ScheduleCalls) != 1 || b.fc.ScheduleCalls[0] != want {
+		t.Fatalf("schedule must carry the subscription currency: %+v", b.fc.ScheduleCalls)
+	}
+
+	up, _ := planRig(t, "premium", "monthly", nil)
+	up.fc.Subscriptions["sub_1"].Currency = "eur"
+	if w := up.do("POST", "/api/billing/change-plan", "tok-u1", `{"target":"pro"}`); w.Code != 200 {
+		t.Fatalf("upgrade %d %s", w.Code, w.Body)
+	}
+	if len(up.fc.UpdatePriceCalls) != 1 || up.fc.UpdatePriceCalls[0].NewPriceID != "price_pro_monthly_cfg" {
+		t.Fatalf("upgrade calls = %+v", up.fc.UpdatePriceCalls)
+	}
+	if got := up.fc.Subscriptions["sub_1"].Currency; got != "eur" {
+		t.Errorf("the upgraded subscription must still bill in eur, got %q", got)
 	}
 }

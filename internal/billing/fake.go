@@ -43,6 +43,12 @@ type FakeClient struct {
 	ScheduleCalls    []ScheduleCall
 	ReleaseCalls     []string
 
+	// CustomerCurrencies maps a Customer id to the currency Stripe has fixed
+	// for it (MM69); absent = none yet. CustomerCurrencyErr fails the read.
+	CustomerCurrencies  map[string]string
+	CustomerCurrencyErr error
+	CustomerReads       []string
+
 	// PriceCents maps a price id to its unit amount; ResumeSubscription applies
 	// it to the stored subscription when the price is swapped.
 	PriceCents map[string]int64
@@ -58,8 +64,8 @@ type UpdatePriceCall struct{ SubID, ItemID, NewPriceID, Proration string }
 
 // ScheduleCall records one CreateSchedule call.
 type ScheduleCall struct {
-	SubID, CurrentPriceID, NextPriceID string
-	SwitchAt                           time.Time
+	SubID, CurrentPriceID, NextPriceID, Currency string
+	SwitchAt                                     time.Time
 }
 
 // NewFakeClient returns a FakeClient with a webhook secret.
@@ -142,6 +148,17 @@ func (f *FakeClient) GetSubscription(_ context.Context, id string) (*Subscriptio
 	return &cp, nil
 }
 
+// CustomerCurrency returns the injected Customer currency ("" = none yet).
+func (f *FakeClient) CustomerCurrency(_ context.Context, customerID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.CustomerReads = append(f.CustomerReads, customerID)
+	if f.CustomerCurrencyErr != nil {
+		return "", f.CustomerCurrencyErr
+	}
+	return f.CustomerCurrencies[customerID], nil
+}
+
 func (f *FakeClient) GetCheckoutSession(_ context.Context, id string) (*CheckoutSession, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -203,10 +220,10 @@ func (f *FakeClient) UpdateSubscriptionPrice(_ context.Context, subID, itemID, n
 
 // CreateSchedule attaches a two-phase schedule. Like Stripe, a subscription
 // that already has a live schedule refuses a second one.
-func (f *FakeClient) CreateSchedule(_ context.Context, subID, currentPriceID, nextPriceID string, switchAt time.Time) (*Schedule, error) {
+func (f *FakeClient) CreateSchedule(_ context.Context, subID, currentPriceID, nextPriceID, currency string, switchAt time.Time) (*Schedule, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.ScheduleCalls = append(f.ScheduleCalls, ScheduleCall{subID, currentPriceID, nextPriceID, switchAt})
+	f.ScheduleCalls = append(f.ScheduleCalls, ScheduleCall{subID, currentPriceID, nextPriceID, currency, switchAt})
 	if f.ScheduleErr != nil {
 		return nil, f.ScheduleErr
 	}

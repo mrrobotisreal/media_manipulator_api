@@ -167,7 +167,7 @@ func (h *BillingHandler) downgradePlan(c *gin.Context, sub *billing.Subscription
 		c.JSON(http.StatusConflict, gin.H{"error": "change_not_available", "reason": "change_not_available"})
 		return
 	}
-	sched, err := h.client.CreateSchedule(ctx, sub.ID, sub.PriceID, newPrice, sub.CurrentPeriodEnd)
+	sched, err := h.client.CreateSchedule(ctx, sub.ID, sub.PriceID, newPrice, sub.Currency, sub.CurrentPeriodEnd)
 	if err != nil {
 		// A concurrent request may have won the race; if so, answer like a
 		// repeat downgrade.

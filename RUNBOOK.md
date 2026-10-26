@@ -697,6 +697,7 @@ history before it is not counted.
 | `STRIPE_PRICE_PRO_MONTHLY` | - | MM39. Optional. Stripe Price id of Pro monthly ($15, lookup key `pro_monthly`). Pro is sold only when both Pro ids are set (`proPurchasable`); Premium does not need them. |
 | `STRIPE_PRICE_PRO_YEARLY` | - | MM39. Optional. Stripe Price id of Pro yearly ($150, lookup key `pro_yearly`). |
 | `BILLING_PRICE_PRO_MONTHLY_USD` / `BILLING_PRICE_PRO_YEARLY_USD` | `15` / `150` | MM39. Display-only Pro numbers for `/api/tiers`. |
+| `BILLING_EUR_COUNTRIES` | EU-27 + `IS LI NO CH GB AD MC SM VA ME XK AX GF GP MQ YT RE BL MF PM` (47) | MM69. ISO 3166-1 alpha-2 codes (comma or space separated, any case) whose visitors get `defaultCurrency: "eur"` from `/api/tiers`; everyone else (and an unknown country) gets `usd`. Display default only: Checkout charges the currency the page sent. Since MM69 every `BILLING_PRICE_*_USD` value is a currency-neutral **numeral**, served as both `prices.usd` and `prices.eur`. |
 
 * Cancellation state and retention offer (`docs/design/BILLING_RETENTION_OFFER.md`). The Customer Portal
   cancels at period end, so `status` stays `active` with `cancel_at_period_end` and/or `cancel_at`; the API
@@ -755,6 +756,44 @@ history before it is not counted.
   - Inspect a user: `SELECT tier, tier_source, tier_expires_at FROM mm_users WHERE id = $1;`
     and `SELECT tier, granted_by, reason, created_at FROM mm_tier_grants WHERE user_id = $1
     ORDER BY created_at DESC LIMIT 5;` (webhook rows have `granted_by='stripe'`).
+* **Currency: USD or EUR at the same numerals (MM69, `docs/design/PRO_TIER.md` §7).**
+  Every Price (Premium monthly/yearly, Pro monthly/yearly, RETAIN7, RETAIN6) is a
+  multi-currency Price: USD default plus `currency_options.eur` with the same unit amount
+  (Mitch 2026-10-26: new price ids, set in the `STRIPE_PRICE_*` env vars).
+  - **Checkout always sends `currency`** (`usd` or `eur`). Stripe's rule: when a Price has
+    `currency_options` and the session sets no `currency`, Checkout picks the currency
+    **from the buyer's IP address**. Before MM69 the API set none, so between adding the
+    EUR option and deploying MM69, European buyers were shown and charged euros by
+    Stripe regardless of what `/pricing` displayed (same numerals, so the same number).
+    With MM69 the session currency is the one the page sent (`POST /billing/checkout
+    {currency}`); a body without one (a pre-MM69 UI) is charged `usd`.
+  - **Lock.** Stripe fixes a Customer's currency once it has been invoiced and refuses a
+    session in another one. Checkout reads the Customer's `currency` (one extra
+    `customers.retrieve` for returning customers; falls back to `mm_users.billing_currency`
+    if that read fails) and answers **409 `currency_locked {currency}`** instead of a
+    Stripe error. The restricted key needs **Customers: Read** (it already has Customers:
+    Write, which includes it).
+  - **Mirror.** The webhook writes `mm_users.billing_currency` from the Subscription's
+    `currency` (the item price's `currency` is only the Price default, `usd`).
+    `GET /billing/status` backfills it for older subscriptions (once per user).
+  - **Plan changes and retention keep the currency.** `change-plan` (upgrade) and
+    `retain` swap only the price id; Stripe keeps the subscription's currency. The
+    Pro->Premium **Subscription Schedule pins both phases' `currency`** to the
+    subscription's: rewriting the phases replaces what `from_subscription` copied, and a
+    phase without a currency would price the Premium phase in the Price default (USD).
+  - `GET /api/tiers` adds `defaultCurrency` (MaxMind country via `geo.ExtractIP`, then
+    Cloudflare's `CF-IPCountry`, else `usd`; never the server's own location) and
+    `prices: {usd, eur}`; it is now `Cache-Control: private, max-age=300` (per-caller).
+  - Account settings gain `currency` (`usd|eur`, null = never chosen).
+  - **Migration (server only, before deploying MM69):**
+    `20261026001_add_billing_currency` (nullable `mm_user_settings.currency`,
+    `mm_users.billing_currency`, both CHECKed to `usd|eur`). The MM69 binary's user
+    SELECT names `billing_currency`: deploy it against an unmigrated DB and every account
+    read fails.
+  - Sandbox check: open Checkout from an account whose email is
+    `test+location_FR@example.com` with the page on USD; the session must say USD (it
+    would say EUR without the explicit `currency`). Inspect: `SELECT billing_currency FROM
+    mm_users WHERE id = $1;` and `SELECT currency FROM mm_user_settings WHERE user_id = $1;`.
 * Stripe Tax is not used (Mitch, 2026-10-24: individual seller, no tax registrations). Leave `STRIPE_AUTOMATIC_TAX` unset. If that ever changes: activate Stripe Tax with registrations in the Dashboard, set both Prices to tax behaviour `exclusive`, then set `STRIPE_AUTOMATIC_TAX=true`.
 * Pinned Stripe API version (stripe-go v87.0.0): `2026-09-30.endive`. Create the
   webhook endpoint at that version. The API still verifies events from another
@@ -939,7 +978,7 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/share/:token/file` | MM32. Public. Same serving code as `/api/result` (ranges, nosniff, unsafe types as attachments); `?download=1` forces an attachment. | No |
 | GET | `/api/transcript/:jobId` | Serve the `transcribe_result.json` for a transcribe job. | No |
 | GET | `/api/analysis/:jobId` | Serve the `analysis.json` (transcript summary + safety review) for a transcribe job. | No |
-| GET | `/api/tiers` | Public tier matrix: `tiers[]` (anonymous, free, premium, pro; limits per tier), `premiumPurchasable`, `premiumPriceUSD`, `premiumPriceYearlyUSD`, `proPurchasable`, `proPriceUSD`, `proPriceYearlyUSD` (MM39; display-only numerals). `Cache-Control: public, max-age=300`. | No |
+| GET | `/api/tiers` | Public tier matrix: `tiers[]` (anonymous, free, premium, pro; limits per tier), `premiumPurchasable`, `proPurchasable`, MM69 `defaultCurrency` (`usd\|eur`, from the caller's country) and `prices: {usd: {premiumMonthly, premiumYearly, proMonthly, proYearly}, eur: {...}}` (identical numerals). Deprecated, kept one release: `premiumPriceUSD`, `premiumPriceYearlyUSD`, `proPriceUSD`, `proPriceYearlyUSD`. `Cache-Control: private, max-age=300` (MM69; was public). | No |
 | GET | `/api/vector/projects` | MM43 Motion. Firebase account required (401 otherwise). `{projects:[{id,name,revision,thumbnailKey?,documentBytes,createdAt,updatedAt}]}`, newest first; never carries `document`. | No |
 | POST | `/api/vector/projects` | MM43. Account required. `{name?, document}` (VectorDoc v1, sanitized; 422 `vector_doc_invalid {code,path,message}`, 413 `vector_doc_too_large`). `201` project with `document`, `revision:1`. 403 `vector_projects_limit {limit,used,upgradePath}` at the tier cap (counted inside the insert transaction). Ledgered as `vector_project`. | No |
 | GET | `/api/vector/projects/:id` | MM43. Owner only (strict, DB-backed; a stranger or an ownerless row gets the same 404). Project with `document`. | No |
@@ -948,10 +987,10 @@ All routes live under `/api/` except `/healthz`.
 | POST | `/api/vector/projects/:id/thumbnail` | MM43. Owner only. `{sizeBytes (1..524288), contentType?: "image/png"}` -> `201 {uploadUrl, thumbnailKey, contentType, maxBytes, expiresAt}`; presigned PUT (TTL `S3_PRESIGN_TTL_SECONDS`) pinned to that length and `image/png`; key `vector/<ownerUid>/<projectId>/thumb.png`. 413 over 512 KB. Ledgered as an `s3_object` of the project. | No |
 | POST | `/api/vector/exports` | MM43. Optional auth + `X-MM-Session-ID`. `{projectId?, format, durationMs, height, fps}` -> `200 {ok:true, format, tier, limit, remaining (-1 = unlimited), resetsAt}` plus the `X-MM-Quota-*` headers. 400 `vector_format_not_countable` (`svg_static`, unknown); 403 `vector_format_locked {format,tier,upgradePath}`; 422 `vector_cap_exceeded {cap: duration\|height\|fps, max, tier}`; 429 `vector_export_limit {tier,metric,limit,used,resetsAt,upgradePath}`; 503 when the counter cannot be written (fails closed). Call BEFORE running the browser exporter. MM49: every 200 emits `server_vector_export_counted {format, tier}` (needs `X-MM-Visitor-ID` + `X-MM-Session-ID`; the editor sends the visitor id only with analytics consent); Pro unlocks `png_sequence`/`mp4`/`webm` (403 `upgradePath: "pro"` below it). | No |
 | POST | `/api/vector/vectorize` | MM43. Optional auth. Multipart `file` (raster image, at most the tier's `MaxFileBytes`) + optional `threshold` (1-99), `turd`. Counted as `import_svg_vectorize` through the same checks BEFORE the job exists (403/429 as above, 400 for SVG/non-image input, which costs nothing), then the potrace converter job: `200 {jobId}`; fetch the SVG with `/api/job/:id` + `/api/download/:id`. Upload rate bucket. | Yes (goroutine) |
-| POST | `/api/billing/checkout` | Firebase auth. `{interval: monthly\|yearly, plan?: premium\|pro, locale}` -> `{url}`. 400 `invalid_interval` / `invalid_plan`; 409 `already_subscribed` / `already_on_plan` / `manual_grant_active`; 403 `operator_account`; 503 `billing_unavailable` (also Pro without Pro prices). | No |
+| POST | `/api/billing/checkout` | Firebase auth. `{interval: monthly\|yearly, plan?: premium\|pro, currency?: usd\|eur, locale}` -> `{url}`. The session's currency is always set (absent body field = `usd`). 400 `invalid_interval` / `invalid_plan` / `invalid_currency`; 409 `already_subscribed` / `already_on_plan` / `manual_grant_active` / `currency_locked {currency}` (MM69: the Stripe Customer is billed in the other currency); 403 `operator_account`; 503 `billing_unavailable` (also Pro without Pro prices). | No |
 | POST | `/api/billing/change-plan` | MM39. Firebase auth, own live subscription only. `{target: premium\|pro}` -> upgrade `{plan:"pro", pendingPlan:null, timing:"immediate"}` or downgrade `{plan:"pro", pendingPlan:{to:"premium", at}, timing:"period_end"}` (repeat downgrade idempotent). 409 `not_subscription` / `same_plan` / `change_not_available` (cancelling, or a schedule this API did not create); 400 `invalid_plan`; 502 `billing_provider_error`; 503 `billing_unavailable`. | No |
 | DELETE | `/api/billing/change-plan` | MM39. Same guards. Releases the scheduled downgrade -> `{plan, pendingPlan:null}`; 200 no-op when nothing is scheduled. | No |
-| GET | `/api/billing/status` | Firebase auth; answers with billing off (`purchasable:false`). Adds (MM39) `plan` (`premium\|pro\|null`, stored tier of a subscription user) and `pendingPlan` (`{to, at}\|null`, from the Stripe schedule). `offer` is never set for Pro. | No |
+| GET | `/api/billing/status` | Firebase auth; answers with billing off (`purchasable:false`). Adds (MM39) `plan` (`premium\|pro\|null`, stored tier of a subscription user) and `pendingPlan` (`{to, at}\|null`, from the Stripe schedule). `offer` is never set for Pro. MM69: `currency` (`usd\|eur\|null`, the subscription's), `currencyLocked` (true once Stripe fixed it: live subscription or a billed past one), `priceMonthly` (any currency; `priceMonthlyUSD` stays USD-only), and `offer.price` + `offer.currency` (`offer.priceUSD` kept, same numeral). | No |
 | POST | `/api/billing/retain` | Firebase auth. Retention offer (`docs/design/BILLING_RETENTION_OFFER.md`). 409 `offer_not_available` for Pro (MM39). | No |
 | GET | `/api/billing/session/:id` | Firebase auth. Checkout return: `{belongsToUser, paid, tierApplied, plan}` (`plan` MM39). | No |
 

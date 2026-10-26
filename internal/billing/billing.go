@@ -56,10 +56,16 @@ type Subscription struct {
 	CurrentPeriodEnd time.Time
 	// Interval is "monthly" or "yearly" ("" when the price is neither).
 	Interval string
-	// UnitAmountCents / Currency are the first item's Price unit_amount and
-	// currency (lowercase ISO 4217, as Stripe returns it). Nil / "" = unknown.
+	// UnitAmountCents is the first item's Price unit_amount (nil = unknown).
+	// For a multi-currency Price this is the DEFAULT currency's amount; MM69
+	// sells identical numerals in every currency, so it is also the amount
+	// in Currency.
 	UnitAmountCents *int64
-	Currency        string
+	// Currency is the currency the subscription is billed in (lowercase ISO
+	// 4217): the Subscription's own `currency`, falling back to the item
+	// price's. MM69: with multi-currency Prices the price's `currency` is only
+	// its default (usd), so the Subscription field is the truth. "" = unknown.
+	Currency string
 	// UserID is subscription metadata user_id (set by Checkout), if present.
 	UserID string
 	// VisitorID / SessionID are the browser analytics ids stamped by Checkout.
@@ -188,6 +194,10 @@ type CheckoutRequest struct {
 	// Plan is "premium" or "pro" (MM39), stamped on subscription metadata
 	// and the success URL. PriceID already encodes it; this is for display.
 	Plan string
+	// Currency is "usd" or "eur" (MM69), always set by the handler and always
+	// sent to Stripe: with multi-currency Prices, Checkout would otherwise
+	// pick a currency from the buyer's IP address.
+	Currency string
 	// Locale is the UI locale (any of en/uk/ru/he/de/es, bare or BCP-47).
 	Locale  string
 	BaseURL string
@@ -211,6 +221,10 @@ type BillingClient interface {
 	CreatePortalSession(ctx context.Context, customerID, returnURL string) (url string, err error)
 	GetSubscription(ctx context.Context, id string) (*Subscription, error)
 	GetCheckoutSession(ctx context.Context, id string) (*CheckoutSession, error)
+	// CustomerCurrency is the Stripe Customer's billing currency (lowercase),
+	// "" when Stripe has not fixed one yet (no invoice so far). MM69: once set,
+	// Stripe refuses a Checkout Session in any other currency.
+	CustomerCurrency(ctx context.Context, customerID string) (string, error)
 	// ConstructEvent verifies the Stripe-Signature header (5 minute tolerance)
 	// against the raw body and returns the reduced event.
 	ConstructEvent(payload []byte, signatureHeader string) (Event, error)
@@ -232,8 +246,10 @@ type BillingClient interface {
 	// CreateSchedule attaches a two-phase schedule to the subscription:
 	// currentPriceID until switchAt (the current period end), then
 	// nextPriceID, releasing the subscription afterwards. No proration and no
-	// refund. Marked mm_plan_change=1.
-	CreateSchedule(ctx context.Context, subID, currentPriceID, nextPriceID string, switchAt time.Time) (*Schedule, error)
+	// refund. Marked mm_plan_change=1. currency is the subscription's (MM69):
+	// both phases are pinned to it so the switch never re-prices the
+	// subscription in a Price's default currency.
+	CreateSchedule(ctx context.Context, subID, currentPriceID, nextPriceID, currency string, switchAt time.Time) (*Schedule, error)
 	// ReleaseSchedule detaches a schedule; the subscription keeps its current
 	// price and renews normally.
 	ReleaseSchedule(ctx context.Context, scheduleID string) error
