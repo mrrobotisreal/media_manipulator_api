@@ -141,3 +141,64 @@ func TestApplyPlanChange(t *testing.T) {
 		t.Fatal("nil subscription is a no-op")
 	}
 }
+
+// TestServerPlanChangedCarriesNewPrice (MM41): server_plan_changed carries
+// the new price's interval, amount_cents and currency, and plan (= to), on
+// top of MM39's {from, to, source}. The analytics plan-split MRR moves the
+// subscription between plan buckets at that price (catalog KnownProps:
+// from, to, source, interval, plan, amount_cents, currency).
+func TestServerPlanChangedCarriesNewPrice(t *testing.T) {
+	end := t0.Add(30 * 24 * time.Hour)
+	u := freeUser()
+	u.Tier, u.TierSource, u.TierExpiresAt = TierPremium, "subscription", &end
+	u.StripeCustomerID, u.StripeSubscriptionID, u.SubscriptionStatus = "cus_1", "sub_1", StatusActive
+	r := newRig(u)
+	r.p.Prices = NewPriceTiers(priceCfg())
+	sub := activeSub(end)
+	sub.PriceID = "price_prom"
+	amount := int64(1500)
+	sub.UnitAmountCents, sub.Currency = &amount, "usd"
+	r.fc.PutSubscription(sub)
+	if err := r.p.ApplyPlanChange(context.Background(), sub, "u1"); err != nil {
+		t.Fatal(err)
+	}
+	got := eventsNamed(r.em, analyticsemit.ServerPlanChanged)
+	if len(got) != 1 {
+		t.Fatalf("events = %+v", got)
+	}
+	p := got[0].Properties
+	want := map[string]any{"from": TierPremium, "to": TierPro, "source": "change_plan", "plan": TierPro,
+		"interval": IntervalMonthly, "amount_cents": int64(1500), "currency": "usd"}
+	for k, v := range want {
+		if p[k] != v {
+			t.Errorf("%s = %#v, want %#v (props %+v)", k, p[k], v, p)
+		}
+	}
+	if len(p) != len(want) {
+		t.Errorf("props = %+v, want exactly %d keys", p, len(want))
+	}
+
+	// Unknown amount (no unit_amount from Stripe): amount/currency omitted,
+	// never zeroed, so the analytics side falls back to the Pro list price.
+	u2 := freeUser()
+	u2.Tier, u2.TierSource, u2.TierExpiresAt = TierPremium, "subscription", &end
+	u2.StripeCustomerID, u2.StripeSubscriptionID, u2.SubscriptionStatus = "cus_1", "sub_1", StatusActive
+	r2 := newRig(u2)
+	r2.p.Prices = NewPriceTiers(priceCfg())
+	s2 := activeSub(end)
+	s2.PriceID = "price_prom"
+	r2.fc.PutSubscription(s2)
+	if err := r2.p.ApplyPlanChange(context.Background(), s2, "u1"); err != nil {
+		t.Fatal(err)
+	}
+	g2 := eventsNamed(r2.em, analyticsemit.ServerPlanChanged)
+	if len(g2) != 1 {
+		t.Fatalf("events = %+v", g2)
+	}
+	if _, ok := g2[0].Properties["amount_cents"]; ok {
+		t.Errorf("amount_cents must be omitted when unknown: %+v", g2[0].Properties)
+	}
+	if g2[0].Properties["interval"] != IntervalMonthly || g2[0].Properties["plan"] != TierPro {
+		t.Errorf("props = %+v", g2[0].Properties)
+	}
+}

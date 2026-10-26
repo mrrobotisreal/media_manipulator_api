@@ -326,8 +326,7 @@ func (p *Processor) apply(ctx context.Context, ev Event) (note string, err error
 		// MM39: a subscription moving between paid plans (premium <-> pro).
 		if storedSource == "subscription" && tiers.Paid(tiers.Tier(storedTier)) &&
 			tiers.Paid(tiers.Tier(d.Tier)) && storedTier != d.Tier {
-			p.emit(ev, sub, user, analyticsemit.ServerPlanChanged,
-				map[string]any{"from": storedTier, "to": d.Tier, "source": PlanChangeSource(ev)}, d.Tier)
+			p.emit(ev, sub, user, analyticsemit.ServerPlanChanged, planChangedProps(sub, ev, storedTier, d.Tier), d.Tier)
 		}
 	}
 
@@ -417,6 +416,20 @@ func sameTierState(u *models.User, d Decision) bool {
 		return false
 	}
 	return u.TierExpiresAt.Equal(*d.ExpiresAt)
+}
+
+// planChangedProps builds server_plan_changed: {from, to, source} (MM39)
+// plus, since MM41, the NEW price's interval, amount_cents and currency and
+// plan (= to). The analytics plan-split MRR ledger moves the subscription
+// between plan buckets at that price; without them it falls back to list
+// price. No extra Stripe call: the re-fetched subscription carries the price.
+func planChangedProps(sub *Subscription, ev Event, from, to string) map[string]any {
+	props := subProps(sub, ev, "")
+	props["from"] = from
+	props["to"] = to
+	props["source"] = PlanChangeSource(ev)
+	props["plan"] = to
+	return props
 }
 
 // subProps is subProps plus the plan the subscription's price grants

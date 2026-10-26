@@ -42,8 +42,8 @@ const (
 )
 
 // Billing (MM17). Emitted by the Stripe webhook processor and cmd/grant-tier.
-// The analytics-side catalog entries belong to MM20; until they land the
-// analytics service stores these as is_unknown=true, which is acceptable.
+// Catalog entries: media-manipulator-analytics MM20 (lifecycle), MM33
+// (retained), MM41 (server_plan_changed and every plan property).
 const (
 	ServerTierChanged               = "server_tier_changed"
 	ServerSubscriptionCreated       = "server_subscription_created"
@@ -55,9 +55,11 @@ const (
 	ServerSubscriptionRetained = "server_subscription_retained"
 	// ServerPlanChanged (MM39): a subscription moved between paid plans, observed
 	// when the price tier differs from the stored tier.
-	// {from, to: premium|pro, source: change_plan|webhook|portal}. Every
-	// server_subscription_* event also carries plan: premium|pro. The
-	// analytics-side catalog entry is MM41's; until then it is stored unknown.
+	// {from, to: premium|pro, source: change_plan|webhook|portal}, plus (MM41)
+	// the new price's interval, amount_cents, currency and plan (= to). Every
+	// server_subscription_* event also carries plan: premium|pro. Catalog entry:
+	// media-manipulator-analytics MM41; events sent before that deploy were
+	// stored is_unknown=true (see that repo's RUNTIME_VERIFICATION §20).
 	ServerPlanChanged = "server_plan_changed"
 )
 
