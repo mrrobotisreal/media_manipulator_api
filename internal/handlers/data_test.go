@@ -98,6 +98,7 @@ func dataRouter(f *fakeData, user *models.User) (*gin.Engine, *services.JobManag
 	r.PATCH("/jobs/:jobId/retention", dh.KeepJobLonger)
 	r.DELETE("/studio/projects/:id", sh.DeleteProject)
 	r.DELETE("/studio/assets/:id", sh.DeleteAsset)
+	r.POST("/studio/assets/:id/rebuild-proxy", sh.RebuildProxy)
 	return r, jm
 }
 

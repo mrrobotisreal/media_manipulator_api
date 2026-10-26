@@ -28,12 +28,17 @@ type LedgerFilter struct {
 	// AssetID narrows to one Darkroom asset's own ledger row (kind studio_asset,
 	// locator = the asset id). Part 21 asset delete.
 	AssetID string
+	// S3Key narrows to one S3 object's ledger row (kind s3_object, locator =
+	// the key). MM71 retires a Darkroom proxy replaced by a rebuild with it;
+	// the inline sweep also takes any object derived from that key.
+	S3Key string
 }
 
 // Valid reports whether the filter is safe to run.
 func (f LedgerFilter) Valid() bool {
 	return strings.TrimSpace(f.UserID) != "" || strings.TrimSpace(f.SessionID) != "" ||
-		strings.TrimSpace(f.JobID) != "" || strings.TrimSpace(f.ProjectID) != "" || strings.TrimSpace(f.AssetID) != ""
+		strings.TrimSpace(f.JobID) != "" || strings.TrimSpace(f.ProjectID) != "" || strings.TrimSpace(f.AssetID) != "" ||
+		strings.TrimSpace(f.S3Key) != ""
 }
 
 // where renders the filter as SQL conditions over mm_retained_objects (alias o)
@@ -61,6 +66,10 @@ func (f LedgerFilter) where(start int) (string, []any) {
 	if strings.TrimSpace(f.AssetID) != "" {
 		conds = append(conds, "o.kind = 'studio_asset'")
 		add("o.locator = $%d", f.AssetID)
+	}
+	if strings.TrimSpace(f.S3Key) != "" {
+		conds = append(conds, "o.kind = 's3_object'")
+		add("o.locator = $%d", f.S3Key)
 	}
 	return strings.Join(conds, " AND "), args
 }

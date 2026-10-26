@@ -92,6 +92,7 @@ func TestRouteLimitDispatcherMatchesGatedRoutes(t *testing.T) {
 	r.Use(routeLimitDispatcher(cfg, limiter, spy))
 	r.POST("/api/upload", func(c *gin.Context) { c.Status(http.StatusOK) })
 	r.POST("/api/studio/projects/abc-123/export", func(c *gin.Context) { c.Status(http.StatusOK) })
+	r.POST("/api/studio/assets/abc-123/rebuild-proxy", func(c *gin.Context) { c.Status(http.StatusOK) })
 	r.POST("/api/job/xyz/cancel", func(c *gin.Context) { c.Status(http.StatusOK) })
 	r.GET("/api/upload", func(c *gin.Context) { c.Status(http.StatusOK) })
 	r.GET("/api/share/:token", func(c *gin.Context) { c.Status(http.StatusOK) })
@@ -104,6 +105,8 @@ func TestRouteLimitDispatcherMatchesGatedRoutes(t *testing.T) {
 	}{
 		{http.MethodPost, "/api/upload", "upload"},
 		{http.MethodPost, "/api/studio/projects/abc-123/export", "studio_project_export"},
+		// MM71: proxy rebuild rides the transcode bucket like reverse-proxy.
+		{http.MethodPost, "/api/studio/assets/abc-123/rebuild-proxy", "studio_asset_rebuild_proxy"},
 		// Not a gated route.
 		{http.MethodPost, "/api/job/xyz/cancel", ""},
 		// GET never spends a bucket.

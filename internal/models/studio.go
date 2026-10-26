@@ -457,6 +457,13 @@ type StudioAsset struct {
 	DisplayName string `json:"displayName,omitempty"`
 	Folder      string `json:"folder,omitempty"`
 	Label       string `json:"label,omitempty"`
+
+	// ProxyGeneration is a video proxy's generation, read from its key (MM71):
+	// 0 = written before MM71 (pre-MM70 imports have the encoder's long GOP),
+	// >= 1 = the 1 s keyframe cadence. Derived, not stored; set on video assets
+	// only, so its presence also tells the editor this API can rebuild. The
+	// editor versions the proxy URL with it (?v=g<N>) and offers the rebuild.
+	ProxyGeneration *int `json:"proxyGeneration,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

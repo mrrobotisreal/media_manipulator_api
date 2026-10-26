@@ -51,6 +51,8 @@ type StudioHandler struct {
 	expirer      Expirer
 	projectStore ProjectDeleteStore
 	onDelete     func(scope string)
+	// MM71: proxy rebuilds in flight, one per asset.
+	rebuilds proxyRebuildRegistry
 }
 
 // NewStudioHandler mirrors NewConversionHandler's construction: it derives the
@@ -103,6 +105,9 @@ func RegisterStudioRoutes(r gin.IRouter, h *StudioHandler) {
 	// asset. A sibling of /derive so it rides the transcode rate bucket, not
 	// the AI one.
 	studio.POST("/assets/:id/reverse-proxy", h.ReverseProxy)
+	// MM71: rebuild an existing video proxy with the current (1 s keyframe)
+	// encode, onto a new key. Same transcode rate bucket as reverse-proxy.
+	studio.POST("/assets/:id/rebuild-proxy", h.RebuildProxy)
 	// Bin organization (rename/folder/label) and delete. Usage protection is the
 	// client's job; see studio_assets_manage.go.
 	studio.PATCH("/assets/:id", h.PatchAsset)
@@ -973,7 +978,7 @@ func (h *StudioHandler) runReverseProxyJob(scope retention.Scope, jobID string, 
 		_ = h.jobManager.UpdateJobError(jobID, "Failed to download preview proxy")
 		return
 	}
-	key, err := h.ingest.GenerateReversedProxy(ctx, jobID, asset.S3KeyOriginal, asset.ID, asset.MediaKind, asset.HasAudio, inPath, asset.DurationSeconds)
+	key, err := h.ingest.GenerateReversedProxy(ctx, jobID, asset.S3KeyOriginal, asset.ID, asset.S3KeyProxy, asset.MediaKind, asset.HasAudio, inPath, asset.DurationSeconds)
 	if err != nil {
 		log.Printf("studio reverse: job %s failed: %v", jobID, err)
 		_ = h.jobManager.UpdateJobError(jobID, err.Error())
@@ -1104,8 +1109,8 @@ func (h *StudioHandler) serveAssetDerivative(c *gin.Context, which string) {
 	// Validators (MM70): S3's ETag + Last-Modified. Browser HTTP caches need a
 	// validator to keep and recombine 206 partial responses, so without these
 	// a proxy range re-read on a seek could go back over the network.
-	// Proxy keys are write-once (<assetId>_proxy.mp4); a future proxy rebuild
-	// must write a NEW key, never overwrite one in place.
+	// Proxy keys are write-once: a rebuild (MM71) writes a new generation key
+	// and the editor versions the URL (?v=g<N>, ignored here) to match.
 	if out.ETag != nil && *out.ETag != "" {
 		c.Header("ETag", *out.ETag)
 	}

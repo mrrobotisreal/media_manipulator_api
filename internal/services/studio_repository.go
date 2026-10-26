@@ -354,6 +354,38 @@ UPDATE studio_assets SET s3_key_proxy_reversed = $2 WHERE id = $1
 	return err
 }
 
+// studioSwapProxySQL swaps a video asset onto a rebuilt proxy (MM71) in ONE
+// statement: only while the row still holds the proxy the rebuild started from
+// (a compare-and-set, so a concurrent change is never clobbered), clearing the
+// reversed proxy built from the old one, and returning that old reversed key so
+// the caller can retire it. No row = not swapped.
+const studioSwapProxySQL = `
+WITH prev AS (
+  SELECT id, s3_key_proxy_reversed FROM studio_assets
+  WHERE id = $1 AND s3_key_proxy = $2
+  FOR UPDATE
+)
+UPDATE studio_assets a
+SET s3_key_proxy = $3, s3_key_proxy_reversed = NULL
+FROM prev
+WHERE a.id = prev.id
+RETURNING coalesce(prev.s3_key_proxy_reversed, '')
+`
+
+// SwapAssetProxy points the asset at newKey if it still points at oldKey,
+// clearing s3_key_proxy_reversed (the sprite is left alone). swapped is false
+// when the row is gone or holds a different proxy.
+func (r *StudioRepository) SwapAssetProxy(ctx context.Context, assetID, oldKey, newKey string) (oldReversed string, swapped bool, err error) {
+	err = r.pool.QueryRow(ctx, studioSwapProxySQL, assetID, oldKey, newKey).Scan(&oldReversed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return oldReversed, true, nil
+}
+
 func (r *StudioRepository) GetAsset(ctx context.Context, id string) (*models.StudioAsset, error) {
 	row := r.pool.QueryRow(ctx, `
 SELECT id, project_id, original_file_name, s3_key_original, s3_key_proxy, thumbnail_sprite_url, s3_key_peaks, s3_key_proxy_reversed,
@@ -461,6 +493,10 @@ func scanAsset(row scannable) (*models.StudioAsset, error) {
 	}
 	if reversedKey != nil {
 		a.S3KeyProxyReversed = *reversedKey
+	}
+	if a.MediaKind == models.StudioMediaKindVideo {
+		gen := StudioProxyGeneration(a.ID, a.S3KeyProxy)
+		a.ProxyGeneration = &gen
 	}
 	if videoCodec != nil {
 		a.VideoCodec = *videoCodec
