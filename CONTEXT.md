@@ -39,3 +39,7 @@ One export or import conversion spent against the `vector_export` daily allowanc
 
 **Pro Motion row** (MM49):
 Pro's own `Vector*` limits (`TIER_PRO_VECTOR_*`): 150 exports/day, Premium's formats plus `png_sequence`, `mp4`, `webm` (unioned, so Pro never loses a Premium format), unlimited projects, raster video 2160p / 60 fps / 60 s. Operator still derives from Pro.
+
+**Billing currency** (MM69):
+`usd` or `eur` (`billing.CurrencyUSD` / `CurrencyEUR`), sold at the same numerals. A Checkout Session always carries one: the request's, or the Stripe Customer's locked currency, which takes precedence (a mismatch answers 409 `currency_locked`). `mm_users.billing_currency` mirrors `Subscription.currency`, and `mm_user_settings.currency` stores the user's choice. The geographic default (`BILLING_EUR_COUNTRIES`) is display-only and is never used to charge.
+_Avoid_: converting amounts, adding USD and EUR together, or reading the currency from the item price, which is only the multi-currency Price's default.
