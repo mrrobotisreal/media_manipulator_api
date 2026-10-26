@@ -108,6 +108,37 @@ func probeNVENCH264(cfg *config.Config) bool {
 // h264EncodeArgs returns the codec + tuning args for the given encoder and
 // quality preset (low|medium|high). NVENC uses constant-quality VBR (-cq);
 // libx264 uses -crf. Both pin yuv420p for broad playback compatibility.
+// StudioProxyKeyframeSeconds is the keyframe spacing of every preview proxy
+// (MM70). The Darkroom preview seeks its <video> pool constantly (cuts, drift
+// correction, scrubbing) and a seek decodes forward from the previous keyframe;
+// with the encoders' default GOP (libx264 keyint 250 ≈ 8–10 s, nvenc similar)
+// one seek could fetch and decode several seconds of video before showing a
+// frame. One second bounds that to at most a second of decode and a small byte
+// range per seek, for a modest size cost at the proxy's 2 Mb/s.
+const StudioProxyKeyframeSeconds = 1
+
+// studioProxyMaxGOPFrames caps the GOP in frames as a backstop for encoders
+// that ignore forced keyframes: 60 frames is 1 s at 60 fps, 2 s at 30.
+const studioProxyMaxGOPFrames = 60
+
+// proxyKeyframeArgs returns the argv that pins a preview proxy's keyframes to
+// a fixed StudioProxyKeyframeSeconds cadence, independent of the source frame
+// rate. -force_key_frames is time-based (both libx264 and h264_nvenc honor
+// it); nvenc additionally needs -forced-idr 1 so the forced frames are IDR
+// (a seekable random-access point, not just an I-frame). -g caps the GOP for
+// any encoder that ignores forced keyframes. Scene-cut keyframes stay on: an
+// extra keyframe only makes seeking cheaper. Proxies only — never the export.
+func proxyKeyframeArgs(encoder string) []string {
+	args := []string{
+		"-force_key_frames", forceKeyFramesExpr(StudioProxyKeyframeSeconds),
+		"-g", strconv.Itoa(studioProxyMaxGOPFrames),
+	}
+	if encoder == "h264_nvenc" {
+		args = append(args, "-forced-idr", "1")
+	}
+	return args
+}
+
 func h264EncodeArgs(encoder, quality string) []string {
 	switch encoder {
 	case "libx264_lossless":
