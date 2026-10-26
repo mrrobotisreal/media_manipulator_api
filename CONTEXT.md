@@ -35,4 +35,7 @@ _Avoid_: "motion" in route paths, table names or Go identifiers.
 The persisted Motion document (v1): canvas, a layer tree, `defs` (gradients, masks, clipPaths, filters, symbols) and keyframe `animations` tracks. Zod model in the UI (`lib/vector/vectorTypes.ts`); `internal/vector.Sanitize` is the Go mirror that validates and canonicalises it before storage. Additive-only: unknown fields round-trip, an unknown `version` is refused. The shared fixtures in `internal/vector/testdata/` are the contract.
 
 **Counted Motion export**:
-One export or import conversion spent against the `vector_export` daily allowance by `POST /api/vector/exports` (or `/api/vector/vectorize`), recorded as one `vector_exports` row in the same transaction. Static SVG export is never counted. A unit is spent before the browser runs the exporter and is not refunded on cancel.
+One export or import conversion spent against the `vector_export` daily allowance by `POST /api/vector/exports` (or `/api/vector/vectorize`), recorded as one `vector_exports` row in the same transaction. Static SVG export is never counted. A unit is spent before the browser runs the exporter and is not refunded on cancel. Each one also emits `server_vector_export_counted {format, tier}` (MM49) when the caller sent analytics identity; `vector_exports` stays the ground truth.
+
+**Pro Motion row** (MM49):
+Pro's own `Vector*` limits (`TIER_PRO_VECTOR_*`): 150 exports/day, Premium's formats plus `png_sequence`, `mp4`, `webm` (unioned, so Pro never loses a Premium format), unlimited projects, raster video 2160p / 60 fps / 60 s. Operator still derives from Pro.
