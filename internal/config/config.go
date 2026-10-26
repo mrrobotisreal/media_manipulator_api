@@ -245,9 +245,8 @@ type Config struct {
 	TierProRetentionHours        int
 	TierProStudioVersionAutoKeep int
 
-	// Motion (vector, MM43) allowances, per tier. Pro has no vector env yet:
-	// the registry copies Premium's values onto Pro until MM49 adds
-	// TIER_PRO_VECTOR_*. *VectorFormats is a comma list of countable formats
+	// Motion (vector, MM43; Pro row MM49) allowances, per tier.
+	// *VectorFormats is a comma list of countable formats
 	// (cumulative: each tier also gets every format of the tier below).
 	// *VectorProjects: -1 = unlimited. *VectorMaxDurationMs and the
 	// *VectorVideo* caps: 0 = no cap on that axis.
@@ -272,6 +271,16 @@ type Config struct {
 	TierPremiumVectorVideoMaxHeight  int
 	TierPremiumVectorVideoMaxFps     int
 	TierPremiumVectorVideoMaxSeconds int
+	// Pro (MM49, design MOTION_SVG_ANIMATOR.md §3.4): 150 exports/day, Premium's
+	// formats + png_sequence, mp4, webm, unlimited projects, video 2160p / 60 fps
+	// / 60 s. TIER_PRO_VECTOR_MAX_DURATION_MS defaults to Premium's.
+	TierProVectorExportsPerDay   int
+	TierProVectorFormats         []string
+	TierProVectorProjects        int
+	TierProVectorMaxDurationMs   int
+	TierProVectorVideoMaxHeight  int
+	TierProVectorVideoMaxFps     int
+	TierProVectorVideoMaxSeconds int
 	// VectorMaxDocBytes (VECTOR_MAX_DOC_BYTES, default 4 MiB) caps one saved
 	// Motion document; the sanitizer refuses anything larger.
 	VectorMaxDocBytes int
@@ -978,6 +987,17 @@ func applyProTierDefaults(c *Config) {
 	c.TierProStudioProjects = getEnvIntDefault("TIER_PRO_STUDIO_PROJECTS", c.TierPremiumStudioProjects)
 	c.TierProRetentionHours = getEnvInt("TIER_PRO_RETENTION_HOURS", c.TierPremiumRetentionHours)
 	c.TierProStudioVersionAutoKeep = getEnvInt("TIER_PRO_STUDIO_VERSION_AUTO_KEEP", c.TierPremiumStudioVersionAutoKeep)
+
+	// Motion (MM49): Pro's own row. The formats default lists only what Pro
+	// adds; the registry unions it with Premium's set, so Pro can never lose a
+	// Premium format. The duration cap follows Premium (0 = none) unless set.
+	c.TierProVectorExportsPerDay = getEnvInt("TIER_PRO_VECTOR_EXPORTS_PER_DAY", 150)
+	c.TierProVectorFormats = splitCSVLower(getEnv("TIER_PRO_VECTOR_FORMATS", "png_sequence,mp4,webm"))
+	c.TierProVectorProjects = getEnvIntDefault("TIER_PRO_VECTOR_PROJECTS", -1)
+	c.TierProVectorMaxDurationMs = getEnvIntDefault("TIER_PRO_VECTOR_MAX_DURATION_MS", c.TierPremiumVectorMaxDurationMs)
+	c.TierProVectorVideoMaxHeight = getEnvIntDefault("TIER_PRO_VECTOR_VIDEO_MAX_HEIGHT", 2160)
+	c.TierProVectorVideoMaxFps = getEnvIntDefault("TIER_PRO_VECTOR_VIDEO_MAX_FPS", 60)
+	c.TierProVectorVideoMaxSeconds = getEnvIntDefault("TIER_PRO_VECTOR_VIDEO_MAX_SECONDS", 60)
 }
 
 func getEnv(key, defaultValue string) string {

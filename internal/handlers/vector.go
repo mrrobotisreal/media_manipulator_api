@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
@@ -778,16 +779,43 @@ func vectorNotCountable(c *gin.Context, format string) {
 	})
 }
 
-// emitCounted is the server_vector_export_counted {format, tier} seam.
-//
-// TODO(MM49): the event is not in the analytics catalog yet
-// (media-manipulator-analytics/internal/catalog/catalog.go), and the server
-// emitter only sends catalogued names. MM49 adds the catalog entry, the
-// analyticsemit.ServerVectorExportCounted constant and replaces this hook with
-// a real Emit. Until then the vector_exports row is the ground truth.
+// emitCounted sends server_vector_export_counted {format, tier} (MM49) once
+// the unit is spent. Fire-and-forget through the analytics emitter; tests
+// replace it through the `counted` seam. The vector_exports row written in the
+// same transaction stays the ground truth: the event needs the caller's
+// visitor and session ids, and the editor sends X-MM-Visitor-ID only when the
+// visitor has granted analytics consent.
 func (h *VectorHandler) emitCounted(c *gin.Context, format, tier string) {
 	if h.counted != nil {
 		h.counted(c, format, tier)
+	}
+}
+
+// SetAnalyticsEmitter attaches the server-truth analytics feed (MM49). A nil
+// or disabled emitter sends nothing.
+func (h *VectorHandler) SetAnalyticsEmitter(e *analyticsemit.Emitter) {
+	if h == nil || !e.Enabled() {
+		return
+	}
+	h.counted = func(c *gin.Context, format, tier string) {
+		e.Emit(vectorCountedEvent(c, format, tier, time.Now().UTC()))
+	}
+}
+
+// vectorCountedEvent builds the server_vector_export_counted event. The
+// properties are the counted format and the tier, both closed vocabularies;
+// the tier also travels in the context block like every server event.
+func vectorCountedEvent(c *gin.Context, format, tier string, at time.Time) analyticsemit.Event {
+	return analyticsemit.Event{
+		EventName: analyticsemit.ServerVectorExportCounted,
+		EventTS:   at,
+		VisitorID: strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
+		SessionID: strings.TrimSpace(c.GetHeader("X-MM-Session-ID")),
+		Context:   analyticsemit.Context("", "", "", tier),
+		Properties: map[string]any{
+			"format": format,
+			"tier":   tier,
+		},
 	}
 }
 

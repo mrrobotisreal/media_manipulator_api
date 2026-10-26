@@ -88,3 +88,13 @@ const ServerAccountDeleted = "server_account_deleted"
 // the durable record and this is a lower bound. The analytics-side catalog entry
 // is in media-manipulator-analytics (branch mm-m6-transactional-email).
 const ServerEmailSent = "server_email_sent"
+
+// Motion (MM49, design MOTION_SVG_ANIMATOR.md §3.8). Emitted by
+// POST /api/vector/exports once the export unit is spent (the counter row and
+// the increment committed): {format, tier}. format is the counted format name
+// (internal/tiers/vector.go), tier the caller's tier. Identity comes from the
+// request headers; the editor sends X-MM-Visitor-ID only with analytics
+// consent, so without it Emit drops the event (skipped_no_identity) and the
+// vector_exports table stays the ground truth. Catalog entry:
+// media-manipulator-analytics MM49.
+const ServerVectorExportCounted = "server_vector_export_counted"

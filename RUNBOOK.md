@@ -635,27 +635,34 @@ cumulative ladder: each tier also gets every format of the tier below, so an
 override can widen a tier but never invert the ladder. Countable formats:
 `svg_animated, lottie, react_tsx, js_ts, flutter, gif, png_sequence, mp4, webm,
 import_lottie, import_svg_vectorize` (`svg_static` is free and never counted).
-**Pro has no `TIER_PRO_VECTOR_*` yet**: it mirrors Premium's Motion row until
-MM49 adds the Pro numbers. Operator: every format, uncounted, unlimited projects,
+**Pro has its own Motion row (MM49)**: 150 exports/day, Premium's formats plus
+`png_sequence,mp4,webm`, unlimited projects, raster video 2160p / 60 fps / 60 s.
+Pro's formats are unioned with Premium's, so `TIER_PRO_VECTOR_FORMATS` only needs
+to name what Pro adds. Operator: every format, uncounted, unlimited projects,
 raster caps at the deployment ceilings (4320 px, 240 fps, `MAX_VIDEO_DURATION_SECONDS`).
 
 | Var | Default | Effect |
 | --- | --- | --- |
 | `TIER_ANON_VECTOR_EXPORTS_PER_DAY` | `2` | Motion exports + import conversions per UTC day, anonymous (session id, else hashed IP). |
 | `TIER_FREE_VECTOR_EXPORTS_PER_DAY` | `5` | Same, free accounts. |
-| `TIER_PREMIUM_VECTOR_EXPORTS_PER_DAY` | `30` | Same, Premium (Pro mirrors it until MM49). |
+| `TIER_PREMIUM_VECTOR_EXPORTS_PER_DAY` | `30` | Same, Premium. |
+| `TIER_PRO_VECTOR_EXPORTS_PER_DAY` | `150` | Same, Pro (MM49). |
 | `TIER_ANON_VECTOR_FORMATS` | `svg_animated` | Comma list of countable formats. |
 | `TIER_FREE_VECTOR_FORMATS` | `svg_animated,lottie,import_lottie,import_svg_vectorize` | Same (plus anonymous's). |
 | `TIER_PREMIUM_VECTOR_FORMATS` | free's + `react_tsx,js_ts,flutter,gif` | Same (plus free's). |
+| `TIER_PRO_VECTOR_FORMATS` | `png_sequence,mp4,webm` (+ Premium's) | Same (plus Premium's), MM49. |
 | `TIER_ANON_VECTOR_PROJECTS` | `1` | Saved-project cap; anonymous means "one browser-only project" (the server never stores anonymous Motion projects). `-1` = unlimited. |
 | `TIER_FREE_VECTOR_PROJECTS` | `3` | Saved Motion projects, free. |
 | `TIER_PREMIUM_VECTOR_PROJECTS` | `25` | Saved Motion projects, Premium. |
+| `TIER_PRO_VECTOR_PROJECTS` | `-1` (unlimited) | Saved Motion projects, Pro (MM49). |
 | `TIER_ANON_VECTOR_MAX_DURATION_MS` | `10000` | Animation duration cap for every counted export; `0` = none. |
 | `TIER_FREE_VECTOR_MAX_DURATION_MS` | `0` | Same, free. |
 | `TIER_PREMIUM_VECTOR_MAX_DURATION_MS` | `0` | Same, Premium. |
+| `TIER_PRO_VECTOR_MAX_DURATION_MS` | Premium's (`0`) | Same, Pro (MM49). |
 | `TIER_ANON_VECTOR_VIDEO_MAX_HEIGHT` / `_MAX_FPS` / `_MAX_SECONDS` | `0` / `0` / `0` | Raster export caps (GIF, PNG sequence, MP4, WebM); `0` = no cap on that axis. Anonymous has no raster format. |
 | `TIER_FREE_VECTOR_VIDEO_MAX_HEIGHT` / `_MAX_FPS` / `_MAX_SECONDS` | `0` / `0` / `0` | Same, free (no raster format). |
 | `TIER_PREMIUM_VECTOR_VIDEO_MAX_HEIGHT` / `_MAX_FPS` / `_MAX_SECONDS` | `720` / `0` / `15` | "GIF 720p / 15 s" (no fps cap unless set). |
+| `TIER_PRO_VECTOR_VIDEO_MAX_HEIGHT` / `_MAX_FPS` / `_MAX_SECONDS` | `2160` / `60` / `60` | Pro raster caps (MM49): every raster format, incl. MP4/WebM/PNG sequence. A 61 s, 2161 px or 61 fps request answers 422 `vector_cap_exceeded`. |
 | `VECTOR_MAX_DOC_BYTES` | `4194304` (4 MiB) | Largest saved Motion document; the sanitizer refuses anything bigger (422). |
 
 #### Billing add-on (Stripe, MM17) - ships dark
@@ -1552,6 +1559,29 @@ leaves `vector_project` ledger rows it cannot write.
   Grant a user extra exports today (support): `UPDATE mm_usage_counters SET count = 0
   WHERE metric = 'vector_export' AND subject_kind = 'user' AND subject_key = $1 AND
   day = (now() AT TIME ZONE 'UTC')::date;`
+- **What a 429 `vector_export_limit` means (MM49).** The caller spent today's
+  `TIER_<T>_VECTOR_EXPORTS_PER_DAY` (2 / 5 / 30 / 150 by default). The body says
+  `tier`, `limit`, `used`, `resetsAt` (next UTC midnight) and `upgradePath`
+  (`signup` for anonymous, `premium` for free, `pro` for Premium, `""` for Pro and
+  operator). Nothing was written for the refused call. The editor shows "Upgrade
+  to Pro" for Premium, "Upgrade to Premium" below, and nothing for Pro. A 403
+  `vector_format_locked` names the lowest public tier with the format in
+  `upgradePath` (MP4/WebM/PNG sequence: `pro`). Read `vector_exports` (queries
+  above) for the caller's history: `tier` is the tier at count time, so a user who
+  upgraded mid-day shows both.
+- **Analytics (MM49).** Every 200 emits `server_vector_export_counted {format,
+  tier}` through `internal/analyticsemit` (needs `ANALYTICS_INGEST_URL` +
+  `ANALYTICS_SERVER_KEY`, and the caller's `X-MM-Visitor-ID` + `X-MM-Session-ID`;
+  the editor sends the visitor id only with analytics consent, so consent-less
+  exports are counted in `vector_exports` and skipped by the emitter as
+  `skipped_no_identity`). `vector_exports` is the ground truth; the admin
+  `/motion` page compares it with the client's `vector_export_completed`.
+- **Sanitizer (MM49).** `PUT /api/vector/projects/:id` also checks `loop`
+  (boolean), `motionPath` extras (`pathId` id pattern, `d` path-data characters,
+  `autoOrient` boolean) and keyframe value kinds per property (`d` path data;
+  `motionPath`, `strokeDashoffset`, `filter.blur`, `gradientStop[i].offset`
+  numbers; stop colours the colour grammar). A 422 `vector_doc_invalid` with
+  `path` names the field.
 - **Thumbnails.** S3 key `vector/<ownerUid>/<projectId>/thumb.png` (prefix
   `vector/`, in every sweeper's allowed prefixes), presigned PUT pinned to the
   declared size (max 512 KB) and `image/png`. The key is server-built from ids,
