@@ -83,18 +83,12 @@ func (s *StudioIngestService) Generate(ctx context.Context, jobID, originalKey, 
 	}
 
 	// Video: 720p H.264 proxy.
-	proxyHeight := s.cfg.ContentStudioProxyHeight
-	if proxyHeight <= 0 {
-		proxyHeight = 720
-	}
 	proxyLocal := filepath.Join(workDir, "proxy.mp4")
-	args := []string{"-y", "-i", inputPath, "-vf", fmt.Sprintf("scale=-2:%d", proxyHeight)}
-	args = append(args, videoProxyEncodeArgs(studioH264Encoder(s.cfg))...)
-	args = append(args, "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", proxyLocal)
+	args := buildVideoProxyArgs(studioH264Encoder(s.cfg), s.proxyHeight(), inputPath, proxyLocal)
 	if err := runStudioFFmpeg(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, totalSeconds, args...); err != nil {
 		return StudioIngestResult{}, fmt.Errorf("video proxy: %w", err)
 	}
-	res.ProxyKey = keyDir + "/" + assetID + "_proxy.mp4"
+	res.ProxyKey = studioVideoProxyKey(keyDir, assetID, StudioProxyIngestGeneration)
 	if err := s.uploadFile(ctx, proxyLocal, res.ProxyKey, originalKey, "video/mp4"); err != nil {
 		return StudioIngestResult{}, fmt.Errorf("upload video proxy: %w", err)
 	}
@@ -121,6 +115,114 @@ func (s *StudioIngestService) Generate(ctx context.Context, jobID, originalKey, 
 	// Waveform peaks for any video with an audio track (non-fatal).
 	s.maybePeaks(ctx, jobID, originalKey, assetID, hasAudio, inputPath, totalSeconds, &res)
 	return res, nil
+}
+
+// proxyHeight is the preview proxy height (CONTENT_STUDIO_PROXY_HEIGHT, 720).
+func (s *StudioIngestService) proxyHeight() int {
+	if s.cfg != nil && s.cfg.ContentStudioProxyHeight > 0 {
+		return s.cfg.ContentStudioProxyHeight
+	}
+	return 720
+}
+
+// buildVideoProxyArgs is the full ffmpeg argv of a video preview proxy encode,
+// shared by ingest and the MM71 rebuild so both produce the same file.
+func buildVideoProxyArgs(encoder string, proxyHeight int, in, out string) []string {
+	args := []string{"-y", "-i", in, "-vf", fmt.Sprintf("scale=-2:%d", proxyHeight)}
+	args = append(args, videoProxyEncodeArgs(encoder)...)
+	return append(args, "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out)
+}
+
+// --- Proxy generations (MM71) ------------------------------------------------
+//
+// A video proxy key is written once and never overwritten: GET /proxy is
+// cached by browsers for a week (MM70), so the bytes behind a key must never
+// change. A rebuilt proxy therefore gets a NEW key, numbered by generation:
+//
+//	<assetId>_proxy.mp4      generation 0: written before MM71. Unknown
+//	                         keyframe cadence (pre-MM70 imports have the
+//	                         encoder's ~8-10 s GOP).
+//	<assetId>_proxy_g<N>.mp4 generation N >= 1: the 1 s keyframe cadence
+//	                         (new imports are g1, each rebuild is N+1).
+//
+// The generation is exposed on the asset as proxyGeneration, so the editor can
+// offer the rebuild only where it helps and version the proxy URL (?v=g<N>)
+// so a browser never answers a rebuilt proxy from the old cached bytes.
+
+// StudioProxyIngestGeneration is the generation a fresh import's proxy gets.
+const StudioProxyIngestGeneration = 1
+
+// studioVideoProxyKey names a video proxy of the given generation.
+func studioVideoProxyKey(keyDir, assetID string, gen int) string {
+	if gen <= 0 {
+		return keyDir + "/" + assetID + "_proxy.mp4"
+	}
+	return fmt.Sprintf("%s/%s_proxy_g%d.mp4", keyDir, assetID, gen)
+}
+
+// StudioProxyGeneration reads the generation out of a video proxy key: N for
+// <assetId>_proxy_g<N>.<ext>, 0 for anything else (the legacy name included).
+func StudioProxyGeneration(assetID, key string) int {
+	if assetID == "" || key == "" {
+		return 0
+	}
+	base := key[strings.LastIndex(key, "/")+1:]
+	prefix := assetID + "_proxy_g"
+	if !strings.HasPrefix(base, prefix) {
+		return 0
+	}
+	rest := base[len(prefix):]
+	dot := strings.IndexByte(rest, '.')
+	if dot <= 0 {
+		return 0
+	}
+	n, err := strconv.Atoi(rest[:dot])
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+// NextStudioVideoProxyKey is the key and generation of the proxy that replaces
+// currentProxyKey: always a different key, beside the original.
+func NextStudioVideoProxyKey(originalKey, assetID, currentProxyKey string) (string, int) {
+	gen := StudioProxyGeneration(assetID, currentProxyKey) + 1
+	return studioVideoProxyKey(s3KeyDir(originalKey), assetID, gen), gen
+}
+
+// studioReversedProxyKey names the reversed proxy built from proxyKey. It
+// follows the proxy's generation so a reverse rebuilt after a proxy rebuild
+// also lands on a new key: <assetId>_proxy_reversed.<ext> for generation 0
+// (the pre-MM71 name, unchanged), <assetId>_proxy_g<N>_reversed.<ext> after.
+func studioReversedProxyKey(originalKey, assetID, proxyKey, ext string) string {
+	if gen := StudioProxyGeneration(assetID, proxyKey); gen > 0 {
+		return fmt.Sprintf("%s/%s_proxy_g%d_reversed.%s", s3KeyDir(originalKey), assetID, gen, ext)
+	}
+	return s3KeyDir(originalKey) + "/" + assetID + "_proxy_reversed." + ext
+}
+
+// RebuildVideoProxy re-encodes a video asset's preview proxy from its ORIGINAL
+// (inputPath) with the current proxy args and uploads it to newKey, registered
+// in the retention ledger with the original as parent. The caller swaps the
+// asset row to newKey and retires the old key (MM71).
+func (s *StudioIngestService) RebuildVideoProxy(ctx context.Context, jobID, originalKey, assetID, newKey, inputPath string, totalSeconds float64) error {
+	if s.s3Client == nil {
+		return fmt.Errorf("S3 client not configured")
+	}
+	workDir := filepath.Join(s.cfg.TempDir, "studio_rebuild_"+assetID)
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(workDir) }()
+	out := filepath.Join(workDir, "proxy.mp4")
+	args := buildVideoProxyArgs(studioH264Encoder(s.cfg), s.proxyHeight(), inputPath, out)
+	if err := runStudioFFmpeg(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, totalSeconds, args...); err != nil {
+		return fmt.Errorf("video proxy: %w", err)
+	}
+	if err := s.uploadFile(ctx, out, newKey, originalKey, "video/mp4"); err != nil {
+		return fmt.Errorf("upload video proxy: %w", err)
+	}
+	return nil
 }
 
 // videoProxyEncodeArgs is the video half of the preview-proxy encode: H.264 at

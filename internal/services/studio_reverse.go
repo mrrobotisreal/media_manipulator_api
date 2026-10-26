@@ -75,7 +75,10 @@ func reverseSegmentArgs(encoder string, kind models.StudioMediaKind, hasAudio bo
 // GenerateReversedProxy renders a reversed copy of an asset's PROXY (already
 // 720p, so this is cheap and bounded) and uploads it beside the original.
 // Returns the S3 key. totalSeconds drives the segment plan and progress.
-func (s *StudioIngestService) GenerateReversedProxy(ctx context.Context, jobID, originalKey, assetID string, kind models.StudioMediaKind, hasAudio bool, proxyPath string, totalSeconds float64) (string, error) {
+//
+// proxyKey is the asset's current proxy key: the reversed key follows its
+// generation (studioReversedProxyKey), so it is never overwritten in place.
+func (s *StudioIngestService) GenerateReversedProxy(ctx context.Context, jobID, originalKey, assetID, proxyKey string, kind models.StudioMediaKind, hasAudio bool, proxyPath string, totalSeconds float64) (string, error) {
 	if s.s3Client == nil {
 		return "", fmt.Errorf("S3 client not configured")
 	}
@@ -109,7 +112,7 @@ func (s *StudioIngestService) GenerateReversedProxy(ctx context.Context, jobID, 
 	if err := runStudioFFmpeg(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, 0, concat...); err != nil {
 		return "", fmt.Errorf("reverse concat: %w", err)
 	}
-	key := s3KeyDir(originalKey) + "/" + assetID + "_proxy_reversed." + ext
+	key := studioReversedProxyKey(originalKey, assetID, proxyKey, ext)
 	if err := s.uploadFile(ctx, outLocal, key, originalKey, mime); err != nil {
 		return "", fmt.Errorf("upload reversed proxy: %w", err)
 	}

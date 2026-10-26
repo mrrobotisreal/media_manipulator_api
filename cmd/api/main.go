@@ -814,6 +814,17 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 				return strings.HasPrefix(path, "/api/studio/assets/") && strings.HasSuffix(path, "/reverse-proxy")
 			},
 		},
+		// Proxy rebuild (MM71): one 720p re-encode from the original, the same
+		// transcode bucket as the reversed proxy.
+		{
+			routeKey:     "studio_asset_rebuild_proxy",
+			tool:         "studio_proxy_rebuild",
+			sessionLimit: cfg.RateLimitTranscodesPerSessionPerHour,
+			ipLimit:      cfg.RateLimitTranscodesPerIPPerHour,
+			matches: func(path string) bool {
+				return strings.HasPrefix(path, "/api/studio/assets/") && strings.HasSuffix(path, "/rebuild-proxy")
+			},
+		},
 		// Version-history checkpoints (part 09) are cheap DB writes, but the
 		// client fires them on a timer — share the generous upload bucket
 		// rather than minting a new limiter type. Only POSTs are dispatched,
