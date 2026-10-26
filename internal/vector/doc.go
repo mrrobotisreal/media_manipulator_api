@@ -940,8 +940,97 @@ func init() {
 		dflt("fps", num("24"), numV(0, 120, true, false)),
 		dflt("layers", emptyArr, vLayers),
 		dflt("defs", func(*object) any { return newObject() }, defsSpec.vfn()),
-		dflt("animations", emptyArr, arrV(trackSpec.vfn(), -1)),
+		dflt("animations", emptyArr, arrV(vTrack, -1)),
+		opt("loop", vBool),
 	}}
+}
+
+// vTrack validates a track, then the per-property rules (MM49): extras of a
+// motionPath track and the keyframe value kind per property. Every rule is
+// the weakest check that still holds for everything the UI editor, animators
+// and importers write.
+func vTrack(c *ctx, path string, v any) (any, *ValidationError) {
+	r, err := trackSpec.vfn()(c, path, v)
+	if err != nil {
+		return nil, err
+	}
+	o := r.(*object)
+	prop := str(o, "property")
+	if prop == "motionPath" {
+		if ex, ok := o.vals["extras"].(*object); ok {
+			if e := checkMotionExtras(sub(path, "extras"), ex); e != nil {
+				return nil, e
+			}
+		}
+	}
+	for i, k := range arr(o, "keyframes") {
+		kf := k.(*object)
+		if e := checkKeyValue(prop, sub(idx(sub(path, "keyframes"), i), "value"), kf.vals["value"]); e != nil {
+			return nil, e
+		}
+	}
+	return r, nil
+}
+
+// pathDataClass is [MmLlHhVvCcSsQqTtAaZz0-9eE.,+\-\s]; JS \s is mapped to a
+// plain space first because RE2's \s is ASCII-only.
+var pathDataClass = regexp.MustCompile(`^[MmLlHhVvCcSsQqTtAaZz0-9eE.,+ -]*$`)
+
+func isPathData(s string) bool {
+	return pathDataClass.MatchString(strings.Map(func(r rune) rune {
+		if isJSSpace(r) {
+			return ' '
+		}
+		return r
+	}, s))
+}
+
+// pathId deliberately checks the id pattern only, not that the layer exists:
+// the editor does not prune extras when a guide layer is deleted (layerTree
+// removeLayers / vectorStore deleteSelection) and motionPathData treats a
+// dangling pathId as "no path".
+func checkMotionExtras(path string, ex *object) *ValidationError {
+	if v, ok := ex.get("pathId"); ok {
+		s, isStr := v.(string)
+		if !isStr || len(s) > 128 || !idRE.MatchString(s) {
+			return fail(CodeInvalidDoc, sub(path, "pathId"), "invalid id")
+		}
+	}
+	if v, ok := ex.get("d"); ok {
+		s, isStr := v.(string)
+		if !isStr || utf16Len(s) > maxPathBytes || !isPathData(s) {
+			return fail(CodeInvalidDoc, sub(path, "d"), "invalid path data")
+		}
+	}
+	if v, ok := ex.get("autoOrient"); ok {
+		if _, isBool := v.(bool); !isBool {
+			return fail(CodeInvalidDoc, sub(path, "autoOrient"), "expected a boolean")
+		}
+	}
+	return nil
+}
+
+var stopColorRE = regexp.MustCompile(`^gradientStop\[(0|[1-9]\d{0,2})\]\.color$`)
+var stopOffsetRE = regexp.MustCompile(`^gradientStop\[(0|[1-9]\d{0,2})\]\.offset$`)
+
+func checkKeyValue(prop, path string, v any) *ValidationError {
+	_, isStr := v.(string)
+	_, isNum := v.(numberT)
+	switch {
+	case prop == "d":
+		if !isStr || !isPathData(v.(string)) {
+			return fail(CodeInvalidDoc, path, "expected path data")
+		}
+	case prop == "motionPath", prop == "strokeDashoffset", prop == "filter.blur", stopOffsetRE.MatchString(prop):
+		if !isNum {
+			return fail(CodeInvalidDoc, path, "expected a number")
+		}
+	case stopColorRE.MatchString(prop):
+		if !isStr || !isSafeColor(v.(string)) {
+			return fail(CodeInvalidDoc, path, "invalid color")
+		}
+	}
+	return nil
 }
 
 // canvasV applies canvasSchema.transform: emit width, height, viewBox,

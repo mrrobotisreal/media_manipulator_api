@@ -113,5 +113,20 @@ func assertVectorShape(t *testing.T, tier any, limits map[string]any) {
 		if video["maxHeight"] != 720.0 || video["maxSeconds"] != 15.0 || limits["vectorExportsPerDay"] != 30.0 {
 			t.Errorf("premium vector row = %v / %v", limits, video)
 		}
+	case "pro":
+		// MM49: Pro's own Motion row, the only public tier with raster video.
+		if video["maxHeight"] != 2160.0 || video["maxFps"] != 60.0 || video["maxSeconds"] != 60.0 ||
+			limits["vectorExportsPerDay"] != 150.0 || limits["vectorProjects"] != -1.0 {
+			t.Errorf("pro vector row = %v / %v", limits, video)
+		}
+		has := map[string]bool{}
+		for _, f := range formats {
+			has[f.(string)] = true
+		}
+		for _, f := range []string{"png_sequence", "mp4", "webm", "gif", "svg_animated"} {
+			if !has[f] {
+				t.Errorf("pro vectorFormats %v lacks %s", formats, f)
+			}
+		}
 	}
 }

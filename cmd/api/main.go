@@ -200,7 +200,7 @@ func main() {
 	studioHandler := handlers.NewStudioHandler(jobManager, cfg, inspector, s3Client, pool, transcription)
 	// Motion (MM43): projects + export counter on the telemetry store; the
 	// vectorize route reuses the conversion handler's converter job.
-	vectorHandler := newVectorHandler(cfg, store, tierRegistry, s3Client, conversionHandler, logging)
+	vectorHandler := newVectorHandler(cfg, store, tierRegistry, s3Client, conversionHandler, analyticsEmitter, logging)
 	// AI Video Restoration gets a dedicated handler too: its pipeline is the
 	// first consumer of the GPU lease manager and the command-audit runner.
 	videoRestoreHandler := handlers.NewVideoRestoreHandler(jobManager, cfg, s3Client, gpuMgr, store, cmdRunner)

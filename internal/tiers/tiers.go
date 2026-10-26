@@ -204,6 +204,15 @@ func New(cfg *config.Config) *Registry {
 			PriorityGPU:           true,
 			ResultRetentionHours:  cfg.TierProRetentionHours,
 			AdsRemoved:            true,
+			// Motion (MM49): the top public Motion rung (design §3.4, PRO_TIER
+			// §2.3). Formats are unioned with Premium's below.
+			VectorExportsPerDay: cfg.TierProVectorExportsPerDay,
+			VectorFormats:       NewFormatSet(cfg.TierProVectorFormats...),
+			VectorProjects:      cfg.TierProVectorProjects,
+			VectorMaxDurationMs: cfg.TierProVectorMaxDurationMs,
+			VectorVideo: VectorVideo{
+				MaxHeight: cfg.TierProVectorVideoMaxHeight, MaxFps: cfg.TierProVectorVideoMaxFps, MaxSeconds: cfg.TierProVectorVideoMaxSeconds,
+			},
 		},
 	}}
 	// Motion formats are a cumulative ladder ("+ Lottie", "+ code exports" in
@@ -216,15 +225,8 @@ func New(cfg *config.Config) *Registry {
 	premium := r.limits[TierPremium]
 	premium.VectorFormats = premium.VectorFormats.Union(free.VectorFormats)
 	r.limits[TierPremium] = premium
-	// Pro's Motion row is MM49's (after MM39): until then Pro carries
-	// Premium's vector values exactly, so the ladder holds and MM49 only has
-	// to raise them.
 	pro := r.limits[TierPro]
-	pro.VectorExportsPerDay = premium.VectorExportsPerDay
-	pro.VectorFormats = premium.VectorFormats
-	pro.VectorProjects = premium.VectorProjects
-	pro.VectorMaxDurationMs = premium.VectorMaxDurationMs
-	pro.VectorVideo = premium.VectorVideo
+	pro.VectorFormats = pro.VectorFormats.Union(premium.VectorFormats)
 	r.limits[TierPro] = pro
 
 	// Operator = Pro (the top public rung) with every allowance removed. Not configurable by

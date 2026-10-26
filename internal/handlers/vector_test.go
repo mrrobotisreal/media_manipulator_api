@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
@@ -213,6 +214,7 @@ var vectorUsers = map[string]*models.User{
 	"free2":    {ID: "user-free-2", FirebaseUID: "uid-free2", Tier: "free"},
 	"premium":  {ID: "user-premium", FirebaseUID: "uid-premium", Tier: "premium"},
 	"premium2": {ID: "user-premium-2", FirebaseUID: "uid-premium2", Tier: "premium"},
+	"pro":      {ID: "user-pro", FirebaseUID: "uid-pro", Tier: "pro"},
 }
 
 // vectorUserStore resolves the principal's uid to a user row.
@@ -709,6 +711,61 @@ func TestVectorExportRowFields(t *testing.T) {
 	}
 }
 
+// MM49: Pro exports MP4 at 4K60 for 60 s, is counted against 150/day, and a
+// 61 s export is refused before anything is written or emitted.
+func TestVectorExportPro(t *testing.T) {
+	e := newVecEnv(t)
+	w := e.do("POST", "/api/vector/exports", "pro", exportBody("mp4", 60000, 2160, 60), nil)
+	if w.Code != 200 {
+		t.Fatalf("pro mp4 = %d %s", w.Code, w.Body.String())
+	}
+	b := decode(t, w)
+	if b["tier"] != "pro" || b["limit"].(float64) != 150 || b["remaining"].(float64) != 149 {
+		t.Fatalf("pro grant = %v", b)
+	}
+	if len(e.counted) != 1 || e.counted[0] != "mp4/pro" {
+		t.Fatalf("counted seam = %v", e.counted)
+	}
+	w = e.do("POST", "/api/vector/exports", "pro", exportBody("webm", 61000, 1080, 30), nil)
+	if w.Code != http.StatusUnprocessableEntity || decode(t, w)["error"] != "vector_cap_exceeded" {
+		t.Fatalf("pro 61 s = %d %s", w.Code, w.Body.String())
+	}
+	if len(e.store.exports) != 1 || len(e.counted) != 1 {
+		t.Fatalf("a capped call must write no row and emit nothing: rows=%d counted=%v", len(e.store.exports), e.counted)
+	}
+}
+
+// MM49: the real server_vector_export_counted event carries {format, tier},
+// the request's visitor/session ids and the tier in context.
+func TestVectorCountedEventShape(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/api/vector/exports", nil)
+	c.Request.Header.Set("X-MM-Visitor-ID", " 11111111-1111-4111-8111-111111111111 ")
+	c.Request.Header.Set("X-MM-Session-ID", "22222222-2222-4222-8222-222222222222")
+	at := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	ev := vectorCountedEvent(c, "mp4", "pro", at)
+	if ev.EventName != analyticsemit.ServerVectorExportCounted || analyticsemit.ServerVectorExportCounted != "server_vector_export_counted" {
+		t.Fatalf("name = %q", ev.EventName)
+	}
+	if ev.VisitorID != "11111111-1111-4111-8111-111111111111" || ev.SessionID != "22222222-2222-4222-8222-222222222222" || !ev.EventTS.Equal(at) {
+		t.Fatalf("identity = %+v", ev)
+	}
+	if len(ev.Properties) != 2 || ev.Properties["format"] != "mp4" || ev.Properties["tier"] != "pro" {
+		t.Fatalf("properties = %v", ev.Properties)
+	}
+	if ev.Context["tier"] != "pro" {
+		t.Fatalf("context = %v", ev.Context)
+	}
+	// A disabled emitter leaves the seam unset (no panic, nothing sent).
+	h := NewVectorHandler(nil, config.Load(), nil, nil, nil, quiet)
+	h.SetAnalyticsEmitter(nil)
+	if h.counted != nil {
+		t.Fatal("a nil emitter must not install the hook")
+	}
+}
+
 func TestVectorExportRefusals(t *testing.T) {
 	e := newVecEnv(t)
 	cases := []struct {
@@ -720,10 +777,16 @@ func TestVectorExportRefusals(t *testing.T) {
 	}{
 		{"svg_static is never countable", "free", exportBody("svg_static", 1000, 0, 0), nil, 400, "vector_format_not_countable", nil},
 		{"unknown format", "free", exportBody("pdf", 1000, 0, 0), nil, 400, "vector_format_not_countable", nil},
-		{"anonymous mp4 locked, nothing unlocks it yet", "", exportBody("mp4", 1000, 480, 24), anonSession, 403, "vector_format_locked",
+		{"anonymous mp4 locked, unlocked by pro (MM49)", "", exportBody("mp4", 1000, 480, 24), anonSession, 403, "vector_format_locked",
 			func(t *testing.T, b map[string]any) {
-				if b["format"] != "mp4" || b["upgradePath"] != "" {
-					t.Errorf("mp4 lock = %v (no public tier has raster video until MM49)", b)
+				if b["format"] != "mp4" || b["upgradePath"] != "pro" {
+					t.Errorf("mp4 lock = %v (Pro is the lowest public tier with raster video)", b)
+				}
+			}},
+		{"premium webm locked, unlocked by pro (MM49)", "premium", exportBody("webm", 1000, 480, 24), nil, 403, "vector_format_locked",
+			func(t *testing.T, b map[string]any) {
+				if b["upgradePath"] != "pro" || b["tier"] != "premium" {
+					t.Errorf("webm lock = %v", b)
 				}
 			}},
 		{"anonymous lottie locked, unlocked by signing up", "", exportBody("lottie", 1000, 0, 0), anonSession, 403, "vector_format_locked",

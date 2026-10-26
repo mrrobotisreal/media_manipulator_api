@@ -177,8 +177,9 @@ func TestLimitsAreMonotonic(t *testing.T) {
 	}
 }
 
-// Pro (MM39, design PRO_TIER.md §2.3): ops 700, AI 120, exports 700, every
-// other cap equal to Premium, priority GPU and no ads.
+// Pro (MM39, design PRO_TIER.md §2.3): ops 700, AI 120, exports 700, the top
+// Motion row (MM49, TestProVectorRow), every other cap equal to Premium,
+// priority GPU and no ads.
 func TestProRow(t *testing.T) {
 	r := testRegistry(t)
 	pro, premium := r.For(TierPro), r.For(TierPremium)
@@ -187,8 +188,10 @@ func TestProRow(t *testing.T) {
 	}
 	same := premium
 	same.OpsPerDay, same.AIOpsPerDay, same.ExportsPerDay = pro.OpsPerDay, pro.AIOpsPerDay, pro.ExportsPerDay
+	same.VectorExportsPerDay, same.VectorFormats, same.VectorProjects = pro.VectorExportsPerDay, pro.VectorFormats, pro.VectorProjects
+	same.VectorMaxDurationMs, same.VectorVideo = pro.VectorMaxDurationMs, pro.VectorVideo
 	if pro != same {
-		t.Fatalf("pro must equal premium apart from ops/ai/exports:\n pro     %+v\n premium %+v", pro, premium)
+		t.Fatalf("pro must equal premium apart from ops/ai/exports and the Motion row:\n pro     %+v\n premium %+v", pro, premium)
 	}
 	if !pro.PriorityGPU || !pro.AdsRemoved || pro.RateLimitExempt {
 		t.Fatalf("pro flags wrong: %+v", pro)
@@ -272,9 +275,10 @@ func TestPublishedMatrix(t *testing.T) {
 			MaxOutputHeight: 2160, MaxLadderHeight: 2160,
 			StudioProjects: Unlimited, StudioVersionAutoKeep: 20, PriorityGPU: true,
 			ResultRetentionHours: 720, AdsRemoved: true,
-			VectorExportsPerDay: 30, VectorProjects: 25,
-			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,import_lottie,import_svg_vectorize",
-			VectorVideo:   VectorVideo{MaxHeight: 720, MaxSeconds: 15},
+			// MM49: Pro's own Motion row (design §3.4).
+			VectorExportsPerDay: 150, VectorProjects: Unlimited,
+			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,png_sequence,mp4,webm,import_lottie,import_svg_vectorize",
+			VectorVideo:   VectorVideo{MaxHeight: 2160, MaxFps: 60, MaxSeconds: 60},
 		},
 	}
 
@@ -370,15 +374,50 @@ func TestVectorFormatsOverrideKeepsLadder(t *testing.T) {
 	}
 }
 
-// Pro's Motion row is MM49's; until then it mirrors Premium exactly.
-func TestProVectorRowMirrorsPremium(t *testing.T) {
+// Pro's Motion row (MM49): its own env, formats unioned on top of Premium's,
+// so an override can add to Pro but never drop a Premium format.
+func TestProVectorRow(t *testing.T) {
 	t.Setenv("TIER_PREMIUM_VECTOR_EXPORTS_PER_DAY", "44")
 	r := testRegistry(t)
 	pro, premium := r.For(TierPro), r.For(TierPremium)
-	if pro.VectorExportsPerDay != 44 || pro.VectorFormats != premium.VectorFormats ||
-		pro.VectorProjects != premium.VectorProjects || pro.VectorVideo != premium.VectorVideo ||
-		pro.VectorMaxDurationMs != premium.VectorMaxDurationMs {
-		t.Fatalf("pro vector row must equal premium's:\n pro     %+v\n premium %+v", pro, premium)
+	if pro.VectorExportsPerDay != 150 {
+		t.Errorf("pro vector exports = %d, want its own default 150 (not premium's 44)", pro.VectorExportsPerDay)
+	}
+	if !pro.VectorFormats.SupersetOf(premium.VectorFormats) {
+		t.Errorf("pro formats %v must include premium's %v", pro.VectorFormats.List(), premium.VectorFormats.List())
+	}
+	for _, f := range []string{VectorFormatPNGSequence, VectorFormatMP4, VectorFormatWebM} {
+		if !pro.VectorFormats.Has(f) || premium.VectorFormats.Has(f) {
+			t.Errorf("%s must be Pro-only by default (pro %v, premium %v)", f, pro.VectorFormats.List(), premium.VectorFormats.List())
+		}
+	}
+	if pro.VectorProjects != Unlimited || pro.VectorVideo != (VectorVideo{MaxHeight: 2160, MaxFps: 60, MaxSeconds: 60}) {
+		t.Errorf("pro projects/video = %d %+v", pro.VectorProjects, pro.VectorVideo)
+	}
+}
+
+func TestProVectorEnvOverrides(t *testing.T) {
+	t.Setenv("TIER_PRO_VECTOR_EXPORTS_PER_DAY", "200")
+	t.Setenv("TIER_PRO_VECTOR_FORMATS", "mp4")
+	t.Setenv("TIER_PRO_VECTOR_PROJECTS", "100")
+	t.Setenv("TIER_PRO_VECTOR_VIDEO_MAX_HEIGHT", "1440")
+	t.Setenv("TIER_PRO_VECTOR_VIDEO_MAX_FPS", "30")
+	t.Setenv("TIER_PRO_VECTOR_VIDEO_MAX_SECONDS", "30")
+	r := testRegistry(t)
+	pro, premium := r.For(TierPro), r.For(TierPremium)
+	if pro.VectorExportsPerDay != 200 || pro.VectorProjects != 100 {
+		t.Errorf("pro exports/projects = %d/%d", pro.VectorExportsPerDay, pro.VectorProjects)
+	}
+	if pro.VectorVideo != (VectorVideo{MaxHeight: 1440, MaxFps: 30, MaxSeconds: 30}) {
+		t.Errorf("pro video = %+v", pro.VectorVideo)
+	}
+	// The override names only mp4, yet Pro keeps every Premium format (union).
+	if !pro.VectorFormats.Has(VectorFormatMP4) || pro.VectorFormats.Has(VectorFormatWebM) || !pro.VectorFormats.SupersetOf(premium.VectorFormats) {
+		t.Errorf("pro formats = %v", pro.VectorFormats.List())
+	}
+	// Operator still derives every format from the deployment, not from Pro's env.
+	if len(r.For(TierOperator).VectorFormats.List()) != len(AllVectorFormats()) {
+		t.Error("operator must keep every format")
 	}
 }
 

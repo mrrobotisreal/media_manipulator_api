@@ -5,6 +5,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/handlers"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
@@ -24,7 +25,7 @@ func retentionS3Prefixes(cfg *config.Config) []string {
 // newVectorHandler builds the Motion handler (MM43). With no database the
 // handler still mounts and every route answers 503, like Darkroom.
 func newVectorHandler(cfg *config.Config, store *telemetry.Store, registry *tiers.Registry, s3Client *s3.Client,
-	conversion *handlers.ConversionHandler, log *slog.Logger) *handlers.VectorHandler {
+	conversion *handlers.ConversionHandler, emitter *analyticsemit.Emitter, log *slog.Logger) *handlers.VectorHandler {
 	var vs handlers.VectorStore
 	if store.Enabled() {
 		vs = store
@@ -37,5 +38,7 @@ func newVectorHandler(cfg *config.Config, store *telemetry.Store, registry *tier
 	// Same fixed salt as the quota middleware, so an anonymous visitor without
 	// a session id is keyed on the same hashed IP everywhere.
 	h.SetIPHashSecret(quotaIPSalt[:])
+	// MM49: server_vector_export_counted on every spent export unit.
+	h.SetAnalyticsEmitter(emitter)
 	return h
 }

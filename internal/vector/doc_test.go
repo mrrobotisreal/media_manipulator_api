@@ -2,6 +2,7 @@ package vector
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -422,4 +423,106 @@ func TestSecurity(t *testing.T) {
 	for _, c := range ok {
 		t.Run("ok "+c.name, func(t *testing.T) { wantOK(t, c.doc, Limits{}) })
 	}
+}
+
+// ---- MM49 tightening: loop, motionPath extras, keyframe value kinds ----
+
+func animatedWith(t *testing.T, mutate func(m map[string]any)) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", "animated.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	mutate(m)
+	out, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+func trackDoc(prop, extras, kf string) string {
+	ex := ""
+	if extras != "" {
+		ex = `,"extras":` + extras
+	}
+	return minimal(`[`+rect("a", "")+`,`+rect("g", "")+`]`, "",
+		`[{"layerId":"a","property":"`+prop+`","keyframes":[{"t":0,"value":`+kf+`,"easing":"linear"}]`+ex+`}]`)
+}
+
+func TestLoopField(t *testing.T) {
+	for _, v := range []string{"true", "false"} {
+		d := wantOK(t, strings.Replace(minimal(`[]`, "", ""), `"layers"`, `"loop":`+v+`,"layers"`, 1), Limits{})
+		if !strings.HasSuffix(strings.TrimSpace(string(d.Canonical())), `"loop":`+v+`}`) {
+			t.Fatalf("loop not canonical-last: %s", d.Canonical())
+		}
+	}
+	wantOK(t, minimal(`[]`, "", ""), Limits{})
+	for _, v := range []string{`"yes"`, `1`, `null`} {
+		wantCode(t, strings.Replace(minimal(`[]`, "", ""), `"layers"`, `"loop":`+v+`,"layers"`, 1), Limits{}, CodeInvalidDoc, "loop")
+	}
+	// loop on the animated fixture round-trips through a mutation.
+	wantOK(t, animatedWith(t, func(m map[string]any) { m["loop"] = false }), Limits{})
+}
+
+func TestMotionPathExtras(t *testing.T) {
+	ok := []string{
+		`{"pathId":"g","autoOrient":true}`,
+		`{"pathId":"deleted_guide"}`, // dangling: the editor can leave it behind
+		`{"d":"M0 0L10 10 C1,2 3,4 5e-1 6Z","autoOrient":false}`,
+		`{"d":"M0 0","future":{"x":1}}`,
+		`{}`,
+	}
+	for _, e := range ok {
+		wantOK(t, trackDoc("motionPath", e, "0.5"), Limits{})
+	}
+	bad := map[string]string{
+		`{"d":"M0 0<script>"}`: "animations[0].extras.d",
+		`{"d":5}`:              "animations[0].extras.d",
+		`{"pathId":"1 bad"}`:   "animations[0].extras.pathId",
+		`{"pathId":5}`:         "animations[0].extras.pathId",
+		`{"autoOrient":"yes"}`: "animations[0].extras.autoOrient",
+	}
+	for e, path := range bad {
+		wantCode(t, trackDoc("motionPath", e, "0.5"), Limits{}, CodeInvalidDoc, path)
+	}
+	// extras on other properties stay free-form.
+	wantOK(t, trackDoc("opacity", `{"d":"<x>","autoOrient":"yes"}`, "1"), Limits{})
+	wantOK(t, trackDoc("gradientStop[0].color", `{"gradientId":"anything"}`, `"#fff"`), Limits{})
+}
+
+func TestKeyframeValueKinds(t *testing.T) {
+	ok := map[string]string{
+		"d":                      `"M0 0 L1 1Z"`,
+		"motionPath":             `1.5`,
+		"strokeDashoffset":       `-20`,
+		"filter.blur":            `-1`,  // UI does not guarantee >= 0 for keys; only "is a number"
+		"gradientStop[2].offset": `1.5`, // clamped on render, UI may store out of range
+		"gradientStop[0].color":  `"rgb(1, 2, 3)"`,
+		"opacity":                `"M0 0"`, // untouched properties keep the union
+	}
+	for p, v := range ok {
+		wantOK(t, trackDoc(p, "", v), Limits{})
+	}
+	wantOK(t, trackDoc("d", "", `""`), Limits{})
+	bad := map[string]string{
+		"d":                      `5`,
+		"motionPath":             `"0.5"`,
+		"strokeDashoffset":       `"10"`,
+		"filter.blur":            `"2"`,
+		"gradientStop[1].offset": `"0.5"`,
+		"gradientStop[0].color":  `url(http://x)`,
+	}
+	for p, v := range bad {
+		if p == "gradientStop[0].color" {
+			v = `"url(http://x)"`
+		}
+		wantCode(t, trackDoc(p, "", v), Limits{}, CodeInvalidDoc, "animations[0].keyframes[0].value")
+	}
+	wantCode(t, trackDoc("d", "", `"M0 0 <script>"`), Limits{}, CodeInvalidDoc, "animations[0].keyframes[0].value")
+	wantCode(t, trackDoc("gradientStop[0].color", "", `5`), Limits{}, CodeInvalidDoc, "animations[0].keyframes[0].value")
 }
