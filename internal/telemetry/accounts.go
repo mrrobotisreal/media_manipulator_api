@@ -26,7 +26,7 @@ const userColumns = `id::text, firebase_uid, coalesce(email, ''), email_verified
 	coalesce(signup_source, ''), created_at, updated_at, last_seen_at,
 	coalesce(stripe_customer_id, ''), coalesce(stripe_subscription_id, ''),
 	coalesce(subscription_status, ''), coalesce(billing_interval, ''), cancel_at_period_end,
-	coalesce(locale, '')`
+	coalesce(locale, ''), coalesce(billing_currency, '')`
 
 func scanUser(row pgx.Row) (*models.User, error) {
 	var u models.User
@@ -35,7 +35,7 @@ func scanUser(row pgx.Row) (*models.User, error) {
 		&u.Tier, &u.TierSource, &u.TierExpiresAt, &u.DisplayName,
 		&u.SignupSource, &u.CreatedAt, &u.UpdatedAt, &u.LastSeenAt,
 		&u.StripeCustomerID, &u.StripeSubscriptionID, &u.SubscriptionStatus,
-		&u.BillingInterval, &u.CancelAtPeriodEnd, &u.Locale,
+		&u.BillingInterval, &u.CancelAtPeriodEnd, &u.Locale, &u.BillingCurrency,
 	)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func scanUserWithCreated(row pgx.Row) (*models.User, bool, error) {
 		&u.Tier, &u.TierSource, &u.TierExpiresAt, &u.DisplayName,
 		&u.SignupSource, &u.CreatedAt, &u.UpdatedAt, &u.LastSeenAt,
 		&u.StripeCustomerID, &u.StripeSubscriptionID, &u.SubscriptionStatus,
-		&u.BillingInterval, &u.CancelAtPeriodEnd, &u.Locale,
+		&u.BillingInterval, &u.CancelAtPeriodEnd, &u.Locale, &u.BillingCurrency,
 	)
 	if err != nil {
 		return nil, false, err

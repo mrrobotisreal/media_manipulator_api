@@ -1,5 +1,10 @@
 package config
 
+import (
+	"strings"
+	"unicode"
+)
+
 // BillingConfigured is true only when billing is switched on AND every value
 // Stripe needs is present. Billing routes answer 503 billing_unavailable and
 // /api/tiers reports premiumPurchasable:false otherwise.
@@ -63,4 +68,26 @@ func (p DisplayPrices) For(plan, interval string) int {
 		return p.PremiumYearly
 	}
 	return p.PremiumMonthly
+}
+
+// DefaultBillingEURCountries is the proposed EUR region (MM69, PRO_TIER.md
+// §7.3): the EU-27, the EEA (IS, LI, NO), CH, GB, the euro micro-states (AD,
+// MC, SM, VA) plus ME and XK, and the euro-using territories with their own
+// ISO code (AX, GF, GP, MQ, YT, RE, BL, MF, PM). Override with
+// BILLING_EUR_COUNTRIES.
+const DefaultBillingEURCountries = "AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IT LV LT LU MT NL PL PT RO SK SI ES SE " +
+	"IS LI NO CH GB AD MC SM VA ME XK AX GF GP MQ YT RE BL MF PM"
+
+// ParseCountryList parses a comma- and/or whitespace-separated country list
+// into upper-case two-letter codes; anything else is dropped.
+func ParseCountryList(raw string) []string {
+	fields := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		f = strings.ToUpper(strings.TrimSpace(f))
+		if len(f) == 2 && f[0] >= 'A' && f[0] <= 'Z' && f[1] >= 'A' && f[1] <= 'Z' {
+			out = append(out, f)
+		}
+	}
+	return out
 }

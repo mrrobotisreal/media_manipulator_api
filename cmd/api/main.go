@@ -355,6 +355,8 @@ func main() {
 	// `server_signup_completed` — the exact signup number, which only the account
 	// sync can produce (see AccountHandler.emitSignupCompleted).
 	accountHandler.SetAnalyticsEmitter(analyticsEmitter)
+	// MM69: /api/tiers' defaultCurrency reads the caller's country via MaxMind.
+	accountHandler.SetGeo(enricher)
 	// Billing (MM17) ships dark: every /api/billing route answers 503
 	// billing_unavailable unless BILLING_ENABLED and all Stripe settings are set.
 	accountHandler.SetBilling(newBillingHandler(cfg, store, tierRegistry, analyticsEmitter, emailSvc, metricsReg, logging))

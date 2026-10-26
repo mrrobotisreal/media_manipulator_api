@@ -17,8 +17,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/billing"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/email"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/geo"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
@@ -58,6 +60,44 @@ type AccountHandler struct {
 	data *AccountDataHandler
 	// tombstones overrides the store for the sign-in tombstone check (tests).
 	tombstones tombstoneChecker
+	// geo resolves the caller's country for /api/tiers' defaultCurrency
+	// (MM69). nil = no MaxMind; the CF-IPCountry header, then usd, apply.
+	geo countryLookup
+	// currency is the BILLING_EUR_COUNTRIES table, built once from cfg.
+	currency billing.CurrencyDefaults
+}
+
+// countryLookup is the slice of *geo.Enricher /api/tiers uses.
+type countryLookup interface {
+	Lookup(ctx context.Context, ip string) (*geo.Entry, error)
+}
+
+// SetGeo attaches the MaxMind enricher used for the default currency (MM69).
+// A nil enricher is fine: Lookup on a nil *geo.Enricher returns nothing.
+func (h *AccountHandler) SetGeo(e *geo.Enricher) {
+	if h != nil && e != nil {
+		h.geo = e
+	}
+}
+
+// callerCountry is the caller's ISO country for the default currency, or "".
+// MaxMind first (internal/geo on geo.ExtractIP, the ticket's source); then
+// Cloudflare's CF-IPCountry, which the edge in front of the API adds and
+// which is only ever used for this display default (a spoofed header can only
+// change which currency is pre-selected, never what is charged). "XX" (unknown)
+// and "T1" (Tor) read as unknown. Never inferred from the server's location.
+func (h *AccountHandler) callerCountry(c *gin.Context) string {
+	if h.geo != nil {
+		if ip := geo.ExtractIP(c); ip != "" {
+			if e, err := h.geo.Lookup(c.Request.Context(), ip); err == nil && e != nil && e.CountryCode != "" {
+				return strings.ToUpper(e.CountryCode)
+			}
+		}
+	}
+	if cf := strings.ToUpper(strings.TrimSpace(c.GetHeader("CF-IPCountry"))); len(cf) == 2 && cf != "XX" && cf != "T1" {
+		return cf
+	}
+	return ""
 }
 
 // tombstoneChecker is the store slice the sign-in check needs.
@@ -133,7 +173,8 @@ func NewAccountHandler(store *telemetry.Store, registry *tiers.Registry, cfg *co
 	if logger == nil {
 		logger = slog.Default()
 	}
-	h := &AccountHandler{store: store, registry: registry, cfg: cfg, logger: logger, presign: presign, jobs: jobs}
+	h := &AccountHandler{store: store, registry: registry, cfg: cfg, logger: logger, presign: presign, jobs: jobs,
+		currency: billing.NewCurrencyDefaults(cfg)}
 	if store != nil { // avoid a typed-nil interface
 		h.history = store
 	}
@@ -680,6 +721,14 @@ func (h *AccountHandler) fillHistoryRetention(out *historyEntry, r models.Conver
 	}
 }
 
+// currencyPrices is one currency's price numerals in /api/tiers' `prices`.
+type currencyPrices struct {
+	PremiumMonthly int `json:"premiumMonthly"`
+	PremiumYearly  int `json:"premiumYearly"`
+	ProMonthly     int `json:"proMonthly"`
+	ProYearly      int `json:"proYearly"`
+}
+
 // Tiers serves the public tier matrix. /pricing, the upgrade prompts and the
 // inline capability hints all render from this, so the numbers exist in exactly
 // one place (internal/tiers, fed by config).
@@ -688,24 +737,36 @@ func (h *AccountHandler) Tiers(c *gin.Context) {
 	for _, t := range tiers.All() {
 		out = append(out, tierDescriptor{Tier: string(t), Limits: h.registry.For(t)})
 	}
-	// Cacheable: this is configuration, identical for every caller, and it
-	// changes only on deploy.
-	c.Header("Cache-Control", "public, max-age=300")
+	// MM69: defaultCurrency depends on the caller's country, so the response
+	// may be cached by the caller's browser but never by a shared cache.
+	c.Header("Cache-Control", "private, max-age=300")
 	prices := h.cfg.DisplayPrices()
+	// Same numerals in both currencies (PRO_TIER.md §7.1). Keyed by currency so
+	// a future real per-currency price needs no API change.
+	numerals := currencyPrices{PremiumMonthly: prices.PremiumMonthly, PremiumYearly: prices.PremiumYearly,
+		ProMonthly: prices.ProMonthly, ProYearly: prices.ProYearly}
 	c.JSON(http.StatusOK, gin.H{
 		"tiers": out,
 		// Config-driven (MM17): true only when BILLING_ENABLED and every Stripe
 		// secret/price id is set. Prices are display-only; the amount charged is
-		// whatever the Stripe Price says. The *USD names are legacy; MM69 adds
-		// a currency-keyed shape beside them.
-		"premiumPurchasable":    h.cfg.BillingConfigured(),
-		"premiumPriceUSD":       prices.PremiumMonthly,
-		"premiumPriceYearlyUSD": prices.PremiumYearly,
+		// whatever the Stripe Price says.
+		"premiumPurchasable": h.cfg.BillingConfigured(),
 		// MM39: Pro is purchasable only when billing is configured AND both Pro
 		// price ids are set.
-		"proPurchasable":    h.cfg.ProPurchasable(),
-		"proPriceUSD":       prices.ProMonthly,
-		"proPriceYearlyUSD": prices.ProYearly,
+		"proPurchasable": h.cfg.ProPurchasable(),
+		// MM69: the geographic default (usd unless the caller's country is in
+		// BILLING_EUR_COUNTRIES) and the price numerals per currency.
+		"defaultCurrency": h.currency.DefaultCurrencyFor(h.callerCountry(c)),
+		"prices": gin.H{
+			billing.CurrencyUSD: numerals,
+			billing.CurrencyEUR: numerals,
+		},
+		// DEPRECATED (MM69): kept for one release for UIs that predate
+		// `prices`; same numerals as prices.usd.
+		"premiumPriceUSD":       prices.PremiumMonthly,
+		"premiumPriceYearlyUSD": prices.PremiumYearly,
+		"proPriceUSD":           prices.ProMonthly,
+		"proPriceYearlyUSD":     prices.ProYearly,
 	})
 }
 

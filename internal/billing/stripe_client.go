@@ -103,12 +103,28 @@ func (c *stripeClient) CreateCheckoutSession(ctx context.Context, req CheckoutRe
 		},
 		// No trial (ticket decision 7).
 	}
+	applyCurrency(p, req.Currency)
 	applyAutomaticTax(p, c.automaticTax)
 	s, err := c.sc.V1CheckoutSessions.Create(ctx, p)
 	if err != nil {
 		return "", "", wrapErr(err)
 	}
 	return s.ID, s.URL, nil
+}
+
+// applyCurrency pins the Checkout Session's currency (MM69). Every Price is
+// multi-currency (USD default + currency_options.eur, same numerals), and a
+// session WITHOUT `currency` lets Stripe choose by the buyer's IP address, so
+// the visitor could be charged in a currency the page never showed them. The
+// handler always resolves a currency; usd is sent explicitly too. An empty or
+// unknown value (only possible from a caller bug) falls back to usd rather
+// than to IP-based selection.
+func applyCurrency(p *stripe.CheckoutSessionCreateParams, currency string) {
+	c, ok := NormalizeCurrency(currency)
+	if !ok {
+		c = CurrencyUSD
+	}
+	p.Currency = stripe.String(c)
 }
 
 // applyAutomaticTax turns on Stripe Tax for a Checkout Session. Tax is added on
@@ -165,6 +181,9 @@ func toSubscription(s *stripe.Subscription) *Subscription {
 	if s.Customer != nil {
 		out.CustomerID = s.Customer.ID
 	}
+	// MM69: the Subscription's own currency is the one it bills in. The item
+	// price's `currency` is only the multi-currency Price's default (usd).
+	out.Currency = strings.ToLower(string(s.Currency))
 	if s.CancelAt > 0 {
 		out.CancelAt = time.Unix(s.CancelAt, 0).UTC()
 	}
@@ -179,7 +198,9 @@ func toSubscription(s *stripe.Subscription) *Subscription {
 		}
 		if item.Price != nil {
 			if item.Price.Currency != "" {
-				out.Currency = strings.ToLower(string(item.Price.Currency))
+				if out.Currency == "" {
+					out.Currency = strings.ToLower(string(item.Price.Currency))
+				}
 				amt := item.Price.UnitAmount
 				out.UnitAmountCents = &amt
 			}
@@ -251,7 +272,7 @@ func (c *stripeClient) UpdateSubscriptionPrice(ctx context.Context, subID, itemI
 // Premium subscription again. No idempotency key: Stripe refuses a second
 // schedule on the same subscription, and a key would replay a released
 // schedule after a quick downgrade -> keep -> downgrade.
-func (c *stripeClient) CreateSchedule(ctx context.Context, subID, currentPriceID, nextPriceID string, switchAt time.Time) (*Schedule, error) {
+func (c *stripeClient) CreateSchedule(ctx context.Context, subID, currentPriceID, nextPriceID, currency string, switchAt time.Time) (*Schedule, error) {
 	cp := &stripe.SubscriptionScheduleCreateParams{
 		Params:           c.params(ctx),
 		FromSubscription: stripe.String(subID),
@@ -284,6 +305,7 @@ func (c *stripeClient) CreateSchedule(ctx context.Context, subID, currentPriceID
 		Items:    []*stripe.SubscriptionScheduleUpdatePhaseItemParams{{Price: stripe.String(nextPriceID), Quantity: stripe.Int64(1)}},
 		Duration: duration, // nil = Stripe's default of one billing interval
 	}
+	pinPhaseCurrency(currency, current, next)
 	up := &stripe.SubscriptionScheduleUpdateParams{
 		Params:            c.params(ctx),
 		EndBehavior:       stripe.String(string(stripe.SubscriptionScheduleEndBehaviorRelease)),
@@ -300,6 +322,22 @@ func (c *stripeClient) CreateSchedule(ctx context.Context, subID, currentPriceID
 		return nil, wrapErr(err)
 	}
 	return toSchedule(updated), nil
+}
+
+// pinPhaseCurrency sets phases[].currency to the subscription's currency
+// (MM69). Rewriting the phases replaces what from_subscription copied, and a
+// phase without a currency would be priced in the multi-currency Price's
+// default (usd): a EUR subscriber's downgrade would switch them to dollars,
+// which Stripe refuses for a Customer already billed in euros. An unknown
+// currency leaves the field unset (Stripe's own default), never guessed.
+func pinPhaseCurrency(currency string, phases ...*stripe.SubscriptionScheduleUpdatePhaseParams) {
+	c, ok := NormalizeCurrency(currency)
+	if !ok {
+		return
+	}
+	for _, ph := range phases {
+		ph.Currency = stripe.String(c)
+	}
 }
 
 // ReleaseSchedule detaches the schedule ("Keep Pro"): the subscription keeps
@@ -342,6 +380,19 @@ func (c *stripeClient) ResumeSubscription(ctx context.Context, subID, itemID, ne
 		return nil, wrapErr(err)
 	}
 	return c.GetSubscription(ctx, subID)
+}
+
+// CustomerCurrency reads the Customer's billing currency (MM69): set by
+// Stripe once the Customer has been invoiced, and fixed from then on.
+func (c *stripeClient) CustomerCurrency(ctx context.Context, customerID string) (string, error) {
+	cust, err := c.sc.V1Customers.Retrieve(ctx, customerID, &stripe.CustomerRetrieveParams{Params: c.params(ctx)})
+	if err != nil {
+		return "", wrapErr(err)
+	}
+	if cust.Deleted {
+		return "", nil
+	}
+	return strings.ToLower(string(cust.Currency)), nil
 }
 
 func (c *stripeClient) GetCheckoutSession(ctx context.Context, id string) (*CheckoutSession, error) {

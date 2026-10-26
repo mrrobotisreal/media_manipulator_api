@@ -508,3 +508,38 @@ func TestInvoicePaidIsAttributedAndCountedOncePerEvent(t *testing.T) {
 		t.Fatalf("a different subscription must start at 0, got %d", n)
 	}
 }
+
+// MM69: the webhook mirrors the subscription's currency onto mm_users
+// (billing_currency) and its events carry it; a replay writes nothing new.
+func TestWebhookWritesBillingCurrency(t *testing.T) {
+	r := newRig(freeUser())
+	sub := activeSub(t0.Add(30 * 24 * time.Hour))
+	sub.UnitAmountCents, sub.Currency = cents(800), "eur"
+	r.fc.PutSubscription(sub)
+	if err := r.deliver(t, "evt_eur", EventCheckoutCompleted, `{"id":"cs_1","customer":"cus_1","subscription":"sub_1","client_reference_id":"u1"}`); err != nil {
+		t.Fatal(err)
+	}
+	if u := r.store.User("u1"); u.BillingCurrency != "eur" {
+		t.Fatalf("billing_currency = %q, want eur", u.BillingCurrency)
+	}
+	if p := r.props(analyticsemit.ServerSubscriptionCreated); p["currency"] != "eur" || p["amount_cents"] != int64(800) {
+		t.Fatalf("created props = %v", p)
+	}
+	if err := r.deliver(t, "evt_eur_upd", EventSubscriptionUpdated, subObj); err != nil {
+		t.Fatal(err)
+	}
+	if r.store.CurrencyWrites != 1 {
+		t.Errorf("an unchanged currency must not be rewritten: %d writes", r.store.CurrencyWrites)
+	}
+	// An unsupported or missing currency is never stored.
+	r2 := newRig(freeUser())
+	s2 := activeSub(t0.Add(30 * 24 * time.Hour))
+	s2.Currency = "gbp"
+	r2.fc.PutSubscription(s2)
+	if err := r2.deliver(t, "evt_gbp", EventCheckoutCompleted, `{"id":"cs_1","customer":"cus_1","subscription":"sub_1","client_reference_id":"u1"}`); err != nil {
+		t.Fatal(err)
+	}
+	if u := r2.store.User("u1"); u.BillingCurrency != "" || r2.store.CurrencyWrites != 0 {
+		t.Errorf("gbp must not be mirrored: %+v", u)
+	}
+}

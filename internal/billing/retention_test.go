@@ -53,6 +53,22 @@ func TestComputeRetentionOffer(t *testing.T) {
 			return s
 		}(), both, OfferRetain6, 6, "price_r6"},
 		{"nil", nil, both, "", 0, ""},
+		// MM69: a EUR subscription gets the same numerals, in euros.
+		{"eur long left -> 7", func() *Subscription {
+			s := mk("monthly", 800, now.Add(10*24*time.Hour))
+			s.Currency = "eur"
+			return s
+		}(), both, OfferRetain7, 7, "price_r7"},
+		{"eur <=3d -> 6", func() *Subscription {
+			s := mk("monthly", 800, now.Add(time.Hour))
+			s.Currency = "eur"
+			return s
+		}(), both, OfferRetain6, 6, "price_r6"},
+		{"unsupported currency -> resume at fallback", func() *Subscription {
+			s := mk("monthly", 800, now.Add(10*24*time.Hour))
+			s.Currency = "gbp"
+			return s
+		}(), both, OfferResume, 8, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -63,7 +79,7 @@ func TestComputeRetentionOffer(t *testing.T) {
 				}
 				return
 			}
-			if o == nil || o.Kind != tc.wantKind || o.PriceUSD != tc.wantPrice || o.PriceID != tc.wantID {
+			if o == nil || o.Kind != tc.wantKind || o.Price != tc.wantPrice || o.PriceID != tc.wantID {
 				t.Fatalf("got %+v", o)
 			}
 		})
@@ -147,3 +163,18 @@ func TestApplyRetainedFlipsMirrorAndWebhookIsNoOp(t *testing.T) {
 }
 
 const analyticsemit_retained = "server_subscription_retained"
+
+// MM69: the offer names the subscription's currency, and the retain price id
+// is the same for both currencies (Stripe keeps the subscription's currency
+// on the swap, so no currency is ever passed).
+func TestRetentionOfferCurrency(t *testing.T) {
+	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	for _, cur := range []string{"usd", "eur"} {
+		sub := &Subscription{ID: "sub_1", Status: StatusActive, CancelAtPeriodEnd: true, Interval: "monthly",
+			CurrentPeriodEnd: now.Add(10 * 24 * time.Hour), UnitAmountCents: i64(800), Currency: cur}
+		o := ComputeRetentionOffer(sub, now, RetentionPrices{Retain7ID: "price_r7", Retain6ID: "price_r6"}, 8)
+		if o == nil || o.Currency != cur || o.PriceID != "price_r7" || o.Price != 7 {
+			t.Errorf("%s: offer = %+v", cur, o)
+		}
+	}
+}

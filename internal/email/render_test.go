@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -173,6 +174,27 @@ func TestEmbeddedLocaleFilesAreValid(t *testing.T) {
 			if _, ok := r.tables[DefaultLocale][k]; !ok && !strings.Contains(k, "_") {
 				t.Errorf("%s has key %q that en-us lacks", loc, k)
 			}
+		}
+	}
+}
+
+// MM69: no transactional email names a price or a currency today (payment
+// failed points to the portal; Stripe sends receipts). If one ever does, it
+// must take a {{price}} the API formatted in the subscription's currency,
+// never a hard-coded "$" or "€" amount.
+func TestNoHardCodedPriceInTemplates(t *testing.T) {
+	files, err := filepath.Glob(filepath.Join("locales", "*.json"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no locale files: %v", err)
+	}
+	money := regexp.MustCompile(`[$€£]\s?\d|\d\s?[$€£]|\b(USD|EUR)\b`)
+	for _, f := range files {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := money.Find(raw); m != nil {
+			t.Errorf("%s: hard-coded amount %q; use a preformatted {{price}} placeholder", f, m)
 		}
 	}
 }

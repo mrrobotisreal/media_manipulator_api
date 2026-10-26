@@ -144,6 +144,9 @@ type checkoutRequest struct {
 	// Plan is "premium" (default when omitted) or "pro" (MM39).
 	Plan   string `json:"plan"`
 	Locale string `json:"locale"`
+	// Currency is "usd" | "eur" (MM69): the currency the page showed. Absent =
+	// a pre-MM69 UI, which showed US dollars.
+	Currency string `json:"currency"`
 }
 
 // Checkout creates a hosted Checkout Session. The price id comes from config
@@ -161,6 +164,15 @@ func (h *BillingHandler) Checkout(c *gin.Context) {
 	if !validPlan(plan) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_plan"})
 		return
+	}
+	var requested string
+	if strings.TrimSpace(req.Currency) != "" {
+		cur, ok := billing.NormalizeCurrency(req.Currency)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_currency"})
+			return
+		}
+		requested = cur
 	}
 	priceID, ok := h.planPrice(plan, req.Interval)
 	if !ok {
@@ -202,6 +214,13 @@ func (h *BillingHandler) Checkout(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+	// MM69: Stripe fixes a Customer's currency once it has been invoiced and
+	// refuses a session in any other one; answer with a clean reason instead.
+	currency, conflict := billing.ResolveCheckoutCurrency(h.lockedCurrency(ctx, user), requested)
+	if conflict {
+		c.JSON(http.StatusConflict, gin.H{"error": "currency_locked", "reason": "currency_locked", "currency": currency})
+		return
+	}
 	customerID := user.StripeCustomerID
 	if customerID == "" {
 		created, err := h.client.EnsureCustomer(ctx, user.ID, principal.Email)
@@ -225,6 +244,7 @@ func (h *BillingHandler) Checkout(c *gin.Context) {
 		CustomerID: customerID,
 		PriceID:    priceID,
 		Plan:       plan,
+		Currency:   currency,
 		Locale:     req.Locale,
 		BaseURL:    h.cfg.BillingPublicBaseURL,
 		VisitorID:  strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
@@ -236,6 +256,22 @@ func (h *BillingHandler) Checkout(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"url": url})
+}
+
+// lockedCurrency is the currency a returning customer is locked to, or "":
+// the Stripe Customer's own currency when it can be read, else the mirrored
+// mm_users.billing_currency. A user with no Stripe Customer is never locked.
+func (h *BillingHandler) lockedCurrency(ctx context.Context, user *models.User) string {
+	if user.StripeCustomerID == "" {
+		return ""
+	}
+	cur, err := h.client.CustomerCurrency(ctx, user.StripeCustomerID)
+	if err != nil {
+		h.logger.Warn("billing: customer currency read failed; using the mirror", "error", err.Error())
+		cur = user.BillingCurrency
+	}
+	locked, _ := billing.NormalizeCurrency(cur)
+	return locked
 }
 
 type portalRequest struct {
@@ -272,7 +308,11 @@ type manualGrantInfo struct {
 }
 
 type retentionOffer struct {
-	Kind         string  `json:"kind"`
+	Kind string `json:"kind"`
+	// Price is the numeral in Currency (MM69). PriceUSD carries the same
+	// numeral under its pre-MM69 name for older UIs (deprecated).
+	Price        float64 `json:"price"`
+	Currency     *string `json:"currency"`
 	PriceUSD     float64 `json:"priceUSD"`
 	NextChargeAt string  `json:"nextChargeAt"`
 }
@@ -292,6 +332,17 @@ type billingStatusResponse struct {
 	// Stripe subscription item. Only resolved while the plan is cancelled (the
 	// only time the UI needs it); null otherwise or when unknown.
 	PriceMonthlyUSD *float64 `json:"priceMonthlyUSD"`
+	// PriceMonthly is the same per-interval price as a numeral in Currency
+	// (MM69), for any currency; null when unknown. PriceMonthlyUSD stays
+	// USD-only for older UIs.
+	PriceMonthly *float64 `json:"priceMonthly"`
+	// Currency is the currency the user's subscription is (or was last)
+	// billed in, "usd" | "eur"; null when no subscription was ever billed.
+	Currency *string `json:"currency"`
+	// CurrencyLocked is true once Stripe has fixed the currency: a live
+	// subscription exists or a past one was billed. The UI then shows the
+	// currency as a chip and Checkout refuses the other one (currency_locked).
+	CurrencyLocked bool `json:"currencyLocked"`
 	// Offer is the retention offer, or null.
 	Offer *retentionOffer `json:"offer"`
 	// PeriodsPaid is the number of paid billing periods on the current MONTHLY
@@ -355,7 +406,8 @@ func toRetentionOffer(o *billing.Offer) *retentionOffer {
 	if o == nil {
 		return nil
 	}
-	return &retentionOffer{Kind: o.Kind, PriceUSD: o.PriceUSD, NextChargeAt: o.NextChargeAt.UTC().Format(time.RFC3339)}
+	return &retentionOffer{Kind: o.Kind, Price: o.Price, Currency: strPtr(o.Currency), PriceUSD: o.Price,
+		NextChargeAt: o.NextChargeAt.UTC().Format(time.RFC3339)}
 }
 
 // cancelledActive: the mirror says the subscription is active and ending.
@@ -414,10 +466,16 @@ func (h *BillingHandler) buildStatus(ctx context.Context, user *models.User) (bi
 			out.PendingPlan = h.pendingFor(sub, now)
 		}
 	}
+	h.applyCurrency(ctx, user, fetched, &out)
 	if sub := fetched; sub != nil && sub.IsCancelling(now) {
-		if sub.UnitAmountCents != nil && sub.Currency == "usd" {
+		if sub.UnitAmountCents != nil {
 			v := float64(*sub.UnitAmountCents) / 100
-			out.PriceMonthlyUSD = &v
+			if cur, ok := billing.NormalizeCurrency(sub.Currency); ok {
+				out.PriceMonthly = &v
+				if cur == billing.CurrencyUSD {
+					out.PriceMonthlyUSD = &v
+				}
+			}
 		}
 		if end, ok := billing.CancelledEnd(sub, now); ok {
 			e := end.Format(time.RFC3339)
@@ -445,6 +503,33 @@ func (h *BillingHandler) buildStatus(ctx context.Context, user *models.User) (bi
 		out.ManualGrant = info
 	}
 	return out, fetched
+}
+
+// applyCurrency fills status currency / currencyLocked (MM69) and backfills
+// mm_users.billing_currency for subscriptions that predate MM69. Truth order:
+// the subscription just fetched for this status, the mirror, and - only when
+// the mirror is empty and a (possibly lapsed) subscription is on record - one
+// extra subscription read, stored so it happens once per user.
+func (h *BillingHandler) applyCurrency(ctx context.Context, user *models.User, fetched *billing.Subscription, out *billingStatusResponse) {
+	cur, _ := billing.NormalizeCurrency(user.BillingCurrency)
+	fresh := ""
+	if fetched != nil {
+		fresh, _ = billing.NormalizeCurrency(fetched.Currency)
+	} else if cur == "" && h.available() && user.StripeSubscriptionID != "" {
+		if sub, err := h.client.GetSubscription(ctx, user.StripeSubscriptionID); err == nil {
+			fresh, _ = billing.NormalizeCurrency(sub.Currency)
+		} else if !errors.Is(err, billing.ErrNotFound) {
+			h.logger.Warn("billing: status currency backfill read failed", "error", err.Error())
+		}
+	}
+	if fresh != "" && fresh != cur {
+		if err := h.store.SetBillingCurrency(ctx, user.ID, fresh); err != nil {
+			h.logger.Warn("billing: status currency backfill write failed", "error", err.Error())
+		}
+		cur = fresh
+	}
+	out.Currency = strPtr(cur)
+	out.CurrencyLocked = cur != "" || liveSubscription(user)
 }
 
 // Status reports the caller's billing state from the stored mirror. It answers

@@ -22,8 +22,12 @@ type RetentionPrices struct {
 // Offer is a computed retention offer.
 type Offer struct {
 	Kind string
-	// PriceUSD is the monthly price after accepting (resume keeps the current one).
-	PriceUSD float64
+	// Price is the monthly price after accepting (resume keeps the current
+	// one), as a numeral in Currency (MM69: retention offers are 7 / 6 in
+	// either currency).
+	Price float64
+	// Currency is the subscription's currency ("usd" | "eur"); "" = unknown.
+	Currency string
 	// NextChargeAt is when the next payment happens (the end of the paid period).
 	NextChargeAt time.Time
 	// PriceID is the Stripe price to swap to; "" for resume.
@@ -46,26 +50,30 @@ func CancelledEnd(sub *Subscription, now time.Time) (time.Time, bool) {
 	return end.UTC(), true
 }
 
-// ComputeRetentionOffer is the pure offer rule. fallbackUSD is the display
-// price used for "resume" when the subscription's real price is unknown.
+// ComputeRetentionOffer is the pure offer rule. fallback is the display
+// numeral used for "resume" when the subscription's real price is unknown.
+// The offer is in the subscription's own currency: the retain prices carry
+// the same numerals in USD and EUR, and swapping the price keeps the
+// subscription's currency (MM69).
 // nil = nothing to offer (not cancelled-but-active, or Premium already ended).
 //
 //   - yearly (or unknown interval): only resume;
 //   - monthly: $7 with more than 3 days left, $6 with 3 days or fewer, but only
 //     if that price is strictly below what the subscriber pays now, its price id
 //     is configured, and the current price is known; otherwise only resume.
-func ComputeRetentionOffer(sub *Subscription, now time.Time, prices RetentionPrices, fallbackUSD float64) *Offer {
+func ComputeRetentionOffer(sub *Subscription, now time.Time, prices RetentionPrices, fallback float64) *Offer {
 	end, ok := CancelledEnd(sub, now)
 	if !ok {
 		return nil
 	}
-	curUSD := fallbackUSD
+	cur := fallback
 	var curCents int64 = -1
-	if sub.UnitAmountCents != nil && sub.Currency == "usd" {
+	currency, known := NormalizeCurrency(sub.Currency)
+	if sub.UnitAmountCents != nil && known {
 		curCents = *sub.UnitAmountCents
-		curUSD = float64(curCents) / 100
+		cur = float64(curCents) / 100
 	}
-	resume := &Offer{Kind: OfferResume, PriceUSD: curUSD, NextChargeAt: end}
+	resume := &Offer{Kind: OfferResume, Price: cur, Currency: currency, NextChargeAt: end}
 	if sub.Interval != IntervalMonthly || curCents < 0 {
 		return resume
 	}
@@ -76,7 +84,7 @@ func ComputeRetentionOffer(sub *Subscription, now time.Time, prices RetentionPri
 	if id == "" || cents >= curCents {
 		return resume
 	}
-	return &Offer{Kind: kind, PriceUSD: float64(cents) / 100, NextChargeAt: end, PriceID: id}
+	return &Offer{Kind: kind, Price: float64(cents) / 100, Currency: currency, NextChargeAt: end, PriceID: id}
 }
 
 // AnalyticsOffer maps an offer kind to the server_subscription_retained enum.
