@@ -1100,7 +1100,18 @@ func (h *StudioHandler) serveAssetDerivative(c *gin.Context, which string) {
 	}
 	c.Header("Content-Type", contentType)
 	c.Header("Accept-Ranges", "bytes")
-	c.Header("Cache-Control", "private, max-age=3600")
+	c.Header("Cache-Control", studioDerivativeCacheControl(which))
+	// Validators (MM70): S3's ETag + Last-Modified. Browser HTTP caches need a
+	// validator to keep and recombine 206 partial responses, so without these
+	// a proxy range re-read on a seek could go back over the network.
+	// Proxy keys are write-once (<assetId>_proxy.mp4); a future proxy rebuild
+	// must write a NEW key, never overwrite one in place.
+	if out.ETag != nil && *out.ETag != "" {
+		c.Header("ETag", *out.ETag)
+	}
+	if out.LastModified != nil {
+		c.Header("Last-Modified", out.LastModified.UTC().Format(http.TimeFormat))
+	}
 	if out.ContentLength != nil {
 		c.Header("Content-Length", strconv.FormatInt(*out.ContentLength, 10))
 	}
@@ -1112,6 +1123,22 @@ func (h *StudioHandler) serveAssetDerivative(c *gin.Context, which string) {
 	c.Status(status)
 	if _, err := io.Copy(c.Writer, out.Body); err != nil {
 		log.Printf("studio: stream %s for asset %s interrupted: %v", which, asset.ID, err)
+	}
+}
+
+// studioDerivativeCacheControl is the Cache-Control for an asset derivative
+// (MM70). Preview proxies and filmstrips are written once per asset and never
+// rewritten in place, and the Darkroom preview re-reads the same byte ranges on
+// every seek, cut and replay — each one a full round trip to this server (and
+// across an ocean for a traveling user). A week of private caching lets the
+// browser's media cache answer repeat ranges locally. Stays `private`: the URL
+// is a capability, not a public asset. Originals keep the hour.
+func studioDerivativeCacheControl(which string) string {
+	switch which {
+	case "proxy", "proxy_reversed", "sprite":
+		return "private, max-age=604800"
+	default:
+		return "private, max-age=3600"
 	}
 }
 

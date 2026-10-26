@@ -65,8 +65,7 @@ func reverseSegmentArgs(encoder string, kind models.StudioMediaKind, hasAudio bo
 	} else {
 		args = append(args, "-an")
 	}
-	args = append(args, h264EncodeArgs(encoder, "medium")...)
-	args = append(args, "-b:v", "2M")
+	args = append(args, videoProxyEncodeArgs(encoder)...)
 	if hasAudio {
 		args = append(args, "-c:a", "aac", "-b:a", "128k")
 	}

@@ -89,8 +89,8 @@ func (s *StudioIngestService) Generate(ctx context.Context, jobID, originalKey, 
 	}
 	proxyLocal := filepath.Join(workDir, "proxy.mp4")
 	args := []string{"-y", "-i", inputPath, "-vf", fmt.Sprintf("scale=-2:%d", proxyHeight)}
-	args = append(args, h264EncodeArgs(studioH264Encoder(s.cfg), "medium")...)
-	args = append(args, "-b:v", "2M", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", proxyLocal)
+	args = append(args, videoProxyEncodeArgs(studioH264Encoder(s.cfg))...)
+	args = append(args, "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", proxyLocal)
 	if err := runStudioFFmpeg(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, totalSeconds, args...); err != nil {
 		return StudioIngestResult{}, fmt.Errorf("video proxy: %w", err)
 	}
@@ -121,6 +121,15 @@ func (s *StudioIngestService) Generate(ctx context.Context, jobID, originalKey, 
 	// Waveform peaks for any video with an audio track (non-fatal).
 	s.maybePeaks(ctx, jobID, originalKey, assetID, hasAudio, inputPath, totalSeconds, &res)
 	return res, nil
+}
+
+// videoProxyEncodeArgs is the video half of the preview-proxy encode: H.264 at
+// 2 Mb/s with a fixed one-second keyframe cadence (MM70) so preview seeks are
+// cheap. The reversed proxy uses the same args so its segments concat cleanly.
+func videoProxyEncodeArgs(encoder string) []string {
+	args := h264EncodeArgs(encoder, "medium")
+	args = append(args, proxyKeyframeArgs(encoder)...)
+	return append(args, "-b:v", "2M")
 }
 
 // maybePeaks generates + uploads waveform peaks when the asset has audio. A

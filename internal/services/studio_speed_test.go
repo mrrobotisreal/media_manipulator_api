@@ -258,3 +258,64 @@ func TestReverseSegmentArgs(t *testing.T) {
 		t.Errorf("audio args: %s", a)
 	}
 }
+
+// MM70: every preview proxy (ingest + reversed) pins a one-second keyframe
+// cadence so Darkroom preview seeks decode at most ~1 s of video.
+func TestProxyKeyframeArgs(t *testing.T) {
+	cases := []struct {
+		encoder   string
+		want      []string
+		forbidden []string
+	}{
+		{"libx264", []string{"-force_key_frames expr:gte(t,n_forced*1)", "-g 60"}, []string{"-forced-idr"}},
+		{"h264_nvenc", []string{"-force_key_frames expr:gte(t,n_forced*1)", "-g 60", "-forced-idr 1"}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.encoder, func(t *testing.T) {
+			got := strings.Join(proxyKeyframeArgs(tc.encoder), " ")
+			for _, w := range tc.want {
+				if !strings.Contains(got, w) {
+					t.Errorf("missing %q in %s", w, got)
+				}
+			}
+			for _, f := range tc.forbidden {
+				if strings.Contains(got, f) {
+					t.Errorf("unexpected %q in %s", f, got)
+				}
+			}
+			full := strings.Join(videoProxyEncodeArgs(tc.encoder), " ")
+			if !strings.Contains(full, "-c:v "+tc.encoder) || !strings.Contains(full, "-b:v 2M") || !strings.Contains(full, got) {
+				t.Errorf("videoProxyEncodeArgs(%s) = %s", tc.encoder, full)
+			}
+		})
+	}
+}
+
+func TestReverseSegmentArgsShareProxyKeyframes(t *testing.T) {
+	for _, enc := range []string{"libx264", "h264_nvenc"} {
+		args := strings.Join(reverseSegmentArgs(enc, models.StudioMediaKindVideo, true, "/in.mp4", "/o.mp4", ReverseSegment{Len: 8}), " ")
+		if !strings.Contains(args, strings.Join(proxyKeyframeArgs(enc), " ")) {
+			t.Errorf("%s reverse segment lacks proxy keyframe args: %s", enc, args)
+		}
+		// The last -b:v wins in ffmpeg; it must stay the proxy's 2M (nvenc's
+		// preset emits an earlier "-b:v 0", unchanged since part 17).
+		if i := strings.LastIndex(args, "-b:v "); i < 0 || !strings.HasPrefix(args[i:], "-b:v 2M") {
+			t.Errorf("%s reverse segment's effective -b:v is not 2M: %s", enc, args)
+		}
+	}
+	audio := strings.Join(reverseSegmentArgs("libx264", models.StudioMediaKindAudio, true, "/in.m4a", "/o.m4a", ReverseSegment{}), " ")
+	if strings.Contains(audio, "-force_key_frames") {
+		t.Errorf("audio reverse must not carry video keyframe args: %s", audio)
+	}
+}
+
+// The export encode is untouched by MM70: no forced proxy keyframes there.
+func TestExportH264ArgsHaveNoProxyKeyframes(t *testing.T) {
+	for _, enc := range []string{"libx264", "h264_nvenc", "libx264_lossless"} {
+		for _, q := range []string{"low", "medium", "high"} {
+			if got := strings.Join(h264EncodeArgs(enc, q), " "); strings.Contains(got, "-force_key_frames") || strings.Contains(got, "-forced-idr") {
+				t.Errorf("h264EncodeArgs(%s,%s) gained proxy args: %s", enc, q, got)
+			}
+		}
+	}
+}
