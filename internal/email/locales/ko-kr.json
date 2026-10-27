@@ -1,0 +1,46 @@
+{
+  "email": {
+    "accountDeleted": {
+      "body": "요청하신 대로 Media Manipulator 계정과 계정에 저장된 파일이 삭제되었습니다. 활성 구독이 있었다면 함께 해지되었습니다.",
+      "contact": "직접 요청하신 것이 아니라면 이 이메일에 회신해 알려 주세요.",
+      "subject": "계정이 삭제되었습니다"
+    },
+    "aiJobFinished": {
+      "completed": "AI 작업이 완료되었고 결과가 준비되었습니다.",
+      "cta": "기록에서 보기",
+      "failed": "AI 작업이 끝났지만 완료하지 못했습니다. 자세한 내용은 기록을 확인해 주세요.",
+      "reason": "설정에서 AI 작업 이메일을 켜 두셨기 때문에 이 메일을 받으셨습니다.",
+      "subject": "AI 작업이 완료되었습니다"
+    },
+    "common": {
+      "brand": "Media Manipulator",
+      "greeting": "{{name}}님, 안녕하세요.",
+      "greetingNoName": "안녕하세요.",
+      "preferencesLink": "이메일 수신 설정 관리",
+      "preferencesNote": "받을 이메일은 계정 설정에서 선택할 수 있습니다:",
+      "signoff": "Media Manipulator 팀 드림"
+    },
+    "expiryDigest": {
+      "cta": "내 파일 확인하기",
+      "intro_other": "저장된 항목 중 {{count}}개가 {{days}}일 안에 삭제됩니다:",
+      "more": "외 {{count}}개",
+      "outro": "계정을 열어 보관하고 싶은 파일을 다운로드하거나 보관 기간을 늘려 주세요.",
+      "reason": "설정에서 만료 알림을 켜 두셨기 때문에 이 메일을 받으셨습니다.",
+      "subject_other": "저장된 항목 {{count}}개가 곧 만료됩니다",
+      "unnamed": "제목 없는 항목"
+    },
+    "paymentFailed": {
+      "body": "최근 Media Manipulator 결제가 처리되지 않았습니다. 요금제를 계속 이용하시려면 결제 수단을 업데이트해 주세요.",
+      "cta": "결제 수단 업데이트",
+      "subject": "결제를 처리하지 못했습니다"
+    },
+    "welcome": {
+      "cta": "내 계정 열기",
+      "darkroom": "Darkroom 프로젝트가 계정에 저장되어 다시 돌아왔을 때 편집 내용이 그대로 있습니다.",
+      "history": "변환 기록이 보관되어 결과를 다시 찾아 다운로드할 수 있습니다.",
+      "intro": "계정이 준비되었습니다. 계정으로 누릴 수 있는 혜택은 다음과 같습니다:",
+      "retention": "보관 기간 선택: 파일을 얼마나 보관할지 24시간부터 최대 2년까지 직접 정할 수 있습니다(기본값 6개월).",
+      "subject": "Media Manipulator에 오신 것을 환영합니다"
+    }
+  }
+}

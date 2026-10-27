@@ -1,0 +1,48 @@
+{
+  "email": {
+    "accountDeleted": {
+      "body": "Votre compte Media Manipulator et les fichiers qui y étaient enregistrés ont été supprimés, comme vous l'avez demandé. Tout abonnement actif a été annulé.",
+      "contact": "Si vous n'êtes pas à l'origine de cette demande, répondez à cet e-mail pour nous le signaler.",
+      "subject": "Votre compte a été supprimé"
+    },
+    "aiJobFinished": {
+      "completed": "Votre tâche IA est terminée et le résultat est prêt.",
+      "cta": "Voir dans l'historique",
+      "failed": "Votre tâche IA est terminée, mais elle n'a pas pu aboutir. Ouvrez votre historique pour en savoir plus.",
+      "reason": "Vous recevez cet e-mail parce que vous avez activé les e-mails de tâches IA dans vos paramètres.",
+      "subject": "Votre tâche IA est terminée"
+    },
+    "common": {
+      "brand": "Media Manipulator",
+      "greeting": "Bonjour {{name}},",
+      "greetingNoName": "Bonjour,",
+      "preferencesLink": "Gérer mes préférences d'e-mail",
+      "preferencesNote": "Vous pouvez choisir les e-mails que vous recevez dans les paramètres de votre compte :",
+      "signoff": "L'équipe Media Manipulator"
+    },
+    "expiryDigest": {
+      "cta": "Vérifier mes fichiers",
+      "intro_one": "{{count}} de vos éléments enregistrés sera supprimé d'ici {{days}} jours :",
+      "intro_other": "{{count}} de vos éléments enregistrés seront supprimés d'ici {{days}} jours :",
+      "more": "et {{count}} de plus",
+      "outro": "Ouvrez votre compte pour télécharger ce que vous voulez garder, ou pour le conserver plus longtemps.",
+      "reason": "Vous recevez cet e-mail parce que les rappels d'expiration sont activés dans vos paramètres.",
+      "subject_one": "{{count}} élément enregistré expire bientôt",
+      "subject_other": "{{count}} éléments enregistrés expirent bientôt",
+      "unnamed": "Élément sans titre"
+    },
+    "paymentFailed": {
+      "body": "Votre dernier paiement Media Manipulator n'a pas abouti. Mettez à jour votre moyen de paiement pour que votre offre reste active.",
+      "cta": "Mettre à jour le moyen de paiement",
+      "subject": "Nous n'avons pas pu traiter votre paiement"
+    },
+    "welcome": {
+      "cta": "Ouvrir mon compte",
+      "darkroom": "Des projets Darkroom enregistrés dans votre compte, pour retrouver vos montages à votre retour.",
+      "history": "Un historique de vos conversions, pour retrouver et retélécharger vos résultats.",
+      "intro": "Votre compte est prêt. Voici ce qu'il vous apporte :",
+      "retention": "Le choix de la conservation : vous décidez combien de temps nous gardons vos fichiers, de 24 heures à 2 ans (6 mois par défaut).",
+      "subject": "Bienvenue sur Media Manipulator"
+    }
+  }
+}

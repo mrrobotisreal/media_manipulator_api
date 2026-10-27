@@ -120,13 +120,79 @@ func TestRussianPluralCategories(t *testing.T) {
 }
 
 func TestNormalizeLocale(t *testing.T) {
-	for in, want := range map[string]string{"en": "en-us", "en-US": "en-us", "ru": "ru-ru", "de_DE": "de-de", "uk-UA": "uk-ua", "he": "he-il", "fr": "", "": ""} {
+	for in, want := range map[string]string{
+		"en": "en-us", "en-US": "en-us", "ru": "ru-ru", "de_DE": "de-de", "uk-UA": "uk-ua", "he": "he-il",
+		"fr": "fr-fr", "es": "es-es", "es-MX": "es-mx", "es-419": "es-es", "pt": "pt-pt", "pt-BR": "pt-br",
+		"zh": "zh-cn", "zh-CN": "zh-cn", "zh-TW": "zh-tw", "zh-Hant": "zh-tw", "zh-HK": "zh-tw",
+		"ja": "ja-jp", "ko-KR": "ko-kr", "ar": "ar-sa", "hi": "hi-in", "vi": "vi-vn", "it": "it-it",
+		"xx": "", "": "",
+	} {
 		if got := NormalizeLocale(in); got != want {
 			t.Errorf("NormalizeLocale(%q) = %q, want %q", in, got, want)
 		}
 	}
 	if LocaleOrDefault("zz") != "en-us" {
 		t.Error("default locale")
+	}
+}
+
+// MM68: the API serves every UI locale, with the UI's URL prefixes and text direction.
+func TestEveryUILocaleHasATable(t *testing.T) {
+	r := MustRenderer()
+	if len(Locales) != 18 {
+		t.Fatalf("Locales has %d entries, want the UI's 18", len(Locales))
+	}
+	for _, loc := range Locales {
+		if !r.Has(loc) {
+			t.Errorf("%s: no embedded table (run go run ./scripts/gen-email-locales)", loc)
+		}
+	}
+}
+
+func TestURLPrefixMatchesUI(t *testing.T) {
+	for loc, want := range map[string]string{
+		"en-us": "", "de-de": "/de", "es-es": "/es", "es-mx": "/es-mx", "fr-fr": "/fr", "ja-jp": "/ja",
+		"zh-cn": "/zh-cn", "zh-tw": "/zh-tw", "ko-kr": "/ko", "ar-sa": "/ar", "hi-in": "/hi",
+		"pt-pt": "/pt-pt", "pt-br": "/pt-br", "vi-vn": "/vi",
+	} {
+		if got := urlPrefix(loc); got != want {
+			t.Errorf("urlPrefix(%q) = %q, want %q", loc, got, want)
+		}
+	}
+}
+
+func TestRTLLocales(t *testing.T) {
+	for _, loc := range Locales {
+		if want := loc == "he-il" || loc == "ar-sa"; isRTL(loc) != want {
+			t.Errorf("isRTL(%q) = %v", loc, !want)
+		}
+	}
+	out, err := MustRenderer().Render(KindWelcome, "ar-sa", sampleData(KindWelcome))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.HTML, `dir="rtl"`) {
+		t.Error("ar-sa HTML is not dir=rtl")
+	}
+}
+
+func TestPluralCategoriesNewLocales(t *testing.T) {
+	cases := []struct {
+		loc  string
+		n    int
+		want string
+	}{
+		{"ar-sa", 0, "zero"}, {"ar-sa", 1, "one"}, {"ar-sa", 2, "two"}, {"ar-sa", 3, "few"}, {"ar-sa", 10, "few"},
+		{"ar-sa", 11, "many"}, {"ar-sa", 99, "many"}, {"ar-sa", 100, "other"}, {"ar-sa", 103, "few"},
+		{"fr-fr", 0, "one"}, {"fr-fr", 1, "one"}, {"fr-fr", 2, "other"},
+		{"pt-br", 0, "one"}, {"pt-pt", 0, "other"}, {"pt-pt", 1, "one"}, {"hi-in", 0, "one"},
+		{"ja-jp", 1, "other"}, {"zh-cn", 1, "other"}, {"ko-kr", 1, "other"}, {"vi-vn", 1, "other"},
+		{"es-mx", 1, "one"}, {"it-it", 2, "other"},
+	}
+	for _, c := range cases {
+		if got := pluralCategory(c.loc, c.n); got != c.want {
+			t.Errorf("pluralCategory(%s, %d) = %s, want %s", c.loc, c.n, got, c.want)
+		}
 	}
 }
 

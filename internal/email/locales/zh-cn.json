@@ -1,0 +1,46 @@
+{
+  "email": {
+    "accountDeleted": {
+      "body": "根据你的要求，你的Media Manipulator账号及其中保存的文件已被删除。所有有效订阅均已取消。",
+      "contact": "如果这不是你本人的请求，请回复此邮件告知我们。",
+      "subject": "你的账号已删除"
+    },
+    "aiJobFinished": {
+      "completed": "你的AI任务已完成，结果已就绪。",
+      "cta": "在历史记录中查看",
+      "failed": "你的AI任务已结束，但未能成功完成。请打开历史记录查看详情。",
+      "reason": "你收到这封邮件是因为你在设置中开启了AI任务邮件通知。",
+      "subject": "你的AI任务已完成"
+    },
+    "common": {
+      "brand": "Media Manipulator",
+      "greeting": "{{name}}，你好：",
+      "greetingNoName": "你好：",
+      "preferencesLink": "管理邮件偏好设置",
+      "preferencesNote": "你可以在账号设置中选择接收哪些邮件：",
+      "signoff": "Media Manipulator团队"
+    },
+    "expiryDigest": {
+      "cta": "查看你的文件",
+      "intro_other": "你有{{count}}个已保存的项目将在{{days}}天内被删除：",
+      "more": "以及另外{{count}}个",
+      "outro": "打开你的账号下载想要保留的内容，或延长保留时间。",
+      "reason": "你收到这封邮件是因为你在设置中开启了过期提醒。",
+      "subject_other": "{{count}}个已保存的项目即将过期",
+      "unnamed": "未命名项目"
+    },
+    "paymentFailed": {
+      "body": "你最近一次Media Manipulator付款未成功。请更新你的付款方式，以保持套餐有效。",
+      "cta": "更新付款方式",
+      "subject": "我们无法处理你的付款"
+    },
+    "welcome": {
+      "cta": "打开你的账号",
+      "darkroom": "保存到你账号的Darkroom项目，回来时你的剪辑都还在。",
+      "history": "转换历史记录，让你可以再次找到并下载结果。",
+      "intro": "你的账号已准备就绪。它为你提供：",
+      "retention": "保留时长选择：由你决定我们保留你文件的时长，从24小时到2年（默认6个月）。",
+      "subject": "欢迎使用Media Manipulator"
+    }
+  }
+}

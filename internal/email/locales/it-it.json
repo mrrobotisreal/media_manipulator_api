@@ -1,0 +1,48 @@
+{
+  "email": {
+    "accountDeleted": {
+      "body": "Il tuo account Media Manipulator e i file salvati al suo interno sono stati eliminati, come richiesto. Qualsiasi abbonamento attivo è stato annullato.",
+      "contact": "Se non hai richiesto tu questa operazione, rispondi a questa email e faccelo sapere.",
+      "subject": "Il tuo account è stato eliminato"
+    },
+    "aiJobFinished": {
+      "completed": "Il tuo lavoro IA è terminato e il risultato è pronto.",
+      "cta": "Vedi nella cronologia",
+      "failed": "Il tuo lavoro IA è terminato, ma non è stato possibile completarlo. Apri la cronologia per i dettagli.",
+      "reason": "Ricevi questa email perché hai attivato le email sui lavori IA nelle tue impostazioni.",
+      "subject": "Il tuo lavoro IA è terminato"
+    },
+    "common": {
+      "brand": "Media Manipulator",
+      "greeting": "Ciao {{name}},",
+      "greetingNoName": "Ciao,",
+      "preferencesLink": "Gestisci le preferenze email",
+      "preferencesNote": "Puoi scegliere quali email ricevere nelle impostazioni del tuo account:",
+      "signoff": "Il team di Media Manipulator"
+    },
+    "expiryDigest": {
+      "cta": "Controlla i tuoi file",
+      "intro_one": "{{count}} dei tuoi elementi salvati verrà eliminato entro {{days}} giorni:",
+      "intro_other": "{{count}} dei tuoi elementi salvati verranno eliminati entro {{days}} giorni:",
+      "more": "e altri {{count}}",
+      "outro": "Apri il tuo account per scaricare ciò che vuoi tenere, oppure conservalo più a lungo.",
+      "reason": "Ricevi questa email perché i promemoria di scadenza sono attivi nelle tue impostazioni.",
+      "subject_one": "{{count}} elemento salvato scade a breve",
+      "subject_other": "{{count}} elementi salvati scadono a breve",
+      "unnamed": "Elemento senza titolo"
+    },
+    "paymentFailed": {
+      "body": "L'ultimo pagamento a Media Manipulator non è andato a buon fine. Aggiorna il metodo di pagamento perché il tuo piano resti attivo.",
+      "cta": "Aggiorna il metodo di pagamento",
+      "subject": "Non siamo riusciti a elaborare il tuo pagamento"
+    },
+    "welcome": {
+      "cta": "Apri il tuo account",
+      "darkroom": "Progetti Darkroom salvati nel tuo account, così i tuoi montaggi sono lì quando torni.",
+      "history": "Una cronologia delle tue conversioni, così puoi ritrovare e scaricare di nuovo i risultati.",
+      "intro": "Il tuo account è pronto. Ecco cosa ti offre:",
+      "retention": "La scelta della conservazione: decidi tu per quanto tempo conserviamo i tuoi file, da 24 ore fino a 2 anni (6 mesi di default).",
+      "subject": "Benvenuto su Media Manipulator"
+    }
+  }
+}

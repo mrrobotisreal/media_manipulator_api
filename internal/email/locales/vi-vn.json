@@ -1,0 +1,46 @@
+{
+  "email": {
+    "accountDeleted": {
+      "body": "Tài khoản Media Manipulator của bạn và các tệp lưu trong đó đã bị xóa theo yêu cầu của bạn. Mọi gói đăng ký đang hoạt động đã được hủy.",
+      "contact": "Nếu bạn không yêu cầu việc này, hãy trả lời email này và cho chúng tôi biết.",
+      "subject": "Tài khoản của bạn đã bị xóa"
+    },
+    "aiJobFinished": {
+      "completed": "Tác vụ AI của bạn đã hoàn tất và kết quả đã sẵn sàng.",
+      "cta": "Xem trong lịch sử",
+      "failed": "Tác vụ AI của bạn đã kết thúc, nhưng không thể hoàn thành. Hãy mở lịch sử để xem chi tiết.",
+      "reason": "Bạn nhận được email này vì đã bật email thông báo tác vụ AI trong cài đặt.",
+      "subject": "Tác vụ AI của bạn đã hoàn tất"
+    },
+    "common": {
+      "brand": "Media Manipulator",
+      "greeting": "Chào {{name}},",
+      "greetingNoName": "Chào bạn,",
+      "preferencesLink": "Quản lý tùy chọn email",
+      "preferencesNote": "Bạn có thể chọn những email muốn nhận trong cài đặt tài khoản:",
+      "signoff": "Đội ngũ Media Manipulator"
+    },
+    "expiryDigest": {
+      "cta": "Xem lại tệp của bạn",
+      "intro_other": "{{count}} mục đã lưu của bạn sẽ bị xóa trong vòng {{days}} ngày:",
+      "more": "và {{count}} mục khác",
+      "outro": "Hãy mở tài khoản để tải xuống những gì bạn muốn giữ, hoặc gia hạn thời gian lưu.",
+      "reason": "Bạn nhận được email này vì đã bật nhắc nhở hết hạn trong cài đặt.",
+      "subject_other": "{{count}} mục đã lưu sắp hết hạn",
+      "unnamed": "Mục chưa đặt tên"
+    },
+    "paymentFailed": {
+      "body": "Lần thanh toán Media Manipulator gần nhất của bạn không thành công. Vui lòng cập nhật phương thức thanh toán để gói của bạn tiếp tục hoạt động.",
+      "cta": "Cập nhật phương thức thanh toán",
+      "subject": "Chúng tôi không xử lý được thanh toán của bạn"
+    },
+    "welcome": {
+      "cta": "Mở tài khoản của bạn",
+      "darkroom": "Dự án Darkroom được lưu vào tài khoản, để bản dựng của bạn vẫn ở đó khi bạn quay lại.",
+      "history": "Lịch sử các lượt chuyển đổi, để bạn tìm lại và tải xuống kết quả.",
+      "intro": "Tài khoản của bạn đã sẵn sàng. Đây là những gì tài khoản mang lại:",
+      "retention": "Quyền chọn thời gian lưu: bạn quyết định chúng tôi giữ tệp bao lâu, từ 24 giờ đến 2 năm (mặc định 6 tháng).",
+      "subject": "Chào mừng bạn đến với Media Manipulator"
+    }
+  }
+}
