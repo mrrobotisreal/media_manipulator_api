@@ -1,0 +1,46 @@
+{
+  "email": {
+    "accountDeleted": {
+      "body": "你的 Media Manipulator 帳號及其中儲存的檔案已依你的要求刪除。任何有效的訂閱也已取消。",
+      "contact": "如果這不是你提出的要求，請回覆這封郵件告訴我們。",
+      "subject": "你的帳號已刪除"
+    },
+    "aiJobFinished": {
+      "completed": "你的 AI 工作已完成，結果已準備好。",
+      "cta": "在記錄中檢視",
+      "failed": "你的 AI 工作已結束，但未能順利完成。請開啟記錄查看詳細資訊。",
+      "reason": "你收到這封郵件，是因為你在設定中開啟了 AI 工作通知郵件。",
+      "subject": "你的 AI 工作已完成"
+    },
+    "common": {
+      "brand": "Media Manipulator",
+      "greeting": "{{name}}，你好：",
+      "greetingNoName": "你好：",
+      "preferencesLink": "管理電子郵件偏好設定",
+      "preferencesNote": "你可以在帳號設定中選擇要接收哪些電子郵件：",
+      "signoff": "Media Manipulator 團隊"
+    },
+    "expiryDigest": {
+      "cta": "檢視你的檔案",
+      "intro_other": "你有 {{count}} 個已儲存的項目將在 {{days}} 天內被刪除：",
+      "more": "還有 {{count}} 個",
+      "outro": "開啟你的帳號，下載想保留的內容，或延長保留期限。",
+      "reason": "你收到這封郵件，是因為你在設定中開啟了到期提醒。",
+      "subject_other": "{{count}} 個已儲存的項目即將到期",
+      "unnamed": "未命名項目"
+    },
+    "paymentFailed": {
+      "body": "你最近一筆 Media Manipulator 付款未能成功。請更新你的付款方式，讓方案保持有效。",
+      "cta": "更新付款方式",
+      "subject": "我們無法處理你的付款"
+    },
+    "welcome": {
+      "cta": "開啟你的帳號",
+      "darkroom": "儲存到帳號的 Darkroom 專案，讓你回來時編輯內容都還在。",
+      "history": "轉換記錄，讓你可以再次找到並下載結果。",
+      "intro": "你的帳號已準備就緒。它能為你提供：",
+      "retention": "保留期限選擇：由你決定我們保留檔案多久，從 24 小時到最長 2 年（預設為 6 個月）。",
+      "subject": "歡迎使用 Media Manipulator"
+    }
+  }
+}

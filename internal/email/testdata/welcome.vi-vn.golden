@@ -1,0 +1,20 @@
+Subject: Chào mừng bạn đến với Media Manipulator
+
+Chào Alina,
+
+Tài khoản của bạn đã sẵn sàng. Đây là những gì tài khoản mang lại:
+
+- Lịch sử các lượt chuyển đổi, để bạn tìm lại và tải xuống kết quả.
+- Quyền chọn thời gian lưu: bạn quyết định chúng tôi giữ tệp bao lâu, từ 24 giờ đến 2 năm (mặc định 6 tháng).
+- Dự án Darkroom được lưu vào tài khoản, để bản dựng của bạn vẫn ở đó khi bạn quay lại.
+
+Mở tài khoản của bạn: https://media-manipulator.com/vi/account
+
+Bạn có thể chọn những email muốn nhận trong cài đặt tài khoản:
+
+Quản lý tùy chọn email: https://media-manipulator.com/vi/account?tab=profile
+
+Đội ngũ Media Manipulator
+
+--- html ---
+<!doctype html><html lang="vi-vn" dir="ltr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>Chào mừng bạn đến với Media Manipulator</title></head><body style="margin:0;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;"><div style="max-width:560px;margin:0 auto;"><p style="margin:0 0 16px;">Chào Alina,</p><p style="margin:0 0 16px;">Tài khoản của bạn đã sẵn sàng. Đây là những gì tài khoản mang lại:</p><ul style="padding-inline-start:20px;margin:0 0 16px;"><li style="margin:0 0 6px;">Lịch sử các lượt chuyển đổi, để bạn tìm lại và tải xuống kết quả.</li><li style="margin:0 0 6px;">Quyền chọn thời gian lưu: bạn quyết định chúng tôi giữ tệp bao lâu, từ 24 giờ đến 2 năm (mặc định 6 tháng).</li><li style="margin:0 0 6px;">Dự án Darkroom được lưu vào tài khoản, để bản dựng của bạn vẫn ở đó khi bạn quay lại.</li></ul><p style="margin:24px 0;"><a href="https://media-manipulator.com/vi/account" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Mở tài khoản của bạn</a></p><p style="margin:16px 0 4px;font-size:13px;opacity:.75;">Bạn có thể chọn những email muốn nhận trong cài đặt tài khoản:</p><p style="margin:0 0 16px;font-size:13px;"><a href="https://media-manipulator.com/vi/account?tab=profile" style="color:#2563eb;">Quản lý tùy chọn email</a></p><p style="margin:24px 0 0;">Đội ngũ Media Manipulator</p></div></body></html>

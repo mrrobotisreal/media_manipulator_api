@@ -1,0 +1,48 @@
+{
+  "email": {
+    "accountDeleted": {
+      "body": "Tu cuenta de Media Manipulator y los archivos guardados en ella se eliminaron, tal como pediste. Cualquier suscripción activa se canceló.",
+      "contact": "Si no lo solicitaste tú, responde a este correo y avísanos.",
+      "subject": "Tu cuenta fue eliminada"
+    },
+    "aiJobFinished": {
+      "completed": "Tu tarea de IA terminó y el resultado está listo.",
+      "cta": "Ver en el historial",
+      "failed": "Tu tarea de IA terminó, pero no se pudo completar. Abre tu historial para ver los detalles.",
+      "reason": "Recibes este correo porque activaste los correos de tareas de IA en tu configuración.",
+      "subject": "Tu tarea de IA terminó"
+    },
+    "common": {
+      "brand": "Media Manipulator",
+      "greeting": "Hola, {{name}}:",
+      "greetingNoName": "Hola:",
+      "preferencesLink": "Administrar preferencias de correo",
+      "preferencesNote": "Puedes elegir qué correos recibes en la configuración de tu cuenta:",
+      "signoff": "El equipo de Media Manipulator"
+    },
+    "expiryDigest": {
+      "cta": "Revisar tus archivos",
+      "intro_one": "{{count}} de tus elementos guardados se eliminará en un plazo de {{days}} días:",
+      "intro_other": "{{count}} de tus elementos guardados se eliminarán en un plazo de {{days}} días:",
+      "more": "y {{count}} más",
+      "outro": "Abre tu cuenta para descargar lo que quieras conservar o para guardarlo más tiempo.",
+      "reason": "Recibes este correo porque los recordatorios de expiración están activados en tu configuración.",
+      "subject_one": "{{count}} elemento guardado expira pronto",
+      "subject_other": "{{count}} elementos guardados expiran pronto",
+      "unnamed": "Elemento sin título"
+    },
+    "paymentFailed": {
+      "body": "Tu último pago de Media Manipulator no se completó. Actualiza tu método de pago para que tu plan siga activo.",
+      "cta": "Actualizar método de pago",
+      "subject": "No pudimos procesar tu pago"
+    },
+    "welcome": {
+      "cta": "Abrir tu cuenta",
+      "darkroom": "Proyectos de Darkroom guardados en tu cuenta, para que tus ediciones estén ahí cuando vuelvas.",
+      "history": "Un historial de tus conversiones, para que puedas encontrar y volver a descargar los resultados.",
+      "intro": "Tu cuenta está lista. Esto es lo que te ofrece:",
+      "retention": "Una opción de conservación: tú decides cuánto tiempo guardamos tus archivos, de 24 horas a 2 años (6 meses por defecto).",
+      "subject": "Te damos la bienvenida a Media Manipulator"
+    }
+  }
+}

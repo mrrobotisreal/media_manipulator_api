@@ -1,0 +1,48 @@
+{
+  "email": {
+    "accountDeleted": {
+      "body": "A sua conta do Media Manipulator e os ficheiros nela guardados foram eliminados, conforme pediu. Qualquer subscrição ativa foi cancelada.",
+      "contact": "Se não fez este pedido, responda a este e-mail e informe-nos.",
+      "subject": "A sua conta foi eliminada"
+    },
+    "aiJobFinished": {
+      "completed": "A sua tarefa de IA terminou e o resultado está pronto.",
+      "cta": "Ver no histórico",
+      "failed": "A sua tarefa de IA terminou, mas não foi possível concluí-la. Abra o seu histórico para mais detalhes.",
+      "reason": "Está a receber este e-mail porque ativou os e-mails de tarefas de IA nas suas definições.",
+      "subject": "A sua tarefa de IA terminou"
+    },
+    "common": {
+      "brand": "Media Manipulator",
+      "greeting": "Olá, {{name}},",
+      "greetingNoName": "Olá,",
+      "preferencesLink": "Gerir preferências de e-mail",
+      "preferencesNote": "Pode escolher que e-mails recebe nas definições da sua conta:",
+      "signoff": "A equipa do Media Manipulator"
+    },
+    "expiryDigest": {
+      "cta": "Rever os seus ficheiros",
+      "intro_one": "{{count}} dos seus itens guardados será eliminado dentro de {{days}} dias:",
+      "intro_other": "{{count}} dos seus itens guardados serão eliminados dentro de {{days}} dias:",
+      "more": "e mais {{count}}",
+      "outro": "Abra a sua conta para transferir o que quiser manter, ou para o guardar durante mais tempo.",
+      "reason": "Está a receber este e-mail porque os lembretes de expiração estão ativados nas suas definições.",
+      "subject_one": "{{count}} item guardado expira em breve",
+      "subject_other": "{{count}} itens guardados expiram em breve",
+      "unnamed": "Item sem título"
+    },
+    "paymentFailed": {
+      "body": "O seu último pagamento ao Media Manipulator não foi concluído. Atualize o seu método de pagamento para que o seu plano se mantenha ativo.",
+      "cta": "Atualizar método de pagamento",
+      "subject": "Não foi possível processar o seu pagamento"
+    },
+    "welcome": {
+      "cta": "Abrir a sua conta",
+      "darkroom": "Projetos do Darkroom guardados na sua conta, para que as suas edições estejam lá quando voltar.",
+      "history": "Um histórico das suas conversões, para poder encontrar e transferir novamente os resultados.",
+      "intro": "A sua conta está pronta. Eis o que lhe oferece:",
+      "retention": "Uma escolha de retenção: a decisão de quanto tempo guardamos os seus ficheiros é sua, de 24 horas até 2 anos (6 meses por predefinição).",
+      "subject": "Bem-vindo ao Media Manipulator"
+    }
+  }
+}

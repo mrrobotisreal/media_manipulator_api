@@ -1,0 +1,46 @@
+{
+  "email": {
+    "accountDeleted": {
+      "body": "ご要望どおり、Media Manipulatorのアカウントと保存されていたファイルを削除しました。有効なサブスクリプションがあった場合はキャンセルされました。",
+      "contact": "お心当たりがない場合は、このメールに返信してお知らせください。",
+      "subject": "アカウントが削除されました"
+    },
+    "aiJobFinished": {
+      "completed": "AIジョブが完了し、結果をご確認いただけます。",
+      "cta": "履歴で見る",
+      "failed": "AIジョブは終了しましたが、完了できませんでした。詳細は履歴をご覧ください。",
+      "reason": "このメールは、設定でAIジョブのメール通知をオンにしているためお送りしています。",
+      "subject": "AIジョブが完了しました"
+    },
+    "common": {
+      "brand": "Media Manipulator",
+      "greeting": "{{name}}様",
+      "greetingNoName": "こんにちは",
+      "preferencesLink": "メール設定を管理",
+      "preferencesNote": "受け取るメールはアカウント設定で選択できます：",
+      "signoff": "Media Manipulatorチーム"
+    },
+    "expiryDigest": {
+      "cta": "ファイルを確認",
+      "intro_other": "保存した項目のうち{{count}}件が{{days}}日以内に削除されます：",
+      "more": "ほか{{count}}件",
+      "outro": "アカウントを開いて、残したいものをダウンロードするか、保存期間を延長してください。",
+      "reason": "このメールは、設定で期限切れのリマインダーをオンにしているためお送りしています。",
+      "subject_other": "保存した{{count}}件の項目がまもなく期限切れになります",
+      "unnamed": "無題の項目"
+    },
+    "paymentFailed": {
+      "body": "Media Manipulatorの直近のお支払いが完了しませんでした。プランを継続するため、お支払い方法を更新してください。",
+      "cta": "お支払い方法を更新",
+      "subject": "お支払いを処理できませんでした"
+    },
+    "welcome": {
+      "cta": "アカウントを開く",
+      "darkroom": "Darkroomプロジェクトのアカウント保存。次に戻ってきたときも編集がそのまま残っています。",
+      "history": "変換履歴。結果を後から見つけて再度ダウンロードできます。",
+      "intro": "アカウントの準備ができました。アカウントでできることは次のとおりです：",
+      "retention": "保存期間の選択。ファイルを保持する期間を24時間から最長2年まで自分で決められます（デフォルトは6か月）。",
+      "subject": "Media Manipulatorへようこそ"
+    }
+  }
+}

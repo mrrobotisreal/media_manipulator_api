@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-)
 
-var locales = []string{"en-us", "de-de", "es-es", "he-il", "ru-ru", "uk-ua"}
+	"github.com/mrrobotisreal/media_manipulator_api/internal/email"
+)
 
 func main() {
 	ui := flag.String("ui", "../media-manipulator-ui", "path to the UI repo")
@@ -31,7 +31,7 @@ func main() {
 	flag.Parse()
 
 	drift := false
-	for _, loc := range locales {
+	for _, loc := range email.Locales {
 		src := filepath.Join(*ui, "i18n", "locales", loc, "interface", "email.json")
 		raw, err := os.ReadFile(src)
 		if err != nil {
