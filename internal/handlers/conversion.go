@@ -157,6 +157,9 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.GET("/download/:jobId", h.DownloadFile)
 	// MM80: owner mints a short-lived signed link for a native browser download.
 	r.POST("/download/:jobId/link", h.CreateDownloadLink)
+	// MM81: "Download as MP3" for a WAV result (owner; free, own rate bucket).
+	r.POST("/download/:jobId/mp3", h.StartMP3Download)
+	r.GET("/download/:jobId/mp3", h.MP3DownloadStatus)
 	if h != nil && h.data != nil {
 		// MM24: owner-scoped deletion and "keep longer".
 		r.DELETE("/jobs/:jobId", h.data.DeleteJob)
@@ -383,6 +386,20 @@ func (h *ConversionHandler) DownloadFile(c *gin.Context) {
 		return
 	}
 	h.ensureResultMime(job, outputPath)
+	servedFormat := ""
+	if claims, ok := downloadTokenClaims(c); ok && claims.Variant != "" {
+		// MM81: a link to a derived file (the cached MP3 of a WAV result). Only
+		// ever reachable through a sealed token, minted after the owner check.
+		vpath, vinfo, vok := variantFile(outputPath, claims.Variant)
+		if !vok {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Converted file not found"})
+			return
+		}
+		outputPath, info, servedFormat = vpath, vinfo, claims.Variant
+		if claims.Name == "" {
+			c.Set(ctxResultName, swapExt(h.resultName(c, job), "."+claims.Variant))
+		}
+	}
 	if claims, ok := downloadTokenClaims(c); ok && claims.Name != "" {
 		// The owner's save-as name, sealed into the token at mint time.
 		c.Set(ctxResultName, claims.Name)
@@ -414,7 +431,7 @@ func (h *ConversionHandler) DownloadFile(c *gin.Context) {
 	// The size comes from the stat, not from the job: a job's ResultSizeBytes is
 	// only set by the pipelines that happen to know it, while the file on disk is
 	// what the visitor received.
-	h.emitDownloadServed(c, job, info.Size())
+	h.emitDownloadServedAs(c, job, info.Size(), servedFormat)
 }
 
 // mediaKindFromMIME derives the analytics media kind from a stored MIME type.
@@ -444,6 +461,12 @@ func mediaKindFromMIME(mime string) string {
 
 // emitDownloadServed reports one served result to the analytics service.
 func (h *ConversionHandler) emitDownloadServed(c *gin.Context, job *models.ConversionJob, bytes int64) {
+	h.emitDownloadServedAs(c, job, bytes, "")
+}
+
+// emitDownloadServedAs is emitDownloadServed with the delivered format when it
+// differs from the job's (MM81: the MP3 of a WAV result reports "mp3").
+func (h *ConversionHandler) emitDownloadServedAs(c *gin.Context, job *models.ConversionJob, bytes int64, format string) {
 	if h == nil || !h.analytics.Enabled() || job == nil {
 		return
 	}
@@ -451,7 +474,10 @@ func (h *ConversionHandler) emitDownloadServed(c *gin.Context, job *models.Conve
 	if bytes > 0 {
 		props["bytes"] = bytes
 	}
-	if format := strings.TrimPrefix(h.getOutputExtension(job), "."); format != "" {
+	if format == "" {
+		format = strings.TrimPrefix(h.getOutputExtension(job), ".")
+	}
+	if format != "" {
 		props["output_format"] = format
 	}
 	tier := ""

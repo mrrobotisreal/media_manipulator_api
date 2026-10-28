@@ -33,6 +33,11 @@ const (
 	RetainedStudioProject = "studio_project"
 	RetainedMetadata      = "metadata_report"
 	RetainedJobRow        = "job_row"
+	// RetainedDerivedFile ("derived_file", MM81) is a file a later request
+	// derived from a finished result and cached beside it in outputs/<jobId>/
+	// (the MP3 of a WAV stem). locator = "<jobId>/<file>", parent_locator = the
+	// job id (the output_dir row's locator).
+	RetainedDerivedFile = "derived_file"
 	// RetainedVectorProject ("vector_project", MM43) is declared in
 	// vector_store.go next to the table it ledgers.
 )

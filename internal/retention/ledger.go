@@ -28,6 +28,9 @@ const (
 	// KindVoice is a saved voice row (MM77, mm_voices); its reference and
 	// preview objects are s3_object rows whose parent_locator is the voice id.
 	KindVoice = telemetry.RetainedVoice
+	// KindDerivedFile is a file cached beside a job's result (MM81: the MP3 of
+	// a WAV stem): locator "<jobId>/<file>", parent_locator the job id.
+	KindDerivedFile = telemetry.RetainedDerivedFile
 )
 
 // Store is the slice of *telemetry.Store the ledger needs. Tests pass a fake.

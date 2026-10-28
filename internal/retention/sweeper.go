@@ -337,6 +337,8 @@ func (s *Sweeper) processBatch(ctx context.Context, rows []telemetry.LedgerRow, 
 			s.finish(ctx, row, res, s.deleteJobRow(ctx, row))
 		case KindMetadata:
 			s.finish(ctx, row, res, s.deleteMetadata(ctx, row))
+		case KindDerivedFile:
+			s.finish(ctx, row, res, s.deleteDerivedFile(ctx, row, active))
 		default:
 			// A kind this build does not know (a newer deploy wrote it). Leave it.
 			s.logger.Error("retention: unknown ledger kind; leaving row", "kind", row.Kind, "id", row.ID)
@@ -388,7 +390,7 @@ func (s *Sweeper) finish(ctx context.Context, row telemetry.LedgerRow, res *Resu
 		res.Dirs += o.dirs
 		res.Files += o.files
 		s.meter.Swept(row.Kind, 1)
-		if row.Kind == KindUploadDir || row.Kind == KindOutputDir || row.Kind == KindS3Object {
+		if row.Kind == KindUploadDir || row.Kind == KindOutputDir || row.Kind == KindS3Object || row.Kind == KindDerivedFile {
 			// The job's database row is anonymized once its last file row is stamped.
 			s.finishJob(ctx, row.JobID)
 		}
@@ -526,6 +528,28 @@ func (s *Sweeper) preserveMetadata(ctx context.Context, row telemetry.LedgerRow,
 		}
 	}
 	return true, nil
+}
+
+// deleteDerivedFile removes one cached file inside outputs/<jobId>/ (MM81). The
+// locator must be exactly "<jobId>/<name>" with two safe segments, so nothing
+// outside that job's directory can ever be named. An already-missing file is
+// done (the output_dir sweep removes the whole directory first, usually).
+func (s *Sweeper) deleteDerivedFile(ctx context.Context, row telemetry.LedgerRow, active map[string]struct{}) outcome {
+	_ = ctx
+	path := DerivedFilePath(s.cfg.OutputDir, row.Locator)
+	if path == "" {
+		return fail(errors.New("refusing unsafe or unconfigured derived file locator"))
+	}
+	if row.JobID != "" {
+		if _, busy := active[row.JobID]; busy {
+			return outcome{deferred: true}
+		}
+	}
+	size := s.disk.Size(path)
+	if err := s.disk.RemoveAll(path); err != nil {
+		return fail(fmt.Errorf("remove derived file: %w", err))
+	}
+	return outcome{done: true, bytes: size, files: 1}
 }
 
 // deleteJobRow anonymizes mm_conversion_jobs and its media assets.
@@ -865,7 +889,7 @@ func pathTypeFor(kind string) string {
 	switch kind {
 	case KindUploadDir, KindOutputDir:
 		return "dir"
-	case KindS3Object, KindMetadata:
+	case KindS3Object, KindMetadata, KindDerivedFile:
 		return "file"
 	default:
 		return "unknown"

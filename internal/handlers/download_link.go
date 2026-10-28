@@ -15,6 +15,7 @@ import (
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/dllink"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 )
 
 // MM80: signed download links.
@@ -113,17 +114,26 @@ func (h *ConversionHandler) CreateDownloadLink(c *gin.Context) {
 	if !ok {
 		return
 	}
+	body2, status := h.mintDownloadLink(c, job, info.Size(), cleanDownloadName(body.FileName), "")
+	c.Header("Cache-Control", "no-store")
+	c.JSON(status, body2)
+}
+
+// mintDownloadLink seals a token for job (variant "" = the result itself,
+// "mp3" = its MP3 transcode, MM81) and returns the /link response body. The
+// caller has already run the ownership lookup.
+func (h *ConversionHandler) mintDownloadLink(c *gin.Context, job *models.ConversionJob, size int64, name, variant string) (gin.H, int) {
 	signer := h.downloadSignerFor()
 	if signer == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Download links are temporarily unavailable"})
-		return
+		return gin.H{"error": "Download links are temporarily unavailable"}, http.StatusServiceUnavailable
 	}
 	expires := downloadLinkNow().Add(downloadSignerTTL).UTC().Truncate(time.Second)
 	claims := dllink.Claims{
 		Expires:   expires.Unix(),
 		SessionID: strings.TrimSpace(c.GetHeader("X-MM-Session-ID")),
 		VisitorID: strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
-		Name:      cleanDownloadName(body.FileName),
+		Name:      name,
+		Variant:   variant,
 	}
 	if claims.VisitorID == "" && h.jobManager != nil {
 		if owner, ok := h.jobManager.JobOwnerOf(job.ID); ok {
@@ -135,20 +145,20 @@ func (h *ConversionHandler) CreateDownloadLink(c *gin.Context) {
 	}
 	token, err := signer.Mint(job.ID, claims)
 	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Download links are temporarily unavailable"})
-		return
+		return gin.H{"error": "Download links are temporarily unavailable"}, http.StatusServiceUnavailable
 	}
-	name := claims.Name
 	if name == "" {
 		name = h.resultName(c, job)
+		if variant == downloadVariantMP3 {
+			name = swapExt(name, ".mp3")
+		}
 	}
-	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, gin.H{
+	return gin.H{
 		"url":       "/api/download/" + url.PathEscape(job.ID) + "?token=" + url.QueryEscape(token),
 		"expiresAt": expires.Format(time.RFC3339),
-		"sizeBytes": info.Size(),
+		"sizeBytes": size,
 		"fileName":  name,
-	})
+	}, http.StatusOK
 }
 
 // acceptDownloadToken verifies ?token= against the :jobId in the path and

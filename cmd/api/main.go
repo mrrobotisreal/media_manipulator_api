@@ -702,6 +702,15 @@ var quotaRoutes = []quotaRoute{
 	{metric: models.MetricAIOps, matches: handlers.IsStudioVoiceoverPath},
 }
 
+// isResultMP3Path matches POST /api/download/:jobId/mp3 (MM81).
+func isResultMP3Path(path string) bool {
+	if !strings.HasPrefix(path, "/api/download/") || !strings.HasSuffix(path, "/mp3") {
+		return false
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(path, "/api/download/"), "/mp3")
+	return id != "" && !strings.Contains(id, "/")
+}
+
 // isStudioExportPath matches the two routes that START a render: POST
 // /api/studio/projects/:id/export and, since part 20, POST
 // /api/studio/projects/:id/exports/:exportId/again (render again). Both spend
@@ -869,6 +878,16 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 			matches: func(path string) bool {
 				return strings.HasPrefix(path, "/api/studio/assets/") && strings.HasSuffix(path, "/rebuild-proxy")
 			},
+		},
+		// MM81: "Download as MP3" transcodes a finished WAV result (ffmpeg, no
+		// GPU, no quota). Its own bucket so it cannot ride the upload allowance.
+		// Only the POST that may start an encode is limited; the status GET is not.
+		{
+			routeKey:     "result_mp3",
+			tool:         "result_mp3",
+			sessionLimit: cfg.RateLimitResultMP3PerSessionPerHour,
+			ipLimit:      cfg.RateLimitResultMP3PerIPPerHour,
+			matches:      isResultMP3Path,
 		},
 		// Version-history checkpoints (part 09) are cheap DB writes, but the
 		// client fires them on a timer — share the generous upload bucket
