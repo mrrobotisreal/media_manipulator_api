@@ -170,7 +170,7 @@ func (s *VoicesService) shift(ctx context.Context, req VoiceJobRequest, wavPath 
 // synthesize calls mm-voices under a TaskVoices lease. The service writes into
 // the shared scratch dir; the result is then moved into the job output dir.
 func (s *VoicesService) synthesize(ctx context.Context, req VoiceJobRequest, wavPath string) error {
-	scratch, err := os.MkdirTemp(s.cfg.Voices.ScratchDir, "job-"+safeSegment(req.JobID)+"-")
+	scratch, err := s.scratchDir("job-"+safeSegment(req.JobID)+"-")
 	if err != nil {
 		return fmt.Errorf("%w: scratch dir: %v", ErrVoicesUnavailable, err)
 	}
@@ -256,13 +256,22 @@ func (s *VoicesService) lease(ctx context.Context, jobID, requestID, tool string
 	}, nil
 }
 
+// scratchDir makes a per-call directory under VOICES_SCRATCH_DIR, creating
+// the root on first use (the service and the API both run as mwintrow).
+func (s *VoicesService) scratchDir(pattern string) (string, error) {
+	if err := os.MkdirAll(s.cfg.Voices.ScratchDir, 0o755); err != nil {
+		return "", err
+	}
+	return os.MkdirTemp(s.cfg.Voices.ScratchDir, pattern)
+}
+
 // --- synchronous steps of creating a voice -----------------------------------
 
 // RenderVoicePreview speaks the fixed sample sentence in a reference clip's
 // voice and encodes it to MP3 at mp3Path. Used by POST /api/voices (the one
 // counted ai_ops unit) and POST /api/voices/design.
 func (s *VoicesService) RenderVoicePreview(ctx context.Context, jobID, requestID, referencePath, language, mp3Path string) (*VoicesResult, error) {
-	scratch, err := os.MkdirTemp(s.cfg.Voices.ScratchDir, "preview-")
+	scratch, err := s.scratchDir("preview-")
 	if err != nil {
 		return nil, fmt.Errorf("%w: scratch dir: %v", ErrVoicesUnavailable, err)
 	}
@@ -291,7 +300,7 @@ func (s *VoicesService) RenderVoicePreview(ctx context.Context, jobID, requestID
 // from a description (Qwen3-TTS VoiceDesign) into refPath (WAV). From then on
 // the voice is spoken by Chatterbox from that clip (design §2).
 func (s *VoicesService) RenderDesignedReference(ctx context.Context, requestID, description, language string, seed int64, refPath string) (*VoicesResult, error) {
-	scratch, err := os.MkdirTemp(s.cfg.Voices.ScratchDir, "design-")
+	scratch, err := s.scratchDir("design-")
 	if err != nil {
 		return nil, fmt.Errorf("%w: scratch dir: %v", ErrVoicesUnavailable, err)
 	}
