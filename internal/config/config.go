@@ -580,6 +580,7 @@ type Config struct {
 	// Voices (MM77): see voices.go. Filled by applyVoicesConfig.
 	Voices                          VoicesConfig
 	GPUSchedulerDefaultVoicesDevice string
+	VoicesTiers                     VoicesTierConfig
 }
 
 func Load() *Config {

@@ -92,4 +92,44 @@ func cudaIndexOf(device string, fallback int) int {
 // literal, like applyProTierDefaults.
 func applyVoicesConfig(c *Config) {
 	c.Voices, c.GPUSchedulerDefaultVoicesDevice = loadVoicesConfig()
+	c.VoicesTiers = loadVoicesTiers()
+}
+
+// VoicesTierRow is one tier's voices allowance (design VOICES.md §4.3).
+type VoicesTierRow struct {
+	// Saved is the saved-voice cap (0 = cannot save; anonymous is always 0
+	// because a voice needs an owner for its consent record).
+	Saved int
+	// MaxSeconds caps generated seconds per request; the speak text cap is
+	// MaxSeconds × 18 characters.
+	MaxSeconds int
+	// Convert allows AI voice conversion; ConvertMaxSeconds caps its input.
+	Convert           bool
+	ConvertMaxSeconds int
+}
+
+// VoicesTierConfig is the four public tiers' voices rows (env
+// TIER_<ANON|FREE|PREMIUM|PRO>_VOICES_SAVED|MAX_SECONDS|CONVERT|CONVERT_MAX_SECONDS).
+type VoicesTierConfig struct {
+	Anon, Free, Premium, Pro VoicesTierRow
+}
+
+func loadVoicesTierRow(prefix string, def VoicesTierRow) VoicesTierRow {
+	return VoicesTierRow{
+		Saved:             getEnvIntDefault(prefix+"_VOICES_SAVED", def.Saved),
+		MaxSeconds:        getEnvIntDefault(prefix+"_VOICES_MAX_SECONDS", def.MaxSeconds),
+		Convert:           getEnvBool(prefix+"_VOICES_CONVERT", def.Convert),
+		ConvertMaxSeconds: getEnvIntDefault(prefix+"_VOICES_CONVERT_MAX_SECONDS", def.ConvertMaxSeconds),
+	}
+}
+
+// loadVoicesTiers reads the voices rows; defaults are the published matrix:
+// saved 0/1/5/25, seconds 30/60/300/900, convert no/60 s/5 min/15 min.
+func loadVoicesTiers() VoicesTierConfig {
+	return VoicesTierConfig{
+		Anon:    loadVoicesTierRow("TIER_ANON", VoicesTierRow{Saved: 0, MaxSeconds: 30, Convert: false, ConvertMaxSeconds: 0}),
+		Free:    loadVoicesTierRow("TIER_FREE", VoicesTierRow{Saved: 1, MaxSeconds: 60, Convert: true, ConvertMaxSeconds: 60}),
+		Premium: loadVoicesTierRow("TIER_PREMIUM", VoicesTierRow{Saved: 5, MaxSeconds: 300, Convert: true, ConvertMaxSeconds: 300}),
+		Pro:     loadVoicesTierRow("TIER_PRO", VoicesTierRow{Saved: 25, MaxSeconds: 900, Convert: true, ConvertMaxSeconds: 900}),
+	}
 }

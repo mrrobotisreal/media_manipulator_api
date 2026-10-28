@@ -190,8 +190,11 @@ func TestProRow(t *testing.T) {
 	same.OpsPerDay, same.AIOpsPerDay, same.ExportsPerDay = pro.OpsPerDay, pro.AIOpsPerDay, pro.ExportsPerDay
 	same.VectorExportsPerDay, same.VectorFormats, same.VectorProjects = pro.VectorExportsPerDay, pro.VectorFormats, pro.VectorProjects
 	same.VectorMaxDurationMs, same.VectorVideo = pro.VectorMaxDurationMs, pro.VectorVideo
+	// MM77: Pro has its own voices row (design VOICES.md §4.3).
+	same.VoicesSaved, same.VoicesMaxSeconds, same.VoicesConvert, same.VoicesConvertMaxSeconds =
+		pro.VoicesSaved, pro.VoicesMaxSeconds, pro.VoicesConvert, pro.VoicesConvertMaxSeconds
 	if pro != same {
-		t.Fatalf("pro must equal premium apart from ops/ai/exports and the Motion row:\n pro     %+v\n premium %+v", pro, premium)
+		t.Fatalf("pro must equal premium apart from ops/ai/exports, the Motion row and the voices row:\n pro     %+v\n premium %+v", pro, premium)
 	}
 	if !pro.PriorityGPU || !pro.AdsRemoved || pro.RateLimitExempt {
 		t.Fatalf("pro flags wrong: %+v", pro)
@@ -280,6 +283,14 @@ func TestPublishedMatrix(t *testing.T) {
 			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,png_sequence,mp4,webm,import_lottie,import_svg_vectorize",
 			VectorVideo:   VectorVideo{MaxHeight: 2160, MaxFps: 60, MaxSeconds: 60},
 		},
+	}
+
+	// MM77 voices row (design VOICES.md §4.3), overlaid so the literals above
+	// stay one per feature.
+	for tier, v := range wantVoices {
+		l := want[tier]
+		l.VoicesSaved, l.VoicesMaxSeconds, l.VoicesConvert, l.VoicesConvertMaxSeconds = v.VoicesSaved, v.VoicesMaxSeconds, v.VoicesConvert, v.VoicesConvertMaxSeconds
+		want[tier] = l
 	}
 
 	for tier, expected := range want {
