@@ -62,3 +62,7 @@ The table of saved voices: always owned by a signed-in account (anonymous visito
 **mm-voices**:
 The resident FastAPI service on the GPU host (`scripts/server/voices_service.py`, unit `deploy/mm-voices.service`, `127.0.0.1:8791`, GPU 0) that holds Chatterbox Multilingual and Qwen3-TTS and answers the API's `internal/services/voices_client.go`. Files travel by path under the shared `VOICES_SCRATCH_DIR`. Not a per-job subprocess, unlike every other AI tool here.
 _Avoid_: calling it "the voices API" (that is `/api/voices` in this repo).
+
+**Contact** (MM85):
+The public contact form, `POST /api/contact` (`internal/handlers/contact.go`). It mails the support inbox (`CONTACT_TO`) through the transactional `email.Sender` with Reply-To the visitor and a 12-character **reference** in the subject and the `202` body; the email is the only record (no table, no quota). Subjects are a closed set: `bug`, `billing`, `privacy`, `press`, `other`. A filled `website` field is the honeypot. Limited by the `contact` bucket; `503 contact_unavailable` when email is off.
+_Avoid_: "support ticket" (there is no ticket system), storing contact messages in Postgres.

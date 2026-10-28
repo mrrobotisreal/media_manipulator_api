@@ -352,7 +352,11 @@ func main() {
 	accountHandler := handlers.NewAccountHandler(store, tierRegistry, cfg, logging, accountPresign, jobManager)
 	// MM31 transactional email. A logged no-op unless EMAIL_ENABLED=true and the
 	// provider key + From address are set; every send is a best-effort goroutine.
-	emailSvc := email.New(store, email.NewSender(cfg, logging), cfg.EmailPublicBaseURL, analyticsEmitter, logging)
+	emailSender := email.NewSender(cfg, logging)
+	emailSvc := email.New(store, emailSender, cfg.EmailPublicBaseURL, analyticsEmitter, logging)
+	// MM85: POST /api/contact mails the form through the same sender; with
+	// email disabled it answers 503 contact_unavailable.
+	contactHandler = handlers.NewContactHandler(emailSender, cfg.ContactTo, logging)
 	accountHandler.SetMailer(emailSvc)
 	jobManager.SetJobFinishedNotifier(emailSvc)
 	if cfg.EmailDigestInterval > 0 {
@@ -552,6 +556,9 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// route-limit rules (only POSTs plus /api/share GETs), so it is never
 		// quota-charged; the global per-IP guard above still applies.
 		handlers.NewSystemHealthHandler(systemHealthProbes(cfg, store, limiter)).Register(api)
+		// MM85: public contact form. Not in quotaRoutes (never charged); the
+		// `contact` bucket in routeLimitDispatcher limits it. nil (tests) mounts nothing.
+		handlers.RegisterContactRoutes(api, contactHandler)
 		// Conversion routes — register first so per-route rate limits can
 		// be layered onto specific groups.
 		handlers.RegisterConversionRoutes(api, conversionHandler)
@@ -624,6 +631,11 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 
 	return router
 }
+
+// contactHandler serves POST /api/contact (MM85); main builds it, setupRouter
+// mounts it. nil (tests) mounts nothing. A package variable like
+// voicesHandler, so setupRouter's signature stays as every test spells it.
+var contactHandler *handlers.ContactHandler
 
 // newRouteGuard builds the per-route limiter middleware factory the dispatcher
 // calls. It is a package variable so cmd/api's test can substitute a spy and
@@ -918,6 +930,9 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 		// Uncounted design previews still render on the GPU: a per-IP bucket on
 		// top of the handler's per-description limit (operators exempt).
 		{path: "/api/voices/design/preview", routeKey: "voices_design_preview", tool: "voices", sessionLimit: 0, ipLimit: cfg.Voices.PreviewPerIPPerHour},
+		// MM85: the public contact form mails a human; spam is the abuse
+		// surface, so a tight bucket (3/h/session, 10/h/IP by default).
+		{path: "/api/contact", routeKey: "contact", tool: "contact", sessionLimit: cfg.ContactPerSessionPerHour, ipLimit: cfg.ContactPerIPPerHour},
 	}
 	// MM32: the public share routes (descriptor + file, GET only) are limited like
 	// downloads' abuse surface: per IP, no session bucket (the viewer has none),

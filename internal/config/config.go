@@ -169,6 +169,11 @@ type Config struct {
 	// MM32: per-IP hourly cap on the public share routes (descriptor + file
 	// range requests). Keyed by IP only; the caller has no session.
 	RateLimitSharePerIPPerHour int
+	// MM85: POST /api/contact. ContactTo receives the form (reply-to is the
+	// visitor); the two limits are the `contact` limiter bucket per hour.
+	ContactTo                string
+	ContactPerSessionPerHour int
+	ContactPerIPPerHour      int
 	// SharePublicBaseURL prefixes the page URL returned by POST /api/jobs/:id/share
 	// (<base>/r/<token>).
 	SharePublicBaseURL string
@@ -709,6 +714,9 @@ func Load() *Config {
 		RateLimitAnalysisPerIPPerHour:        getEnvInt("RATE_LIMIT_ANALYSIS_PER_IP_PER_HOUR", 40),
 		RateLimitAuditAllowed:                getEnvBool("RATE_LIMIT_AUDIT_ALLOWED", false),
 		RateLimitSharePerIPPerHour:           getEnvInt("RATE_LIMIT_SHARE_PER_IP_PER_HOUR", 1200),
+		ContactTo:                            getEnv("CONTACT_TO", "support@media-manipulator.com"),
+		ContactPerSessionPerHour:             getEnvInt("CONTACT_PER_SESSION_PER_HOUR", 3),
+		ContactPerIPPerHour:                  getEnvInt("CONTACT_PER_IP_PER_HOUR", 10),
 		SharePublicBaseURL: strings.TrimRight(strings.TrimSpace(getEnv("SHARE_PUBLIC_BASE_URL",
 			getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com"))), "/"),
 

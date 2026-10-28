@@ -65,13 +65,17 @@ type resendRequest struct {
 
 // Send implements Sender. Errors never contain the API key or the request body.
 func (r *ResendSender) Send(ctx context.Context, msg Message) (string, error) {
+	replyTo := r.ReplyTo
+	if v := cleanHeader(msg.ReplyTo); v != "" {
+		replyTo = v
+	}
 	body := resendRequest{
 		From:    r.From,
 		To:      []string{msg.To},
 		Subject: cleanHeader(msg.Subject),
 		HTML:    msg.HTML,
 		Text:    msg.Text,
-		ReplyTo: r.ReplyTo,
+		ReplyTo: replyTo,
 		Headers: msg.Headers,
 	}
 	raw, err := json.Marshal(body)

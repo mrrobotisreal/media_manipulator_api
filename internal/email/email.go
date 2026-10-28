@@ -43,7 +43,8 @@ const (
 	StatusSkipped  = "skipped"
 )
 
-// Message is one outgoing email. From and Reply-To belong to the sender.
+// Message is one outgoing email. From and the default Reply-To belong to the
+// sender.
 type Message struct {
 	To      string
 	Subject string
@@ -53,6 +54,9 @@ type Message struct {
 	Headers map[string]string
 	// IdempotencyKey lets the provider collapse a retried request into one mail.
 	IdempotencyKey string
+	// ReplyTo, when set, overrides the sender's configured Reply-To for this
+	// one message (MM85: the contact form replies to the visitor).
+	ReplyTo string
 }
 
 // Sender delivers a message and returns the provider's id for it.
