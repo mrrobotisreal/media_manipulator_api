@@ -42,6 +42,8 @@ func TestMM24RoutesAreRegistered(t *testing.T) {
 		"POST /api/account/sessions/revoke",
 		"DELETE /api/account",
 		"GET /api/download/:jobId",
+		// MM80
+		"POST /api/download/:jobId/link",
 		"GET /api/result/:jobId",
 		// MM32
 		"POST /api/jobs/:jobId/share",

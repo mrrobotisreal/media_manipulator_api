@@ -154,6 +154,8 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.GET("/job/:jobId/metadata/diff", h.GetJobMetadataDiff)
 	r.GET("/job/:jobId/metadata/binary/:entryId", h.GetJobMetadataBinary)
 	r.GET("/download/:jobId", h.DownloadFile)
+	// MM80: owner mints a short-lived signed link for a native browser download.
+	r.POST("/download/:jobId/link", h.CreateDownloadLink)
 	if h != nil && h.data != nil {
 		// MM24: owner-scoped deletion and "keep longer".
 		r.DELETE("/jobs/:jobId", h.data.DeleteJob)
@@ -281,6 +283,14 @@ func (h *ConversionHandler) GetJobStatus(c *gin.Context) {
 // locates the output file. On failure it has already written the response.
 // allowQuerySID lets the inline route accept ?sid= for media elements.
 func (h *ConversionHandler) resolveCompletedResult(c *gin.Context, allowQuerySID bool) (job *models.ConversionJob, path string, info os.FileInfo, ok bool) {
+	return h.resolveCompletedResultAuth(c, allowQuerySID, false)
+}
+
+// resolveCompletedResultAuth is resolveCompletedResult where granted=true means
+// the caller already proved access another way (an MM80 signed download token
+// for exactly this job) and the ownership check is skipped. Existence,
+// completion and the file check still apply.
+func (h *ConversionHandler) resolveCompletedResultAuth(c *gin.Context, allowQuerySID, granted bool) (job *models.ConversionJob, path string, info os.FileInfo, ok bool) {
 	jobID := strings.TrimSpace(c.Param("jobId"))
 	if jobID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Job ID is required"})
@@ -291,12 +301,12 @@ func (h *ConversionHandler) resolveCompletedResult(c *gin.Context, allowQuerySID
 		// MM24: after an API restart the in-memory map is empty but history (served
 		// from Postgres and the ledger) still lists the download link.
 		if h.records != nil {
-			return h.resolveRecordedResult(c, jobID, allowQuerySID)
+			return h.resolveRecordedResult(c, jobID, allowQuerySID, granted)
 		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
 		return nil, "", nil, false
 	}
-	if !authorizeJobAccessSID(c, h.jobManager, job, allowQuerySID) {
+	if !granted && !authorizeJobAccessSID(c, h.jobManager, job, allowQuerySID) {
 		denyJobAccess(c)
 		return nil, "", nil, false
 	}
@@ -352,14 +362,45 @@ func serveResultFile(c *gin.Context, file *os.File, info os.FileInfo, mime, name
 }
 
 func (h *ConversionHandler) DownloadFile(c *gin.Context) {
-	job, outputPath, info, ok := h.resolveCompletedResult(c, false)
+	// MM80: ?token= is a signed download link (see download_link.go). A request
+	// that carries one is authorized by the token ALONE: an invalid, expired or
+	// other-job token is refused even if headers are present. Requests without
+	// ?token= take the original header path, byte for byte.
+	granted := false
+	if token := c.Query("token"); token != "" {
+		if !h.acceptDownloadToken(c, token) {
+			denyJobAccess(c)
+			return
+		}
+		granted = true
+	}
+	job, outputPath, info, ok := h.resolveCompletedResultAuth(c, false, granted)
 	if !ok {
 		return
 	}
 	h.ensureResultMime(job, outputPath)
+	if claims, ok := downloadTokenClaims(c); ok && claims.Name != "" {
+		// The owner's save-as name, sealed into the token at mint time.
+		c.Set(ctxResultName, claims.Name)
+	}
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", h.resultName(c, job)))
 	c.Header("Content-Type", "application/octet-stream")
+	if granted {
+		// The URL carries a credential: no shared cache may keep the response.
+		c.Header("Cache-Control", "private, no-store")
+		c.Header("Referrer-Policy", "no-referrer")
+		// Stream through nginx at the client's pace instead of spooling a
+		// multi-GB result into proxy temp files first (same as the SSE routes).
+		c.Header("X-Accel-Buffering", "no")
+	}
+	// c.File is http.ServeFile -> ServeContent: real Content-Length, Accept-Ranges,
+	// 206/416 for Range, so a browser download can resume after a network drop.
 	c.File(outputPath)
+	if !isFirstByteRequest(c.Request.Header.Get("Range")) {
+		// A resume (Range starting past byte 0) is the same download continuing,
+		// not a new one; counting it would inflate server_download_served.
+		return
+	}
 
 	// Server truth for a download. Emitted AFTER c.File so it reflects a response
 	// that was actually written, and emitted here rather than trusted from the
@@ -413,14 +454,28 @@ func (h *ConversionHandler) emitDownloadServed(c *gin.Context, job *models.Conve
 	if res, ok := middleware.ResolveTier(c); ok {
 		tier = string(res.Tier)
 	}
+	// Identity comes from the request headers. A signed-link download (MM80) is a
+	// header-less browser navigation, so it uses the ids sealed into the token
+	// by the owner's link request instead.
+	visitor := strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID"))
+	session := strings.TrimSpace(c.GetHeader("X-MM-Session-ID"))
+	if claims, ok := downloadTokenClaims(c); ok {
+		if visitor == "" {
+			visitor = claims.VisitorID
+		}
+		if session == "" {
+			session = claims.SessionID
+		}
+		if claims.Tier != "" {
+			tier = claims.Tier
+		}
+		props["via"] = "signed_link"
+	}
 	h.analytics.Emit(analyticsemit.Event{
-		EventName: analyticsemit.ServerDownloadServed,
-		EventTS:   time.Now().UTC(),
-		// Identity comes from the request headers, which is the only identity a
-		// download request carries: it is a plain GET the browser may even have
-		// issued in a new tab.
-		VisitorID:  strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
-		SessionID:  strings.TrimSpace(c.GetHeader("X-MM-Session-ID")),
+		EventName:  analyticsemit.ServerDownloadServed,
+		EventTS:    time.Now().UTC(),
+		VisitorID:  visitor,
+		SessionID:  session,
 		Context:    analyticsemit.Context(conversionToolFor(job), mediaKindFromMIME(job.OriginalFile.Type), job.ID, tier),
 		Properties: props,
 	})
