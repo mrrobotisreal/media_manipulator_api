@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -245,5 +246,110 @@ func TestVoiceUserMessage(t *testing.T) {
 	}
 	if !strings.Contains(VoiceUserMessage(&VoicesServiceError{Code: "preset_not_found"}), "preset") {
 		t.Error("preset message")
+	}
+}
+
+// MM79 acceptance 7 (server truth at the emission seam): a voice job created
+// through RecordJobCreated with tool voice_tts and failed by the service
+// emits server_job_created then server_job_failed with tool_slug voice_tts in
+// the context and a coarse error_type (never the message); the convert and
+// shift tools flow the same way.
+func TestVoiceJobServerTruthEvents(t *testing.T) {
+	for tool, wantType := range map[string]string{
+		VoiceToolTTS:     "upstream",
+		VoiceToolConvert: "upstream",
+		VoiceToolShift:   "tool_failure",
+	} {
+		t.Run(tool, func(t *testing.T) {
+			e := newVoiceJobEnv(t)
+			an := &stubAnalytics{}
+			e.jm.SetAnalyticsEmitter(an)
+			e.synth.err = ErrVoicesUnavailable
+			req := e.job(t, tool)
+			req.ReferencePath, req.InputPath = e.ref, e.ref
+			e.jm.RecordJobCreated(context.Background(), req.JobID, testOwner(),
+				JobFacts{Tool: tool, Mode: "Vivian", MediaKind: "audio", SourceFormat: "text", TargetFormat: "mp3"})
+			if tool == VoiceToolShift {
+				e.svc.SetRunner(func(context.Context, string, ...string) (string, string, error) {
+					return "", "rubberband: /srv/uploads/x/secret name.wav", errors.New("exit status 1")
+				})
+			}
+			e.svc.Process(context.Background(), req)
+			created := an.named("server_job_created")
+			failed := an.named("server_job_failed")
+			if len(created) != 1 || len(failed) != 1 {
+				t.Fatalf("created %d failed %d", len(created), len(failed))
+			}
+			ev := failed[0]
+			if ev.Context["tool_slug"] != tool || ev.Context["job_id"] != req.JobID || ev.Context["media_kind"] != "audio" {
+				t.Errorf("context %v", ev.Context)
+			}
+			if ev.Properties["error_type"] != wantType {
+				t.Errorf("error_type %v want %s", ev.Properties["error_type"], wantType)
+			}
+			if _, ok := ev.Properties["duration_ms"]; !ok {
+				t.Error("duration_ms missing")
+			}
+			for _, v := range ev.Properties {
+				if s, ok := v.(string); ok && (strings.Contains(s, "/") || strings.Contains(s, " ")) {
+					t.Errorf("a property carries message text: %q", s)
+				}
+			}
+		})
+	}
+}
+
+// MM79: Finish runs after the MP3 exists; its error fails the job (refunded
+// once) with the user-safe message.
+func TestVoiceJobFinishHook(t *testing.T) {
+	e := newVoiceJobEnv(t)
+	req := e.job(t, VoiceToolTTS)
+	req.ReferencePath = e.ref
+	var sawWav string
+	req.Finish = func(_ context.Context, wav string) error {
+		sawWav = wav
+		if _, err := os.Stat(filepath.Join(filepath.Dir(wav), VoiceResultMP3)); err != nil {
+			t.Errorf("Finish ran before the MP3 existed")
+		}
+		return errors.New("ingest: s3 down")
+	}
+	e.svc.Process(context.Background(), req)
+	j := e.status(t, req.JobID)
+	if filepath.Base(sawWav) != VoiceResultWav || j.Status != models.StatusFailed || j.Error != VoiceFinishFailedMessage {
+		t.Fatalf("wav %q job %+v", sawWav, j)
+	}
+	if e.refund.n.Load() != 1 {
+		t.Fatalf("refunds %d", e.refund.n.Load())
+	}
+}
+
+// MM79: resultSeconds comes from the WAV header (byte rate × data size).
+func TestWavSeconds(t *testing.T) {
+	dir := t.TempDir()
+	mk := func(name string, byteRate uint32, dataBytes int) string {
+		hdr := []byte("RIFF\x00\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\xbb\x00\x00")
+		br := make([]byte, 4)
+		binary.LittleEndian.PutUint32(br, byteRate)
+		hdr = append(hdr, br...)
+		hdr = append(hdr, []byte("\x02\x00\x10\x00LIST\x04\x00\x00\x00abcddata")...)
+		sz := make([]byte, 4)
+		binary.LittleEndian.PutUint32(sz, uint32(dataBytes))
+		hdr = append(hdr, sz...)
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, append(hdr, make([]byte, dataBytes)...), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if got := WavSeconds(mk("a.wav", 48000, 48000*12)); got != 12 {
+		t.Errorf("12 s file read as %v", got)
+	}
+	if got := WavSeconds(mk("b.wav", 48000, 24000)); got != 0.5 {
+		t.Errorf("0.5 s file read as %v", got)
+	}
+	junk := filepath.Join(dir, "junk.wav")
+	_ = os.WriteFile(junk, []byte("ID3 not a wav"), 0o644)
+	if WavSeconds(junk) != 0 || WavSeconds(filepath.Join(dir, "missing.wav")) != 0 {
+		t.Error("unreadable files must read as 0")
 	}
 }

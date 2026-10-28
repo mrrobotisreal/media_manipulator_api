@@ -112,6 +112,11 @@ type VoicesHandler struct {
 	now   func() time.Time
 	// async starts a job goroutine; tests run it inline.
 	async func(func())
+	// studio is the Darkroom side of POST /studio/projects/:id/voiceover
+	// (MM79); nil = that route answers 503 and capabilities say voices:false.
+	studio voiceoverStudio
+	// created is the server_voice_created seam (MM79); nil = off.
+	created func(c *gin.Context, kind, languageHint, tier string)
 }
 
 // VoicesDeps wires the handler. Store/Objects may be nil (no database / no
@@ -586,6 +591,9 @@ func (h *VoicesHandler) finishVoice(c *gin.Context, vc voiceCaller, voice *telem
 			return
 		}
 		registerS3Object(c, obj.key, created.ID, "", "", size)
+	}
+	if h.created != nil {
+		h.created(c, created.Kind, created.LanguageHint, string(vc.tier))
 	}
 	c.JSON(http.StatusCreated, h.voiceJSON(ctx, created))
 }

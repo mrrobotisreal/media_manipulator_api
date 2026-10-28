@@ -71,6 +71,14 @@ func voicesPreCharge() gin.HandlerFunc {
 				return
 			}
 		}
+		// MM79: a saved voice in the Darkroom voiceover needs an account; 401
+		// before the ai_ops charge.
+		if c.Request.Method == http.MethodPost && handlers.IsStudioVoiceoverPath(c.Request.URL.Path) {
+			handlers.StudioVoiceoverPreChargeGate(c)
+			if c.IsAborted() {
+				return
+			}
+		}
 		c.Next()
 	}
 }
