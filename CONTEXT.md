@@ -43,3 +43,14 @@ Pro's own `Vector*` limits (`TIER_PRO_VECTOR_*`): 150 exports/day, Premium's for
 **Billing currency** (MM69):
 `usd` or `eur` (`billing.CurrencyUSD` / `CurrencyEUR`), sold at the same numerals. A Checkout Session always carries one: the request's, or the Stripe Customer's locked currency, which takes precedence (a mismatch answers 409 `currency_locked`). `mm_users.billing_currency` mirrors `Subscription.currency`, and `mm_user_settings.currency` stores the user's choice. The geographic default (`BILLING_EUR_COUNTRIES`) is display-only and is never used to charge.
 _Avoid_: converting amounts, adding USD and EUR together, or reading the currency from the item price, which is only the multi-currency Price's default.
+
+**Voices** (MM77, ADR-0015):
+The feature: clone a voice from the user's own 5-60 s clip, design one from a text description, speak text in a saved or preset voice, convert a recording to a voice, and shift pitch/formant. Routes `/api/voices/*`, jobs `voice_tts` | `voice_convert` | `voice_shift` (the `mode` column carries the voice id or preset name), tier fields `voices*`, env `VOICES_*` and `TIER_*_VOICES_*`.
+_Avoid_: "TTS" or "clone" as the feature name in identifiers; "voiceover" (that is Darkroom's recorded narration, MM79 builds on voices for it).
+
+**mm_voices**:
+The table of saved voices: always owned by a signed-in account (anonymous visitors cannot save one), `kind` cloned | designed | preset, a consent record (`consent_at`, `consent_text_version`) required for a cloned voice, soft delete then sweep. Ledger kind `voice`; its reference clip and preview are `s3_object` rows under `voices/<userId>/<voiceId>/` with the voice id as parent.
+
+**mm-voices**:
+The resident FastAPI service on the GPU host (`scripts/server/voices_service.py`, unit `deploy/mm-voices.service`, `127.0.0.1:8791`, GPU 0) that holds Chatterbox Multilingual and Qwen3-TTS and answers the API's `internal/services/voices_client.go`. Files travel by path under the shared `VOICES_SCRATCH_DIR`. Not a per-job subprocess, unlike every other AI tool here.
+_Avoid_: calling it "the voices API" (that is `/api/voices` in this repo).
