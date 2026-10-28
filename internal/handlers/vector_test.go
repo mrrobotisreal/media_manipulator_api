@@ -233,6 +233,10 @@ func (vectorUserStore) IncrementUsage(context.Context, models.UsageSubjectKind, 
 	return 1, nil
 }
 
+func (vectorUserStore) DecrementUsage(context.Context, models.UsageSubjectKind, string, string, time.Time) (int64, error) {
+	return 0, nil
+}
+
 type vecEnv struct {
 	t       *testing.T
 	store   *fakeVectorStore

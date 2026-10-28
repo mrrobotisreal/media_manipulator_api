@@ -215,6 +215,40 @@ RETURNING count`
 	return count, err
 }
 
+// DecrementUsage gives back one unit previously taken by IncrementUsage for
+// (subjectKind, subjectKey, metric) on a day, and returns the count after the
+// refund.
+//
+// The quota middleware spends a unit BEFORE the handler runs, because that is
+// the only place a concurrent over-spend can be stopped. When the handler then
+// refuses the request (oversized upload, over-limit framerate, unsupported
+// file) or the pipeline later fails, no work was delivered and the unit comes
+// back here. The floor at zero means a refund can never create credit: a day
+// that was never charged stays at zero, and a refund that races a midnight
+// rollover is dropped rather than applied to the wrong day.
+func (s *Store) DecrementUsage(ctx context.Context, subjectKind models.UsageSubjectKind, subjectKey, metric string, day time.Time) (int64, error) {
+	if !s.Enabled() {
+		return 0, ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+
+	const q = `
+UPDATE mm_usage_counters
+SET count = GREATEST(count - 1, 0), updated_at = now()
+WHERE subject_kind = $1 AND subject_key = $2 AND metric = $3 AND day = $4
+RETURNING count`
+
+	var count int64
+	err := s.Pool.QueryRow(ctx, q, string(subjectKind), subjectKey, metric, day.UTC().Format("2006-01-02")).Scan(&count)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Nothing was ever counted for this subject today; there is nothing
+		// to give back, and that is not an error.
+		return 0, nil
+	}
+	return count, err
+}
+
 // UsageForDay returns every metric counted for a subject on one UTC day, as a
 // metric → count map. A subject with no activity returns an empty map, not an
 // error.

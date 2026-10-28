@@ -79,6 +79,15 @@ type JobFacts struct {
 	TargetFormat string
 }
 
+// QuotaRefunder gives back the allowance unit a job's creating request spent.
+// middleware.QuotaCharge satisfies it; the interface lives here so the job model
+// has no dependency on the HTTP layer. A nil refunder is an uncharged job
+// (quota off, uncounted tier, ungated route) and is a no-op.
+type QuotaRefunder interface {
+	// Refund returns the unit once; later calls are no-ops. reason is for logs.
+	Refund(reason string) bool
+}
+
 type JobManager struct {
 	jobs       map[string]*models.ConversionJob
 	mu         sync.RWMutex
@@ -113,6 +122,12 @@ type JobManager struct {
 	// by emitMu.
 	ownerByJob map[string]JobOwner
 
+	// quotaByJob is the allowance unit each job's request spent, kept so a
+	// pipeline failure can give it back long after the request is gone. Lives
+	// exactly as long as the job (swept by ForgetJob/CleanupOldJobs). Guarded
+	// by emitMu.
+	quotaByJob map[string]QuotaRefunder
+
 	// MM31: lastPoll is when a client last read a job's status (GET status, or an
 	// open SSE stream). notifier gets the one "AI job finished" callback for long
 	// jobs nobody was watching. Both guarded by emitMu.
@@ -130,6 +145,7 @@ func NewJobManager() *JobManager {
 		recFlush:    make(chan chan struct{}, 4),
 		emitOwners:  make(map[string]jobEmitContext),
 		ownerByJob:  make(map[string]JobOwner),
+		quotaByJob:  make(map[string]QuotaRefunder),
 		lastPoll:    make(map[string]time.Time),
 		notified:    make(map[string]struct{}),
 	}
@@ -204,6 +220,40 @@ func (jm *JobManager) SetJobOwner(jobID string, owner JobOwner) {
 	}
 	jm.ownerByJob[jobID] = owner
 	jm.emitMu.Unlock()
+}
+
+// SetJobQuotaCharge attaches the allowance unit a job's request spent, so the
+// job can refund it if it fails. Called by the handler layer right after
+// RecordJobCreated. A nil charge is ignored.
+func (jm *JobManager) SetJobQuotaCharge(jobID string, charge QuotaRefunder) {
+	if jm == nil || jobID == "" || charge == nil {
+		return
+	}
+	jm.emitMu.Lock()
+	if jm.quotaByJob == nil {
+		jm.quotaByJob = make(map[string]QuotaRefunder)
+	}
+	jm.quotaByJob[jobID] = charge
+	jm.emitMu.Unlock()
+}
+
+// refundQuota gives a failed job's allowance unit back, once. The entry is
+// removed on first use so a job that fails and is then re-marked failed by a
+// second path (the handler's rejection, then the middleware's 4xx sweep) can
+// only ever refund one unit; the charge itself is idempotent as well.
+func (jm *JobManager) refundQuota(jobID, reason string) {
+	if jm == nil || jobID == "" {
+		return
+	}
+	jm.emitMu.Lock()
+	charge, ok := jm.quotaByJob[jobID]
+	if ok {
+		delete(jm.quotaByJob, jobID)
+	}
+	jm.emitMu.Unlock()
+	if ok && charge != nil {
+		charge.Refund(reason)
+	}
 }
 
 // JobOwnerOf returns the recorded owner of a job; ok is false when none was
@@ -549,6 +599,10 @@ func (jm *JobManager) UpdateJobStatus(jobID string, status models.JobStatus) err
 		}
 	}
 	jm.mu.Unlock()
+	if status == models.StatusFailed {
+		// Nothing was delivered: the unit this job's request spent comes back.
+		jm.refundQuota(jobID, "job_failed")
+	}
 	jm.notifySubscribers(jobID)
 	jm.recordTransition(jobID)
 	return nil
@@ -740,6 +794,10 @@ func (jm *JobManager) UpdateJobError(jobID string, errorMsg string) error {
 	now := time.Now().UTC()
 	job.CompletedAt = &now
 	jm.mu.Unlock()
+	// A failed job never counts against the day's allowance, whatever the
+	// reason: an over-limit source refused by the handler, an ffmpeg error, a
+	// model that would not load. The unit its request spent comes back.
+	jm.refundQuota(jobID, "job_failed")
 	jm.notifySubscribers(jobID)
 	jm.recordTransition(jobID)
 	return nil
@@ -815,6 +873,11 @@ func (jm *JobManager) CleanupOldJobs(maxAge time.Duration) {
 	for jobID := range jm.ownerByJob {
 		if _, ok := live[jobID]; !ok {
 			delete(jm.ownerByJob, jobID)
+		}
+	}
+	for jobID := range jm.quotaByJob {
+		if _, ok := live[jobID]; !ok {
+			delete(jm.quotaByJob, jobID)
 		}
 	}
 	for jobID := range jm.lastPoll {

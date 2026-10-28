@@ -225,6 +225,19 @@ func (s *stubQuotaStore) IncrementUsage(_ context.Context, kind models.UsageSubj
 	return s.counts[k], nil
 }
 
+func (s *stubQuotaStore) DecrementUsage(_ context.Context, kind models.UsageSubjectKind, key, metric string, _ time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.counts == nil {
+		return 0, nil
+	}
+	k := string(kind) + "|" + key + "|" + metric
+	if s.counts[k] > 0 {
+		s.counts[k]--
+	}
+	return s.counts[k], nil
+}
+
 // quotaTestRouter mounts the dispatcher exactly the way setupRouter does:
 // on the group, before any route is registered.
 func quotaTestRouter(store middleware.QuotaStore, registry *tiers.Registry) *gin.Engine {
@@ -454,5 +467,111 @@ func TestSystemHealthRouteIsPublicAndNotQuotaCharged(t *testing.T) {
 		if strings.Contains(r.path, "system/health") {
 			t.Fatal("health must not be a quota route")
 		}
+	}
+}
+
+// A request the handler refuses (oversized file, over-limit framerate,
+// unsupported type) delivered nothing, so the unit the dispatcher spent on it
+// must come back. Five refusals in a row must leave the full allowance intact,
+// and a 429 must only ever follow five genuinely accepted requests.
+func TestQuotaRefundsRejectedRequests(t *testing.T) {
+	cfg := config.Load()
+	store := &stubQuotaStore{}
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := r.Group("/api")
+	api.Use(quotaDispatcher(middleware.QuotaConfig{
+		Store:        store,
+		Registry:     tiers.New(cfg),
+		Enabled:      true,
+		IPHashSecret: quotaIPSalt[:],
+	}))
+	api.POST("/upload", func(c *gin.Context) {
+		if c.GetHeader("X-Test-Reject") != "" {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "Video framerate 90000.0fps exceeds the limit of 120 fps.", "reason": "video_fps"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	post := func(reject bool) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/upload", nil)
+		req.Header.Set("X-MM-Session-ID", "session-r")
+		if reject {
+			req.Header.Set("X-Test-Reject", "1")
+		}
+		r.ServeHTTP(w, req)
+		return w
+	}
+
+	for i := 0; i < cfg.TierAnonOpsPerDay*3; i++ {
+		if w := post(true); w.Code != http.StatusRequestEntityTooLarge {
+			t.Fatalf("rejection %d: expected the handler's 413, got %d (%s)", i, w.Code, w.Body.String())
+		}
+	}
+	store.mu.Lock()
+	used := store.counts["session|session-r|ops"]
+	store.mu.Unlock()
+	if used != 0 {
+		t.Fatalf("rejected requests landed in the ledger: %d units counted", used)
+	}
+
+	for i := 1; i <= cfg.TierAnonOpsPerDay; i++ {
+		if w := post(false); w.Code != http.StatusOK {
+			t.Fatalf("accepted request %d: expected 200 after refunds, got %d (%s)", i, w.Code, w.Body.String())
+		}
+	}
+	if w := post(false); w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 after the real allowance, got %d", w.Code)
+	}
+}
+
+// The refund covers the handler's own failures too (a 500 saving the file is
+// not the visitor's fault), but never the 429 itself: that unit was the one
+// over the line and is correctly counted.
+func TestQuotaRefundsServerErrorsButNotTheOverLimit429(t *testing.T) {
+	cfg := config.Load()
+	store := &stubQuotaStore{}
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := r.Group("/api")
+	api.Use(quotaDispatcher(middleware.QuotaConfig{
+		Store:        store,
+		Registry:     tiers.New(cfg),
+		Enabled:      true,
+		IPHashSecret: quotaIPSalt[:],
+	}))
+	api.POST("/upload", func(c *gin.Context) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/upload", nil)
+	req.Header.Set("X-MM-Session-ID", "session-e")
+	r.ServeHTTP(w, req)
+	store.mu.Lock()
+	used := store.counts["session|session-e|ops"]
+	store.mu.Unlock()
+	if used != 0 {
+		t.Fatalf("a 500 must be refunded, ledger shows %d", used)
+	}
+
+	// Spend the whole allowance on a route that accepts, then confirm the 429
+	// does not refund (the ledger stays at limit+1, as before).
+	api.POST("/image-restore/start", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	for i := 0; i <= cfg.TierAnonAIOpsPerDay; i++ {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/image-restore/start", nil)
+		req.Header.Set("X-MM-Session-ID", "session-e")
+		r.ServeHTTP(w, req)
+		if i == cfg.TierAnonAIOpsPerDay && w.Code != http.StatusTooManyRequests {
+			t.Fatalf("expected 429 on request %d, got %d", i, w.Code)
+		}
+	}
+	store.mu.Lock()
+	aiUsed := store.counts["session|session-e|ai_ops"]
+	store.mu.Unlock()
+	if aiUsed != int64(cfg.TierAnonAIOpsPerDay)+1 {
+		t.Fatalf("the over-limit 429 must not refund itself: ledger %d, want %d", aiUsed, cfg.TierAnonAIOpsPerDay+1)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -33,6 +34,82 @@ type QuotaStore interface {
 	Enabled() bool
 	UserByFirebaseUID(ctx context.Context, firebaseUID string) (*models.User, error)
 	IncrementUsage(ctx context.Context, subjectKind models.UsageSubjectKind, subjectKey, metric string, day time.Time) (int64, error)
+	// DecrementUsage gives one unit back. Implementations floor at zero and
+	// treat "no row for that day" as nothing to refund, not as an error.
+	DecrementUsage(ctx context.Context, subjectKind models.UsageSubjectKind, subjectKey, metric string, day time.Time) (int64, error)
+}
+
+// CtxQuotaCharge is the gin context key under which RequireQuota leaves the
+// unit it spent on this request. Read it through QuotaChargeOf, never by key.
+const CtxQuotaCharge = "mm_quota_charge"
+
+// QuotaCharge is one unit of allowance spent by RequireQuota, with everything
+// needed to give it back. A charge is refunded when the request is refused
+// after the middleware ran (a 4xx from the handler: oversized upload, over-limit
+// framerate, unsupported file) or when the job it paid for later fails; in both
+// cases nothing was delivered, so nothing should be counted.
+type QuotaCharge struct {
+	SubjectKind models.UsageSubjectKind
+	SubjectKey  string
+	Metric      string
+	// Day is the UTC day the unit landed on, so a refund that crosses midnight
+	// goes back to the day that was charged rather than to a fresh one.
+	Day time.Time
+
+	store  QuotaStore
+	logger *slog.Logger
+	// refunded makes Refund idempotent: the handler's 4xx path and a later
+	// pipeline failure can both try, and only the first gives the unit back.
+	refunded atomic.Bool
+}
+
+// Refund returns the unit to the ledger. Safe to call more than once, from any
+// goroutine, and long after the request that charged it has finished (the
+// pipeline failure path): it carries its own store reference and uses a fresh
+// context. Returns true when this call performed the refund.
+func (q *QuotaCharge) Refund(reason string) bool {
+	if q == nil || q.store == nil || !q.refunded.CompareAndSwap(false, true) {
+		return false
+	}
+	logger := q.logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := q.store.DecrementUsage(ctx, q.SubjectKind, q.SubjectKey, q.Metric, q.Day); err != nil {
+		// Fail open in the user's favour was the charge's posture; a failed
+		// refund is the one case where the ledger over-counts, so it is logged
+		// at warning rather than silently dropped.
+		logger.Warn("quota: refund failed",
+			"metric", q.Metric, "subject_kind", string(q.SubjectKind), "reason", reason, "error", err.Error())
+		return false
+	}
+	return true
+}
+
+// QuotaChargeOf returns the unit RequireQuota spent on this request, or nil
+// when nothing was charged (uncounted tier, quota disabled, store down, or a
+// route that is not gated). Handlers that create a job hand the charge to the
+// job so a pipeline failure can refund it; handlers that refuse the request do
+// not need to touch it, RefundOnRejection does that.
+func QuotaChargeOf(c *gin.Context) *QuotaCharge {
+	if c == nil {
+		return nil
+	}
+	v, ok := c.Get(CtxQuotaCharge)
+	if !ok {
+		return nil
+	}
+	charge, _ := v.(*QuotaCharge)
+	return charge
+}
+
+// QuotaRefunder is the slice of QuotaCharge a job needs: just the ability to
+// give the unit back once. *QuotaCharge satisfies it; a nil interface is a
+// no-op everywhere, which is what an uncharged job carries.
+type QuotaRefunder interface {
+	Refund(reason string) bool
 }
 
 // QuotaConfig is everything RequireQuota needs that is not per-request.
@@ -212,6 +289,15 @@ func RequireQuota(cfg QuotaConfig, metric string) gin.HandlerFunc {
 			c.Next()
 			return
 		}
+		charge := &QuotaCharge{
+			SubjectKind: subject.kind,
+			SubjectKey:  subject.key,
+			Metric:      metric,
+			Day:         now,
+			store:       cfg.Store,
+			logger:      logger,
+		}
+		c.Set(CtxQuotaCharge, charge)
 
 		remaining := limit - count
 		if remaining < 0 {
@@ -240,5 +326,21 @@ func RequireQuota(cfg QuotaConfig, metric string) gin.HandlerFunc {
 		}
 
 		c.Next()
+
+		// The handler has run. A request it refused (any 4xx; a 5xx is our
+		// failure, not theirs, and is refunded too) delivered nothing, so the
+		// unit goes back. A 2xx that started a job keeps its charge: the job
+		// carries it (handlers pass QuotaChargeOf(c) to the job manager) and
+		// refunds it itself if the pipeline fails. The over-limit 429 above
+		// never reaches this line because the request was aborted there, and
+		// that charge is correct: the allowance was spent before it.
+		//
+		// The X-MM-Quota-Remaining header on such a response still shows the
+		// charged value: gin writes headers with the body, so they cannot be
+		// corrected here. The UI treats quota headers on a non-2xx response as
+		// stale and re-reads /api/account/usage instead.
+		if status := c.Writer.Status(); status >= 400 {
+			charge.Refund("rejected_" + strconv.Itoa(status))
+		}
 	}
 }

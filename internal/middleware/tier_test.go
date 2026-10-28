@@ -34,6 +34,10 @@ func (s *countingStore) IncrementUsage(context.Context, models.UsageSubjectKind,
 	return 1, nil
 }
 
+func (s *countingStore) DecrementUsage(context.Context, models.UsageSubjectKind, string, string, time.Time) (int64, error) {
+	return 0, nil
+}
+
 func tierTestRouter(t *testing.T, store QuotaStore, enabled bool, handler gin.HandlerFunc) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)

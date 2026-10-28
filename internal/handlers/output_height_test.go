@@ -147,3 +147,7 @@ func (s userStore) UserByFirebaseUID(context.Context, string) (*models.User, err
 func (userStore) IncrementUsage(context.Context, models.UsageSubjectKind, string, string, time.Time) (int64, error) {
 	return 1, nil
 }
+
+func (userStore) DecrementUsage(context.Context, models.UsageSubjectKind, string, string, time.Time) (int64, error) {
+	return 0, nil
+}

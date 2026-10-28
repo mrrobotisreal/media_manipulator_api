@@ -27,6 +27,10 @@ func (s *jobRecordStore) IncrementUsage(_ context.Context, _ models.UsageSubject
 	return 1, nil
 }
 
+func (s *jobRecordStore) DecrementUsage(context.Context, models.UsageSubjectKind, string, string, time.Time) (int64, error) {
+	return 0, nil
+}
+
 // ownerTestContext builds a request context with the tier resolver installed the
 // way the /api group installs it.
 func ownerTestContext(t *testing.T, user *models.User, signedIn bool, headers map[string]string) *gin.Context {

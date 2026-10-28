@@ -26,6 +26,9 @@ type ffprobeStream struct {
 	SampleRate         string            `json:"sample_rate"`
 	Channels           int               `json:"channels"`
 	Tags               map[string]string `json:"tags"`
+	Disposition        struct {
+		AttachedPic int `json:"attached_pic"`
+	} `json:"disposition"`
 }
 
 type ffprobeFormat struct {
@@ -73,6 +76,13 @@ func ProbeVideoReport(ctx context.Context, inputPath string) (*models.VideoProbe
 	for _, stream := range res.Streams {
 		switch stream.CodecType {
 		case "video":
+			// Embedded cover art / poster frames are "video" streams to ffprobe
+			// (one PNG/MJPEG picture, attached_pic=1, r_frame_rate = the 90 kHz
+			// timebase). Skip them: they are not the picture being transcoded
+			// and their timebase is not a frame rate.
+			if stream.Disposition.AttachedPic != 0 {
+				continue
+			}
 			if out.Width == 0 && stream.Width > 0 {
 				out.Width = stream.Width
 			}

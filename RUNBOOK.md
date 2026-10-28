@@ -504,6 +504,18 @@ Every number the product promises resolves through `internal/tiers` (fed by
 `TIER_*` env vars; `/pricing` renders `GET /api/tiers`). `TIER_QUOTA_ENABLED`
 (default `true`) is the single kill switch for the whole tier system.
 
+**Only delivered work counts (2026-10-28).** `RequireQuota` spends a unit
+*before* the handler runs (the only place a concurrent over-spend can be
+stopped) and leaves a `middleware.QuotaCharge` on the request. The unit is
+given back (`Store.DecrementUsage`, floored at zero, same UTC day) in two cases:
+the handler answered 4xx/5xx (oversized or over-limit source, unsupported type,
+a save failure), which the middleware refunds itself after `c.Next()`; or the
+job the request started later fails, which `JobManager` refunds through the
+charge `recordJobCreated` attached to the job (`SetJobQuotaCharge`). A refund is
+idempotent and the over-limit 429 is never refunded. The `X-MM-Quota-*` headers
+on a refused response were written before the refund and overstate usage by
+one; the UI discards them on non-2xx and re-reads `/api/account/usage`.
+
 The **operator** tier is the site's own people. It is not a plan: it does not
 appear in `/api/tiers`, cannot be stored on `mm_users` (the CHECK forbids it),
 and `cmd/grant-tier` cannot grant it. It is re-derived on **every request** from

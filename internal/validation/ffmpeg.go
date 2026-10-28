@@ -203,6 +203,9 @@ func ParseProbeJSON(out []byte) (*ProbeReport, error) {
 			AvgFrameRate string `json:"avg_frame_rate"`
 			RFrameRate   string `json:"r_frame_rate"`
 			Duration     string `json:"duration"`
+			Disposition  struct {
+				AttachedPic int `json:"attached_pic"`
+			} `json:"disposition"`
 		} `json:"streams"`
 		Format struct {
 			Duration string `json:"duration"`
@@ -215,6 +218,15 @@ func ParseProbeJSON(out []byte) (*ProbeReport, error) {
 	for _, s := range raw.Streams {
 		switch s.CodecType {
 		case "video":
+			// Cover art (an MP3 with embedded album art, an M4A with a
+			// thumbnail) shows up as a "video" stream too: a single PNG/MJPEG
+			// frame flagged attached_pic, with avg_frame_rate 0/0 and an
+			// r_frame_rate equal to the container timebase (90000/1). It is
+			// not a video, must not make an audio file count as one, and its
+			// timebase must never be read as "90000 fps".
+			if s.Disposition.AttachedPic != 0 || isStillImageCodec(s.CodecName) {
+				continue
+			}
 			report.HasVideo = true
 			if s.Width > report.Width {
 				report.Width = s.Width
@@ -222,9 +234,7 @@ func ParseProbeJSON(out []byte) (*ProbeReport, error) {
 			if s.Height > report.Height {
 				report.Height = s.Height
 			}
-			if fps := parseFrameRate(s.AvgFrameRate); fps > report.FPS {
-				report.FPS = fps
-			} else if fps := parseFrameRate(s.RFrameRate); fps > report.FPS {
+			if fps := streamFrameRate(s.AvgFrameRate, s.RFrameRate); fps > report.FPS {
 				report.FPS = fps
 			}
 			if report.VideoCodec == "" {
@@ -253,6 +263,33 @@ func ParseProbeJSON(out []byte) (*ProbeReport, error) {
 		return report, errors.New("ffprobe found neither video nor audio streams")
 	}
 	return report, nil
+}
+
+// streamFrameRate picks the frame rate to validate a video stream by.
+//
+// avg_frame_rate is the real rate (frames / duration). r_frame_rate is only
+// "the smallest rate every timestamp fits in", which for variable-frame-rate
+// sources and for anything demuxed with a 90 kHz timebase can be absurdly high
+// (1000/1, 90000/1) while the picture plays at 30 fps. It is used only when the
+// average is unknown (a stream with no duration yet, e.g. a raw elementary
+// stream), never to override a known average.
+func streamFrameRate(avg, r string) float64 {
+	if fps := parseFrameRate(avg); fps > 0 {
+		return fps
+	}
+	return parseFrameRate(r)
+}
+
+// isStillImageCodec reports whether a "video" stream is really a single picture
+// (album art, a poster frame, an embedded thumbnail). Older ffprobe builds do
+// not always set disposition.attached_pic for these, so the codec is checked as
+// well.
+func isStillImageCodec(codec string) bool {
+	switch strings.ToLower(strings.TrimSpace(codec)) {
+	case "png", "mjpeg", "bmp", "gif", "tiff", "webp", "jpegls", "jpeg2000", "ppm", "pgm", "pam", "targa", "sgi", "heic", "avif":
+		return true
+	}
+	return false
 }
 
 // parseFrameRate parses ffprobe's fractional fps string e.g. "30000/1001".

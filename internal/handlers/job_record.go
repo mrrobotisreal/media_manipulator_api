@@ -39,6 +39,12 @@ func recordJobCreated(c *gin.Context, jm *services.JobManager, job *models.Conve
 		return
 	}
 	jm.RecordJobCreated(c.Request.Context(), job.ID, jobOwnerFor(c), facts)
+	// The allowance unit RequireQuota spent on this request now belongs to the
+	// job: if the pipeline fails, the job gives it back. Typed-nil guard: a
+	// nil *QuotaCharge must not become a non-nil interface.
+	if charge := middleware.QuotaChargeOf(c); charge != nil {
+		jm.SetJobQuotaCharge(job.ID, charge)
+	}
 }
 
 // jobOwnerFor assembles who is running this job.

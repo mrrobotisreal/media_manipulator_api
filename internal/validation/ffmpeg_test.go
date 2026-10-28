@@ -163,3 +163,84 @@ func TestParseFrameRate(t *testing.T) {
 		}
 	}
 }
+
+// An MP3 (or M4A) with embedded album art shows up in ffprobe with a second,
+// "video" stream: one PNG/MJPEG frame flagged attached_pic, avg_frame_rate 0/0
+// and r_frame_rate equal to the 90 kHz container timebase. That is not a video
+// and its timebase is not a frame rate. Before this test the parser reported
+// HasVideo=true and FPS=90000, and a user's "remove vocals" job was refused with
+// "Video framerate 90000.0fps exceeds the limit of 120 fps."
+func TestParseProbeJSON_SkipsEmbeddedCoverArt(t *testing.T) {
+	raw := []byte(`{
+	  "streams": [
+	    {"index":0,"codec_type":"audio","codec_name":"mp3","avg_frame_rate":"0/0","r_frame_rate":"0/0","duration":"2.0"},
+	    {"index":1,"codec_type":"video","codec_name":"png","width":320,"height":240,
+	     "avg_frame_rate":"0/0","r_frame_rate":"90000/1","disposition":{"attached_pic":1}}
+	  ],
+	  "format": {"duration":"2.0"}
+	}`)
+	report, err := ParseProbeJSON(raw)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if report.HasVideo {
+		t.Errorf("cover art must not make an audio file a video: %+v", report)
+	}
+	if !report.HasAudio || report.AudioCodec != "mp3" {
+		t.Errorf("audio stream lost: %+v", report)
+	}
+	if report.FPS != 0 || report.Width != 0 {
+		t.Errorf("cover art dimensions/fps leaked into the report: %+v", report)
+	}
+	if err := ValidateVideo(cfg(), nil, report); err != nil {
+		t.Errorf("an mp3 with cover art must validate, got %v", err)
+	}
+}
+
+// Older ffprobe builds do not always flag attached_pic; the still-image codec
+// alone is enough to tell a cover from a picture track.
+func TestParseProbeJSON_SkipsStillImageCodecWithoutDisposition(t *testing.T) {
+	raw := []byte(`{
+	  "streams": [
+	    {"index":0,"codec_type":"audio","codec_name":"aac","duration":"3.0"},
+	    {"index":1,"codec_type":"video","codec_name":"mjpeg","width":600,"height":600,"avg_frame_rate":"0/0","r_frame_rate":"90000/1"}
+	  ],
+	  "format": {"duration":"3.0"}
+	}`)
+	report, err := ParseProbeJSON(raw)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if report.HasVideo || report.FPS != 0 {
+		t.Errorf("mjpeg cover art treated as video: %+v", report)
+	}
+}
+
+// avg_frame_rate is the real rate; r_frame_rate is only the finest timestamp
+// grid and is wildly high for variable-frame-rate screen recordings. The real
+// rate must win whenever it is known.
+func TestParseProbeJSON_PrefersAverageOverNominalFrameRate(t *testing.T) {
+	raw := []byte(`{
+	  "streams": [
+	    {"index":0,"codec_type":"video","codec_name":"h264","width":1920,"height":1080,
+	     "avg_frame_rate":"30000/1001","r_frame_rate":"1000/1","duration":"10.0"}
+	  ],
+	  "format": {"duration":"10.0"}
+	}`)
+	report, err := ParseProbeJSON(raw)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if report.FPS < 29.9 || report.FPS > 30.0 {
+		t.Errorf("FPS = %v, want ~29.97 (avg_frame_rate), not 1000 (r_frame_rate)", report.FPS)
+	}
+	// Only when the average is unknown does the nominal rate stand in.
+	raw2 := []byte(`{"streams":[{"codec_type":"video","codec_name":"h264","width":1280,"height":720,"avg_frame_rate":"0/0","r_frame_rate":"60/1"}],"format":{}}`)
+	report2, err := ParseProbeJSON(raw2)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if report2.FPS != 60 {
+		t.Errorf("FPS fallback = %v, want 60", report2.FPS)
+	}
+}
