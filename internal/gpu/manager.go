@@ -36,6 +36,10 @@ const (
 	// BasicVSR++, RVRT, VRT); realesrgan-ncnn runs keep using TaskRealESRGAN.
 	TaskRestoreSR TaskType = "restore_sr"
 	TaskOther     TaskType = "other"
+	// TaskVoices is a call into the resident mm-voices service (MM77): the
+	// lease is held for the whole synthesis / conversion so a restoration job
+	// does not land on the same card mid-request.
+	TaskVoices TaskType = "voices"
 )
 
 // Device represents a single GPU known to the scheduler.
@@ -257,6 +261,12 @@ func (m *Manager) pickDevice(task TaskType) Device {
 	case TaskRestoreSR:
 		// PyTorch restoration models are pinned to the big-VRAM card.
 		pref = fmt.Sprintf("cuda:%d", m.Cfg.AIRestoreCUDAGPU)
+	case TaskVoices:
+		// mm-voices is pinned to one card by its unit; default cuda:0.
+		pref = m.Cfg.GPUSchedulerDefaultVoicesDevice
+		if pref == "" {
+			pref = "cuda:0"
+		}
 	}
 	if pref != "" {
 		if d, ok := m.devices[pref]; ok {

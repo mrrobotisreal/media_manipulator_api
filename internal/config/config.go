@@ -576,6 +576,10 @@ type Config struct {
 	DRDesktopMacArm64Key string
 	DRDesktopMacIntelKey string
 	DRDesktopWindowsKey  string
+
+	// Voices (MM77): see voices.go. Filled by applyVoicesConfig.
+	Voices                          VoicesConfig
+	GPUSchedulerDefaultVoicesDevice string
 }
 
 func Load() *Config {
@@ -983,6 +987,7 @@ func Load() *Config {
 		DRDesktopWindowsKey:  getEnv("DR_DESKTOP_WINDOWS_KEY", "double-raven/desktop/windows/Double Raven Portal Setup 0.1.0.exe"),
 	}
 	applyProTierDefaults(cfg)
+	applyVoicesConfig(cfg)
 	return cfg
 }
 
