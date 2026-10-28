@@ -111,14 +111,25 @@ func SummarizeSignInGate() gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		if res.Limits.SummaryMaxFrames <= 0 {
+		if res.Limits.SummaryMaxFrames > 0 {
+			return
+		}
+		if res.Tier == tiers.TierAnonymous {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":       "signin_required",
 				"message":     "Sign in to summarize videos",
 				"tier":        string(res.Tier),
 				"upgradePath": "signup",
 			})
+			return
 		}
+		// A signed-in tier whose budget an operator set to 0.
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error":       "summary_not_in_plan",
+			"message":     "Video summaries are not included in your plan",
+			"tier":        string(res.Tier),
+			"upgradePath": "premium",
+		})
 	}
 }
 

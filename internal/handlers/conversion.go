@@ -809,6 +809,9 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 	if name == "" {
 		name = "converted"
 	}
+	if isVideoSummaryJob(job) {
+		return name + "_summary.md"
+	}
 	if isTranscribeMode(job) {
 		return fmt.Sprintf("%s_transcript%s", name, h.getOutputExtension(job))
 	}
@@ -842,6 +845,10 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 }
 
 func (h *ConversionHandler) outputPath(job *models.ConversionJob, outputDir string) string {
+	// MM74: a video summary's downloadable result is summary.md.
+	if isVideoSummaryJob(job) {
+		return filepath.Join(outputDir, services.SummaryMarkdownFile)
+	}
 	if isTranscribeMode(job) {
 		return filepath.Join(outputDir, "transcript"+h.getOutputExtension(job))
 	}
@@ -868,6 +875,11 @@ func (h *ConversionHandler) outputPath(job *models.ConversionJob, outputDir stri
 		return filepath.Join(outputDir, "image_restoration_results.tar.gz")
 	}
 	return filepath.Join(outputDir, "converted"+h.getOutputExtension(job))
+}
+
+// isVideoSummaryJob reports whether a job is an MM74 video summary.
+func isVideoSummaryJob(job *models.ConversionJob) bool {
+	return job != nil && strings.EqualFold(strings.TrimSpace(job.Mode), models.VideoSummaryMode)
 }
 
 // isImageRestoreMode reports whether a job is an AI Image Restoration job.

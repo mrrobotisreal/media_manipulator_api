@@ -96,7 +96,9 @@ func parseShowinfoTimes(stderr string) []float64 {
 // from showinfo. No image is written: which frames to keep is PlanFrames'
 // decision, made in Go so it can be tested.
 func detectSceneTimes(ctx context.Context, inputPath string, threshold float64) ([]float64, error) {
-	filter := fmt.Sprintf("select='gt(scene,%s)',showinfo", strconv.FormatFloat(threshold, 'f', 2, 64))
+	// Scene scores are computed on a 320 px copy: cheap on 4K sources, and the
+	// cut detection does not need detail. showinfo reports source timestamps.
+	filter := fmt.Sprintf("scale=320:-2,select='gt(scene,%s)',showinfo", strconv.FormatFloat(threshold, 'f', 2, 64))
 	_, stderr, err := runCommand(ctx, "ffmpeg", "-hide_banner", "-nostats", "-i", inputPath, "-an", "-vf", filter, "-vsync", "vfr", "-f", "null", "-")
 	if err != nil {
 		return nil, fmt.Errorf("scene detection: %w: %s", err, tail(stderr, 1200))

@@ -514,3 +514,37 @@ func TestSummarizeSignInGateWithoutTierSystemStaysOut(t *testing.T) {
 		t.Fatal("with no tier resolution the gate must not refuse (the handler decides)")
 	}
 }
+
+// /api/download/:jobId (the link account History lists) serves summary.md
+// for a finished summary job, owner only.
+func TestSummaryJobDownloadServesMarkdown(t *testing.T) {
+	SetResultOwnershipEnforce(true)
+	f := newSummaryFixture(t, "free", false)
+	job := completedSummaryJob(t, f)
+	conv := &ConversionHandler{jobManager: f.jm, cfg: f.cfg}
+	r := gin.New()
+	r.GET("/api/download/:jobId", conv.DownloadFile)
+	req := httptest.NewRequest(http.MethodGet, "/api/download/"+job.ID, nil)
+	req.Header.Set("X-MM-Session-ID", "sess-owner")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK || w.Body.String() != "# Title\n\nBody.\n" || !strings.Contains(w.Header().Get("Content-Disposition"), "talk_summary.md") {
+		t.Fatalf("download: %d %q %v", w.Code, w.Body.String(), w.Header())
+	}
+	if got := findResultFile(f.cfg.OutputDir, job.ID); filepath.Base(got) != "summary.md" {
+		t.Fatalf("restart fallback must find summary.md, got %q", got)
+	}
+}
+
+func TestSummarizeGateZeroBudgetSignedInIsNotInPlan(t *testing.T) {
+	// The fixture builds its registry from config.Load(), so the env applies.
+	t.Setenv("TIER_FREE_SUMMARY_MAX_FRAMES", "0")
+	f := newSummaryFixture(t, "free", true)
+	w := f.start(t, "")
+	if w.Code != http.StatusForbidden || summaryDecode(t, w)["error"] != "summary_not_in_plan" {
+		t.Fatalf("got %d %s", w.Code, w.Body.String())
+	}
+	if f.store.total() != 0 || len(f.enqueued) != 0 {
+		t.Fatal("refused before the charge, no job")
+	}
+}

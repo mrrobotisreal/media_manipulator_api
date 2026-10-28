@@ -85,7 +85,8 @@ func PlanFrames(durationSec float64, sceneTimes []float64, budget int) []float64
 
 // evenIntervalTimes is the no-cuts fallback: n frames at slice centres.
 func evenIntervalTimes(durationSec, floor float64, budget int) []float64 {
-	n := int(durationSec / floor)
+	// +1e-9: duration/(duration/budget) can land at budget-0.000001 in floats.
+	n := int(durationSec/floor + 1e-9)
 	if n < 1 {
 		n = 1
 	}

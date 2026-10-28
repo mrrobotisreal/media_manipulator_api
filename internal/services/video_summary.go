@@ -232,12 +232,15 @@ func (s *VideoSummaryService) worker() {
 // refreshQueueMessages updates the probe-stage message of every waiting job.
 // A waiting job has not started, so its stage list is rebuilt from the initial
 // one rather than read from the live job (no shared-pointer reads).
+//
+// waitMu is held for the whole update: the worker removes a job from waiting
+// under the same lock before it starts, so a job that has started can never
+// have its live stages overwritten by this placeholder.
 func (s *VideoSummaryService) refreshQueueMessages() {
 	s.waitMu.Lock()
-	waiting := append([]string(nil), s.waiting...)
-	s.waitMu.Unlock()
+	defer s.waitMu.Unlock()
 	running := int(s.running.Load())
-	for i, id := range waiting {
+	for i, id := range s.waiting {
 		ahead := i + running
 		msg := "Waiting in the queue"
 		if ahead == 1 {
@@ -430,11 +433,16 @@ type summaryRun struct {
 	transcript models.VideoSummaryTranscript
 	frames     []Frame
 	notes      []models.VideoSummaryBatchNote
-	caveats    []string
-	trace      func(string)
+	// caveats is appended from the audio and frames goroutines; caveatMu
+	// guards it.
+	caveatMu sync.Mutex
+	caveats  []string
+	trace    func(string)
 }
 
 func (r *summaryRun) addCaveat(c string) {
+	r.caveatMu.Lock()
+	defer r.caveatMu.Unlock()
 	for _, have := range r.caveats {
 		if have == c {
 			return

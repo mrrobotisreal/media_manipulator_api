@@ -518,3 +518,20 @@ func TestOnScreenTextFromNotesDedupesToFirstSeen(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 }
+
+// Review finding: duration/(duration/budget) can round below budget.
+func TestPlanFramesEvenIntervalNoRoundingLoss(t *testing.T) {
+	for _, tc := range []struct {
+		dur    float64
+		budget int
+	}{{18, 7}, {100, 3}, {7199, 96}, {600, 24}} {
+		got := PlanFrames(tc.dur, nil, tc.budget)
+		want := tc.budget
+		if int(tc.dur/2) < want {
+			want = int(tc.dur / 2)
+		}
+		if len(got) != want {
+			t.Errorf("PlanFrames(%v, nil, %d) = %d frames, want %d", tc.dur, tc.budget, len(got), want)
+		}
+	}
+}
