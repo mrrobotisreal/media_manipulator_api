@@ -45,7 +45,13 @@ type VoicesClient struct {
 	health    *VoicesHealth
 	healthErr error
 	healthAt  time.Time
+	presets   []VoicePreset
+	presetsAt time.Time
 }
+
+// presetsTTL caches the preset list: it changes only when Mitch drops a clip
+// into VOICES_BUILTIN_PRESETS_DIR or the model changes.
+const presetsTTL = time.Minute
 
 // Typed voices errors (ticket decision 5).
 var (
@@ -269,11 +275,19 @@ func (c *VoicesClient) invalidateHealth() {
 	c.mu.Unlock()
 }
 
-// Presets lists the service's preset voices (built-in drops + CustomVoice).
+// Presets lists the service's preset voices (built-in drops + CustomVoice),
+// cached for a minute.
 func (c *VoicesClient) Presets(ctx context.Context) ([]VoicePreset, error) {
 	if !c.Enabled() {
 		return nil, ErrVoicesUnavailable
 	}
+	c.mu.Lock()
+	if c.presets != nil && c.now().Sub(c.presetsAt) < presetsTTL {
+		p := c.presets
+		c.mu.Unlock()
+		return p, nil
+	}
+	c.mu.Unlock()
 	var out struct {
 		Presets []VoicePreset `json:"presets"`
 	}
@@ -282,6 +296,12 @@ func (c *VoicesClient) Presets(ctx context.Context) ([]VoicePreset, error) {
 	if err := c.do(pctx, http.MethodPost, "/presets", struct{}{}, &out); err != nil {
 		return nil, err
 	}
+	if out.Presets == nil {
+		out.Presets = []VoicePreset{}
+	}
+	c.mu.Lock()
+	c.presets, c.presetsAt = out.Presets, c.now()
+	c.mu.Unlock()
 	return out.Presets, nil
 }
 

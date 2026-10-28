@@ -363,6 +363,10 @@ func main() {
 	// MM24: per-item delete, keep longer, delete-all, export, sign-out-everywhere and
 	// account deletion; also the Postgres-backed fallback for /api/download after a restart.
 	wireDataControls(ctx, cfg, store, jobManager, s3Client, conversionHandler, studioHandler, vectorHandler, accountHandler, limiter, metricsReg, analyticsEmitter, emailSvc, logging)
+	// MM77 voices: /api/voices/* against the resident mm-voices service (ships
+	// dark: VOICES_ENABLED=false). Its deletes use the same user-delete sweeper.
+	voicesHandler = newVoicesHandler(cfg, tierRegistry, jobManager, gpuMgr, store, s3Client, limiter,
+		newUserDeleteSweeper(cfg, store, jobManager, s3Client, metricsReg, logging), logging)
 
 	router := setupRouter(cfg, conversionHandler, studioHandler, vectorHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg, analyticsEmitter)
 
@@ -509,6 +513,8 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 			Registry: tierRegistry,
 			Logger:   slog.Default(),
 		}, cfg.TierQuotaEnabled))
+		// MM77: voices sign-in / plan refusals run before any unit is spent.
+		api.Use(voicesPreCharge())
 		api.Use(quotaDispatcher(middleware.QuotaConfig{
 			Store:    store,
 			Registry: tierRegistry,
@@ -551,6 +557,9 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		if vectorHandler != nil {
 			handlers.RegisterVectorRoutes(api, vectorHandler)
 		}
+		// Voices (MM77): saved voices, presets, speak, convert, shift. nil
+		// (tests) mounts nothing.
+		handlers.RegisterVoicesRoutes(api, voicesHandler)
 		// AI Video Restoration (multi-model comparison pipeline). The group
 		// carries the Firebase auth seam — a pass-through no-op while
 		// RESTORE_REQUIRE_FIREBASE_AUTH is off (the default).
@@ -659,6 +668,15 @@ var quotaRoutes = []quotaRoute{
 			return isStudioExportPath(path)
 		},
 	},
+
+	// Voices (MM77, ticket decision 11): ai_ops for create (the preview),
+	// design, speak, preset speak and convert; ops for the rubberband shifter.
+	// design/preview, PATCH, DELETE and the GETs are not gated.
+	{metric: models.MetricAIOps, path: "/api/voices"},
+	{metric: models.MetricAIOps, path: "/api/voices/design"},
+	{metric: models.MetricAIOps, path: "/api/voices/convert"},
+	{metric: models.MetricAIOps, matches: voicesSpeakPath},
+	{metric: models.MetricOps, path: "/api/voices/shift"},
 }
 
 // isStudioExportPath matches the two routes that START a render: POST
@@ -858,6 +876,18 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 			ipLimit:      cfg.RateLimitAnalysisPerIPPerHour,
 			matches: func(path string) bool {
 				return strings.HasPrefix(path, "/api/studio/projects/") && strings.HasSuffix(path, "/captions/generate")
+			},
+		},
+		// Voices (MM77): saving a voice (clone or design) is the abuse surface,
+		// so it gets its own tight bucket like the restore routes (5/h/session,
+		// 20/h/IP); operators are exempt through limiter.RouteExempt.
+		{
+			routeKey:     "voices_create",
+			tool:         "voices",
+			sessionLimit: cfg.Voices.RateLimitPerSessionPerHour,
+			ipLimit:      cfg.Voices.RateLimitPerIPPerHour,
+			matches: func(path string) bool {
+				return path == "/api/voices" || path == "/api/voices/design"
 			},
 		},
 	}
