@@ -54,6 +54,31 @@ func TestResendRequestShape(t *testing.T) {
 	}
 }
 
+// MM85: a per-message Reply-To (the contact form's visitor) overrides the
+// sender default, and CR/LF cannot smuggle a header through it.
+func TestResendPerMessageReplyTo(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &got)
+		_, _ = w.Write([]byte(`{"id":"x"}`))
+	}))
+	defer srv.Close()
+	s := &ResendSender{APIKey: testKey, From: "a@example.com", ReplyTo: "support@example.com", Endpoint: srv.URL}
+	if _, err := s.Send(context.Background(), Message{To: "t@example.com", ReplyTo: "v@example.com\r\nBcc: e@example.com", Text: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if got["reply_to"] != "v@example.com  Bcc: e@example.com" {
+		t.Errorf("reply_to = %#v", got["reply_to"])
+	}
+	if _, err := s.Send(context.Background(), Message{To: "t@example.com", Text: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if got["reply_to"] != "support@example.com" {
+		t.Errorf("default reply_to = %#v", got["reply_to"])
+	}
+}
+
 func TestResendErrorsNeverLeakKey(t *testing.T) {
 	cases := []struct {
 		status    int

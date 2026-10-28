@@ -976,6 +976,18 @@ back to `en-us`. The user's language is `mm_users.locale`, set from the optional
 of `POST /api/account/sync`. After changing a template or locale file run
 `go test ./internal/email -update` and review the golden diffs.
 
+**Contact form (MM85).** `POST /api/contact` mails the site's contact form through the same
+sender, plain text, to `CONTACT_TO` with Reply-To set to the visitor; subject
+`[MM contact] <subject label> — <name> (<reference>)`. No database row (the email is the record), no
+quota charge, no analytics on the server (the UI emits `contact_submitted`). With the `NoopSender`
+(email off) the route answers `503 contact_unavailable` and the page shows the mailto fallback.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `CONTACT_TO` | `support@media-manipulator.com` | Inbox that receives contact-form mail. |
+| `CONTACT_PER_SESSION_PER_HOUR` | `3` | `contact` limiter bucket, per `X-MM-Session-ID` per hour. |
+| `CONTACT_PER_IP_PER_HOUR` | `10` | `contact` limiter bucket, per IP per hour. The dial to turn if the form is abused (there is no CAPTCHA). |
+
 Settings API (additive): `GET/PATCH /api/account/settings` also carry `emailAiJobFinished` (default `false`) and `emailExpiryDigest` (default `true`); an email-only PATCH is valid. **Deploy:** run migration `20261024004_add_transactional_email` before this build serves traffic (settings reads select the new columns and `mm_users.locale`).
 
 **Go-live checklist (Mitch):** verify the sending domain in Resend (add the DKIM CNAME/TXT and
@@ -1064,6 +1076,7 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/healthz` | Process liveness. | No |
 | GET | `/api/health` | Same, namespaced under `/api`. | No |
 | GET | `/api/system/health` | MM34 status-page feed: `{status healthy/degraded/down, service, version, uptimeSeconds, checks{database, redis (omitted if unconfigured), storage: ok/fail}, queue{gpuEnabled, running, waiting}}`. 200 for healthy/degraded, 503 for down (body still valid). down = DB ping fails; degraded = Redis ping or output-dir write fails. 1 s probe timeouts, 5 s cache, no error strings/hosts/paths. Public, never quota-charged. | No |
+| POST | `/api/contact` | MM85. Public. JSON `{name (1-100), email (bare address), subject (bug\|billing\|privacy\|press\|other), message (1-2000 chars), website?}`. `website` is a honeypot: filled → `202` with a reference and nothing sent. Valid → mails `CONTACT_TO` (Reply-To the visitor), `202 {reference}` (12 chars, also in the email subject). `400 {error:"invalid_contact", field}`; `503 contact_unavailable` when email is off; `502 contact_send_failed` when Resend refuses. `contact` bucket (`CONTACT_PER_SESSION_PER_HOUR` 3, `CONTACT_PER_IP_PER_HOUR` 10; operators exempt). Never quota-charged, no DB row. | No (sync, ≤ 15 s) |
 | POST | `/api/metadata/inspect` | Inspect a file's metadata with exiftool/ffprobe (no job created). | No (sync, each tool capped at 20 s) |
 | POST | `/api/upload` | Multipart upload + conversion. Returns `{jobId}`. | Yes (goroutine) |
 | POST | `/api/video-upload/presign` | Presigned S3 PUT URL for the UI to upload a video directly. | No |
@@ -2387,6 +2400,17 @@ Redeploy the script: `sudo cp scripts/server/voices_service.py /opt/media-manipu
   in-memory queue for whisper-ctranslate2 subprocesses.
 - **Stage** — one row in the `stages[]` array of a transcode job. Each
   stage has a key, label, status, and message.
+
+### 12.9 Contact form smoke test (MM85)
+
+Sends one real email to `CONTACT_TO`; expect `202 {"reference":"…"}` and the same reference in the
+inbox subject. `503 contact_unavailable` means email is off (section 4.14).
+
+```bash
+curl -sS -X POST -H 'Content-Type: application/json' -H 'X-MM-Session-ID: smoketest' \
+  -d '{"name":"Runbook smoke","email":"you@example.com","subject":"other","message":"Contact form smoke test."}' \
+  http://localhost:59997/api/contact
+```
 
 ---
 

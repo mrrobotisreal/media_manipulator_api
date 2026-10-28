@@ -174,6 +174,11 @@ type Config struct {
 	// bucket (result_mp3). Repeat clicks on a cached MP3 still count.
 	RateLimitResultMP3PerSessionPerHour int
 	RateLimitResultMP3PerIPPerHour      int
+	// MM85: POST /api/contact. ContactTo receives the form (reply-to is the
+	// visitor); the two limits are the `contact` limiter bucket per hour.
+	ContactTo                string
+	ContactPerSessionPerHour int
+	ContactPerIPPerHour      int
 	// SharePublicBaseURL prefixes the page URL returned by POST /api/jobs/:id/share
 	// (<base>/r/<token>).
 	SharePublicBaseURL string
@@ -716,6 +721,9 @@ func Load() *Config {
 		RateLimitSharePerIPPerHour:           getEnvInt("RATE_LIMIT_SHARE_PER_IP_PER_HOUR", 1200),
 		RateLimitResultMP3PerSessionPerHour:  getEnvInt("RATE_LIMIT_RESULT_MP3_PER_SESSION_PER_HOUR", 20),
 		RateLimitResultMP3PerIPPerHour:       getEnvInt("RATE_LIMIT_RESULT_MP3_PER_IP_PER_HOUR", 40),
+		ContactTo:                            getEnv("CONTACT_TO", "support@media-manipulator.com"),
+		ContactPerSessionPerHour:             getEnvInt("CONTACT_PER_SESSION_PER_HOUR", 3),
+		ContactPerIPPerHour:                  getEnvInt("CONTACT_PER_IP_PER_HOUR", 10),
 		SharePublicBaseURL: strings.TrimRight(strings.TrimSpace(getEnv("SHARE_PUBLIC_BASE_URL",
 			getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com"))), "/"),
 
