@@ -190,8 +190,10 @@ func TestProRow(t *testing.T) {
 	same.OpsPerDay, same.AIOpsPerDay, same.ExportsPerDay = pro.OpsPerDay, pro.AIOpsPerDay, pro.ExportsPerDay
 	same.VectorExportsPerDay, same.VectorFormats, same.VectorProjects = pro.VectorExportsPerDay, pro.VectorFormats, pro.VectorProjects
 	same.VectorMaxDurationMs, same.VectorVideo = pro.VectorMaxDurationMs, pro.VectorVideo
+	// MM74: Pro's own summary row (96 frames, deep synthesis).
+	same.SummaryMaxFrames, same.SummaryDeep = pro.SummaryMaxFrames, pro.SummaryDeep
 	if pro != same {
-		t.Fatalf("pro must equal premium apart from ops/ai/exports and the Motion row:\n pro     %+v\n premium %+v", pro, premium)
+		t.Fatalf("pro must equal premium apart from ops/ai/exports, the Motion row and the summary row:\n pro     %+v\n premium %+v", pro, premium)
 	}
 	if !pro.PriorityGPU || !pro.AdsRemoved || pro.RateLimitExempt {
 		t.Fatalf("pro flags wrong: %+v", pro)
@@ -256,6 +258,7 @@ func TestPublishedMatrix(t *testing.T) {
 			MaxOutputHeight: 1440, MaxLadderHeight: 1080,
 			StudioProjects: 5, StudioVersionAutoKeep: 20, PriorityGPU: false,
 			ResultRetentionHours: 168, AdsRemoved: false,
+			SummaryMaxFrames:    24, // MM74
 			VectorExportsPerDay: 5, VectorProjects: 3,
 			VectorFormats: "svg_animated,lottie,import_lottie,import_svg_vectorize",
 		},
@@ -265,6 +268,7 @@ func TestPublishedMatrix(t *testing.T) {
 			MaxOutputHeight: 2160, MaxLadderHeight: 2160,
 			StudioProjects: Unlimited, StudioVersionAutoKeep: 20, PriorityGPU: true,
 			ResultRetentionHours: 720, AdsRemoved: true,
+			SummaryMaxFrames:    48, // MM74
 			VectorExportsPerDay: 30, VectorProjects: 25,
 			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,import_lottie,import_svg_vectorize",
 			VectorVideo:   VectorVideo{MaxHeight: 720, MaxSeconds: 15},
@@ -275,6 +279,8 @@ func TestPublishedMatrix(t *testing.T) {
 			MaxOutputHeight: 2160, MaxLadderHeight: 2160,
 			StudioProjects: Unlimited, StudioVersionAutoKeep: 20, PriorityGPU: true,
 			ResultRetentionHours: 720, AdsRemoved: true,
+			// MM74: 96 frames and deep synthesis.
+			SummaryMaxFrames: 96, SummaryDeep: true,
 			// MM49: Pro's own Motion row (design §3.4).
 			VectorExportsPerDay: 150, VectorProjects: Unlimited,
 			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,png_sequence,mp4,webm,import_lottie,import_svg_vectorize",
@@ -464,5 +470,53 @@ func TestFormatSetJSON(t *testing.T) {
 	}
 	if b, _ := json.Marshal(FormatSet("")); string(b) != "[]" {
 		t.Fatalf("empty set = %s, want []", b)
+	}
+}
+
+// MM74: summary frame budgets anonymous 0 / free 24 / premium 48 / pro 96,
+// deep synthesis Pro only; operator inherits Pro's row; budgets never decrease.
+func TestSummaryLimits(t *testing.T) {
+	r := testRegistry(t)
+	want := map[Tier]struct {
+		frames int
+		deep   bool
+	}{
+		TierAnonymous: {0, false},
+		TierFree:      {24, false},
+		TierPremium:   {48, false},
+		TierPro:       {96, true},
+		TierOperator:  {96, true},
+	}
+	for tier, w := range want {
+		l := r.For(tier)
+		if l.SummaryMaxFrames != w.frames || l.SummaryDeep != w.deep {
+			t.Errorf("%s: frames %d deep %v, want %d %v", tier, l.SummaryMaxFrames, l.SummaryDeep, w.frames, w.deep)
+		}
+	}
+	ladder := All()
+	for i := 1; i < len(ladder); i++ {
+		lo, hi := r.For(ladder[i-1]), r.For(ladder[i])
+		if lo.SummaryMaxFrames > hi.SummaryMaxFrames {
+			t.Errorf("SummaryMaxFrames decreases from %s to %s", ladder[i-1], ladder[i])
+		}
+		if lo.SummaryDeep && !hi.SummaryDeep {
+			t.Errorf("SummaryDeep lost from %s to %s", ladder[i-1], ladder[i])
+		}
+	}
+	// Both fields are in the limits JSON the UI reads.
+	raw, _ := json.Marshal(r.For(TierFree))
+	var m map[string]any
+	_ = json.Unmarshal(raw, &m)
+	if m["summaryMaxFrames"] != 24.0 || m["summaryDeep"] != false {
+		t.Errorf("limits JSON: %v / %v", m["summaryMaxFrames"], m["summaryDeep"])
+	}
+}
+
+func TestSummaryLimitsEnvOverride(t *testing.T) {
+	t.Setenv("TIER_FREE_SUMMARY_MAX_FRAMES", "12")
+	t.Setenv("TIER_ANON_SUMMARY_MAX_FRAMES", "6")
+	r := New(config.Load())
+	if r.For(TierFree).SummaryMaxFrames != 12 || r.For(TierAnonymous).SummaryMaxFrames != 6 {
+		t.Errorf("overrides not applied: free %d anon %d", r.For(TierFree).SummaryMaxFrames, r.For(TierAnonymous).SummaryMaxFrames)
 	}
 }
