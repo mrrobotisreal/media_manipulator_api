@@ -37,7 +37,8 @@ Environment (all optional; defaults in brackets):
         Drop <id>.wav (5-60 s of clean speech) and an optional <id>.json
         ({"name": "...", "description": "...", "language": "en"}) here and the
         clip becomes a built-in preset spoken by Chatterbox. No code change.
-    HF_HOME (the Hugging Face cache the weights were downloaded into)
+    HF_HOME (the Hugging Face cache the weights were downloaded into;
+        /var/lib/creatv/hf on the host, shared with the existing Qwen3-TTS service)
 
 Deploy (the repo copy is the source of truth):
     sudo cp scripts/server/voices_service.py /opt/media-manipulator-ai/scripts/voices_service.py
@@ -75,6 +76,9 @@ DEFAULT_IDLE_UNLOAD_SECONDS = 600
 DEFAULT_CHATTERBOX_REPO = "ResembleAI/chatterbox"
 DEFAULT_QWEN_DESIGN_REPO = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
 DEFAULT_QWEN_CUSTOM_REPO = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+# The files ChatterboxMultilingualTTS.from_local and ChatterboxVC.from_local read.
+CHATTERBOX_FILES = ("ve.pt", "t3_mtl23ls_v2.safetensors", "s3gen.pt", "s3gen.safetensors",
+                    "grapheme_mtl_merged_expanded_v1.json", "conds.pt", "Cangjie5_TC.json")
 
 # Chatterbox Multilingual's language ids (ISO 639-1). The API validates against
 # the same list (internal/services/voices_client.go VoiceLanguages).
@@ -372,7 +376,8 @@ class Voices:
 
     def _chatterbox_dir(self) -> str:
         from huggingface_hub import snapshot_download
-        return snapshot_download(repo_id=self.chatterbox_repo)
+        # Only the multilingual TTS + VC files (~4.3 GB), not the whole repo (~14 GB).
+        return snapshot_download(repo_id=self.chatterbox_repo, allow_patterns=list(CHATTERBOX_FILES))
 
     def _load_chatterbox_tts(self) -> Any:
         from chatterbox.mtl_tts import ChatterboxMultilingualTTS

@@ -15,7 +15,8 @@ Group=mwintrow
 WorkingDirectory=/opt/media-manipulator-ai
 # GPU 0 by UUID (hosts only Whisper), so a re-enumeration cannot move it.
 Environment=CUDA_VISIBLE_DEVICES=GPU-8c5d035f-59ba-2501-42eb-ec4d97a71527
-Environment=HF_HOME=/opt/media-manipulator-ai/models/hf-cache
+# Shared HF cache that already holds Qwen3-TTS CustomVoice (russian-local-assistant).
+Environment=HF_HOME=/var/lib/creatv/hf
 Environment=VOICES_HOST=127.0.0.1
 Environment=VOICES_PORT=8791
 Environment=VOICES_SCRATCH_DIR=/opt/media-manipulator-ai/tmp/voices
@@ -24,11 +25,13 @@ Environment=VOICES_BUILTIN_PRESETS_DIR=/opt/media-manipulator-ai/models/voices/p
 # Hugging Face repo ids: MM76 S3 writes the ids actually downloaded here.
 Environment=VOICES_CHATTERBOX_REPO=ResembleAI/chatterbox
 Environment=VOICES_QWEN_DESIGN_REPO=Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
-Environment=VOICES_QWEN_CUSTOM_REPO=Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+# CustomVoice is already on disk (complete copy, 4.3 GB); a local dir works as the id.
+Environment=VOICES_QWEN_CUSTOM_REPO=/home/mwintrow/models/qwen3-tts/Qwen3-TTS-12Hz-1.7B-CustomVoice
 # Once every weight is in the cache, uncomment to stop the hub update check:
 #Environment=HF_HUB_OFFLINE=1
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/media-manipulator-ai/venvs/voices/bin/python /opt/media-manipulator-ai/scripts/voices_service.py
+# Reuses the existing Qwen3-TTS venv (torch 2.10 cu128, qwen-tts 0.1.1) + chatterbox-tts --no-deps.
+ExecStart=/home/mwintrow/ai/qwen3-tts/.venv/bin/python /opt/media-manipulator-ai/scripts/voices_service.py
 Restart=on-failure
 RestartSec=5
 # Model load is 10-20 s; give a stop time to finish a request.

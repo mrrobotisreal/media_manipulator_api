@@ -113,7 +113,7 @@ The resident **voices** service (`mm-voices`, MM77, ADR-0015). Unlike the
 scripts above it is not shelled out per job: it runs as its own systemd unit
 (`deploy/mm-voices.service`) from
 `/opt/media-manipulator-ai/scripts/voices_service.py` with the
-`/opt/media-manipulator-ai/venvs/voices` Python, bound to `127.0.0.1:8791`
+`/home/mwintrow/ai/qwen3-tts/.venv` Python (the existing Qwen3-TTS venv + chatterbox-tts `--no-deps`), bound to `127.0.0.1:8791`
 and pinned to GPU 0 by UUID. It keeps Chatterbox Multilingual (TTS from a
 reference clip, voice conversion) and Qwen3-TTS VoiceDesign + CustomVoice
 (voices from a description, presets) loaded, unloading each after
