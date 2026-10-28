@@ -22,6 +22,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/validation"
 )
 
 type ConversionHandler struct {
@@ -217,6 +218,9 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported file type"})
 		return
 	}
+
+	// MM81: a stem job asking for "auto" gets its concrete format now.
+	resolveStemFormatOption(ctx, h.cfg, options, fileHeader.Filename, mimeType, incomingPath)
 
 	originalFile := models.OriginalFileInfo{Name: fileHeader.Filename, Size: fileHeader.Size, Type: mimeType}
 	job := h.jobManager.CreateJobWithID(jobID, originalFile, options)
@@ -708,6 +712,10 @@ func (h *ConversionHandler) getOutputExtension(job *models.ConversionJob) string
 		}
 		return ".jpg"
 	case models.FileTypeVideo:
+		// MM81: vocals from a video's audio track are an audio stem.
+		if ext := aiAudioExtension(job); ext != "" {
+			return ext
+		}
 		if ext := aiVideoExtension(job); ext != "" {
 			return ext
 		}
@@ -831,21 +839,64 @@ func aiVideoExtension(job *models.ConversionJob) string {
 	return ""
 }
 
-// aiAudioExtension defaults vocals/no_vocals stems to WAV when the caller did
-// not pick a format. Other AI audio ops honor the requested format.
+// aiAudioExtension is the extension of a vocals/no_vocals stem. An explicit
+// format (e.g. "wav", which older UIs send) is honored exactly as before; an
+// empty format or "auto" follows the input (MM81, services.ResolveStemFormat):
+// lossy stays lossy in the same format, lossless becomes FLAC, video becomes
+// MP3. /upload already rewrites "auto" to the concrete format (with the probed
+// codec, see resolveStemFormatOption); this fallback covers any other caller.
+// Other AI audio ops honor the requested format.
 func aiAudioExtension(job *models.ConversionJob) string {
 	op, enabled := aiOperation(job)
 	if !enabled {
 		return ""
 	}
-	switch op {
-	case "isolate_vocals", "remove_vocals":
-		if format, ok := job.Options["format"].(string); ok && strings.TrimSpace(format) != "" {
+	if services.IsStemOperation(op) {
+		format, _ := job.Options["format"].(string)
+		if !services.IsAutoFormat(format) {
 			return "." + strings.TrimPrefix(format, ".")
 		}
-		return ".wav"
+		return "." + services.ResolveStemFormat(job.OriginalFile.Name, job.OriginalFile.Type, "")
 	}
 	return ""
+}
+
+// resolveStemFormatOption (MM81) turns a stem job's empty or "auto" format into
+// the concrete one before the job is created, so the converter's validation,
+// the output name, history's target format and analytics all agree. The codec
+// is probed (the existing validation.Probe) only when the extension cannot tell
+// lossy from lossless (.m4a may be AAC or ALAC). Other jobs are untouched.
+func resolveStemFormatOption(ctx context.Context, cfg *config.Config, options map[string]interface{}, name, mime, path string) {
+	if options == nil {
+		return
+	}
+	op, enabled := aiOperation(&models.ConversionJob{Options: options})
+	if !enabled || !services.IsStemOperation(op) {
+		return
+	}
+	format, _ := options["format"].(string)
+	if !services.IsAutoFormat(format) {
+		return
+	}
+	codec := ""
+	if path != "" && services.NeedsCodecProbe(name) {
+		codec = stemCodecProbe(ctx, cfg, path)
+	}
+	options["format"] = services.ResolveStemFormat(name, mime, codec)
+}
+
+// stemCodecProbe returns the first audio stream's codec ("" when unknown). A
+// variable so tests never shell out to ffprobe.
+var stemCodecProbe = func(ctx context.Context, cfg *config.Config, path string) string {
+	timeout := time.Duration(0)
+	if cfg != nil {
+		timeout = cfg.CommandTimeout
+	}
+	report, err := validation.Probe(ctx, "ffprobe", path, timeout)
+	if err != nil || report == nil {
+		return ""
+	}
+	return report.AudioCodec
 }
 
 func aiOperation(job *models.ConversionJob) (string, bool) {

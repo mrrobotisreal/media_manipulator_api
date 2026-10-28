@@ -301,7 +301,8 @@ func (a *AIService) SeparateVocals(ctx context.Context, jobID, inputPath, output
 
 	a.sendProgress(jobID, 90)
 	args := []string{"-y", "-i", stemPath}
-	args = append(args, audioEncoderArgs(outputPath)...)
+	// MM81: stems use 320k for MP3/AAC (StemEncoderArgs); WAV/FLAC unchanged.
+	args = append(args, StemEncoderArgs(outputPath)...)
 	args = append(args, outputPath)
 	if err := a.runAI(ctx, "ffmpeg encode stem", nil, "ffmpeg", args...); err != nil {
 		return err
