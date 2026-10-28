@@ -83,6 +83,7 @@ type VoiceStore interface {
 type VoiceObjects interface {
 	Put(ctx context.Context, key, localPath, contentType string) (int64, error)
 	Fetch(ctx context.Context, key, localPath string) error
+	Delete(ctx context.Context, key string) error
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
 }
 
@@ -598,7 +599,34 @@ func (h *VoicesHandler) discardVoice(c *gin.Context, userID, id string) {
 	if h.expirer != nil {
 		_, _ = h.expirer.ExpireNow(ctx, telemetry.LedgerFilter{UserID: userID, VoiceID: id})
 	}
-	_, _ = h.store.DeleteVoiceRow(ctx, id)
+	keys, _ := h.store.DeleteVoiceRow(ctx, id)
+	h.deleteVoiceObjects(ctx, userID, id, keys)
+}
+
+// deleteVoiceObjects removes a voice's objects directly, on top of the ledger
+// sweep: the keys the row held plus the two deterministic keys, so a voice
+// sample is never left in S3 because a ledger write failed. Missing objects
+// are not an error (S3 DeleteObject is idempotent).
+func (h *VoicesHandler) deleteVoiceObjects(ctx context.Context, userID, id string, keys []string) int {
+	if h.objects == nil {
+		return 0
+	}
+	prefix := voicesS3Prefix + "/" + sanitizeS3PathSegment(userID) + "/" + id + "/"
+	seen := map[string]bool{}
+	failed := 0
+	for _, k := range append(keys, prefix+"reference.wav", prefix+"preview.mp3") {
+		if k == "" || seen[k] || !strings.HasPrefix(k, voicesS3Prefix+"/") {
+			continue
+		}
+		seen[k] = true
+		if err := h.objects.Delete(ctx, k); err != nil {
+			failed++
+		}
+	}
+	if failed > 0 {
+		h.logger.Warn("voices: direct object delete failed; the ledger sweep will retry", "failed", failed)
+	}
+	return failed
 }
 
 // serviceFailure maps a synchronous mm-voices failure onto a response.
@@ -709,6 +737,9 @@ func (h *VoicesHandler) DesignPreview(c *gin.Context) {
 	if per <= 0 {
 		per = 3
 	}
+	if !h.healthy(c) {
+		return
+	}
 	key := "voices_design_preview:" + shortHash(session) + ":" + shortHash(strings.ToLower(req.Description)+"|"+req.Language)
 	if res, ok := middleware.ResolveTier(c); !ok || !res.Limits.RateLimitExempt {
 		if allowed, retry := h.previews.AllowWindow(c.Request.Context(), key, per, time.Hour); !allowed {
@@ -717,9 +748,6 @@ func (h *VoicesHandler) DesignPreview(c *gin.Context) {
 				gin.H{"limit": per, "retryAfterSeconds": retry})
 			return
 		}
-	}
-	if !h.healthy(c) {
-		return
 	}
 	seed := randomSeed()
 	if req.Seed != nil {
@@ -822,9 +850,11 @@ func (h *VoicesHandler) Delete(c *gin.Context) {
 	}
 	// The row itself goes now in case it was never ledgered; its objects are
 	// ledgered children, which the sweep above (or the next tick) removes.
-	if _, err := h.store.DeleteVoiceRow(ctx, id); err != nil {
+	keys, err := h.store.DeleteVoiceRow(ctx, id)
+	if err != nil {
 		res.Pending++
 	}
+	res.Pending += h.deleteVoiceObjects(ctx, vc.userID, id, keys)
 	c.JSON(http.StatusOK, newDeletedBody(res))
 }
 
@@ -918,7 +948,9 @@ func (h *VoicesHandler) Speak(c *gin.Context) {
 	}
 	refPath := filepath.Join(uploadDir, "reference.wav")
 	if err := h.objects.Fetch(c.Request.Context(), voice.ReferenceKey, refPath); err != nil {
-		h.logger.Warn("voices: fetching the reference failed", "error", err.Error())
+		// The error text can carry the voices/<userId>/ key: log the class only.
+		h.logger.Warn("voices: fetching the reference failed", "error_type", fmt.Sprintf("%T", err))
+		_ = os.Remove(refPath)
 		_ = h.jobs.UpdateJobError(job.ID, "Could not load the voice.")
 		voicesUnavailable(c)
 		return
@@ -1053,6 +1085,7 @@ func (h *VoicesHandler) Convert(c *gin.Context) {
 	if voice != nil {
 		refPath := filepath.Join(uploadDir, "reference.wav")
 		if h.objects == nil || h.objects.Fetch(c.Request.Context(), voice.ReferenceKey, refPath) != nil {
+			_ = os.Remove(refPath)
 			_ = h.jobs.UpdateJobError(job.ID, "Could not load the voice.")
 			voicesUnavailable(c)
 			return

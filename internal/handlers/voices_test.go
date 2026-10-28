@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -119,8 +120,9 @@ func (f *fakeVoiceStore) DeleteVoiceRow(_ context.Context, id string) ([]string,
 }
 
 type fakeVoiceObjects struct {
-	mu   sync.Mutex
-	objs map[string]bool
+	mu      sync.Mutex
+	objs    map[string]bool
+	deleted []string
 }
 
 func (o *fakeVoiceObjects) Put(_ context.Context, key, _ string, _ string) (int64, error) {
@@ -134,6 +136,13 @@ func (o *fakeVoiceObjects) Fetch(_ context.Context, key, local string) error {
 		return errors.New("no such key")
 	}
 	return os.WriteFile(local, voiceTestWav, 0o644)
+}
+func (o *fakeVoiceObjects) Delete(_ context.Context, key string) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.deleted = append(o.deleted, key)
+	delete(o.objs, key)
+	return nil
 }
 func (o *fakeVoiceObjects) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
 	return "https://s3.test/" + key, nil
@@ -736,5 +745,56 @@ func TestVoiceJobOutputPath(t *testing.T) {
 		if got := h.getOutputFilename(job); got != "talk_voice.mp3" {
 			t.Errorf("%s download name %q", tool, got)
 		}
+	}
+}
+
+// Review fix: even when the ledger never knew the objects (a failed best-effort
+// registration), deleting a voice removes its reference and preview directly.
+func TestVoiceDeleteRemovesObjectsWithoutLedgerRows(t *testing.T) {
+	e := newVoicesEnv(t)
+	e.h.expirer = nil // no ledger sweep at all
+	v := e.seedVoice("free")
+	w := e.json("DELETE", "/api/voices/"+v.ID, "free", "")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"pending":0`) {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	if e.objects.objs[v.ReferenceKey] || e.objects.objs[v.PreviewKey] {
+		t.Fatalf("voice samples left in S3: %v", e.objects.objs)
+	}
+	for _, k := range e.objects.deleted {
+		if !strings.HasPrefix(k, "voices/"+voiceUsers["free"].ID+"/"+v.ID+"/") {
+			t.Errorf("deleted a key outside the voice's prefix: %s", k)
+		}
+	}
+}
+
+// Review fix: a preview refused because the service is down does not spend
+// one of the three previews.
+func TestVoiceDesignPreviewDownDoesNotSpendLimit(t *testing.T) {
+	e := newVoicesEnv(t)
+	e.backend.down = true
+	for i := 0; i < 5; i++ {
+		if w := e.json("POST", "/api/voices/design/preview", "", `{"description":"calm"}`); w.Code != 503 {
+			t.Fatalf("down: %d", w.Code)
+		}
+	}
+	e.backend.down = false
+	if w := e.json("POST", "/api/voices/design/preview", "", `{"description":"calm"}`); w.Code != 200 {
+		t.Fatalf("first real preview: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// Review fix: after a restart (job no longer in memory) the recorded-result
+// path finds speech.mp3, not speech.wav.
+func TestFindResultFileVoice(t *testing.T) {
+	root := t.TempDir()
+	id := "3f2b1c1e-0000-4000-8000-000000000009"
+	dir := filepath.Join(root, id)
+	_ = os.MkdirAll(dir, 0o755)
+	for _, f := range []string{services.VoiceResultWav, services.VoiceResultMP3} {
+		_ = os.WriteFile(filepath.Join(dir, f), voiceTestWav, 0o644)
+	}
+	if got := findResultFile(root, id); filepath.Base(got) != services.VoiceResultMP3 {
+		t.Fatalf("got %q", got)
 	}
 }

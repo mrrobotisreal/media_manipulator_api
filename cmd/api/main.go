@@ -906,6 +906,9 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 				return path == "/api/voices" || path == "/api/voices/design"
 			},
 		},
+		// Uncounted design previews still render on the GPU: a per-IP bucket on
+		// top of the handler's per-description limit (operators exempt).
+		{path: "/api/voices/design/preview", routeKey: "voices_design_preview", tool: "voices", sessionLimit: 0, ipLimit: cfg.Voices.PreviewPerIPPerHour},
 	}
 	// MM32: the public share routes (descriptor + file, GET only) are limited like
 	// downloads' abuse surface: per IP, no session bucket (the viewer has none),

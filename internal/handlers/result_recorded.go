@@ -25,7 +25,9 @@ const ctxResultName = "mm_result_name"
 // resultFilePrefixes are the basenames the pipelines write into outputs/<jobId>/
 // (see outputPath), in the order they are looked for.
 var resultFilePrefixes = []string{"converted", "transcript", "translated", "stitched",
-	"waveform", "audio", "silent", "frames", "trimmed", "image_restoration_results"}
+	"waveform", "audio", "silent", "frames", "trimmed", "image_restoration_results",
+	// MM77 voice jobs: speech.mp3 (speech.wav sits beside it; mp3 is the download).
+	"speech"}
 
 // findResultFile locates the result file inside a job's output directory, or "".
 func findResultFile(outputRoot, jobID string) string {
@@ -41,6 +43,11 @@ func findResultFile(outputRoot, jobID string) string {
 	// served by /api/summarize/:jobId/result).
 	for _, e := range entries {
 		if !e.IsDir() && e.Name() == services.SummaryMarkdownFile {
+			return filepath.Join(dir, e.Name())
+		}
+	}
+	for _, e := range entries {
+		if !e.IsDir() && e.Name() == services.VoiceResultMP3 {
 			return filepath.Join(dir, e.Name())
 		}
 	}

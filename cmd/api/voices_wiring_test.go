@@ -172,7 +172,7 @@ func TestVoicesCreateBucket(t *testing.T) {
 	for path, want := range map[string]string{
 		"/api/voices":                      "voices_create",
 		"/api/voices/design":               "voices_create",
-		"/api/voices/design/preview":       "",
+		"/api/voices/design/preview":       "voices_design_preview",
 		"/api/voices/presets/Vivian/speak": "",
 		"/api/voices/convert":              "",
 		"/api/voices/shift":                "",
@@ -184,6 +184,9 @@ func TestVoicesCreateBucket(t *testing.T) {
 			got = hits[0].key
 			if got == "voices_create" && (hits[0].session != 5 || hits[0].ipLimit != 20 || hits[0].tool != "voices") {
 				t.Errorf("%s: bucket %+v", path, hits[0])
+			}
+			if got == "voices_design_preview" && (hits[0].session != 0 || hits[0].ipLimit != 30) {
+				t.Errorf("%s: preview bucket %+v", path, hits[0])
 			}
 		}
 		if got != want {

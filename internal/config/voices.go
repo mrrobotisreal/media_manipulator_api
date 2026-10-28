@@ -33,6 +33,11 @@ type VoicesConfig struct {
 	// POST /api/voices and POST /api/voices/design.
 	RateLimitPerSessionPerHour int
 	RateLimitPerIPPerHour      int
+	// PreviewPerIPPerHour is the per-IP bucket on the uncounted design
+	// previews (VOICES_DESIGN_PREVIEW_RATE_LIMIT_PER_IP_PER_HOUR, default 30),
+	// so rotating the session header or the description cannot render without
+	// limit on the shared card.
+	PreviewPerIPPerHour int
 	// PreviewPerDescriptionPerHour caps uncounted design previews per
 	// description hash per session (design §5: 3).
 	PreviewPerDescriptionPerHour int
@@ -64,10 +69,13 @@ func loadVoicesConfig() (VoicesConfig, string) {
 		RateLimitPerSessionPerHour:   getEnvInt("VOICES_RATE_LIMIT_PER_SESSION_PER_HOUR", 5),
 		RateLimitPerIPPerHour:        getEnvInt("VOICES_RATE_LIMIT_PER_IP_PER_HOUR", 20),
 		PreviewPerDescriptionPerHour: getEnvInt("VOICES_DESIGN_PREVIEWS_PER_HOUR", 3),
-		ConsentTextVersion:           getEnv("VOICES_CONSENT_TEXT_VERSION", "2026-10-28"),
-		SpeechCheck:                  getEnvBool("VOICES_SPEECH_CHECK", true),
-		NoSpeechThreshold:            getEnvFloat("VOICES_NO_SPEECH_THRESHOLD", 0.6),
-		WhisperModel:                 getEnv("VOICES_SPEECH_CHECK_MODEL", "small"),
+		PreviewPerIPPerHour:          getEnvInt("VOICES_DESIGN_PREVIEW_RATE_LIMIT_PER_IP_PER_HOUR", 30),
+		// getEnv falls back on empty too: an empty version would violate the
+		// mm_voices cloned-consent CHECK and break every clone.
+		ConsentTextVersion: getEnv("VOICES_CONSENT_TEXT_VERSION", "2026-10-28"),
+		SpeechCheck:        getEnvBool("VOICES_SPEECH_CHECK", true),
+		NoSpeechThreshold:  getEnvFloat("VOICES_NO_SPEECH_THRESHOLD", 0.6),
+		WhisperModel:       getEnv("VOICES_SPEECH_CHECK_MODEL", "small"),
 	}, device
 }
 

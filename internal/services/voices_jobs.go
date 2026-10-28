@@ -170,7 +170,7 @@ func (s *VoicesService) shift(ctx context.Context, req VoiceJobRequest, wavPath 
 // synthesize calls mm-voices under a TaskVoices lease. The service writes into
 // the shared scratch dir; the result is then moved into the job output dir.
 func (s *VoicesService) synthesize(ctx context.Context, req VoiceJobRequest, wavPath string) error {
-	scratch, err := s.scratchDir("job-"+safeSegment(req.JobID)+"-")
+	scratch, err := s.scratchDir("job-" + safeSegment(req.JobID) + "-")
 	if err != nil {
 		return fmt.Errorf("%w: scratch dir: %v", ErrVoicesUnavailable, err)
 	}

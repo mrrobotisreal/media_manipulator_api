@@ -66,6 +66,15 @@ func (o S3VoiceObjects) Fetch(ctx context.Context, key, localPath string) error 
 	return f.Close()
 }
 
+// Delete removes one object (idempotent in S3).
+func (o S3VoiceObjects) Delete(ctx context.Context, key string) error {
+	if o.Client == nil || o.Bucket == "" {
+		return errVoiceS3Unconfigured
+	}
+	_, err := o.Client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: aws.String(o.Bucket), Key: aws.String(key)})
+	return err
+}
+
 // PresignGet signs a short-lived GET (the voice preview player).
 func (o S3VoiceObjects) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
 	if o.Presign == nil || o.Bucket == "" {

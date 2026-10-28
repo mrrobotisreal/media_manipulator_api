@@ -1005,6 +1005,7 @@ API env (in `/home/mwintrow/media-manipulator/api/.env`):
 | `VOICES_RATE_LIMIT_PER_SESSION_PER_HOUR` | `5` | `voices_create` bucket (POST `/api/voices`, `/api/voices/design`). Operators exempt. |
 | `VOICES_RATE_LIMIT_PER_IP_PER_HOUR` | `20` | Same bucket, per IP. |
 | `VOICES_DESIGN_PREVIEWS_PER_HOUR` | `3` | Uncounted `/api/voices/design/preview` renders per description hash per session (or account) per hour. |
+| `VOICES_DESIGN_PREVIEW_RATE_LIMIT_PER_IP_PER_HOUR` | `30` | Per-IP bucket `voices_design_preview` on `/api/voices/design/preview` (uncounted renders still use the GPU). Operators exempt. |
 | `VOICES_CONSENT_TEXT_VERSION` | `2026-10-28` | Stored with every cloned voice (`mm_voices.consent_text_version`). Bump it when the consent copy changes (MM78). |
 | `VOICES_SPEECH_CHECK` | `true` | Whisper `no_speech_prob` check on a new reference clip (first 30 s). |
 | `VOICES_NO_SPEECH_THRESHOLD` | `0.6` | Mean `no_speech_prob` above which a clip is refused (400 `no_speech_detected`). |
@@ -1108,7 +1109,7 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/voices` | MM77. Account required (401). `{voices:[{id,name,kind,languageHint,description?,seed?,engineVersion,consentAt,consentTextVersion,previewUrl,createdAt,updatedAt}], limit, used}`; `previewUrl` is a presigned GET. | No |
 | POST | `/api/voices` | MM77. Account. Multipart `reference` (5-60 s audio) + `name` (1-60), `languageHint`, `consent=true`. 400 `reference_too_short` / `reference_too_long` / `not_audio` / `no_speech_detected` / `consent_required` / `name_invalid` / `language_not_supported` / `reference_required`; 403 `voice_limit {limit,used,tier}`; 503 `voices_unavailable`. `201` voice. One `ai_ops`; `voices_create` bucket. | Sync (~10-30 s) |
 | POST | `/api/voices/design` | MM77. Account. `{name, description (<=1000), language (Qwen list), seed?}` → renders the 10 s reference with Qwen3-TTS VoiceDesign (random seed stored when absent) and the preview with Chatterbox. `201` voice (`kind:"designed"`). One `ai_ops`; `voices_create` bucket. | Sync |
-| POST | `/api/voices/design/preview` | MM77. Public. `{description, language, seed?}` → `{seed, mime:"audio/mpeg", seconds, audioBase64}`. Not counted; 429 `preview_limit` after 3 per description per session per hour. | Sync |
+| POST | `/api/voices/design/preview` | MM77. Public. `{description, language, seed?}` → `{seed, mime:"audio/mpeg", seconds, audioBase64}`. Not counted; 429 `preview_limit` after 3 per description per session per hour, plus the per-IP `voices_design_preview` bucket (30/h). | Sync |
 | PATCH | `/api/voices/:id` | MM77. Owner. `{name}` → voice. 404 for strangers. | No |
 | DELETE | `/api/voices/:id` | MM77. Owner. Hides the voice, inline-sweeps its ledger rows (row, reference, preview). `200 {deleted:{objects,bytes},pending}`. Generations already made stay in History until their own retention. | No |
 | POST | `/api/voices/:id/speak` | MM77. Owner. `{text (<= tier seconds × 18), language, exaggeration? (0.25-2)}` → `202 {jobId, tool:"voice_tts"}`; poll `/api/job/:id`, fetch `/api/download/:id` (`speech.mp3`). One `ai_ops`. | Yes |
