@@ -169,6 +169,11 @@ type Config struct {
 	// MM32: per-IP hourly cap on the public share routes (descriptor + file
 	// range requests). Keyed by IP only; the caller has no session.
 	RateLimitSharePerIPPerHour int
+	// MM81: "Download as MP3" (POST /api/download/:jobId/mp3) re-encodes a
+	// finished WAV result with ffmpeg. Free of quota, so it gets its own hourly
+	// bucket (result_mp3). Repeat clicks on a cached MP3 still count.
+	RateLimitResultMP3PerSessionPerHour int
+	RateLimitResultMP3PerIPPerHour      int
 	// SharePublicBaseURL prefixes the page URL returned by POST /api/jobs/:id/share
 	// (<base>/r/<token>).
 	SharePublicBaseURL string
@@ -709,6 +714,8 @@ func Load() *Config {
 		RateLimitAnalysisPerIPPerHour:        getEnvInt("RATE_LIMIT_ANALYSIS_PER_IP_PER_HOUR", 40),
 		RateLimitAuditAllowed:                getEnvBool("RATE_LIMIT_AUDIT_ALLOWED", false),
 		RateLimitSharePerIPPerHour:           getEnvInt("RATE_LIMIT_SHARE_PER_IP_PER_HOUR", 1200),
+		RateLimitResultMP3PerSessionPerHour:  getEnvInt("RATE_LIMIT_RESULT_MP3_PER_SESSION_PER_HOUR", 20),
+		RateLimitResultMP3PerIPPerHour:       getEnvInt("RATE_LIMIT_RESULT_MP3_PER_IP_PER_HOUR", 40),
 		SharePublicBaseURL: strings.TrimRight(strings.TrimSpace(getEnv("SHARE_PUBLIC_BASE_URL",
 			getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com"))), "/"),
 

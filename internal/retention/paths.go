@@ -44,3 +44,21 @@ func JobDirPath(root, locator string) string {
 	}
 	return p
 }
+
+// DerivedFilePath resolves a derived_file locator "<jobId>/<name>" (MM81) under
+// root, or "" when it is not exactly two safe segments or the root is unset.
+func DerivedFilePath(root, locator string) string {
+	parts := strings.Split(locator, "/")
+	if len(parts) != 2 || !SafeSegment(parts[0]) || !SafeSegment(parts[1]) {
+		return ""
+	}
+	dir := JobDirPath(root, parts[0])
+	if dir == "" {
+		return ""
+	}
+	p := filepath.Join(dir, parts[1])
+	if !IsWithin(p, dir) {
+		return ""
+	}
+	return p
+}

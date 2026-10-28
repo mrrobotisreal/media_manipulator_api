@@ -65,6 +65,11 @@ func (c *Converter) ConvertFile(job *models.ConversionJob, inputPath, outputPath
 	case models.FileTypeImage:
 		return c.convertImage(job, inputPath, outputPath)
 	case models.FileTypeVideo:
+		// MM81: isolate/remove vocals on a video separates its audio track
+		// (Demucs reads the container through ffmpeg) and returns an audio stem.
+		if isStemJob(job) {
+			return c.convertAudio(job, inputPath, outputPath)
+		}
 		return c.convertVideo(job, inputPath, outputPath)
 	case models.FileTypeAudio:
 		return c.convertAudio(job, inputPath, outputPath)
@@ -73,6 +78,20 @@ func (c *Converter) ConvertFile(job *models.ConversionJob, inputPath, outputPath
 	default:
 		return fmt.Errorf("unsupported file type: %s", fileType)
 	}
+}
+
+// isStemJob reports whether a job asks for an enabled vocal-stem AI operation.
+func isStemJob(job *models.ConversionJob) bool {
+	if job == nil {
+		return false
+	}
+	ai, ok := job.Options["ai"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	enabled, _ := ai["enabled"].(bool)
+	op, _ := ai["operation"].(string)
+	return enabled && IsStemOperation(op)
 }
 
 func (c *Converter) validateInputFile(inputPath string) error {
@@ -2036,6 +2055,11 @@ func (c *Converter) validateAudioOptions(options *models.AudioConversionOptions)
 
 	// Validate format
 	validFormats := map[string]bool{"mp3": true, "wav": true, "aac": true, "ogg": true, "flac": true, "alac": true, "opus": true, "ac3": true, "dts": true}
+	// MM81: a vocal stem resolved from an .m4a input keeps the .m4a container
+	// (AAC at 320k, see StemEncoderArgs). Only the stem path accepts it.
+	if options.AI != nil && options.AI.Enabled && IsStemOperation(options.AI.Operation) && options.Format == "m4a" {
+		validFormats["m4a"] = true
+	}
 	if !validFormats[options.Format] {
 		return fmt.Errorf("unsupported format: %s", options.Format)
 	}

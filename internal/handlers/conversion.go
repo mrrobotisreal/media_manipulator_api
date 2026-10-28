@@ -22,6 +22,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/validation"
 )
 
 type ConversionHandler struct {
@@ -156,6 +157,9 @@ func RegisterConversionRoutes(r gin.IRouter, h *ConversionHandler) {
 	r.GET("/download/:jobId", h.DownloadFile)
 	// MM80: owner mints a short-lived signed link for a native browser download.
 	r.POST("/download/:jobId/link", h.CreateDownloadLink)
+	// MM81: "Download as MP3" for a WAV result (owner; free, own rate bucket).
+	r.POST("/download/:jobId/mp3", h.StartMP3Download)
+	r.GET("/download/:jobId/mp3", h.MP3DownloadStatus)
 	if h != nil && h.data != nil {
 		// MM24: owner-scoped deletion and "keep longer".
 		r.DELETE("/jobs/:jobId", h.data.DeleteJob)
@@ -217,6 +221,9 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported file type"})
 		return
 	}
+
+	// MM81: a stem job asking for "auto" gets its concrete format now.
+	resolveStemFormatOption(ctx, h.cfg, options, fileHeader.Filename, mimeType, incomingPath)
 
 	originalFile := models.OriginalFileInfo{Name: fileHeader.Filename, Size: fileHeader.Size, Type: mimeType}
 	job := h.jobManager.CreateJobWithID(jobID, originalFile, options)
@@ -379,6 +386,20 @@ func (h *ConversionHandler) DownloadFile(c *gin.Context) {
 		return
 	}
 	h.ensureResultMime(job, outputPath)
+	servedFormat := ""
+	if claims, ok := downloadTokenClaims(c); ok && claims.Variant != "" {
+		// MM81: a link to a derived file (the cached MP3 of a WAV result). Only
+		// ever reachable through a sealed token, minted after the owner check.
+		vpath, vinfo, vok := variantFile(outputPath, claims.Variant)
+		if !vok {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Converted file not found"})
+			return
+		}
+		outputPath, info, servedFormat = vpath, vinfo, claims.Variant
+		if claims.Name == "" {
+			c.Set(ctxResultName, swapExt(h.resultName(c, job), "."+claims.Variant))
+		}
+	}
 	if claims, ok := downloadTokenClaims(c); ok && claims.Name != "" {
 		// The owner's save-as name, sealed into the token at mint time.
 		c.Set(ctxResultName, claims.Name)
@@ -410,7 +431,7 @@ func (h *ConversionHandler) DownloadFile(c *gin.Context) {
 	// The size comes from the stat, not from the job: a job's ResultSizeBytes is
 	// only set by the pipelines that happen to know it, while the file on disk is
 	// what the visitor received.
-	h.emitDownloadServed(c, job, info.Size())
+	h.emitDownloadServedAs(c, job, info.Size(), servedFormat)
 }
 
 // mediaKindFromMIME derives the analytics media kind from a stored MIME type.
@@ -440,6 +461,12 @@ func mediaKindFromMIME(mime string) string {
 
 // emitDownloadServed reports one served result to the analytics service.
 func (h *ConversionHandler) emitDownloadServed(c *gin.Context, job *models.ConversionJob, bytes int64) {
+	h.emitDownloadServedAs(c, job, bytes, "")
+}
+
+// emitDownloadServedAs is emitDownloadServed with the delivered format when it
+// differs from the job's (MM81: the MP3 of a WAV result reports "mp3").
+func (h *ConversionHandler) emitDownloadServedAs(c *gin.Context, job *models.ConversionJob, bytes int64, format string) {
 	if h == nil || !h.analytics.Enabled() || job == nil {
 		return
 	}
@@ -447,7 +474,10 @@ func (h *ConversionHandler) emitDownloadServed(c *gin.Context, job *models.Conve
 	if bytes > 0 {
 		props["bytes"] = bytes
 	}
-	if format := strings.TrimPrefix(h.getOutputExtension(job), "."); format != "" {
+	if format == "" {
+		format = strings.TrimPrefix(h.getOutputExtension(job), ".")
+	}
+	if format != "" {
 		props["output_format"] = format
 	}
 	tier := ""
@@ -708,6 +738,10 @@ func (h *ConversionHandler) getOutputExtension(job *models.ConversionJob) string
 		}
 		return ".jpg"
 	case models.FileTypeVideo:
+		// MM81: vocals from a video's audio track are an audio stem.
+		if ext := aiAudioExtension(job); ext != "" {
+			return ext
+		}
 		if ext := aiVideoExtension(job); ext != "" {
 			return ext
 		}
@@ -831,21 +865,64 @@ func aiVideoExtension(job *models.ConversionJob) string {
 	return ""
 }
 
-// aiAudioExtension defaults vocals/no_vocals stems to WAV when the caller did
-// not pick a format. Other AI audio ops honor the requested format.
+// aiAudioExtension is the extension of a vocals/no_vocals stem. An explicit
+// format (e.g. "wav", which older UIs send) is honored exactly as before; an
+// empty format or "auto" follows the input (MM81, services.ResolveStemFormat):
+// lossy stays lossy in the same format, lossless becomes FLAC, video becomes
+// MP3. /upload already rewrites "auto" to the concrete format (with the probed
+// codec, see resolveStemFormatOption); this fallback covers any other caller.
+// Other AI audio ops honor the requested format.
 func aiAudioExtension(job *models.ConversionJob) string {
 	op, enabled := aiOperation(job)
 	if !enabled {
 		return ""
 	}
-	switch op {
-	case "isolate_vocals", "remove_vocals":
-		if format, ok := job.Options["format"].(string); ok && strings.TrimSpace(format) != "" {
+	if services.IsStemOperation(op) {
+		format, _ := job.Options["format"].(string)
+		if !services.IsAutoFormat(format) {
 			return "." + strings.TrimPrefix(format, ".")
 		}
-		return ".wav"
+		return "." + services.ResolveStemFormat(job.OriginalFile.Name, job.OriginalFile.Type, "")
 	}
 	return ""
+}
+
+// resolveStemFormatOption (MM81) turns a stem job's empty or "auto" format into
+// the concrete one before the job is created, so the converter's validation,
+// the output name, history's target format and analytics all agree. The codec
+// is probed (the existing validation.Probe) only when the extension cannot tell
+// lossy from lossless (.m4a may be AAC or ALAC). Other jobs are untouched.
+func resolveStemFormatOption(ctx context.Context, cfg *config.Config, options map[string]interface{}, name, mime, path string) {
+	if options == nil {
+		return
+	}
+	op, enabled := aiOperation(&models.ConversionJob{Options: options})
+	if !enabled || !services.IsStemOperation(op) {
+		return
+	}
+	format, _ := options["format"].(string)
+	if !services.IsAutoFormat(format) {
+		return
+	}
+	codec := ""
+	if path != "" && services.NeedsCodecProbe(name) {
+		codec = stemCodecProbe(ctx, cfg, path)
+	}
+	options["format"] = services.ResolveStemFormat(name, mime, codec)
+}
+
+// stemCodecProbe returns the first audio stream's codec ("" when unknown). A
+// variable so tests never shell out to ffprobe.
+var stemCodecProbe = func(ctx context.Context, cfg *config.Config, path string) string {
+	timeout := time.Duration(0)
+	if cfg != nil {
+		timeout = cfg.CommandTimeout
+	}
+	report, err := validation.Probe(ctx, "ffprobe", path, timeout)
+	if err != nil || report == nil {
+		return ""
+	}
+	return report.AudioCodec
 }
 
 func aiOperation(job *models.ConversionJob) (string, bool) {

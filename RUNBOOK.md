@@ -183,6 +183,7 @@ after changing them.
 | `PROD` | `false` | Legacy flag that used to pin whisper to GPU 0. Now mostly inert; the GPU scheduler is the source of truth. | `transcribe.go` |
 | `DOWNLOAD_LINK_SECRET` | _(empty)_ | **Secret** (MM80). Keys the AES-GCM sealed tokens of `POST /api/download/:jobId/link`. Empty = a random per-process key: links minted before a restart stop working (they live for minutes; the UI mints one per click), so it is optional. Set any long random string (`openssl rand -hex 32`) to survive restarts. Never log it. | `config.go`, `internal/dllink` |
 | `DOWNLOAD_LINK_TTL_SECONDS` | `300` | Lifetime of a signed download link (MM80), clamped to 30..3600. Only the START of a download must happen inside it; a running download and its Range resumes keep the token they began with, so keep it short. | `config.go` |
+| `RATE_LIMIT_RESULT_MP3_PER_SESSION_PER_HOUR` / `_PER_IP_PER_HOUR` | `20` / `40` | MM81. Route bucket `result_mp3` (tool `result_mp3`) on `POST /api/download/:jobId/mp3` ("Download as MP3" of a WAV result: one ffmpeg encode, no GPU, no quota). Every POST counts, including repeat clicks answered from the cache. Operators exempt. | `config.go`, `cmd/api/main.go` |
 
 ### 4.2 S3
 
@@ -1083,6 +1084,8 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/job/:jobId/events` | SSE event stream of job state changes. Closes on completed/failed. | Yes (open connection) |
 | GET | `/api/download/:jobId` | Stream the converted output file for jobs that produced one locally (image/audio/video convert + transcribe). | No |
 | POST | `/api/download/:jobId/link` | MM80. Owner only (MM05 header rules: owner `X-MM-Session-ID`, signed-in owner or operator; `?sid=` NOT accepted). Optional body `{fileName}` (save-as name, sanitized). Same lookup as `/download` (404 stranger/missing, 400 not completed, 404 file gone). `200 {url,expiresAt,sizeBytes,fileName}`; `url` is `/api/download/:jobId?token=<sealed>`, valid `DOWNLOAD_LINK_TTL_SECONDS` (300). Never charges quota (download of finished work). | No |
+| POST | `/api/download/:jobId/mp3` | MM81. "Download as MP3" of a **WAV** result (400 otherwise). Owner only (same lookup and rules as `/link`). First call starts one ffmpeg MP3 320k encode of the finished file into `OUTPUT_DIR/<jobId>/derived.mp3` → `202 {status:"processing"}`; once cached → `200 {status:"ready",url,expiresAt,sizeBytes,fileName}` where `url` is a signed `/api/download/:jobId?token=` whose sealed claims carry `Variant:"mp3"` (serves `derived.mp3` as `<name>.mp3`). Never charges quota (no `ai_ops`); bucket `result_mp3`. | No |
+| GET | `/api/download/:jobId/mp3` | MM81. Status poll for the above, owner only: `{status:"none"|"processing"|"failed"|"ready",...}` (ready carries a fresh signed link). Never starts an encode; not rate-bucketed. | No |
 | GET | `/api/download/:jobId?token=` | MM80. The token alone authorizes (identical 404 for expired/tampered/other-job tokens, even with owner headers). Attachment, real `Content-Length`, Range `206`/`416`, `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer`, `X-Accel-Buffering: no`. Lets the browser's download manager fetch huge results (no JS buffering). | No |
 | GET | `/api/result/:jobId` | Same file as `/download`, served inline with its sniffed MIME and HTTP range (`206`/`416`); unsafe types fall back to an octet-stream attachment. Accepts `?sid=`. | No |
 | POST | `/api/jobs/:jobId/share` | MM32. Owner only (MM24 strict check). Body optional `{ttlHours}` (>=1, clamped to 168 and to the remaining retention of the job result files; default 72). `201 {token,url,expiresAt}`; the plaintext token is shown once, only its SHA-256 is stored. `422 share_not_allowed` (metadata report, Darkroom, unknown kind), `409 result_unavailable` / `share_limit` (5 live links). | Owner |
@@ -1690,11 +1693,36 @@ cannot be edited, and keeps the session/visitor ids it carries (for
 URL. The header path (`X-MM-Session-ID` / `Authorization`) is unchanged, so an old
 UI keeps working.
 
+**Vocal stem format (MM81).** `isolate_vocals` / `remove_vocals` with no format or
+`"auto"` follow the input: lossy (mp3, m4a/aac, ogg, opus, ac3) stays in its format,
+lossless (wav, flac, aiff, alac) becomes FLAC, video input becomes MP3. `/upload`
+rewrites `auto` to the concrete format before the job exists (ffprobe only for
+ambiguous containers such as `.m4a`, which may be ALAC), so history, the download
+name and `server_download_served.output_format` all show the real format. Stems
+are encoded at 320k for MP3/AAC; WAV stays `pcm_s16le`, FLAC `flac`. An explicit
+`format: "wav"` (old UIs) is unchanged. A stem job on a video now runs the audio
+path and returns an audio stem.
+
+**Download as MP3 (MM81).** For an existing WAV result, `POST
+/api/download/:jobId/mp3` encodes the finished file once to
+`OUTPUT_DIR/<jobId>/derived.mp3` (written as `derived.mp3.part`, then renamed) and
+answers with a signed link for it; repeat clicks reuse the cache. The encode state
+is in memory: a restart mid-encode forgets it and the next click starts again
+(the temp file is overwritten). The cached file is ledgered as kind
+`derived_file` (locator `<jobId>/derived.mp3`, parent = the job id, created on
+the job's own clock so it expires with the result); the output_dir sweep and a
+job delete remove it with the directory. **Migration** `20261028002_derived_file_kind`
+widens the `mm_retained_objects` kind CHECK; run it before this build serves
+traffic or the ledger write fails (logged `retention_register_failed`, the MP3 is
+still served and is removed with its directory).
+
 **Failure modes:**
 
 | Symptom | Cause | Recovery |
 | --- | --- | --- |
 | `Converted file not found` (404) | The file was deleted from `OUTPUT_DIR` before download. | Cron retention; rerun the job. |
+| "Download as MP3" answers `{status:"failed"}` | ffmpeg could not read the WAV (log line `download mp3: job <id>: ...`). | Check the API log; the visitor can click again (each POST retries). |
+| `retention_register_failed kind=derived_file` | Migration `20261028002_derived_file_kind` not applied. | Run `go run ./internal/migrations up`. |
 | A signed link answers 404 `Job not found` | Token expired (> `DOWNLOAD_LINK_TTL_SECONDS` between click and request), the API restarted with `DOWNLOAD_LINK_SECRET` unset, or the link was used for another job. | Click Download again (mints a fresh link); set `DOWNLOAD_LINK_SECRET` to survive restarts. |
 | Large download stalls at a few MB | A proxy buffering the response (nginx `proxy_buffering`, `proxy_max_temp_file_size`). | Signed-link responses send `X-Accel-Buffering: no`; check nginx honors it and `proxy_read_timeout` is not tiny. |
 | Presigned URL returns 403 SignatureDoesNotMatch | Clock skew on the API host vs S3. | `timedatectl status`; sync NTP. |

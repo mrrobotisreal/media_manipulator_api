@@ -55,6 +55,10 @@ type Claims struct {
 	// Name is the owner's chosen save-as name (already sanitized by the
 	// handler); sealed so a link holder cannot rewrite Content-Disposition.
 	Name string `json:"n,omitempty"`
+	// Variant (MM81) names a derived file to serve instead of the result:
+	// "mp3" = the cached MP3 transcode of a WAV result. Empty = the result
+	// itself, so every token minted before MM81 means what it meant.
+	Variant string `json:"x,omitempty"`
 }
 
 // Signer seals and opens tokens with one server secret.
