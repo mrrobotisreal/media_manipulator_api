@@ -51,3 +51,14 @@ _Avoid_: calling a plain transcript a summary; "analysis" for this feature.
 **Deep synthesis** (MM74):
 `depth: deep` on a video summary: the synthesis step (only) runs on `OLLAMA_SUMMARY_DEEP_MODEL` (the 27B) served by the third, unpinned Ollama daemon at `OLLAMA_SUMMARY_DEEP_URL` (:11436). Pro only (`tiers.Limits.SummaryDeep`), and only when both env vars are set, which waits on Mitch's benchmark (>= 12 tokens/s at 100% GPU). Otherwise a `deep` request silently runs as `standard` and the job's `options.depth` records the effective depth. The frame pass never uses the deep model.
 _Avoid_: "deep mode" for anything but the synthesis model choice.
+
+**Voices** (MM77, ADR-0015):
+The feature: clone a voice from the user's own 5-60 s clip, design one from a text description, speak text in a saved or preset voice, convert a recording to a voice, and shift pitch/formant. Routes `/api/voices/*`, jobs `voice_tts` | `voice_convert` | `voice_shift` (the `mode` column carries the voice id or preset name), tier fields `voices*`, env `VOICES_*` and `TIER_*_VOICES_*`.
+_Avoid_: "TTS" or "clone" as the feature name in identifiers; "voiceover" (that is Darkroom's recorded narration, MM79 builds on voices for it).
+
+**mm_voices**:
+The table of saved voices: always owned by a signed-in account (anonymous visitors cannot save one), `kind` cloned | designed | preset, a consent record (`consent_at`, `consent_text_version`) required for a cloned voice, soft delete then sweep. Ledger kind `voice`; its reference clip and preview are `s3_object` rows under `voices/<userId>/<voiceId>/` with the voice id as parent.
+
+**mm-voices**:
+The resident FastAPI service on the GPU host (`scripts/server/voices_service.py`, unit `deploy/mm-voices.service`, `127.0.0.1:8791`, GPU 0) that holds Chatterbox Multilingual and Qwen3-TTS and answers the API's `internal/services/voices_client.go`. Files travel by path under the shared `VOICES_SCRATCH_DIR`. Not a per-job subprocess, unlike every other AI tool here.
+_Avoid_: calling it "the voices API" (that is `/api/voices` in this repo).

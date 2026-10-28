@@ -30,6 +30,10 @@ func (f *fakeLedgerDB) matches(r *fakeRow, fl telemetry.LedgerFilter) bool {
 	if fl.ProjectID != "" && r.ProjectID != fl.ProjectID {
 		return false
 	}
+	if fl.VoiceID != "" && !((r.Kind == KindVoice && r.Locator == fl.VoiceID) ||
+		(r.Kind == KindS3Object && r.ParentLocator == fl.VoiceID)) {
+		return false
+	}
 	return true
 }
 

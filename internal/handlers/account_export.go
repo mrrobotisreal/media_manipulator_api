@@ -47,6 +47,12 @@ type ExportStore interface {
 	GetOrCreateUserSettings(ctx context.Context, userID string, defaultHours int) (*telemetry.UserSettings, error)
 }
 
+// VoiceExportStore lists saved voices for the export (MM77). Optional: a store
+// that does not implement it exports an empty voices.json.
+type VoiceExportStore interface {
+	ExportVoices(ctx context.Context, userID string) ([]telemetry.ExportVoice, error)
+}
+
 // ExportLimiter is the 3-per-hour guard. Redis-backed in production.
 type ExportLimiter interface {
 	AllowWindow(ctx context.Context, key string, limit int, window time.Duration) (bool, int)
@@ -169,10 +175,16 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 				var metaJobs []string
 				if metaJobs, err = d.Store.ExportMetadataJobs(ctx, u.ID); err == nil {
 					settings, serr := d.Store.GetOrCreateUserSettings(ctx, u.ID, retention.DefaultHours(u.Tier))
+					var voices []telemetry.ExportVoice
+					if serr == nil {
+						if vs, ok := d.Store.(VoiceExportStore); ok {
+							voices, serr = vs.ExportVoices(ctx, u.ID)
+						}
+					}
 					if serr != nil {
 						err = serr
 					} else {
-						h.writeExport(c, u, settings, jobs, projects, files, metaJobs, now)
+						h.writeExport(c, u, settings, jobs, projects, files, metaJobs, voices, now)
 						return
 					}
 				}
@@ -184,7 +196,8 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 }
 
 func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *telemetry.UserSettings,
-	jobs []telemetry.ExportJob, projects []telemetry.ExportProject, files []telemetry.ExportFile, metaJobs []string, now time.Time) {
+	jobs []telemetry.ExportJob, projects []telemetry.ExportProject, files []telemetry.ExportFile, metaJobs []string,
+	voices []telemetry.ExportVoice, now time.Time) {
 	d := h.export
 
 	history := make([]map[string]any, 0, len(jobs))
@@ -222,6 +235,17 @@ func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *tel
 			entry["expiresAt"] = rfc(f.ExpiresAt)
 		}
 		fileList = append(fileList, entry)
+	}
+	// MM77: saved voices, metadata only. The audio is not exported (generated
+	// speech is in History; the reference clip is the user's own recording).
+	voiceList := make([]map[string]any, 0, len(voices))
+	for _, v := range voices {
+		voiceList = append(voiceList, map[string]any{
+			"id": v.ID, "name": v.Name, "kind": v.Kind, "languageHint": v.LanguageHint,
+			"description": nilIfEmpty(v.Description), "engineVersion": v.EngineVersion,
+			"consentAt": rfcp(v.ConsentAt), "consentTextVersion": nilIfEmpty(v.ConsentTextVersion),
+			"createdAt": rfc(v.CreatedAt), "updatedAt": rfc(v.UpdatedAt),
+		})
 	}
 	account := map[string]any{
 		"email": u.Email, "emailVerified": u.EmailVerified, "displayName": u.DisplayName,
@@ -262,6 +286,9 @@ func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *tel
 	}{{"history.json", history}, {"projects.json", proj}, {"files.json", map[string]any{
 		"note":  "These are files we hold for you right now. Each can be re-downloaded individually from your history while it exists; this export contains no media.",
 		"files": fileList,
+	}}, {"voices.json", map[string]any{
+		"note":   "Your saved voices: name, kind, language, consent record and dates. No audio is included; generated speech is in your history.",
+		"voices": voiceList,
 	}}, {"account.json", account}} {
 		if err := put(m.name, m.v); err != nil {
 			fail(err)
@@ -343,6 +370,8 @@ projects.json    Your Darkroom and Motion projects ("kind": studio | vector): na
 files.json       Every file we hold for you right now, with its size and expiry. Files are
                  not included here; re-download them individually from your history while
                  they exist.
+voices.json      Your saved voices: name, kind (cloned | designed), language, the consent you
+                 gave and when. No audio is included.
 metadata-reports Metadata reports we keep for you (one document per job), if you keep them.
 account.json     Your profile, plan and retention settings.
 

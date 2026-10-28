@@ -25,6 +25,9 @@ const (
 	// KindVectorProject is a Motion project row (MM43); its thumbnail is an
 	// s3_object row carrying the project id.
 	KindVectorProject = telemetry.RetainedVectorProject
+	// KindVoice is a saved voice row (MM77, mm_voices); its reference and
+	// preview objects are s3_object rows whose parent_locator is the voice id.
+	KindVoice = telemetry.RetainedVoice
 )
 
 // Store is the slice of *telemetry.Store the ledger needs. Tests pass a fake.

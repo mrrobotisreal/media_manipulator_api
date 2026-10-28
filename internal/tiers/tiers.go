@@ -104,6 +104,47 @@ type Limits struct {
 	VectorMaxDurationMs int `json:"vectorMaxDurationMs"`
 	// VectorVideo caps the raster exports (GIF, PNG sequence, MP4, WebM).
 	VectorVideo VectorVideo `json:"vectorVideo"`
+
+	// Voices (MM77, design VOICES.md §4.3). Generations draw from AIOpsPerDay
+	// and the shifter from OpsPerDay; these only cap size and saved voices.
+	// VoicesSaved is the saved-voice cap (-1 unlimited; anonymous 0).
+	VoicesSaved int `json:"voicesSaved"`
+	// VoicesMaxSeconds caps generated seconds per request; the speak text cap
+	// is VoicesMaxSeconds × VoiceCharsPerSecond.
+	VoicesMaxSeconds int `json:"voicesMaxSeconds"`
+	// VoicesConvert allows AI voice conversion; VoicesConvertMaxSeconds caps
+	// the converted input's duration.
+	VoicesConvert           bool `json:"voicesConvert"`
+	VoicesConvertMaxSeconds int  `json:"voicesConvertMaxSeconds"`
+}
+
+// VoiceCharsPerSecond is the speech-rate estimate behind the speak text cap
+// (design VOICES.md §5: text <= tier seconds × 18 characters).
+const VoiceCharsPerSecond = 18
+
+// DeploymentMaxVoiceSeconds is the voices ceiling the operator tier gets: the
+// mm-voices service refuses text over 20000 characters (MAX_TEXT_CHARS), and
+// 1110 s × 18 = 19980 stays under it.
+const DeploymentMaxVoiceSeconds = 1110
+
+// VoicesTextCap is the speak text cap in characters for a tier's limits.
+func (l Limits) VoicesTextCap() int {
+	if l.VoicesMaxSeconds <= 0 {
+		return 0
+	}
+	return l.VoicesMaxSeconds * VoiceCharsPerSecond
+}
+
+// applyVoices fills the voices fields of one public tier from config.
+func applyVoices(l Limits, row config.VoicesTierRow) Limits {
+	l.VoicesSaved = row.Saved
+	l.VoicesMaxSeconds = row.MaxSeconds
+	l.VoicesConvert = row.Convert
+	l.VoicesConvertMaxSeconds = row.ConvertMaxSeconds
+	if !l.VoicesConvert {
+		l.VoicesConvertMaxSeconds = 0
+	}
+	return l
 }
 
 // Unlimited is the sentinel StudioProjects, OpsPerDay and AIOpsPerDay use for
@@ -250,6 +291,16 @@ func New(cfg *config.Config) *Registry {
 		r.limits[t] = l
 	}
 
+	// Voices (MM77): one block for all four public rows. Anonymous can never
+	// save a voice (no owner for the consent record), whatever the env says.
+	vt := cfg.VoicesTiers
+	for t, row := range map[Tier]config.VoicesTierRow{TierAnonymous: vt.Anon, TierFree: vt.Free, TierPremium: vt.Premium, TierPro: vt.Pro} {
+		r.limits[t] = applyVoices(r.limits[t], row)
+	}
+	anon := r.limits[TierAnonymous]
+	anon.VoicesSaved = 0
+	r.limits[TierAnonymous] = anon
+
 	// Operator = Pro (the top public rung) with every allowance removed. Not configurable by
 	// env on purpose: there is no economics to tune here, only "the owner can
 	// test everything". The byte and duration caps are the deployment's own
@@ -273,6 +324,13 @@ func New(cfg *config.Config) *Registry {
 	operator.VectorVideo = VectorVideo{
 		MaxHeight: DeploymentMaxOutputHeight, MaxFps: DeploymentMaxVectorFps, MaxSeconds: cfg.MaxVideoDurationSeconds,
 	}
+	// Voices (MM77): no saved-voice cap, conversion on, and the length caps at
+	// the deployment's own ceilings (the service's text backstop; the upload
+	// duration ceiling) so the UI shows a real number.
+	operator.VoicesSaved = Unlimited
+	operator.VoicesMaxSeconds = DeploymentMaxVoiceSeconds
+	operator.VoicesConvert = true
+	operator.VoicesConvertMaxSeconds = cfg.MaxVideoDurationSeconds
 	r.limits[TierOperator] = operator
 	return r
 }

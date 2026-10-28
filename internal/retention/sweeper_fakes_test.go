@@ -28,7 +28,8 @@ type fakeLedgerDB struct {
 	assets       map[string][]string
 	assetProject map[string]string
 	projects     map[string]bool
-	vectors      map[string]string // vector project id -> thumbnail key ("" = none)
+	vectors      map[string]string   // vector project id -> thumbnail key ("" = none)
+	voices       map[string][]string // voice id -> its row's S3 keys (MM77)
 	anonymized   []string
 	parked       []string // locators of parked metadata_report rows
 	failOn       map[string]error
@@ -44,7 +45,7 @@ type fakeRow struct {
 
 func newFakeDB() *fakeLedgerDB {
 	return &fakeLedgerDB{rows: map[string]*fakeRow{}, keepMeta: map[string]bool{}, assets: map[string][]string{},
-		assetProject: map[string]string{}, projects: map[string]bool{}, vectors: map[string]string{}, failOn: map[string]error{}}
+		assetProject: map[string]string{}, projects: map[string]bool{}, vectors: map[string]string{}, voices: map[string][]string{}, failOn: map[string]error{}}
 }
 
 var idSeq int
@@ -292,6 +293,20 @@ func (f *fakeLedgerDB) DeleteStudioProjectRows(_ context.Context, project string
 	}
 	delete(f.projects, project)
 	sort.Strings(keys)
+	return keys, nil
+}
+
+func (f *fakeLedgerDB) DeleteVoiceRow(_ context.Context, voice string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.failOn["voice-row"]; err != nil {
+		return nil, err
+	}
+	keys, ok := f.voices[voice]
+	delete(f.voices, voice)
+	if !ok {
+		return nil, nil
+	}
 	return keys, nil
 }
 

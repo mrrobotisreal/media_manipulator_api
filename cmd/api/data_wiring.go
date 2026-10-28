@@ -18,6 +18,23 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 )
 
+// newUserDeleteSweeper is the sweeper behind user-initiated deletes (MM24
+// data controls, MM77 voice delete). It never runs on a ticker.
+func newUserDeleteSweeper(cfg *config.Config, store *telemetry.Store, jobManager *services.JobManager,
+	s3Client *s3.Client, m *metrics.Registry, log *slog.Logger) *retention.Sweeper {
+	var objStore retention.ObjectStore
+	if s3Client != nil {
+		objStore = retention.NewS3Store(s3Client)
+	}
+	return retention.NewSweeper(store, retention.OSDisk{}, objStore, jobManager.ActiveJobIDs,
+		retention.NewMeter(m), log, retention.SweepConfig{
+			UploadDir: cfg.UploadDir, OutputDir: cfg.OutputDir, Bucket: cfg.S3Bucket,
+			AllowedPrefixes: retentionS3Prefixes(cfg),
+			Batch:           cfg.RetentionSweepBatch, Budget: cfg.RetentionSweepBudget,
+			MaxAttempts: cfg.RetentionMaxAttempts,
+		})
+}
+
 // wireDataControls mounts the MM24 deletion / export surface. It builds its OWN
 // sweeper for user-initiated deletes: the ticker's sweeper only exists when
 // CLEANUP_ENABLED is set, and a user's "delete" must work regardless. Both run the
@@ -28,17 +45,7 @@ func wireDataControls(ctx context.Context, cfg *config.Config, store *telemetry.
 	vector *handlers.VectorHandler, account *handlers.AccountHandler, limiter *limits.Limiter, m *metrics.Registry,
 	emitter *analyticsemit.Emitter, mailer handlers.AccountDeletedMailer, log *slog.Logger) {
 
-	var objStore retention.ObjectStore
-	if s3Client != nil {
-		objStore = retention.NewS3Store(s3Client)
-	}
-	sweeper := retention.NewSweeper(store, retention.OSDisk{}, objStore, jobManager.ActiveJobIDs,
-		retention.NewMeter(m), log, retention.SweepConfig{
-			UploadDir: cfg.UploadDir, OutputDir: cfg.OutputDir, Bucket: cfg.S3Bucket,
-			AllowedPrefixes: retentionS3Prefixes(cfg),
-			Batch:           cfg.RetentionSweepBatch, Budget: cfg.RetentionSweepBudget,
-			MaxAttempts: cfg.RetentionMaxAttempts,
-		})
+	sweeper := newUserDeleteSweeper(cfg, store, jobManager, s3Client, m, log)
 
 	// Per-item routes (jobs, keep longer) and projects.
 	data := handlers.NewDataHandler(store, sweeper, jobManager, log)

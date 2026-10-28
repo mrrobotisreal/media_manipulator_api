@@ -75,3 +75,31 @@ func TestManager_Disabled_FallsThrough(t *testing.T) {
 	}
 	lease.Release(context.Background(), nil)
 }
+
+// MM77: TaskVoices honours GPU_SCHEDULER_DEFAULT_VOICES_DEVICE and defaults to
+// cuda:0 (the card mm-voices is pinned to), even when another card is bigger.
+func TestManager_PickDevice_Voices(t *testing.T) {
+	devices := []string{"cuda:0:RTX5080:16303", "cuda:1:RTX5080:16304"}
+	cases := []struct {
+		pref, want string
+	}{
+		{"", "cuda:0"},
+		{"cuda:0", "cuda:0"},
+		{"cuda:1", "cuda:1"},
+	}
+	for _, tc := range cases {
+		cfg := &config.Config{GPUSchedulerEnabled: true, GPUSchedulerDevices: devices, GPUSchedulerDefaultVoicesDevice: tc.pref}
+		m := NewManager(cfg, nil, nil, nil)
+		lease, err := m.Acquire(context.Background(), TaskVoices, "voice_tts", "", "")
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		if got := lease.Device().Key; got != tc.want {
+			t.Errorf("pref %q: got %q want %q", tc.pref, got, tc.want)
+		}
+		lease.Release(context.Background(), nil)
+	}
+	if TaskVoices != "voices" {
+		t.Fatalf("TaskVoices = %q", TaskVoices)
+	}
+}

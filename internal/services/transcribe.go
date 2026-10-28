@@ -728,20 +728,31 @@ func extractAudioForTranscribe(ctx context.Context, inputPath, outputDir string)
 }
 
 func callWhisperCT2(ctx context.Context, cfg WhisperCT2Config, audioPath, parentOutputDir string) (whisperResponse, error) {
-	if strings.TrimSpace(audioPath) == "" {
-		return whisperResponse{}, errors.New("audio path is required")
-	}
-	resolvedBin, err := ResolveWhisperCT2Bin(cfg.Bin)
+	payload, err := runWhisperCT2JSON(ctx, cfg, audioPath)
 	if err != nil {
 		return whisperResponse{}, err
 	}
+	return parseWhisperCT2Response(payload)
+}
+
+// runWhisperCT2JSON runs whisper-ctranslate2 on one audio file and returns its
+// raw JSON output. callWhisperCT2 parses it into a transcript; the voices
+// speech check (MM77) reads the per-segment no_speech_prob from the same JSON.
+func runWhisperCT2JSON(ctx context.Context, cfg WhisperCT2Config, audioPath string) ([]byte, error) {
+	if strings.TrimSpace(audioPath) == "" {
+		return nil, errors.New("audio path is required")
+	}
+	resolvedBin, err := ResolveWhisperCT2Bin(cfg.Bin)
+	if err != nil {
+		return nil, err
+	}
 	cfg.Bin = resolvedBin
 	if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
-		return whisperResponse{}, fmt.Errorf("create whisper output dir %s: %w", cfg.OutputDir, err)
+		return nil, fmt.Errorf("create whisper output dir %s: %w", cfg.OutputDir, err)
 	}
 	runOutputDir, err := os.MkdirTemp(cfg.OutputDir, "mm-whisper-ct2-")
 	if err != nil {
-		return whisperResponse{}, fmt.Errorf("create whisper run output dir: %w", err)
+		return nil, fmt.Errorf("create whisper run output dir: %w", err)
 	}
 	defer os.RemoveAll(runOutputDir)
 
@@ -777,7 +788,7 @@ func callWhisperCT2(ctx context.Context, cfg WhisperCT2Config, audioPath, parent
 		if cfg.DeviceIndex != nil {
 			deviceIdx = strconv.Itoa(*cfg.DeviceIndex)
 		}
-		return whisperResponse{}, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"whisper-ctranslate2 failed: %w\nHF_HOME(resolved)=%q model=%q device=%s device_index=%s\nstderr_tail: %s\nstdout_tail: %s",
 			err, hfHome, cfg.Model, cfg.Device, deviceIdx, tail(stderr, 4000), tail(stdout, 2000),
 		)
@@ -785,13 +796,13 @@ func callWhisperCT2(ctx context.Context, cfg WhisperCT2Config, audioPath, parent
 
 	jsonPath, err := locateWhisperCT2JSON(runOutputDir, audioPath)
 	if err != nil {
-		return whisperResponse{}, err
+		return nil, err
 	}
 	payload, err := os.ReadFile(jsonPath)
 	if err != nil {
-		return whisperResponse{}, fmt.Errorf("read whisper output json %s: %w", jsonPath, err)
+		return nil, fmt.Errorf("read whisper output json %s: %w", jsonPath, err)
 	}
-	return parseWhisperCT2Response(payload)
+	return payload, nil
 }
 
 func parseWhisperCT2Response(payload []byte) (whisperResponse, error) {

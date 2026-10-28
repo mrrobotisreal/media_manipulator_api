@@ -136,7 +136,7 @@ func TestExportZipMembersAndContent(t *testing.T) {
 		rc.Close()
 	}
 	sort.Strings(names)
-	want := []string{"README.txt", "account.json", "files.json", "history.json", "metadata-reports/job-1.json", "projects.json"}
+	want := []string{"README.txt", "account.json", "files.json", "history.json", "metadata-reports/job-1.json", "projects.json", "voices.json"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Fatalf("members %v want %v", names, want)
 	}

@@ -32,13 +32,17 @@ type LedgerFilter struct {
 	// the key). MM71 retires a Darkroom proxy replaced by a rebuild with it;
 	// the inline sweep also takes any object derived from that key.
 	S3Key string
+	// VoiceID narrows to one saved voice (MM77): its own ledger row (kind
+	// voice, locator = the id) and the s3_object rows registered with it as
+	// parent (reference.wav, preview.mp3).
+	VoiceID string
 }
 
 // Valid reports whether the filter is safe to run.
 func (f LedgerFilter) Valid() bool {
 	return strings.TrimSpace(f.UserID) != "" || strings.TrimSpace(f.SessionID) != "" ||
 		strings.TrimSpace(f.JobID) != "" || strings.TrimSpace(f.ProjectID) != "" || strings.TrimSpace(f.AssetID) != "" ||
-		strings.TrimSpace(f.S3Key) != ""
+		strings.TrimSpace(f.S3Key) != "" || strings.TrimSpace(f.VoiceID) != ""
 }
 
 // where renders the filter as SQL conditions over mm_retained_objects (alias o)
@@ -70,6 +74,9 @@ func (f LedgerFilter) where(start int) (string, []any) {
 	if strings.TrimSpace(f.S3Key) != "" {
 		conds = append(conds, "o.kind = 's3_object'")
 		add("o.locator = $%d", f.S3Key)
+	}
+	if strings.TrimSpace(f.VoiceID) != "" {
+		add("((o.kind = 'voice' AND o.locator = $%[1]d) OR (o.kind = 's3_object' AND o.parent_locator = $%[1]d))", f.VoiceID)
 	}
 	return strings.Join(conds, " AND "), args
 }
@@ -313,7 +320,15 @@ func (s *Store) DeleteUserProjects(ctx context.Context, userID string) (int64, e
 	// MM43: Motion projects go with the account too (their thumbnails are
 	// ledgered s3_object rows the preceding sweep already removed).
 	m, err := s.deleteUserVectorProjects(ctx, userID)
-	return n + m, err
+	if err != nil {
+		return n + m, err
+	}
+	// MM77: saved voices go with the account too. Their reference and preview
+	// objects are ledgered (kind voice + s3_object children) and the preceding
+	// account-wide sweep already removed them; this catches any row the ledger
+	// never knew. The mm_users FK cascade is the last backstop.
+	v, err := s.DeleteUserVoices(ctx, userID)
+	return n + m + v, err
 }
 
 // DeleteUserSettingsAndGrants removes mm_user_settings and mm_tier_grants rows

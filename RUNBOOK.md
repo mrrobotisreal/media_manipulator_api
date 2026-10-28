@@ -981,6 +981,75 @@ set `EMAIL_PROVIDER_API_KEY`, `EMAIL_FROM`, `EMAIL_ENABLED=true` in the server e
 repo), run migration `20261024004`, restart, then send yourself a test by signing up with a
 fresh verified account. Roll back by setting `EMAIL_ENABLED=false`.
 
+### 4.15 Voices (MM77)
+
+Voice cloning, voice design, voice conversion and the shifter (ADR-0015,
+`docs/design/VOICES.md`). The engines run in the resident **`mm-voices`**
+service on GPU 0 (`127.0.0.1:8791`, unit `deploy/mm-voices.service`, install
+`docs/INSTALL_VOICES.md`, service row in §12.8); the API drives it over HTTP
+(`internal/services/voices_client.go`). **Ships dark:** with `VOICES_ENABLED`
+unset every counted voices route answers 503 `voices_unavailable` (refunded)
+and `/api/voices/capabilities` reports `enabled:false`. The shifter
+(`/api/voices/shift`) is ffmpeg only and works with the service down.
+
+API env (in `/home/mwintrow/media-manipulator/api/.env`):
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `VOICES_ENABLED` | `false` | Master switch for the AI voice routes. |
+| `VOICES_URL` | `http://127.0.0.1:8791` | mm-voices base URL. `/health` is cached 10 s. |
+| `VOICES_TIMEOUT_SECONDS` | `300` | One synthesis / conversion call (covers a 10-20 s cold load and a 15-minute Pro convert). |
+| `VOICES_SCRATCH_DIR` | `/opt/media-manipulator-ai/tmp/voices` | Shared with the unit (same value there). The API writes inputs and the service writes outputs here; the service refuses any path outside it. Owned by `mwintrow`. |
+| `VOICES_VRAM_MIB` | `6000` | Size of the `TaskVoices` scheduler slot taken (on the voices card) before every service call, so a restoration job does not land there mid-synthesis. |
+| `GPU_SCHEDULER_DEFAULT_VOICES_DEVICE` | `cuda:0` | The card mm-voices is pinned to; the lease is forced onto it and the `gpu` telemetry lease records it. |
+| `VOICES_RATE_LIMIT_PER_SESSION_PER_HOUR` | `5` | `voices_create` bucket (POST `/api/voices`, `/api/voices/design`). Operators exempt. |
+| `VOICES_RATE_LIMIT_PER_IP_PER_HOUR` | `20` | Same bucket, per IP. |
+| `VOICES_DESIGN_PREVIEWS_PER_HOUR` | `3` | Uncounted `/api/voices/design/preview` renders per description hash per session (or account) per hour. |
+| `VOICES_DESIGN_PREVIEW_RATE_LIMIT_PER_IP_PER_HOUR` | `30` | Per-IP bucket `voices_design_preview` on `/api/voices/design/preview` (uncounted renders still use the GPU). Operators exempt. |
+| `VOICES_CONSENT_TEXT_VERSION` | `2026-10-28` | Stored with every cloned voice (`mm_voices.consent_text_version`). Bump it when the consent copy changes (MM78). |
+| `VOICES_SPEECH_CHECK` | `true` | Whisper `no_speech_prob` check on a new reference clip (first 30 s). |
+| `VOICES_NO_SPEECH_THRESHOLD` | `0.6` | Mean `no_speech_prob` above which a clip is refused (400 `no_speech_detected`). |
+| `VOICES_SPEECH_CHECK_MODEL` | `small` | Whisper model for that check (through the normal `WHISPER_CT2_*` path and scheduler). |
+
+Tier env (`TIER_<ANON\|FREE\|PREMIUM\|PRO>_VOICES_*`; operator = unlimited saves, conversion on, deployment ceilings):
+
+| Var suffix | anon / free / premium / pro | Effect |
+| --- | --- | --- |
+| `_VOICES_SAVED` | 0 / 1 / 5 / 25 | Saved-voice cap (403 `voice_limit`). Anonymous is always 0 whatever the env says. |
+| `_VOICES_MAX_SECONDS` | 30 / 60 / 300 / 900 | Generated seconds per request; speak text cap = this × 18 characters (400 `text_too_long`). |
+| `_VOICES_CONVERT` | false / true / true / true | AI conversion allowed (403 `voice_convert_not_in_plan`). |
+| `_VOICES_CONVERT_MAX_SECONDS` | 0 / 60 / 300 / 900 | Conversion input length (413 `voice_input_too_long`). |
+
+mm-voices unit env (in `deploy/mm-voices.service`, not the API's `.env`):
+`CUDA_VISIBLE_DEVICES=GPU-8c5d035f-59ba-2501-42eb-ec4d97a71527`,
+`HF_HOME=/var/lib/creatv/hf`, `VOICES_HOST=127.0.0.1`, `VOICES_PORT=8791`,
+`VOICES_SCRATCH_DIR`, `VOICES_IDLE_UNLOAD_SECONDS=600`,
+`VOICES_BUILTIN_PRESETS_DIR=/opt/media-manipulator-ai/models/voices/presets`
+(drop `<id>.wav` + optional `<id>.json` to add a preset, no restart),
+`VOICES_CHATTERBOX_REPO`, `VOICES_QWEN_DESIGN_REPO`, `VOICES_QWEN_CUSTOM_REPO`
+(the CustomVoice weights are the local dir
+`/home/mwintrow/models/qwen3-tts/Qwen3-TTS-12Hz-1.7B-CustomVoice`). Python is
+the existing venv `/home/mwintrow/ai/qwen3-tts/.venv`.
+
+Quota: one `ai_ops` for create (the preview render), design, speak, preset
+speak and convert; one `ops` for shift; preview, rename, delete and GETs are
+free. Sign-in (401 `sign_in_required`) and plan (403
+`voice_convert_not_in_plan`) refusals run before the charge; every other 4xx/5xx
+and every failed job is refunded (MM73).
+
+Data: table `mm_voices` (migration `20261028001_mm_voices`, run on the server
+before this build serves `/api/voices`), ledger kind `voice` plus `s3_object`
+children `voices/<userId>/<voiceId>/reference.wav` and `preview.mp3`. Voice
+delete and account deletion retire all three; the sweeper's S3 allowlist
+includes `voices/`. The data export lists voices in `voices.json` (no audio).
+Jobs: `mm_conversion_jobs.tool` = `voice_tts` | `voice_convert` |
+`voice_shift`, `mode` = the voice id or preset name; results `speech.mp3`
+(download) + `speech.wav` in the job output dir.
+
+**Rollback:** set `VOICES_ENABLED=false` and restart. To remove the table,
+first delete the `voices/` objects (they are voice samples), then run the down
+migration.
+
 ---
 
 ## 5. HTTP API surface
@@ -1036,6 +1105,17 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/billing/status` | Firebase auth; answers with billing off (`purchasable:false`). Adds (MM39) `plan` (`premium\|pro\|null`, stored tier of a subscription user) and `pendingPlan` (`{to, at}\|null`, from the Stripe schedule). `offer` is never set for Pro. MM69: `currency` (`usd\|eur\|null`, the subscription's), `currencyLocked` (true once Stripe fixed it: live subscription or a billed past one), `priceMonthly` (any currency; `priceMonthlyUSD` stays USD-only), and `offer.price` + `offer.currency` (`offer.priceUSD` kept, same numeral). | No |
 | POST | `/api/billing/retain` | Firebase auth. Retention offer (`docs/design/BILLING_RETENTION_OFFER.md`). 409 `offer_not_available` for Pro (MM39). | No |
 | GET | `/api/billing/session/:id` | Firebase auth. Checkout return: `{belongsToUser, paid, tierApplied, plan}` (`plan` MM39). | No |
+| GET | `/api/voices/capabilities` | MM77. Public, never 5xx. `{enabled, warm, engines, languages[], designLanguages[], presets[], shiftPresets[], limits:{voicesSaved, voicesMaxSeconds, voicesConvert, voicesConvertMaxSeconds, textMaxChars}, tier, signedIn}`. `enabled:false` when `VOICES_ENABLED` is off or mm-voices is unreachable. | No |
+| GET | `/api/voices` | MM77. Account required (401). `{voices:[{id,name,kind,languageHint,description?,seed?,engineVersion,consentAt,consentTextVersion,previewUrl,createdAt,updatedAt}], limit, used}`; `previewUrl` is a presigned GET. | No |
+| POST | `/api/voices` | MM77. Account. Multipart `reference` (5-60 s audio) + `name` (1-60), `languageHint`, `consent=true`. 400 `reference_too_short` / `reference_too_long` / `not_audio` / `no_speech_detected` / `consent_required` / `name_invalid` / `language_not_supported` / `reference_required`; 403 `voice_limit {limit,used,tier}`; 503 `voices_unavailable`. `201` voice. One `ai_ops`; `voices_create` bucket. | Sync (~10-30 s) |
+| POST | `/api/voices/design` | MM77. Account. `{name, description (<=1000), language (Qwen list), seed?}` → renders the 10 s reference with Qwen3-TTS VoiceDesign (random seed stored when absent) and the preview with Chatterbox. `201` voice (`kind:"designed"`). One `ai_ops`; `voices_create` bucket. | Sync |
+| POST | `/api/voices/design/preview` | MM77. Public. `{description, language, seed?}` → `{seed, mime:"audio/mpeg", seconds, audioBase64}`. Not counted; 429 `preview_limit` after 3 per description per session per hour, plus the per-IP `voices_design_preview` bucket (30/h). | Sync |
+| PATCH | `/api/voices/:id` | MM77. Owner. `{name}` → voice. 404 for strangers. | No |
+| DELETE | `/api/voices/:id` | MM77. Owner. Hides the voice, inline-sweeps its ledger rows (row, reference, preview). `200 {deleted:{objects,bytes},pending}`. Generations already made stay in History until their own retention. | No |
+| POST | `/api/voices/:id/speak` | MM77. Owner. `{text (<= tier seconds × 18), language, exaggeration? (0.25-2)}` → `202 {jobId, tool:"voice_tts"}`; poll `/api/job/:id`, fetch `/api/download/:id` (`speech.mp3`). One `ai_ops`. | Yes |
+| POST | `/api/voices/presets/:preset/speak` | MM77. Anonymous allowed. Same body; `:preset` from capabilities. `404 preset_not_found`. One `ai_ops`. | Yes |
+| POST | `/api/voices/convert` | MM77. Multipart `input` + `voiceId` (owner) or `preset`, optional `language`. 403 `voice_convert_not_in_plan` (anonymous), 413 `voice_input_too_long {limit,seconds}` over `voicesConvertMaxSeconds`. `202 {jobId, tool:"voice_convert"}`. One `ai_ops`. | Yes |
+| POST | `/api/voices/shift` | MM77. Multipart `input` + `semitones` (clamped ±12), `formant` (`preserved`\|`shifted`) or `preset` (`deeper`, `higher`, `child`, `elder`, `telephone`). Input up to the tier's `maxVideoSeconds`. `202 {jobId, tool:"voice_shift"}`. One `ops`. No GPU, no mm-voices, no watermark. | Yes |
 
 **CORS** allowed request headers include `If-Match` (MM43, Motion saves).
 **CORS** allow-list (in `cmd/api/main.go`): `https://media-manipulator.com`,
@@ -2197,6 +2277,28 @@ Job JSON gains `metadataAvailable: {original, result}` (stat-based) and `strippe
   ls $HF_HOME/hub 2>/dev/null | grep -q models-- && echo OK HF cache \
    || echo FAIL HF cache; }
 ```
+
+### 12.8 mm-voices (MM77)
+
+| Service | Unit | Bind | GPU | Python | Health |
+| --- | --- | --- | --- | --- | --- |
+| `mm-voices` (Chatterbox + Qwen3-TTS) | `/etc/systemd/system/mm-voices.service` (repo `deploy/mm-voices.service`) | `127.0.0.1:8791` | 0 (`GPU-8c5d035f-59ba-2501-42eb-ec4d97a71527`, beside Whisper) | `/home/mwintrow/ai/qwen3-tts/.venv/bin/python`, `HF_HOME=/var/lib/creatv/hf` | `GET http://127.0.0.1:8791/health` |
+
+```bash
+# Is it alive?
+systemctl is-active mm-voices && curl -sf http://127.0.0.1:8791/health >/dev/null && echo "mm-voices OK"
+curl -s http://127.0.0.1:8791/health | python3 -m json.tool      # engines.*.loaded, gpu, idleSeconds
+journalctl -u mm-voices -n 50 --no-pager                         # load/unload lines only
+curl -s -X POST http://127.0.0.1:8791/unload                     # free GPU 0 now
+# Model acceptance check (writes three WAVs):
+CUDA_VISIBLE_DEVICES=GPU-8c5d035f-59ba-2501-42eb-ec4d97a71527 HF_HOME=/var/lib/creatv/hf \
+  /home/mwintrow/ai/qwen3-tts/.venv/bin/python /opt/media-manipulator-ai/scripts/voices_service.py \
+  --self-test --out /opt/media-manipulator-ai/tmp/voices/selftest
+# What the API sees:
+curl -s http://127.0.0.1:59997/api/voices/capabilities | python3 -m json.tool
+```
+
+Redeploy the script: `sudo cp scripts/server/voices_service.py /opt/media-manipulator-ai/scripts/ && sudo systemctl restart mm-voices`.
 
 ---
 

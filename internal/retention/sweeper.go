@@ -69,6 +69,7 @@ type SweepStore interface {
 	DeleteStudioAssetRow(ctx context.Context, assetID string) error
 	DeleteStudioProjectRows(ctx context.Context, projectID string) ([]string, error)
 	DeleteVectorProjectRows(ctx context.Context, projectID string) ([]string, error)
+	DeleteVoiceRow(ctx context.Context, voiceID string) ([]string, error)
 	AnonymizeJob(ctx context.Context, jobID string) error
 	JobHasLiveRows(ctx context.Context, jobID string) (bool, error)
 }
@@ -330,6 +331,8 @@ func (s *Sweeper) processBatch(ctx context.Context, rows []telemetry.LedgerRow, 
 			s.finish(ctx, row, res, s.deleteStudioProject(ctx, row))
 		case KindVectorProject:
 			s.finish(ctx, row, res, s.deleteVectorProject(ctx, row))
+		case KindVoice:
+			s.finish(ctx, row, res, s.deleteVoice(ctx, row))
 		case KindJobRow:
 			s.finish(ctx, row, res, s.deleteJobRow(ctx, row))
 		case KindMetadata:
@@ -779,6 +782,43 @@ func (s *Sweeper) deleteVectorProject(ctx context.Context, row telemetry.LedgerR
 		return fail(err)
 	}
 	return outcome{done: true, bytes: row.SizeBytes, files: int64(len(keys))}
+}
+
+// deleteVoice removes a saved voice (MM77): the mm_voices row first, then its
+// reference and preview objects. The keys come from the row AND from the
+// s3_object ledger rows registered with the voice id as parent, so a retry after
+// the row is gone still finds them.
+func (s *Sweeper) deleteVoice(ctx context.Context, row telemetry.LedgerRow) outcome {
+	rowKeys, err := s.store.DeleteVoiceRow(ctx, row.Locator)
+	if err != nil {
+		return fail(fmt.Errorf("delete voice row: %w", err))
+	}
+	children, err := s.store.DerivedS3Rows(ctx, []string{row.Locator})
+	if err != nil {
+		return fail(fmt.Errorf("read voice objects: %w", err))
+	}
+	keys := append([]string(nil), rowKeys...)
+	for _, lr := range children {
+		keys = append(keys, lr.Locator)
+	}
+	keys = dedupeKeys(keys)
+	if err := s.deleteKeysWithDerived(ctx, keys); err != nil {
+		return fail(err)
+	}
+	return outcome{done: true, bytes: row.SizeBytes, files: int64(len(keys))}
+}
+
+func dedupeKeys(keys []string) []string {
+	seen := make(map[string]struct{}, len(keys))
+	out := keys[:0]
+	for _, k := range keys {
+		if _, ok := seen[k]; ok || k == "" {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+	return out
 }
 
 // deleteKeysWithDerived deletes keys plus their ledger-registered derivatives and
