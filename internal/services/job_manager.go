@@ -782,6 +782,20 @@ func (jm *JobManager) SetResultAsset(jobID, assetID string) error {
 	return nil
 }
 
+// SetResultSeconds records the length of a voice job's audio (MM79).
+func (jm *JobManager) SetResultSeconds(jobID string, seconds float64) error {
+	jm.mu.Lock()
+	job, ok := jm.jobs[jobID]
+	if !ok {
+		jm.mu.Unlock()
+		return fmt.Errorf("job not found")
+	}
+	job.ResultSeconds = seconds
+	jm.mu.Unlock()
+	jm.notifySubscribers(jobID)
+	return nil
+}
+
 // SetResultMime records the sniffed MIME type of the job's result file.
 func (jm *JobManager) SetResultMime(jobID, mime string) error {
 	jm.mu.Lock()

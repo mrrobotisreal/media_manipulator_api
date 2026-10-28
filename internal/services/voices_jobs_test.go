@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -319,5 +320,36 @@ func TestVoiceJobFinishHook(t *testing.T) {
 	}
 	if e.refund.n.Load() != 1 {
 		t.Fatalf("refunds %d", e.refund.n.Load())
+	}
+}
+
+// MM79: resultSeconds comes from the WAV header (byte rate × data size).
+func TestWavSeconds(t *testing.T) {
+	dir := t.TempDir()
+	mk := func(name string, byteRate uint32, dataBytes int) string {
+		hdr := []byte("RIFF\x00\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\xbb\x00\x00")
+		br := make([]byte, 4)
+		binary.LittleEndian.PutUint32(br, byteRate)
+		hdr = append(hdr, br...)
+		hdr = append(hdr, []byte("\x02\x00\x10\x00LIST\x04\x00\x00\x00abcddata")...)
+		sz := make([]byte, 4)
+		binary.LittleEndian.PutUint32(sz, uint32(dataBytes))
+		hdr = append(hdr, sz...)
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, append(hdr, make([]byte, dataBytes)...), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if got := WavSeconds(mk("a.wav", 48000, 48000*12)); got != 12 {
+		t.Errorf("12 s file read as %v", got)
+	}
+	if got := WavSeconds(mk("b.wav", 48000, 24000)); got != 0.5 {
+		t.Errorf("0.5 s file read as %v", got)
+	}
+	junk := filepath.Join(dir, "junk.wav")
+	_ = os.WriteFile(junk, []byte("ID3 not a wav"), 0o644)
+	if WavSeconds(junk) != 0 || WavSeconds(filepath.Join(dir, "missing.wav")) != 0 {
+		t.Error("unreadable files must read as 0")
 	}
 }

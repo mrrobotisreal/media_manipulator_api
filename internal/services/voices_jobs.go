@@ -2,9 +2,11 @@ package services
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -156,6 +158,9 @@ func (s *VoicesService) Process(ctx context.Context, req VoiceJobRequest) {
 	}
 	_ = s.jobs.SetResultSize(req.JobID, st.Size())
 	_ = s.jobs.SetResultMime(req.JobID, "audio/mpeg")
+	if secs := WavSeconds(wavPath); secs > 0 {
+		_ = s.jobs.SetResultSeconds(req.JobID, secs)
+	}
 	if req.Finish != nil {
 		if err := req.Finish(ctx, wavPath); err != nil {
 			s.fail(req, VoiceFinishFailedMessage, err)
@@ -532,4 +537,54 @@ func safeSegment(s string) string {
 		return "x"
 	}
 	return b.String()
+}
+
+// WavSeconds reads a PCM WAV's duration from its header (fmt byte rate and
+// data chunk size), 0 when the file is not a readable RIFF/WAVE. Used for the
+// job's resultSeconds (MM79); it never fails a job.
+func WavSeconds(path string) float64 {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	head := make([]byte, 12)
+	if _, err := io.ReadFull(f, head); err != nil || string(head[0:4]) != "RIFF" || string(head[8:12]) != "WAVE" {
+		return 0
+	}
+	var byteRate uint32
+	chunk := make([]byte, 8)
+	for i := 0; i < 64; i++ {
+		if _, err := io.ReadFull(f, chunk); err != nil {
+			return 0
+		}
+		id, size := string(chunk[0:4]), binary.LittleEndian.Uint32(chunk[4:8])
+		switch id {
+		case "fmt ":
+			body := make([]byte, size)
+			if _, err := io.ReadFull(f, body); err != nil || size < 12 {
+				return 0
+			}
+			byteRate = binary.LittleEndian.Uint32(body[8:12])
+			if size%2 == 1 {
+				_, _ = f.Seek(1, io.SeekCurrent)
+			}
+		case "data":
+			if byteRate == 0 {
+				return 0
+			}
+			if size == 0 || size == 0xFFFFFFFF { // streamed header: use the file size
+				if st, err := f.Stat(); err == nil {
+					pos, _ := f.Seek(0, io.SeekCurrent)
+					size = uint32(st.Size() - pos)
+				}
+			}
+			return float64(size) / float64(byteRate)
+		default:
+			if _, err := f.Seek(int64(size)+int64(size%2), io.SeekCurrent); err != nil {
+				return 0
+			}
+		}
+	}
+	return 0
 }
