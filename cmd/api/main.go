@@ -213,6 +213,12 @@ func main() {
 	// the plain /api group like the conversion routes; shares the GPU lease
 	// manager + command-audit runner.
 	documentScanHandler := handlers.NewDocumentScanHandler(jobManager, cfg, inspector, gpuMgr, store, cmdRunner)
+	// Video summary (MM74): its own SUMMARY_WORKERS queue (default 1, like
+	// ANALYSIS_WORKERS) so two summaries never load models at once. Mounted
+	// through the conversion handler; see setupRouter.
+	videoSummaryHandler := handlers.NewVideoSummaryHandler(jobManager, cfg, tierRegistry, s3Client, gpuMgr)
+	videoSummaryHandler.Start()
+	conversionHandler.SetVideoSummaryHandler(videoSummaryHandler)
 	// Double Raven partner portal — Postgres-backed document API (GET /api/dr/docs
 	// [, /:slug]) plus the in-portal "Create Doc" editor (draft create/update/
 	// publish + media asset presign/complete/delete). Shares the same pgx pool as
@@ -525,6 +531,8 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 			// the export allowance is spent.
 		}, map[string]gin.HandlerFunc{
 			models.MetricExport: handlers.ExportHeightGate(studioHandler.ExportHeightLookup),
+			// MM74: /api/summarize/start needs sign-in, refused before the charge.
+			models.MetricAIOps: summarizeQuotaGate(),
 		}))
 
 		api.GET("/health", func(c *gin.Context) {
@@ -563,6 +571,9 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// AI Document Scan is PUBLIC (like the conversion/tool routes) — mounted
 		// on the plain /api group, NOT behind the Firebase-gated restoreGroup.
 		handlers.RegisterDocumentScanRoutes(api, documentScanHandler)
+		// Video summary (MM74): /summarize/capabilities, /summarize/start (ai_ops,
+		// sign-in), /summarize/:jobId/result. Nil (tests) mounts nothing.
+		handlers.RegisterVideoSummaryRoutes(api, conversionHandler.VideoSummary())
 
 		// Double Raven partner portal document API. ALWAYS Firebase-gated and
 		// fail-closed via RequireDoubleRavenAuth (nil verifier -> 503; bad/missing
@@ -637,6 +648,9 @@ var quotaRoutes = []quotaRoute{
 	{metric: models.MetricAIOps, path: "/api/document-scan/start"},
 	{metric: models.MetricAIOps, path: "/api/image-restore/start"},
 	{metric: models.MetricAIOps, path: "/api/video-restore/start"},
+	// MM74: one summary = one ai_ops, refunded on 4xx / job failure (MM73);
+	// the sign-in gate (summarizeQuotaGate) runs before the charge.
+	{metric: models.MetricAIOps, path: summarizeStartPath},
 	{
 		metric: models.MetricAIOps,
 		matches: func(path string) bool {
@@ -760,6 +774,8 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 		{path: "/api/video-restore/start", routeKey: "video_restore_start", tool: "video_restore", sessionLimit: cfg.RestoreRateLimitPerSessionPerHour, ipLimit: cfg.RestoreRateLimitPerIPPerHour},
 		{path: "/api/image-restore/start", routeKey: "image_restore_start", tool: "image_restore", sessionLimit: cfg.ImageRestoreRateLimitPerSessionPerHour, ipLimit: cfg.ImageRestoreRateLimitPerIPPerHour},
 		{path: "/api/document-scan/start", routeKey: "document_scan_start", tool: "document_scan", sessionLimit: cfg.DocumentScanRateLimitPerSessionPerHour, ipLimit: cfg.DocumentScanRateLimitPerIPPerHour},
+		// MM74: video summary (Whisper + VLM + text model per job).
+		{path: summarizeStartPath, routeKey: "summarize_start", tool: "video_summary", sessionLimit: cfg.VideoSummary.RateLimitPerSessionPerHour, ipLimit: cfg.VideoSummary.RateLimitPerIPPerHour},
 		{path: "/api/video-transcode/probe", routeKey: "video_transcode_probe", tool: "video_transcode", sessionLimit: cfg.RateLimitTranscodesPerSessionPerHour, ipLimit: cfg.RateLimitTranscodesPerIPPerHour},
 		{path: "/api/ai/faces/detect", routeKey: "ai_faces_detect", tool: "ai_faces", sessionLimit: cfg.RateLimitAnalysisPerSessionPerHour, ipLimit: cfg.RateLimitAnalysisPerIPPerHour},
 		// Caption translator runs the local Ollama LLM — treat it like analysis

@@ -197,11 +197,17 @@ func (h *ConversionHandler) CompleteVideoUpload(c *gin.Context) {
 }
 
 func (h *ConversionHandler) downloadS3Object(ctx context.Context, key, path string) error {
+	return downloadS3ObjectTo(ctx, h.s3Client, h.cfg.S3Bucket, key, path)
+}
+
+// downloadS3ObjectTo streams one object to a local path. Shared by the
+// conversion routes and the video summary's presigned-upload path (MM74).
+func downloadS3ObjectTo(ctx context.Context, client *s3.Client, bucket, key, path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	result, err := h.s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(h.cfg.S3Bucket),
+	result, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {

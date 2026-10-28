@@ -87,6 +87,9 @@ type VideoSummaryRequest struct {
 	// Probe is the handler's ffprobe report (it already probed to refuse an
 	// unusable file before the job existed). nil makes the probe stage run it.
 	Probe *models.VideoProbeResponse
+	// UploadDir, when set, is the job's staged-upload directory, removed when
+	// the job ends (the frames, transcript and summary stay in OutputDir).
+	UploadDir string
 }
 
 // summaryLease / summaryLeaser abstract gpu.Manager so the stage-ordering test
@@ -449,6 +452,9 @@ func (s *VideoSummaryService) Process(ctx context.Context, req VideoSummaryReque
 func (s *VideoSummaryService) process(ctx context.Context, req VideoSummaryRequest, trace func(string)) {
 	ctx, cancel := context.WithTimeout(ctx, s.settings.JobTimeout)
 	defer cancel()
+	if req.UploadDir != "" {
+		defer func() { _ = os.RemoveAll(req.UploadDir) }()
+	}
 	run := &summaryRun{req: req, st: newSummaryStages(req.JobID, s.jobManager, trace), trace: trace}
 	if err := s.jobManager.UpdateJobStatus(req.JobID, models.StatusProcessing); err != nil {
 		return
