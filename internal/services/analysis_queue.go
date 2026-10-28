@@ -1,13 +1,10 @@
 package services
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -243,23 +240,15 @@ func (q *AnalysisQueue) transcribeVideo(ctx context.Context, job AnalysisJob) (s
 
 func (q *AnalysisQueue) extractFrames(ctx context.Context, job AnalysisJob) (string, []string, error) {
 	framesDir := filepath.Join(job.OutputDir, "frames")
-	if err := os.MkdirAll(framesDir, 0755); err != nil {
-		return "", nil, err
-	}
 	interval := envInt("OLLAMA_VLM_FRAME_INTERVAL_SECONDS", 10)
 	maxWidth := envInt("OLLAMA_VLM_MAX_WIDTH", 768)
 	maxFrames := envInt("OLLAMA_VLM_MAX_FRAMES", 24)
-	pattern := filepath.Join(framesDir, "frame_%05d.jpg")
-	filter := fmt.Sprintf("fps=1/%d,scale=%d:-2:flags=lanczos", interval, maxWidth)
-	_, stderr, err := runCommand(ctx, "ffmpeg", "-y", "-i", job.InputPath, "-vf", filter, "-q:v", "3", "-frames:v", strconv.Itoa(maxFrames), pattern)
-	if err != nil {
-		return framesDir, nil, fmt.Errorf("extract frames: %w: %s", err, tail(stderr, 1200))
-	}
-	frames, err := filepath.Glob(filepath.Join(framesDir, "frame_*.jpg"))
+	// Shared sampler (vlm.go, MM74); the ffmpeg invocation is unchanged.
+	frames, err := extractIntervalFrames(ctx, job.InputPath, framesDir, interval, maxWidth, maxFrames)
 	if err != nil {
 		return framesDir, nil, err
 	}
-	return framesDir, frames, nil
+	return framesDir, FramePaths(frames), nil
 }
 
 func (q *AnalysisQueue) analyzeFrameBatches(ctx context.Context, frames []string, transcriptPath string) ([]any, error) {
@@ -288,13 +277,9 @@ func (q *AnalysisQueue) analyzeFrameBatches(ctx context.Context, frames []string
 }
 
 func (q *AnalysisQueue) analyzeImages(ctx context.Context, paths []string, prompt string) (any, error) {
-	images := make([]string, 0, len(paths))
-	for _, path := range paths {
-		body, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-		images = append(images, base64.StdEncoding.EncodeToString(body))
+	images, err := encodeImagesBase64(paths)
+	if err != nil {
+		return nil, err
 	}
 	payload := map[string]any{
 		"model":  envOrDefault("OLLAMA_VLM_MODEL", defaultVLMModel),
@@ -306,27 +291,9 @@ func (q *AnalysisQueue) analyzeImages(ctx context.Context, paths []string, promp
 		}},
 		"format": "json",
 	}
-	body, _ := json.Marshal(payload)
-	url := strings.TrimRight(envOrDefault("OLLAMA_URL", "http://localhost:11434"), "/") + "/api/chat"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: time.Duration(envInt("OLLAMA_TIMEOUT_SECONDS", 300)) * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	var response map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("ollama status %d: %v", resp.StatusCode, response)
-	}
-	return response, nil
+	// Shared Ollama call (vlm.go, MM74); the raw response is kept as before.
+	client, baseURL := analysisOllamaClient()
+	return ollamaChat(ctx, client, baseURL, payload)
 }
 
 func (q *AnalysisQueue) analyzeTranscript(ctx context.Context, transcript, language string) (any, error) {
@@ -356,25 +323,10 @@ func (q *AnalysisQueue) analyzeTranscript(ctx context.Context, transcript, langu
 		"messages": []map[string]any{{"role": "user", "content": prompt}},
 		"format":   "json",
 	}
-	body, _ := json.Marshal(payload)
-	url := strings.TrimRight(envOrDefault("OLLAMA_URL", "http://localhost:11434"), "/") + "/api/chat"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	client, baseURL := analysisOllamaClient()
+	response, err := ollamaChat(ctx, client, baseURL, payload)
 	if err != nil {
 		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: time.Duration(envInt("OLLAMA_TIMEOUT_SECONDS", 300)) * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	var response map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("ollama status %d: %v", resp.StatusCode, response)
 	}
 	if message, ok := response["message"].(map[string]any); ok {
 		if content, ok := message["content"].(string); ok && strings.TrimSpace(content) != "" {
