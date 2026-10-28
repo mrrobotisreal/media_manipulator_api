@@ -64,13 +64,13 @@ func findResultFile(outputRoot, jobID string) string {
 
 // resolveRecordedResult mirrors the tail of resolveCompletedResult for a job the
 // process no longer remembers. On failure it has written the response.
-func (h *ConversionHandler) resolveRecordedResult(c *gin.Context, jobID string, allowQuerySID bool) (*models.ConversionJob, string, os.FileInfo, bool) {
+func (h *ConversionHandler) resolveRecordedResult(c *gin.Context, jobID string, allowQuerySID, granted bool) (*models.ConversionJob, string, os.FileInfo, bool) {
 	rec, err := h.records.JobRecord(c.Request.Context(), jobID)
 	if err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Job lookup is temporarily unavailable"})
 		return nil, "", nil, false
 	}
-	if !rec.Found || !authorizeRecordAccess(c, rec, jobID, allowQuerySID) {
+	if !rec.Found || (!granted && !authorizeRecordAccess(c, rec, jobID, allowQuerySID)) {
 		denyJobAccess(c)
 		return nil, "", nil, false
 	}

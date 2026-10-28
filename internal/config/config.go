@@ -190,6 +190,14 @@ type Config struct {
 	// result/download routes 404 for callers who do not own the job. False logs
 	// would-be denials and allows them (rollout mode).
 	ResultOwnershipEnforce bool
+	// DownloadLinkSecret (DOWNLOAD_LINK_SECRET, MM80) keys the AES-GCM sealed
+	// download tokens minted by POST /api/download/:jobId/link. A SECRET: never
+	// log it. Empty (the default) uses a random per-process key, so links only
+	// stop working across a restart (they live for minutes).
+	DownloadLinkSecret string
+	// DownloadLinkTTL (DOWNLOAD_LINK_TTL_SECONDS, default 300) is how long a
+	// minted download link stays valid. Clamped to 30 s .. 1 h.
+	DownloadLinkTTL time.Duration
 
 	TierAnonOpsPerDay int
 	// *ExportsPerDay is the Content Studio export allowance, a separate counter
@@ -720,6 +728,8 @@ func Load() *Config {
 		TierQuotaEnabled: getEnvBool("TIER_QUOTA_ENABLED", true),
 
 		ResultOwnershipEnforce: getEnvBool("RESULT_OWNERSHIP_ENFORCE", true),
+		DownloadLinkSecret:     getEnv("DOWNLOAD_LINK_SECRET", ""),
+		DownloadLinkTTL:        clampDuration(time.Duration(getEnvInt("DOWNLOAD_LINK_TTL_SECONDS", 300))*time.Second, 30*time.Second, time.Hour),
 
 		TierAnonOpsPerDay:             anonOps,
 		TierAnonExportsPerDay:         getEnvInt("TIER_ANON_EXPORTS_PER_DAY", anonOps),
@@ -1021,6 +1031,17 @@ func applyProTierDefaults(c *Config) {
 	c.TierProVectorVideoMaxHeight = getEnvIntDefault("TIER_PRO_VECTOR_VIDEO_MAX_HEIGHT", 2160)
 	c.TierProVectorVideoMaxFps = getEnvIntDefault("TIER_PRO_VECTOR_VIDEO_MAX_FPS", 60)
 	c.TierProVectorVideoMaxSeconds = getEnvIntDefault("TIER_PRO_VECTOR_VIDEO_MAX_SECONDS", 60)
+}
+
+// clampDuration bounds d to [lo, hi].
+func clampDuration(d, lo, hi time.Duration) time.Duration {
+	if d < lo {
+		return lo
+	}
+	if d > hi {
+		return hi
+	}
+	return d
 }
 
 func getEnv(key, defaultValue string) string {

@@ -181,6 +181,8 @@ after changing them.
 | `ANALYSIS_WORKERS` | `1` | Concurrent goroutines draining the analysis (Ollama) queue. | `config.go` |
 | `AI_ENABLED` | `true` | Master switch — when `false`, the `AIService` is not built and AI ops fail with "AI service is not enabled". | `config.go` |
 | `PROD` | `false` | Legacy flag that used to pin whisper to GPU 0. Now mostly inert; the GPU scheduler is the source of truth. | `transcribe.go` |
+| `DOWNLOAD_LINK_SECRET` | _(empty)_ | **Secret** (MM80). Keys the AES-GCM sealed tokens of `POST /api/download/:jobId/link`. Empty = a random per-process key: links minted before a restart stop working (they live for minutes; the UI mints one per click), so it is optional. Set any long random string (`openssl rand -hex 32`) to survive restarts. Never log it. | `config.go`, `internal/dllink` |
+| `DOWNLOAD_LINK_TTL_SECONDS` | `300` | Lifetime of a signed download link (MM80), clamped to 30..3600. Only the START of a download must happen inside it; a running download and its Range resumes keep the token they began with, so keep it short. | `config.go` |
 
 ### 4.2 S3
 
@@ -875,7 +877,7 @@ process is a no-op and the API behaves exactly as it did before the feed existed
 | --- | --- |
 | `server_job_created` | `services.JobManager.RecordJobCreated` (the handlers' `recordJobCreated` path) |
 | `server_job_completed` / `server_job_failed` | `services.JobManager.recordTransition`, on the first terminal transition |
-| `server_download_served` | `ConversionHandler.DownloadFile`, after the file is written |
+| `server_download_served` | `ConversionHandler.DownloadFile`, after the file is written. MM80: a Range request that does not start at byte 0 (a resume) is not counted; a signed-link download takes visitor/session/tier from the token and adds `via: "signed_link"` |
 | `server_quota_rejected` | `middleware.RequireQuota`, the 429 branch |
 | `server_rate_limited` | `limits.Limiter.recordEvent`, blocked decisions only |
 | `server_signup_completed` | `AccountHandler.Sync`, when the upsert created the row |
@@ -1080,6 +1082,8 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/job/:jobId` | Poll a job's full JSON state. `queueWaitMs` (ms, MM33) is the total time the job parked in the shared GPU scheduler (`GPUScheduler.AcquireTimed`, enqueue to acquire, summed across GPU stages); omitted when the job never queued (also on the SSE status). | No |
 | GET | `/api/job/:jobId/events` | SSE event stream of job state changes. Closes on completed/failed. | Yes (open connection) |
 | GET | `/api/download/:jobId` | Stream the converted output file for jobs that produced one locally (image/audio/video convert + transcribe). | No |
+| POST | `/api/download/:jobId/link` | MM80. Owner only (MM05 header rules: owner `X-MM-Session-ID`, signed-in owner or operator; `?sid=` NOT accepted). Optional body `{fileName}` (save-as name, sanitized). Same lookup as `/download` (404 stranger/missing, 400 not completed, 404 file gone). `200 {url,expiresAt,sizeBytes,fileName}`; `url` is `/api/download/:jobId?token=<sealed>`, valid `DOWNLOAD_LINK_TTL_SECONDS` (300). Never charges quota (download of finished work). | No |
+| GET | `/api/download/:jobId?token=` | MM80. The token alone authorizes (identical 404 for expired/tampered/other-job tokens, even with owner headers). Attachment, real `Content-Length`, Range `206`/`416`, `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer`, `X-Accel-Buffering: no`. Lets the browser's download manager fetch huge results (no JS buffering). | No |
 | GET | `/api/result/:jobId` | Same file as `/download`, served inline with its sniffed MIME and HTTP range (`206`/`416`); unsafe types fall back to an octet-stream attachment. Accepts `?sid=`. | No |
 | POST | `/api/jobs/:jobId/share` | MM32. Owner only (MM24 strict check). Body optional `{ttlHours}` (>=1, clamped to 168 and to the remaining retention of the job result files; default 72). `201 {token,url,expiresAt}`; the plaintext token is shown once, only its SHA-256 is stored. `422 share_not_allowed` (metadata report, Darkroom, unknown kind), `409 result_unavailable` / `share_limit` (5 live links). | Owner |
 | DELETE | `/api/jobs/:jobId/share` | MM32. Owner only. Revokes every live link. `200 {revoked:N}`. | Owner |
@@ -1671,11 +1675,26 @@ owner stay open. Owners live in memory with the job. `RESULT_OWNERSHIP_ENFORCE`
 (default `true`; `false` logs would-be denials and allows them) is the rollout
 switch.
 
+**Signed download links (MM80).** Large results (an 87-minute vocal-removal WAV
+is ~880 MB) cannot go through the UI's old `fetch` + `blob()` path: nothing
+reaches the browser's download manager until every byte sits in page memory, and
+tab memory limits kill it silently. The UI now calls `POST
+/api/download/:jobId/link` with its identity headers and navigates to the
+returned `url`, so the browser downloads natively (progress, pause/resume via
+Range). The token is AES-256-GCM sealed (`internal/dllink`) with the job id as
+authenticated data: it names one job, expires after `DOWNLOAD_LINK_TTL_SECONDS`,
+cannot be edited, and keeps the session/visitor ids it carries (for
+`server_download_served` attribution) unreadable. No Firebase token ever enters a
+URL. The header path (`X-MM-Session-ID` / `Authorization`) is unchanged, so an old
+UI keeps working.
+
 **Failure modes:**
 
 | Symptom | Cause | Recovery |
 | --- | --- | --- |
 | `Converted file not found` (404) | The file was deleted from `OUTPUT_DIR` before download. | Cron retention; rerun the job. |
+| A signed link answers 404 `Job not found` | Token expired (> `DOWNLOAD_LINK_TTL_SECONDS` between click and request), the API restarted with `DOWNLOAD_LINK_SECRET` unset, or the link was used for another job. | Click Download again (mints a fresh link); set `DOWNLOAD_LINK_SECRET` to survive restarts. |
+| Large download stalls at a few MB | A proxy buffering the response (nginx `proxy_buffering`, `proxy_max_temp_file_size`). | Signed-link responses send `X-Accel-Buffering: no`; check nginx honors it and `proxy_read_timeout` is not tiny. |
 | Presigned URL returns 403 SignatureDoesNotMatch | Clock skew on the API host vs S3. | `timedatectl status`; sync NTP. |
 | Presigned URL returns 403 AccessDenied | IAM role lacks `s3:GetObject` on `results/*`. | Add the policy. |
 | Presigned URL returns 404 NoSuchKey | The tarball never made it to S3 (PutObject failed earlier). | Check the job's `stages[].message` for `uploading_result`. |
