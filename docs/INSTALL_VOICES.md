@@ -88,7 +88,12 @@ $V/bin/pip install --no-deps \
   spacy-pkuseg==1.0.2 srsly==2.5.5 catalogue==2.0.10 \
   onnx==1.23.2 ml_dtypes==0.5.4 importlib_metadata==10.1.0 zipp==4.1.2
 
-# 3. Prove nothing that was there changed (expect only "+" lines, no "-" lines).
+# Chatterbox's watermarker (resemble-perth) imports pkg_resources, which
+# setuptools >= 81 no longer ships; without it the watermarker is None and
+# Chatterbox fails to load with "'NoneType' object is not callable".
+$V/bin/pip install "setuptools==80.9.0"
+
+# 3. Prove nothing else changed: expect only ">" additions, plus setuptools 82.0.1 -> 80.9.0.
 $V/bin/pip freeze | diff ~/ai/qwen3-tts/pip-freeze-before-chatterbox.txt - | grep '^[<>]'
 
 # 4. Both engines import, on GPU 0, with the Blackwell torch.
@@ -274,6 +279,8 @@ with Chatterbox from that clip. No restart needed.
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `no kernel image is available` at first request | a dependency replaced the cu128 torch | `pip freeze` diff against `~/ai/qwen3-tts/pip-freeze-before-chatterbox.txt`; reinstall `torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128` |
+| self-test `chatterbox: error ... TypeError` (`'NoneType' object is not callable` at `perth.PerthImplicitWatermarker()`) | setuptools >= 81 has no `pkg_resources` | `pip install "setuptools==80.9.0"` (S2) |
+| `Can't load feature extractor for '/var/lib/creatv/hf/transformers/...'` | `TRANSFORMERS_CACHE` from `~/.bashrc` made transformers fetch a partial second copy | the script now ignores `TRANSFORMERS_CACHE`; delete the partial `/var/lib/creatv/hf/transformers/models--Qwen--Qwen3-TTS-12Hz-1.7B-VoiceDesign` |
 | `pip check` complains about chatterbox pins | upstream test pins (torch 2.6, transformers 5.2, numpy<2) | expected; installed with `--no-deps` on purpose (S2) |
 | self-test `"error: engine_load_failed"` | weights missing or repo renamed | re-run S3; set the `VOICES_*_REPO` ids in the unit |
 | `/health` refuses the connection | unit not running or crashed on start | `journalctl -u mm-voices -n 100 --no-pager` |

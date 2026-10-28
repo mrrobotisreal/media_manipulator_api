@@ -982,6 +982,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO),
                         format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    # A legacy TRANSFORMERS_CACHE (set in the host's ~/.bashrc) makes transformers
+    # fetch a second, partial copy of each model outside HF_HOME/hub, so it is
+    # ignored and every weight comes from HF_HOME.
+    if os.environ.pop("TRANSFORMERS_CACHE", None) is not None:
+        log.info("ignoring TRANSFORMERS_CACHE; weights come from HF_HOME")
     voices = voices_from_env()
     if args.self_test:
         return self_test(voices, args.out or os.path.join(voices.scratch_dir, "selftest"))
