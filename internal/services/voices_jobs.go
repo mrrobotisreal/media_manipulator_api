@@ -100,7 +100,14 @@ type VoiceJobRequest struct {
 	// Cleanup runs after the job ends either way (removes the fetched
 	// reference and the scratch dir). Optional.
 	Cleanup func()
+	// Finish runs once the WAV and MP3 exist and before the job completes
+	// (MM79: ingest the WAV as a Darkroom audio asset). An error fails the
+	// job, which refunds its unit like any other failure. Optional.
+	Finish func(ctx context.Context, wavPath string) error
 }
+
+// VoiceFinishFailedMessage is the job error when Finish fails (MM79).
+const VoiceFinishFailedMessage = "Could not add the voiceover to the project. Your operation was not counted."
 
 // Process runs one voice job to completion. Any failure goes through
 // UpdateJobError, which marks the job failed and refunds its unit once.
@@ -149,6 +156,12 @@ func (s *VoicesService) Process(ctx context.Context, req VoiceJobRequest) {
 	}
 	_ = s.jobs.SetResultSize(req.JobID, st.Size())
 	_ = s.jobs.SetResultMime(req.JobID, "audio/mpeg")
+	if req.Finish != nil {
+		if err := req.Finish(ctx, wavPath); err != nil {
+			s.fail(req, VoiceFinishFailedMessage, err)
+			return
+		}
+	}
 	if err := s.jobs.UpdateJobResult(req.JobID, "/api/download/"+req.JobID); err != nil {
 		s.fail(req, "Could not record the result", err)
 		return

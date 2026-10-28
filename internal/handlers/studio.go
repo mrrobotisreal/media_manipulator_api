@@ -873,25 +873,10 @@ func (h *StudioHandler) runDeriveJob(scope retention.Scope, jobID string, asset 
 		return
 	}
 
-	if err := h.uploadLocalToS3(ctx, outPath, derivedKey, "audio/wav"); err != nil {
-		log.Printf("studio derive: upload derived failed: %v", err)
-		_ = h.jobManager.UpdateJobError(jobID, "Failed to store the result")
+	if msg, err := ingestStudioAudio(ctx, h.studioAudioSteps(), jobID, asset, derivedKey, outPath); err != nil {
+		log.Printf("studio derive: %s for job %s: %v", msg, jobID, err)
+		_ = h.jobManager.UpdateJobError(jobID, msg)
 		return
-	}
-
-	// Ingest the new asset (audio proxy + waveform peaks).
-	res, err := h.ingest.Generate(ctx, jobID, derivedKey, asset.ID, models.StudioMediaKindAudio, true, outPath, asset.DurationSeconds)
-	if err != nil {
-		log.Printf("studio derive: ingest failed for job %s: %v", jobID, err)
-		_ = h.jobManager.UpdateJobError(jobID, err.Error())
-		return
-	}
-	if err := h.repo.SetAssetDerived(ctx, asset.ID, res.ProxyKey, res.SpriteKey); err != nil {
-		_ = h.jobManager.UpdateJobError(jobID, "Failed to record proxy")
-		return
-	}
-	if res.PeaksKey != "" {
-		_ = h.repo.SetAssetPeaks(ctx, asset.ID, res.PeaksKey)
 	}
 	_ = h.jobManager.UpdateJobResult(jobID, "/api/studio/assets/"+asset.ID+"/proxy")
 	if err := h.jobManager.UpdateJobStatus(jobID, models.StatusCompleted); err != nil {

@@ -57,6 +57,9 @@ type ConversionJob struct {
 	// scheduler waiting for a slot (enqueue to acquire, summed over every GPU
 	// stage). Nil, and so omitted, when the job never had to queue.
 	QueueWaitMs *int64 `json:"queueWaitMs,omitempty"`
+	// AssetID is the Darkroom asset a job created (MM79: a voiceover rendered
+	// into a project). Empty, and so omitted, for every other job.
+	AssetID string `json:"assetId,omitempty"`
 }
 
 // MetadataAvailability reports which metadata documents can be requested.

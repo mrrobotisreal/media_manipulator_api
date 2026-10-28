@@ -41,7 +41,7 @@ func ErrorType(msg string) string {
 	}
 
 	switch {
-	case containsAny(m, "context deadline exceeded", "timed out", "timeout", "deadline exceeded", "signal: killed"):
+	case containsAny(m, "context deadline exceeded", "timed out", "timeout", "deadline exceeded", "signal: killed", "took too long"):
 		// signal: killed lands here rather than under OOM: our own command timeout
 		// kills subprocesses that way, and a timeout is the far more common cause.
 		return ErrorTypeTimeout
@@ -61,7 +61,7 @@ func ErrorType(msg string) string {
 		"decoder not found", "encoder not found", "does not contain any stream", "unrecognized"):
 		return ErrorTypeUnsupported
 	case containsAny(m, "connection refused", "connection reset", "no such host", "eof",
-		"503", "502", "upstream", "sidecar", "dial tcp"):
+		"503", "502", "upstream", "sidecar", "dial tcp", "engine is unavailable"):
 		return ErrorTypeUpstream
 	default:
 		// A real failure we have not categorised. `tool_failure` rather than

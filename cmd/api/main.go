@@ -373,6 +373,9 @@ func main() {
 	// dark: VOICES_ENABLED=false). Its deletes use the same user-delete sweeper.
 	voicesHandler = newVoicesHandler(cfg, tierRegistry, jobManager, gpuMgr, store, s3Client, limiter,
 		newUserDeleteSweeper(cfg, store, jobManager, s3Client, metricsReg, logging), logging)
+	// MM79: the Darkroom voiceover ingests into the studio handler's projects.
+	voicesHandler.SetVoiceover(studioHandler)
+	voicesHandler.SetAnalyticsEmitter(analyticsEmitter)
 
 	router := setupRouter(cfg, conversionHandler, studioHandler, vectorHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg, analyticsEmitter)
 
@@ -568,6 +571,9 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// Voices (MM77): saved voices, presets, speak, convert, shift. nil
 		// (tests) mounts nothing.
 		handlers.RegisterVoicesRoutes(api, voicesHandler)
+		// MM79: GET /studio/capabilities {voices} and the Darkroom voiceover
+		// route (the voices handler renders, the studio handler ingests).
+		handlers.RegisterStudioVoiceoverRoutes(api, voicesHandler)
 		// AI Video Restoration (multi-model comparison pipeline). The group
 		// carries the Firebase auth seam — a pass-through no-op while
 		// RESTORE_REQUIRE_FIREBASE_AUTH is off (the default).
@@ -691,6 +697,9 @@ var quotaRoutes = []quotaRoute{
 	{metric: models.MetricAIOps, path: "/api/voices/convert"},
 	{metric: models.MetricAIOps, matches: voicesSpeakPath},
 	{metric: models.MetricOps, path: "/api/voices/shift"},
+	// MM79: Darkroom "Generate voiceover" is one voice_tts render = one ai_ops,
+	// refunded on refusal / job failure like every voices route.
+	{metric: models.MetricAIOps, matches: handlers.IsStudioVoiceoverPath},
 }
 
 // isStudioExportPath matches the two routes that START a render: POST

@@ -25,6 +25,9 @@ func TestErrorType(t *testing.T) {
 		{"mp4 without moov", "moov atom not found", ErrorTypeCorruptInput},
 		{"unsupported codec", "Unknown encoder 'libaom-av1'", ErrorTypeUnsupported},
 		{"sidecar down", "dial tcp 127.0.0.1:8099: connect: connection refused", ErrorTypeUpstream},
+		// MM79: the voice job messages (services.VoiceUserMessage).
+		{"voice engine down", "The voice engine is unavailable right now. Your operation was not counted; try again shortly.", ErrorTypeUpstream},
+		{"voice engine slow", "The voice engine took too long. Your operation was not counted; try a shorter text.", ErrorTypeTimeout},
 		{"uncategorised tool failure", "convert: delegate failed at line 12", ErrorTypeToolFailure},
 	}
 

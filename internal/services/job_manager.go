@@ -768,6 +768,20 @@ func (jm *JobManager) AddQueueWait(jobID string, wait time.Duration) {
 	jm.notifySubscribers(jobID)
 }
 
+// SetResultAsset records the Darkroom asset a job created (MM79 voiceover).
+func (jm *JobManager) SetResultAsset(jobID, assetID string) error {
+	jm.mu.Lock()
+	job, ok := jm.jobs[jobID]
+	if !ok {
+		jm.mu.Unlock()
+		return fmt.Errorf("job not found")
+	}
+	job.AssetID = assetID
+	jm.mu.Unlock()
+	jm.notifySubscribers(jobID)
+	return nil
+}
+
 // SetResultMime records the sniffed MIME type of the job's result file.
 func (jm *JobManager) SetResultMime(jobID, mime string) error {
 	jm.mu.Lock()

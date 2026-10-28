@@ -247,3 +247,77 @@ func TestVoiceUserMessage(t *testing.T) {
 		t.Error("preset message")
 	}
 }
+
+// MM79 acceptance 7 (server truth at the emission seam): a voice job created
+// through RecordJobCreated with tool voice_tts and failed by the service
+// emits server_job_created then server_job_failed with tool_slug voice_tts in
+// the context and a coarse error_type (never the message); the convert and
+// shift tools flow the same way.
+func TestVoiceJobServerTruthEvents(t *testing.T) {
+	for tool, wantType := range map[string]string{
+		VoiceToolTTS:     "upstream",
+		VoiceToolConvert: "upstream",
+		VoiceToolShift:   "tool_failure",
+	} {
+		t.Run(tool, func(t *testing.T) {
+			e := newVoiceJobEnv(t)
+			an := &stubAnalytics{}
+			e.jm.SetAnalyticsEmitter(an)
+			e.synth.err = ErrVoicesUnavailable
+			req := e.job(t, tool)
+			req.ReferencePath, req.InputPath = e.ref, e.ref
+			e.jm.RecordJobCreated(context.Background(), req.JobID, testOwner(),
+				JobFacts{Tool: tool, Mode: "Vivian", MediaKind: "audio", SourceFormat: "text", TargetFormat: "mp3"})
+			if tool == VoiceToolShift {
+				e.svc.SetRunner(func(context.Context, string, ...string) (string, string, error) {
+					return "", "rubberband: /srv/uploads/x/secret name.wav", errors.New("exit status 1")
+				})
+			}
+			e.svc.Process(context.Background(), req)
+			created := an.named("server_job_created")
+			failed := an.named("server_job_failed")
+			if len(created) != 1 || len(failed) != 1 {
+				t.Fatalf("created %d failed %d", len(created), len(failed))
+			}
+			ev := failed[0]
+			if ev.Context["tool_slug"] != tool || ev.Context["job_id"] != req.JobID || ev.Context["media_kind"] != "audio" {
+				t.Errorf("context %v", ev.Context)
+			}
+			if ev.Properties["error_type"] != wantType {
+				t.Errorf("error_type %v want %s", ev.Properties["error_type"], wantType)
+			}
+			if _, ok := ev.Properties["duration_ms"]; !ok {
+				t.Error("duration_ms missing")
+			}
+			for _, v := range ev.Properties {
+				if s, ok := v.(string); ok && (strings.Contains(s, "/") || strings.Contains(s, " ")) {
+					t.Errorf("a property carries message text: %q", s)
+				}
+			}
+		})
+	}
+}
+
+// MM79: Finish runs after the MP3 exists; its error fails the job (refunded
+// once) with the user-safe message.
+func TestVoiceJobFinishHook(t *testing.T) {
+	e := newVoiceJobEnv(t)
+	req := e.job(t, VoiceToolTTS)
+	req.ReferencePath = e.ref
+	var sawWav string
+	req.Finish = func(_ context.Context, wav string) error {
+		sawWav = wav
+		if _, err := os.Stat(filepath.Join(filepath.Dir(wav), VoiceResultMP3)); err != nil {
+			t.Errorf("Finish ran before the MP3 existed")
+		}
+		return errors.New("ingest: s3 down")
+	}
+	e.svc.Process(context.Background(), req)
+	j := e.status(t, req.JobID)
+	if filepath.Base(sawWav) != VoiceResultWav || j.Status != models.StatusFailed || j.Error != VoiceFinishFailedMessage {
+		t.Fatalf("wav %q job %+v", sawWav, j)
+	}
+	if e.refund.n.Load() != 1 {
+		t.Fatalf("refunds %d", e.refund.n.Load())
+	}
+}

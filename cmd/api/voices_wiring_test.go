@@ -200,3 +200,70 @@ func TestVoicesCreateBucket(t *testing.T) {
 		t.Fatal("operator must be exempt from voices_create")
 	}
 }
+
+// MM79: the Darkroom voiceover is one ai_ops (and only the POST that starts
+// it; studio capabilities and the other project routes are not gated here).
+func TestStudioVoiceoverQuotaRoute(t *testing.T) {
+	for path, want := range map[string]string{
+		"/api/studio/projects/p1/voiceover": models.MetricAIOps,
+		"/api/studio/capabilities":          "",
+		"/api/studio/projects/p1/export":    models.MetricExport,
+		"/api/studio/projects/p1/versions":  "",
+	} {
+		if got := metricFor(path); got != want {
+			t.Errorf("%s: metric %q want %q", path, got, want)
+		}
+	}
+}
+
+// MM79 acceptance 2: anonymous with voiceId → 401 before the charge (ledger
+// untouched); with mm-voices down the route answers 503 and the unit is
+// refunded (no studio wired → 503 studio_unavailable, also refunded).
+func TestStudioVoiceoverChargeAndRefund(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := &stubQuotaStore{}
+	cfg := config.Load()
+	registry := tiers.New(cfg)
+	r := gin.New()
+	api := r.Group("/api")
+	api.Use(middleware.TierContext(middleware.TierConfig{Store: store, Registry: registry}, true))
+	api.Use(voicesPreCharge())
+	api.Use(quotaDispatcher(middleware.QuotaConfig{Store: store, Registry: registry, Enabled: true, IPHashSecret: quotaIPSalt[:]}))
+	handlers.RegisterStudioVoiceoverRoutes(api, newDownVoicesHandler(t))
+
+	post := func(body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/studio/projects/p1/voiceover", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-MM-Session-ID", "sess-vo")
+		r.ServeHTTP(w, req)
+		return w
+	}
+	w := post(`{"voiceId":"3f2b1c1e-0000-4000-8000-000000000001","text":"hi","language":"en"}`)
+	if w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "sign_in_required") {
+		t.Fatalf("anonymous saved voice: %d %s", w.Code, w.Body.String())
+	}
+	if w.Header().Get(middleware.HeaderQuotaLimit) != "" {
+		t.Fatal("refused before the charge, so no quota headers")
+	}
+	store.mu.Lock()
+	if len(store.counts) != 0 {
+		t.Fatalf("the 401 must not touch the ledger: %v", store.counts)
+	}
+	store.mu.Unlock()
+
+	for i := 0; i < 3; i++ {
+		w = post(`{"preset":"Vivian","text":"hi","language":"en"}`)
+		if w.Code != http.StatusServiceUnavailable {
+			t.Fatalf("request %d: %d %s", i, w.Code, w.Body.String())
+		}
+		if w.Header().Get(middleware.HeaderQuotaLimit) == "" {
+			t.Fatalf("request %d: a preset request is charged (then refunded)", i)
+		}
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if n := store.counts["session|sess-vo|ai_ops"]; n != 0 {
+		t.Fatalf("a 503 must be refunded; ledger shows %d", n)
+	}
+}

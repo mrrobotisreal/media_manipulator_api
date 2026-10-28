@@ -98,3 +98,14 @@ const ServerEmailSent = "server_email_sent"
 // vector_exports table stays the ground truth. Catalog entry:
 // media-manipulator-analytics MM49.
 const ServerVectorExportCounted = "server_vector_export_counted"
+
+// Voices (MM79, design docs/design/VOICES.md §4.5). Emitted by POST
+// /api/voices and POST /api/voices/design once the voice row and its audio
+// are stored (the 201): {kind: cloned|designed, languageHint, tier}. The
+// server twin of the client's voice_created; never a voice name, description
+// or audio. Identity comes from the request headers (X-MM-Visitor-ID is sent
+// only with analytics consent), so without it Emit drops the event and
+// mm_voices stays the ground truth. Generations are the ordinary server_job_*
+// lifecycle with tool voice_tts | voice_convert | voice_shift. Catalog entry:
+// media-manipulator-analytics MM79.
+const ServerVoiceCreated = "server_voice_created"
