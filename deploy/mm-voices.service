@@ -1,0 +1,39 @@
+# mm-voices: resident Chatterbox + Qwen3-TTS service for Media Manipulator
+# (MM77 S1, ADR-0015, docs/INSTALL_VOICES.md). Install:
+#   sudo cp deploy/mm-voices.service /etc/systemd/system/mm-voices.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now mm-voices
+# Health: curl -s http://127.0.0.1:8791/health
+[Unit]
+Description=Media Manipulator voices service (mm-voices, Chatterbox + Qwen3-TTS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mwintrow
+Group=mwintrow
+WorkingDirectory=/opt/media-manipulator-ai
+# GPU 0 by UUID (hosts only Whisper), so a re-enumeration cannot move it.
+Environment=CUDA_VISIBLE_DEVICES=GPU-8c5d035f-59ba-2501-42eb-ec4d97a71527
+Environment=HF_HOME=/opt/media-manipulator-ai/models/hf-cache
+Environment=VOICES_HOST=127.0.0.1
+Environment=VOICES_PORT=8791
+Environment=VOICES_SCRATCH_DIR=/opt/media-manipulator-ai/tmp/voices
+Environment=VOICES_IDLE_UNLOAD_SECONDS=600
+Environment=VOICES_BUILTIN_PRESETS_DIR=/opt/media-manipulator-ai/models/voices/presets
+# Hugging Face repo ids: MM76 S3 writes the ids actually downloaded here.
+Environment=VOICES_CHATTERBOX_REPO=ResembleAI/chatterbox
+Environment=VOICES_QWEN_DESIGN_REPO=Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+Environment=VOICES_QWEN_CUSTOM_REPO=Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+# Once every weight is in the cache, uncomment to stop the hub update check:
+#Environment=HF_HUB_OFFLINE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/media-manipulator-ai/venvs/voices/bin/python /opt/media-manipulator-ai/scripts/voices_service.py
+Restart=on-failure
+RestartSec=5
+# Model load is 10-20 s; give a stop time to finish a request.
+TimeoutStopSec=60
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

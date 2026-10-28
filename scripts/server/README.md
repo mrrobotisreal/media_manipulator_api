@@ -106,3 +106,41 @@ sudo cp scripts/server/document_ocr.py \
   /opt/media-manipulator-ai/scripts/document_ocr.py
 sudo chmod +x /opt/media-manipulator-ai/scripts/document_ocr.py
 ```
+
+## `voices_service.py`
+
+The resident **voices** service (`mm-voices`, MM77, ADR-0015). Unlike the
+scripts above it is not shelled out per job: it runs as its own systemd unit
+(`deploy/mm-voices.service`) from
+`/opt/media-manipulator-ai/scripts/voices_service.py` with the
+`/opt/media-manipulator-ai/venvs/voices` Python, bound to `127.0.0.1:8791`
+and pinned to GPU 0 by UUID. It keeps Chatterbox Multilingual (TTS from a
+reference clip, voice conversion) and Qwen3-TTS VoiceDesign + CustomVoice
+(voices from a description, presets) loaded, unloading each after
+`VOICES_IDLE_UNLOAD_SECONDS` (600) of idleness.
+
+The Go API (`internal/services/voices_client.go`) calls it over HTTP JSON:
+`GET /health`, `POST /tts`, `/design`, `/presets`, `/tts-preset`, `/vc`,
+`/unload`. Audio travels by path under `VOICES_SCRATCH_DIR`
+(`/opt/media-manipulator-ai/tmp/voices`), which the API owns; the service
+refuses any path outside it. Hugging Face repo ids come from
+`VOICES_CHATTERBOX_REPO`, `VOICES_QWEN_DESIGN_REPO`,
+`VOICES_QWEN_CUSTOM_REPO` (set in the unit). Clips dropped into
+`VOICES_BUILTIN_PRESETS_DIR` become built-in presets spoken by Chatterbox.
+
+Module-level imports are stdlib only (torch and the engines load lazily), so
+`python3 -m py_compile scripts/server/voices_service.py`, `--help` and the
+helper tests (`python3 -m unittest scripts/server/test_voices_service.py`)
+run on a machine without a GPU. `--self-test --out <dir>` is the model
+acceptance check.
+
+To deploy on the server:
+
+```bash
+sudo cp scripts/server/voices_service.py \
+  /opt/media-manipulator-ai/scripts/voices_service.py
+sudo chown mwintrow:mwintrow /opt/media-manipulator-ai/scripts/voices_service.py
+sudo systemctl restart mm-voices
+```
+
+See `docs/INSTALL_VOICES.md` for the full install flow (MM76).
