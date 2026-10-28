@@ -57,7 +57,15 @@ func TestVectorRoutesMountedAndNotQuotaCharged(t *testing.T) {
 
 func TestRetentionPrefixesIncludeVector(t *testing.T) {
 	got := retentionS3Prefixes(config.Load())
-	if got[len(got)-1] != "vector" {
+	// MM77: voices/ follows vector/; both must be on the allowlist.
+	has := map[string]bool{}
+	for _, p := range got {
+		has[p] = true
+	}
+	if !has["vector"] {
 		t.Fatalf("sweeper prefixes %v must include the Motion thumbnail prefix", got)
+	}
+	if !has["voices"] {
+		t.Fatalf("sweeper prefixes %v must include the voices prefix (MM77)", got)
 	}
 }

@@ -16,10 +16,14 @@ import (
 // (vector/<ownerUid>/<projectId>/thumb.png). The sweeper may delete under it.
 const vectorThumbnailS3Prefix = "vector"
 
+// voicesS3Prefix is the first key segment of every saved-voice object
+// (voices/<userId>/<voiceId>/reference.wav|preview.mp3, MM77).
+const voicesS3Prefix = "voices"
+
 // retentionS3Prefixes is the S3 allowlist every sweeper is built with: the job
-// uploads, results, Darkroom media and (MM43) Motion thumbnails.
+// uploads, results, Darkroom media, (MM43) Motion thumbnails and (MM77) voices.
 func retentionS3Prefixes(cfg *config.Config) []string {
-	return []string{"videos", cfg.S3ResultPrefix, cfg.ContentStudioS3Prefix, vectorThumbnailS3Prefix}
+	return []string{"videos", cfg.S3ResultPrefix, cfg.ContentStudioS3Prefix, vectorThumbnailS3Prefix, voicesS3Prefix}
 }
 
 // newVectorHandler builds the Motion handler (MM43). With no database the
