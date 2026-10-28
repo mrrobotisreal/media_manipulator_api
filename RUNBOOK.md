@@ -33,6 +33,7 @@ debug commands.
    - [7.10 Job status + SSE event stream](#710-job-status--sse-event-stream)
    - [7.11 Result download](#711-result-download)
    - [7.12 Motion / vector (MM43)](#712-motion--vector-mm43)
+   - [7.14 Video summary (MM74)](#714-video-summary-mm74)
 8. [GPU scheduling](#8-gpu-scheduling)
 9. [External dependencies](#9-external-dependencies)
 10. [Common incidents and recovery](#10-common-incidents-and-recovery)
@@ -333,6 +334,13 @@ Note: the earliest this rule deletes anything is 737 days after the oldest objec
 | `OLLAMA_VLM_MAX_WIDTH` | `768` | Max width of frames sent to the VLM. |
 | `OLLAMA_VLM_MAX_FRAMES` | `24` | Max frames per analysis batch. |
 | `OLLAMA_VLM_BATCH_SIZE` | `4` | Inner batch size when calling the VLM. |
+| `SUMMARY_ENABLED` | `false` | MM74 video summary master switch. Off: `/api/summarize/capabilities` says `enabled:false` and `POST /api/summarize/start` answers 503 `summary_unavailable` (refunded). Section 7.14. |
+| `OLLAMA_SUMMARY_MODEL` | `qwen3.5:9b-q8_0` | MM74 synthesis model (the text model already on the `OLLAMA_URL` daemon). The frame pass always uses `OLLAMA_VLM_MODEL`. |
+| `OLLAMA_SUMMARY_DEEP_MODEL` | empty (deep off) | MM74 `deep` synthesis model for Pro, e.g. `qwen3.8:27b`. Needs `OLLAMA_SUMMARY_DEEP_URL` too. **Leave unset until Mitch's benchmark passes** (section 7.14). |
+| `OLLAMA_SUMMARY_DEEP_URL` | empty (deep off) | MM74 daemon serving the deep model: the third, unpinned daemon `http://127.0.0.1:11436` (`ollama-mm-summary.service`). |
+| `OLLAMA_SUMMARY_MAX_INPUT_TOKENS` | `12000` | MM74 synthesis input budget (estimated). Over it, the least informative frame notes are dropped first, then the transcript is condensed; each adds a caveat to the summary. `num_ctx` is this + 4096. |
+| `SUMMARY_WORKERS` | `1` | MM74 summary queue workers (serial, like `ANALYSIS_WORKERS`): two summaries never load models at once. Keep 1 on the two-card box. |
+| `SUMMARY_STAGE_TIMEOUT_SECONDS` | `1800` | MM74 bound on each heavy stage (audio, frames, vision, synthesis); a timeout fails the job and refunds its `ai_ops`. The whole job is bounded by `COMMAND_TIMEOUT_SECONDS`. |
 
 ### 4.5 AI image / audio toolchain
 
@@ -677,6 +685,26 @@ raster caps at the deployment ceilings (4320 px, 240 fps, `MAX_VIDEO_DURATION_SE
 | `TIER_PRO_VECTOR_VIDEO_MAX_HEIGHT` / `_MAX_FPS` / `_MAX_SECONDS` | `2160` / `60` / `60` | Pro raster caps (MM49): every raster format, incl. MP4/WebM/PNG sequence. A 61 s, 2161 px or 61 fps request answers 422 `vector_cap_exceeded`. |
 | `VECTOR_MAX_DOC_BYTES` | `4194304` (4 MiB) | Largest saved Motion document; the sanitizer refuses anything bigger (422). |
 
+#### Video summary frame budgets and deep synthesis (MM74)
+
+`/api/tiers` exposes `summaryMaxFrames` (frames sampled for one summary) and
+`summaryDeep` (may ask for `depth: deep`) on every tier. Anonymous `0` means the
+feature needs sign-in: `POST /api/summarize/start` answers 403
+`{"error":"signin_required"}` from a pre-quota gate, so nothing is charged. One
+summary spends one `ai_ops`. Duration follows `TIER_*_MAX_VIDEO_SECONDS`.
+`summaryDeep` is Pro only (operator inherits Pro) and only matters when
+`OLLAMA_SUMMARY_DEEP_MODEL` + `_URL` are set; otherwise `deep` silently runs as
+`standard`.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `TIER_ANON_SUMMARY_MAX_FRAMES` | `0` | Frame budget, anonymous; `0` = sign-in required. |
+| `TIER_FREE_SUMMARY_MAX_FRAMES` | `24` | Frame budget, free. |
+| `TIER_PREMIUM_SUMMARY_MAX_FRAMES` | `48` | Frame budget, Premium. |
+| `TIER_PRO_SUMMARY_MAX_FRAMES` | `96` | Frame budget, Pro (and operator). |
+| `SUMMARY_RATE_LIMIT_PER_SESSION_PER_HOUR` | `6` | Route bucket `summarize_start` (tool `video_summary`), per session. Operator exempt. |
+| `SUMMARY_RATE_LIMIT_PER_IP_PER_HOUR` | `12` | Same bucket, per IP. |
+
 #### Billing add-on (Stripe, MM17) - ships dark
 
 Billing is **off** until `BILLING_ENABLED=true` AND all four values below are set
@@ -990,6 +1018,9 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/share/:token/file` | MM32. Public. Same serving code as `/api/result` (ranges, nosniff, unsafe types as attachments); `?download=1` forces an attachment. | No |
 | GET | `/api/transcript/:jobId` | Serve the `transcribe_result.json` for a transcribe job. | No |
 | GET | `/api/analysis/:jobId` | Serve the `analysis.json` (transcript summary + safety review) for a transcribe job. | No |
+| GET | `/api/summarize/capabilities` | MM74. `{enabled, vlmModel, summaryModel, deepModel?, deep, deepTiers[], maxFramesByTier{anonymous,free,premium,pro}, outputLanguages[]}`. `enabled` = `SUMMARY_ENABLED` and the `OLLAMA_URL` daemon answers `/api/tags`; `deep` = deep configured and its daemon answers. Public, never charged. Section 7.14. | No |
+| POST | `/api/summarize/start` | MM74. Multipart `file` + `options` JSON, or JSON `{s3Key, fileName, fileSizeBytes, options}` after `/api/video-upload/presign`. `options {outputLanguage: auto\|<locale>, depth: standard\|deep}`. 202 `{jobId}`. `ai_ops`; 403 `signin_required` (anonymous) or `summary_not_in_plan` (signed-in tier with a 0 budget) before the charge; 503 `summary_unavailable`; 400 `invalid_options`/`invalid_output_language`/`invalid_depth`/`no_file`/`invalid_s3_key`/`upload_not_found`; 413 `file_too_large` or `{error, reason: video_duration\|audio_duration\|...}`; 422 `unreadable_media`/`no_audio_or_video` (all refunded). Route bucket `summarize_start`. | Yes (queued, `SUMMARY_WORKERS`) |
+| GET | `/api/summarize/:jobId/result?format=md\|json` | MM74. `summary.md` (`text/markdown; charset=utf-8`, default) or `summary.json` (`application/json; charset=utf-8`), inline, `nosniff`. Owner only, same helper as `/transcript/:jobId` (stranger: 404 `{"error":"Job not found"}`). 409 `not_ready` until completed; 400 `invalid_format`. | No |
 | GET | `/api/tiers` | Public tier matrix: `tiers[]` (anonymous, free, premium, pro; limits per tier), `premiumPurchasable`, `proPurchasable`, MM69 `defaultCurrency` (`usd\|eur`, from the caller's country) and `prices: {usd: {premiumMonthly, premiumYearly, proMonthly, proYearly}, eur: {...}}` (identical numerals). Deprecated, kept one release: `premiumPriceUSD`, `premiumPriceYearlyUSD`, `proPriceUSD`, `proPriceYearlyUSD`. `Cache-Control: private, max-age=300` (MM69; was public). | No |
 | GET | `/api/vector/projects` | MM43 Motion. Firebase account required (401 otherwise). `{projects:[{id,name,revision,thumbnailKey?,documentBytes,createdAt,updatedAt}]}`, newest first; never carries `document`. | No |
 | POST | `/api/vector/projects` | MM43. Account required. `{name?, document}` (VectorDoc v1, sanitized; 422 `vector_doc_invalid {code,path,message}`, 413 `vector_doc_too_large`). `201` project with `document`, `revision:1`. 403 `vector_projects_limit {limit,used,upgradePath}` at the tier cap (counted inside the insert transaction). Ledgered as `vector_project`. | No |
@@ -1673,6 +1704,43 @@ leaves `vector_project` ledger rows it cannot write.
 - **Deploy (MM71).** No migration, no new env var. The UI action needs this API: the media bin offers it only for video assets whose `proxyGeneration` is 0, so an older API (no `proxyGeneration`) hides it, and a missing route answers "not available on this server" without touching the asset. Deploying the API alone changes nothing for the current UI (new imports are named `_g1`, which an old UI fetches by asset id as before).
 - **Rate limit.** Every preview seek is a Range request. `RATE_LIMIT_PER_IP_BURST` (default 20/s per IP, all routes) is enough for the fixed preview (at most about 2 seeks per second per element), but a 429 on `/proxy` in the access log during playback means the burst is too low for that user.
 
+### 7.14 Video summary (MM74)
+
+Design `docs/design/VIDEO_SUMMARY.md`, ADR-0014. Code: `internal/services/video_summary.go` (pipeline), `video_summary_plan.go` (frame plan, windows, input budget), `vlm.go` (frame + Ollama helpers shared with the analysis queue), `internal/handlers/video_summary.go` (routes).
+
+- **Job.** `mm_conversion_jobs.tool = video_summary`, mode `summarize`, `server_job_*` with tool `video_summary` (no new event, no new table). Stages on `/api/job/:id` (`stages[]`, `currentStage`): `probe`, `audio`, `frames`, `vision`, `synthesis`, `render`. A queued job's `probe` stage message says how many summaries are ahead. `audio` and `frames` run in parallel; `vision` needs both; `synthesis` starts strictly after them so the text model never shares VRAM with Whisper or the VLM.
+- **Stages.** `probe`: `ProbeVideoReport` (cover art and still-image codecs are not video, MM73). `audio`: 16 kHz mono WAV, `whisper-ctranslate2` through the shared GPU scheduler (`WHISPER_CT2_*`, `WHISPER_CT2_DEVICE_INDEX=0`) under a `TaskWhisper` lease; writes `transcript.json`. `frames`: one ffmpeg pass `select='gt(scene,0.30)',showinfo` for the cuts, then Go plans the frames (floor `max(2 s, duration / budget)`, gaps filled, evenly spaced subset over budget, even interval with no cuts) and extracts each at 768 px as `frames/frame_<seconds>.jpg`. `vision`: batches of 4 frames to `OLLAMA_VLM_MODEL` with only that window's transcript lines, `format: json`, one repair retry, `TaskVLM` lease; a batch still invalid is skipped with a caveat; writes `vision_notes.json`. `synthesis`: one call to `OLLAMA_SUMMARY_MODEL` (or the deep model), schema-validated, exactly one repair retry, `keep_alive 0`. `render`: `summary.json` + `summary.md`; `resultUrl` `/api/summarize/<id>/result?format=md`, `resultFileName` `summary.md`, `resultMime` `text/markdown`.
+- **Input paths.** Audio only (incl. MP3 with cover art): `frames`/`vision` skipped, caveat "Audio only". Video without an audio track: `audio` skipped. Audio with no speech: frames only, caveat "No speech detected". Neither audio nor a usable picture: 422 `no_audio_or_video` before the job exists (refunded).
+- **Failures** set a user-safe `error` on the job (e.g. "The summary model returned an invalid summary twice", "The vision model is not available right now", "Transcribing the speech took too long") and refund the `ai_ops` unit (MM73). Raw causes are logged as `video-summary job <id>: ...`.
+- **Download.** `/api/download/:jobId` (the link account History lists, also after an API restart) serves `summary.md` as `<name>_summary.md`; `summary.json` only via `/api/summarize/:jobId/result?format=json`.
+- **Files** (all in `outputs/<jobId>/`, the job's existing retention unit): `summary.md`, `summary.json`, `transcript.json`, `vision_notes.json`, `frames/`. The upload dir is removed when the job ends.
+- **Host facts (verified over SSH 2026-10-28).** Two RTX 5080 16 GB. Both existing Ollama daemons are pinned to **GPU 1**: `ollama.service` (:11434, `OLLAMA_URL`, pinned by UUID) and `ollama-mm-doc.service` (:11435, `DOCUMENT_SCAN_OLLAMA_URL`, pinned by index), both `OLLAMA_KEEP_ALIVE=0`. Whisper runs on **GPU 0** (`WHISPER_CT2_DEVICE_INDEX=0`). `qwen3-vl:8b-instruct-q8_0` (9.8 GB) and `qwen3.5:9b-q8_0` both load on GPU 1, one after the other. `qwen3.8:27b` (17 GB, about 20 GB with KV cache) cannot split across the two cards from a pinned daemon and spills to RAM; it needs the third, unpinned daemon below and is used only for `deep` synthesis.
+- **Turn it on (9B, works today).** API `.env`: `SUMMARY_ENABLED=true`, `OLLAMA_SUMMARY_MODEL=qwen3.5:9b-q8_0`; restart the API; `ollama list` must show `qwen3.5:9b-q8_0` and `qwen3-vl:8b-instruct-q8_0`. Check `curl -s localhost:59997/api/summarize/capabilities` says `"enabled":true`.
+- **Third daemon for the 27B (optional, Mitch).** `/etc/systemd/system/ollama-mm-summary.service`, the shape of `ollama-mm-doc.service` but with NO `CUDA_VISIBLE_DEVICES`:
+
+  ```ini
+  [Unit]
+  Description=Ollama (Media Manipulator summary, sharded across both GPUs)
+  After=network-online.target
+
+  [Service]
+  User=ollama
+  Group=ollama
+  ExecStart=/usr/local/bin/ollama serve
+  Environment="OLLAMA_HOST=127.0.0.1:11436"
+  Environment="OLLAMA_KEEP_ALIVE=0"
+  Environment="OLLAMA_MODELS=/usr/share/ollama/.ollama/models"
+  Restart=always
+  RestartSec=3
+
+  [Install]
+  WantedBy=multi-user.target
+  ```
+
+  Copy `ExecStart` from the existing unit if the binary lives elsewhere. `sudo systemctl daemon-reload && sudo systemctl enable --now ollama-mm-summary`.
+- **27B benchmark (gate for deep).** With :11434 and :11435 idle (`ollama ps` empty on both) and no Whisper job: `OLLAMA_HOST=127.0.0.1:11436 ollama run qwen3.8:27b --verbose "Summarise the following transcript in 150 words, then list 5 chapters with timestamps:" < sample-6k-tokens.txt`, then `OLLAMA_HOST=127.0.0.1:11436 ollama ps`. Pass: eval rate **>= 12 tokens/s** and `100% GPU` split over both cards. Then load `qwen3-vl:8b-instruct-q8_0` on :11434 and re-run to see the contended number. Only on a pass: `.env` `OLLAMA_SUMMARY_DEEP_MODEL=qwen3.8:27b`, `OLLAMA_SUMMARY_DEEP_URL=http://127.0.0.1:11436`, restart; capabilities then report `"deep":true`. Under 12 t/s leave both unset: `deep` stays off and runs as `standard`.
+- **Model swaps.** The VLM and the 9B share the GPU-1 daemon with `KEEP_ALIVE=0`, so a job pays two loads (the pipeline keeps the VLM loaded across its own batches with `keep_alive 2m` and releases it on the last batch). Record load times when measuring.
+
 ### 7.x Retention ledger and user retention setting (MM22)
 
 Retention is chosen by the user, not by tier: every signed-in account sets 24 h to 2 years (default 4320 h = 6 months) in `mm_user_settings`; guests are fixed at 24 h. `TIER_*_RETENTION_HOURS` no longer caps anything. Every producer of durable data (job `uploads/<jobId>/` and `outputs/<jobId>/` directories, S3 objects, Darkroom projects/assets) writes an `mm_retained_objects` row (`expires_at = created_at + window`) through `internal/retention.Register`; a failed write is logged as `retention_register_failed` and counted in `mm_retention_register_failed_total` and never fails the request. Routes: `GET/PATCH /api/account/settings` (`?dryRun=1`) and `GET /api/account/settings/preview?retentionHours=N`; changing the window re-stamps the caller's live rows with a floor of `now + 1h`. The ledger-driven sweeper (MM23, section 4.2.1) acts on `expires_at`; it ships in dry-run mode (`RETENTION_SWEEP_DRY_RUN=true`) until you turn enforcement on. **Deploy:** run migration `20261023004_add_user_settings_and_retained_objects` on the server before this build serves traffic (until then ledger writes fail, are metered, and settings routes answer 500).
@@ -1683,6 +1751,9 @@ The `GPUScheduler` is a process-wide singleton (created on first call to
 `SharedGPUScheduler()` from `internal/services/gpu_scheduler.go`). It's
 specifically for **whisper-ctranslate2 subprocesses** today — Ollama is
 treated as opaque and not scheduled by us (it has its own internal queue).
+The video summary (MM74, section 7.14) additionally records `gpu.Manager`
+leases (`TaskWhisper`, `TaskVLM`, `TaskOllama`, tool `video_summary`) for
+accounting; Ollama still places its own models.
 
 ### 8.1 Decision flow per Acquire call
 

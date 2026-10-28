@@ -76,6 +76,7 @@ func (jm *JobManager) LastJobPoll(jobID string) (time.Time, bool) {
 var aiTools = map[string]struct{}{
 	"image_restore": {}, "video_restore": {}, "document_scan": {},
 	"studio_captions": {}, "studio_derive": {},
+	"video_summary": {}, // MM74
 }
 
 func toolIsAI(tool string) bool {

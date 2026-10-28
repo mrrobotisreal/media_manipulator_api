@@ -73,6 +73,13 @@ func TestTiersResponseShape(t *testing.T) {
 			t.Errorf("%v: exportsPerDay must be present", d["tier"])
 		}
 		assertVectorShape(t, d["tier"], limits)
+		// MM74: the summary frame budget and deep flag are on every tier.
+		if _, isNum := limits["summaryMaxFrames"].(float64); !isNum {
+			t.Errorf("%v: summaryMaxFrames must be a number", d["tier"])
+		}
+		if _, isBool := limits["summaryDeep"].(bool); !isBool {
+			t.Errorf("%v: summaryDeep must be a bool", d["tier"])
+		}
 	}
 }
 

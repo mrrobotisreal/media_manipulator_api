@@ -531,6 +531,9 @@ type Config struct {
 	DocumentScanRateLimitPerSessionPerHour int
 	DocumentScanRateLimitPerIPPerHour      int
 
+	// VideoSummary is the MM74 video summary configuration (video_summary.go).
+	VideoSummary VideoSummaryConfig
+
 	// DR AI Chat Test Lab (/dr/demos/chat-lab) — a ChatGPT-style chat backed by
 	// OpenRouter, called from THIS API (never from the Next.js layer) so the key
 	// stays on the home server and every request passes RequireDoubleRavenAuth.
@@ -945,6 +948,9 @@ func Load() *Config {
 		DocumentScanMaxConcurrentJobs:          getEnvInt("DOCUMENT_SCAN_MAX_CONCURRENT_JOBS", 1),
 		DocumentScanRateLimitPerSessionPerHour: getEnvInt("DOCUMENT_SCAN_RATE_LIMIT_PER_SESSION_PER_HOUR", 20),
 		DocumentScanRateLimitPerIPPerHour:      getEnvInt("DOCUMENT_SCAN_RATE_LIMIT_PER_IP_PER_HOUR", 40),
+
+		// Video summary (MM74).
+		VideoSummary: loadVideoSummaryConfig(),
 
 		// DR AI Chat Test Lab (see struct doc). The key is the one true secret
 		// here — never log or echo it.

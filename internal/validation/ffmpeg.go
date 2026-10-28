@@ -280,6 +280,10 @@ func streamFrameRate(avg, r string) float64 {
 	return parseFrameRate(r)
 }
 
+// IsStillImageCodec is isStillImageCodec for other packages (MM74: the video
+// summary decides "usable video stream" with the same rule as the validator).
+func IsStillImageCodec(codec string) bool { return isStillImageCodec(codec) }
+
 // isStillImageCodec reports whether a "video" stream is really a single picture
 // (album art, a poster frame, an embedded thumbnail). Older ffprobe builds do
 // not always set disposition.attached_pic for these, so the codec is checked as
