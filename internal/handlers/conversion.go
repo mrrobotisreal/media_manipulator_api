@@ -52,6 +52,8 @@ type ConversionHandler struct {
 	data *DataHandler
 	// share serves the MM32 result-link routes. nil = not mounted.
 	share *ShareHandler
+	// videoSummary serves the MM74 /summarize routes. nil = not mounted.
+	videoSummary *VideoSummaryHandler
 }
 
 // SetJobRecords attaches the durable job lookup (MM24 download-after-restart).
@@ -66,6 +68,22 @@ func (h *ConversionHandler) SetShareHandler(s *ShareHandler) {
 	if h != nil {
 		h.share = s
 	}
+}
+
+// SetVideoSummaryHandler attaches the MM74 /summarize routes (mounted by
+// cmd/api's setupRouter through VideoSummary()).
+func (h *ConversionHandler) SetVideoSummaryHandler(v *VideoSummaryHandler) {
+	if h != nil {
+		h.videoSummary = v
+	}
+}
+
+// VideoSummary returns the attached summary handler, or nil.
+func (h *ConversionHandler) VideoSummary() *VideoSummaryHandler {
+	if h == nil {
+		return nil
+	}
+	return h.videoSummary
 }
 
 func (h *ConversionHandler) SetDataHandler(d *DataHandler) {
@@ -794,6 +812,9 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 	if name == "" {
 		name = "converted"
 	}
+	if isVideoSummaryJob(job) {
+		return name + "_summary.md"
+	}
 	if isTranscribeMode(job) {
 		return fmt.Sprintf("%s_transcript%s", name, h.getOutputExtension(job))
 	}
@@ -830,6 +851,10 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 }
 
 func (h *ConversionHandler) outputPath(job *models.ConversionJob, outputDir string) string {
+	// MM74: a video summary's downloadable result is summary.md.
+	if isVideoSummaryJob(job) {
+		return filepath.Join(outputDir, services.SummaryMarkdownFile)
+	}
 	if isTranscribeMode(job) {
 		return filepath.Join(outputDir, "transcript"+h.getOutputExtension(job))
 	}
@@ -874,6 +899,11 @@ func isVoiceJob(job *models.ConversionJob) bool {
 		return true
 	}
 	return false
+}
+
+// isVideoSummaryJob reports whether a job is an MM74 video summary.
+func isVideoSummaryJob(job *models.ConversionJob) bool {
+	return job != nil && strings.EqualFold(strings.TrimSpace(job.Mode), models.VideoSummaryMode)
 }
 
 // isImageRestoreMode reports whether a job is an AI Image Restoration job.

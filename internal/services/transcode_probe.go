@@ -61,8 +61,15 @@ func ProbeVideoReport(ctx context.Context, inputPath string) (*models.VideoProbe
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed: %w: %s", err, strings.TrimSpace(stderr))
 	}
+	return parseVideoProbeReport([]byte(stdout))
+}
+
+// parseVideoProbeReport builds the report from raw `ffprobe -print_format json
+// -show_streams -show_format` output. Split from ProbeVideoReport (MM74) so the
+// cover-art handling can be tested on canned ffprobe JSON.
+func parseVideoProbeReport(stdout []byte) (*models.VideoProbeResponse, error) {
 	var res ffprobeResult
-	if err := json.Unmarshal([]byte(stdout), &res); err != nil {
+	if err := json.Unmarshal(stdout, &res); err != nil {
 		return nil, fmt.Errorf("ffprobe parse: %w", err)
 	}
 

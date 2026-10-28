@@ -83,6 +83,13 @@ type Limits struct {
 	// protection, not a usage allowance.
 	RateLimitExempt bool `json:"rateLimitExempt"`
 
+	// Video summary (MM74). SummaryMaxFrames is the frame budget of one
+	// summary (TIER_<T>_SUMMARY_MAX_FRAMES; anonymous 0 = sign-in required).
+	// SummaryDeep allows depth "deep" (the larger synthesis model) when the
+	// operator configured it; Pro only.
+	SummaryMaxFrames int  `json:"summaryMaxFrames"`
+	SummaryDeep      bool `json:"summaryDeep"`
+
 	// Motion (vector, MM43). VectorExportsPerDay is its own daily counter
 	// (metric vector_export), never drawn from OpsPerDay or ExportsPerDay.
 	VectorExportsPerDay int `json:"vectorExportsPerDay"`
@@ -269,6 +276,20 @@ func New(cfg *config.Config) *Registry {
 	pro := r.limits[TierPro]
 	pro.VectorFormats = pro.VectorFormats.Union(premium.VectorFormats)
 	r.limits[TierPro] = pro
+
+	// Video summary (MM74): frame budgets per tier, deep synthesis for Pro.
+	// Operator inherits Pro's row below.
+	for t, frames := range map[Tier]int{
+		TierAnonymous: cfg.VideoSummary.TierAnonMaxFrames,
+		TierFree:      cfg.VideoSummary.TierFreeMaxFrames,
+		TierPremium:   cfg.VideoSummary.TierPremiumMaxFrames,
+		TierPro:       cfg.VideoSummary.TierProMaxFrames,
+	} {
+		l := r.limits[t]
+		l.SummaryMaxFrames = frames
+		l.SummaryDeep = t == TierPro
+		r.limits[t] = l
+	}
 
 	// Voices (MM77): one block for all four public rows. Anonymous can never
 	// save a voice (no owner for the consent record), whatever the env says.

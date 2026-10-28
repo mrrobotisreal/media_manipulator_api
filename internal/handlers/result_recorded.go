@@ -10,6 +10,7 @@ import (
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 )
 
 // MM24 (the gap MM23 flagged): GET /api/download/:jobId and GET /api/result/:jobId
@@ -35,6 +36,13 @@ func findResultFile(outputRoot, jobID string) string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return ""
+	}
+	// MM74: a video summary's download is exactly summary.md (summary.json is
+	// served by /api/summarize/:jobId/result).
+	for _, e := range entries {
+		if !e.IsDir() && e.Name() == services.SummaryMarkdownFile {
+			return filepath.Join(dir, e.Name())
+		}
 	}
 	for _, prefix := range resultFilePrefixes {
 		for _, e := range entries {

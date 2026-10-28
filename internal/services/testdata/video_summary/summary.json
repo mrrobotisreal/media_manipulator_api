@@ -1,0 +1,45 @@
+{
+  "title": "Building a birdhouse from one pine board",
+  "summary": "A presenter introduces a small woodworking project. She builds a birdhouse from a single pine board. The panels are cut, glued and nailed together. The finished birdhouse is shown at the end.",
+  "chapters": [
+    {
+      "start": 0,
+      "end": 45,
+      "title": "Introduction",
+      "description": "The presenter welcomes viewers and shows the board."
+    },
+    {
+      "start": 45,
+      "end": 140,
+      "title": "Building",
+      "description": "The panels are cut and assembled."
+    },
+    {
+      "start": 140,
+      "end": 180,
+      "title": "The finished house",
+      "description": "The birdhouse is shown complete."
+    }
+  ],
+  "topics": [
+    "woodworking",
+    "birdhouse",
+    "DIY"
+  ],
+  "onScreenText": [
+    {
+      "text": "WELCOME",
+      "firstSeen": 1
+    },
+    {
+      "text": "Step 1: measure",
+      "firstSeen": 60
+    }
+  ],
+  "visual": "A tidy home workshop with a desk, a laptop and hand tools; a static camera.",
+  "speech": "One presenter speaks in a calm, friendly tone.",
+  "language": "en",
+  "caveats": [
+    "The transcript is machine-generated and may contain mistakes."
+  ]
+}

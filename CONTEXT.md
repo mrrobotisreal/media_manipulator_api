@@ -44,6 +44,14 @@ Pro's own `Vector*` limits (`TIER_PRO_VECTOR_*`): 150 exports/day, Premium's for
 `usd` or `eur` (`billing.CurrencyUSD` / `CurrencyEUR`), sold at the same numerals. A Checkout Session always carries one: the request's, or the Stripe Customer's locked currency, which takes precedence (a mismatch answers 409 `currency_locked`). `mm_users.billing_currency` mirrors `Subscription.currency`, and `mm_user_settings.currency` stores the user's choice. The geographic default (`BILLING_EUR_COUNTRIES`) is display-only and is never used to charge.
 _Avoid_: converting amounts, adding USD and EUR together, or reading the currency from the item price, which is only the multi-currency Price's default.
 
+**Video summary** (MM74, ADR-0014):
+A staged job (tool `video_summary`, mode `summarize`) that turns a video or audio file into `summary.json` + `summary.md`: title, 3-6 sentence summary, timestamped chapters, topics, on-screen text, visual and speech paragraphs, language, caveats. Stages `probe`, `audio` (Whisper) ∥ `frames` (scene-aware sampling), `vision` (VLM notes per batch of four frames with that window's transcript), `synthesis` (one text-model call, schema-validated, one repair retry), `render`. Routes `/api/summarize/*`; one `ai_ops`; sign-in required (anonymous frame budget 0). Distinct from the internal **analysis** (`analysis_queue.go`, `analysis.json`), which shares the frame/VLM helpers in `vlm.go` but is product intelligence, never shown to users.
+_Avoid_: calling a plain transcript a summary; "analysis" for this feature.
+
+**Deep synthesis** (MM74):
+`depth: deep` on a video summary: the synthesis step (only) runs on `OLLAMA_SUMMARY_DEEP_MODEL` (the 27B) served by the third, unpinned Ollama daemon at `OLLAMA_SUMMARY_DEEP_URL` (:11436). Pro only (`tiers.Limits.SummaryDeep`), and only when both env vars are set, which waits on Mitch's benchmark (>= 12 tokens/s at 100% GPU). Otherwise a `deep` request silently runs as `standard` and the job's `options.depth` records the effective depth. The frame pass never uses the deep model.
+_Avoid_: "deep mode" for anything but the synthesis model choice.
+
 **Voices** (MM77, ADR-0015):
 The feature: clone a voice from the user's own 5-60 s clip, design one from a text description, speak text in a saved or preset voice, convert a recording to a voice, and shift pitch/formant. Routes `/api/voices/*`, jobs `voice_tts` | `voice_convert` | `voice_shift` (the `mode` column carries the voice id or preset name), tier fields `voices*`, env `VOICES_*` and `TIER_*_VOICES_*`.
 _Avoid_: "TTS" or "clone" as the feature name in identifiers; "voiceover" (that is Darkroom's recorded narration, MM79 builds on voices for it).
