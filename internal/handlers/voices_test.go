@@ -724,3 +724,17 @@ func TestVoicesPreChargeGate(t *testing.T) {
 		}
 	}
 }
+
+// Voice jobs download as speech.mp3 through the shared /api/download path.
+func TestVoiceJobOutputPath(t *testing.T) {
+	h := &ConversionHandler{}
+	for _, tool := range []string{services.VoiceToolTTS, services.VoiceToolConvert, services.VoiceToolShift} {
+		job := &models.ConversionJob{ID: "j", OriginalFile: models.OriginalFileInfo{Name: "talk.m4a", Type: "audio/mp4"}, Options: map[string]any{"mode": tool}}
+		if got := h.outputPath(job, "/out/j"); got != "/out/j/speech.mp3" {
+			t.Errorf("%s output path %q", tool, got)
+		}
+		if got := h.getOutputFilename(job); got != "talk_voice.mp3" {
+			t.Errorf("%s download name %q", tool, got)
+		}
+	}
+}

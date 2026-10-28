@@ -622,6 +622,9 @@ func (h *ConversionHandler) getOutputExtension(job *models.ConversionJob) string
 	if mode, _ := job.Options["mode"].(string); strings.EqualFold(strings.TrimSpace(mode), "stitch_audio_to_video") {
 		return ".mp4"
 	}
+	if isVoiceJob(job) {
+		return ".mp3"
+	}
 	switch models.GetFileType(job.OriginalFile.Type) {
 	case models.FileTypeImage:
 		if ext := aiImageExtension(job); ext != "" {
@@ -813,6 +816,9 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 	if isImageRestoreMode(job) {
 		return fmt.Sprintf("%s_restoration_results.tar.gz", name)
 	}
+	if isVoiceJob(job) {
+		return fmt.Sprintf("%s_voice.mp3", name)
+	}
 	if models.GetFileType(job.OriginalFile.Type) == models.FileTypeDocument {
 		ext := h.getOutputExtension(job)
 		if ext == ".zip" {
@@ -849,7 +855,25 @@ func (h *ConversionHandler) outputPath(job *models.ConversionJob, outputDir stri
 	if isImageRestoreMode(job) {
 		return filepath.Join(outputDir, "image_restoration_results.tar.gz")
 	}
+	// Voice jobs (MM77) leave speech.wav + speech.mp3; the MP3 is the download.
+	if isVoiceJob(job) {
+		return filepath.Join(outputDir, services.VoiceResultMP3)
+	}
 	return filepath.Join(outputDir, "converted"+h.getOutputExtension(job))
+}
+
+// isVoiceJob reports whether a job is a voice_tts / voice_convert / voice_shift
+// job (MM77).
+func isVoiceJob(job *models.ConversionJob) bool {
+	if job == nil || job.Options == nil {
+		return false
+	}
+	mode, _ := job.Options["mode"].(string)
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case services.VoiceToolTTS, services.VoiceToolConvert, services.VoiceToolShift:
+		return true
+	}
+	return false
 }
 
 // isImageRestoreMode reports whether a job is an AI Image Restoration job.
