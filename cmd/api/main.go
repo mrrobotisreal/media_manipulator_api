@@ -481,7 +481,7 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// Quota state, read by the UI's meter after every gated request. The
 		// browser hides response headers that are not listed here.
 		middleware.HeaderQuotaLimit, middleware.HeaderQuotaRemaining,
-		middleware.HeaderQuotaReset, middleware.HeaderTier,
+		middleware.HeaderQuotaReset, middleware.HeaderTier, middleware.HeaderQuotaMetric,
 	}
 	router.Use(cors.New(corsConfig))
 	router.Use(middleware.RequestContext())
@@ -651,6 +651,12 @@ var newRouteGuard = func(limiter *limits.Limiter) func(routeKey, tool string, se
 // limiter's — non-reversibility within a snapshot, not secrecy.
 var quotaIPSalt = sha256.Sum256([]byte("mm-api-quota-ip-salt"))
 
+// quotaMetricByJob marks a route whose metric depends on the job it starts
+// (MM90): the handler decides `ops` or `ai_ops` from the parsed options
+// (handlers.QuotaMetricForJob) and spends exactly one of them through
+// middleware.SpendDeferredQuota. It is never a ledger metric itself.
+const quotaMetricByJob = "by_job"
+
 // quotaRoute maps one gated endpoint to the metric it spends.
 type quotaRoute struct {
 	metric string
@@ -664,14 +670,22 @@ type quotaRoute struct {
 // charge — status polls, downloads, capability probes and the account
 // endpoints themselves must never spend a visitor's allowance.
 var quotaRoutes = []quotaRoute{
+	// One upload, one allowance, decided by the job (MM90): a model-run AI
+	// operation (upscale, face blur, text redaction, object removal, vocal
+	// separation, frame interpolation) or a transcription spends one `ai_ops`;
+	// every other job, including AI background removal, Clean Voice and
+	// background-noise removal, spends one `ops`. Never both.
+	{metric: quotaMetricByJob, path: "/api/upload"},
+	{metric: quotaMetricByJob, path: "/api/video-upload/complete"},
+
 	// `ops` — the everyday conversion work the daily allowance is about.
-	{metric: models.MetricOps, path: "/api/upload"},
-	{metric: models.MetricOps, path: "/api/video-upload/complete"},
 	{metric: models.MetricOps, path: "/api/video-transcode/start"},
-	{metric: models.MetricOps, path: "/api/tools/caption-translator"},
 	{metric: models.MetricOps, path: "/api/tools/stitch-audio-to-video"},
 
-	// `ai_ops` — GPU-bound work with a much tighter allowance.
+	// `ai_ops` — model-run work with its own, separate daily allowance. It is
+	// not part of the `ops` allowance: spending one never spends the other.
+	// MM90: caption translation runs a language model.
+	{metric: models.MetricAIOps, path: "/api/tools/caption-translator"},
 	{metric: models.MetricAIOps, path: "/api/document-scan/start"},
 	{metric: models.MetricAIOps, path: "/api/image-restore/start"},
 	{metric: models.MetricAIOps, path: "/api/video-restore/start"},
@@ -764,7 +778,12 @@ func quotaDispatcher(cfg middleware.QuotaConfig, preQuotaGates ...map[string]gin
 			gates[k] = v
 		}
 	}
-	byMetric := map[string]gin.HandlerFunc{}
+	byMetric := map[string]gin.HandlerFunc{
+		// The job-decided routes charge inside the handler (DeferQuota). No
+		// pre-charge gate applies to them: the gates are keyed by metric, and
+		// the metric is not known until the options are parsed.
+		quotaMetricByJob: middleware.DeferQuota(cfg),
+	}
 	for _, r := range quotaRoutes {
 		if _, ok := byMetric[r.metric]; !ok {
 			quota := middleware.RequireQuota(cfg, r.metric)

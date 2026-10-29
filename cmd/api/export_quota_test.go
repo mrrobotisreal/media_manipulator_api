@@ -28,7 +28,7 @@ func TestExportHasItsOwnAllowance(t *testing.T) {
 	}))
 	ok := func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) }
 	api.POST("/studio/projects/:id/export", ok)
-	api.POST("/upload", ok)
+	api.POST("/upload", chargeByJob(ok))
 
 	do := func(path string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()

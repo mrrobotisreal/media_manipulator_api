@@ -253,7 +253,7 @@ func quotaTestRouter(store middleware.QuotaStore, registry *tiers.Registry) *gin
 		Enabled:      true,
 		IPHashSecret: quotaIPSalt[:],
 	}))
-	api.POST("/upload", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	api.POST("/upload", chargeByJob(func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) }))
 	api.POST("/image-restore/start", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 	api.GET("/job/:id", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 	return r
@@ -319,13 +319,13 @@ func TestQuotaIsPerSubject(t *testing.T) {
 	}
 }
 
-// ai_ops is a separate, much tighter budget — spending it must not consume the
-// general ops allowance, and vice versa.
+// ai_ops is a separate budget — spending it must not consume the general ops
+// allowance, and vice versa.
 func TestQuotaMetricsAreIndependent(t *testing.T) {
 	cfg := config.Load()
 	r := quotaTestRouter(&stubQuotaStore{}, tiers.New(cfg))
 
-	// Anonymous gets 1 AI op a day.
+	// Anonymous gets 3 AI jobs a day (MM90).
 	for i := 0; i < cfg.TierAnonAIOpsPerDay; i++ {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/api/image-restore/start", nil)
@@ -418,7 +418,7 @@ func TestQuotaOperatorIsUncounted(t *testing.T) {
 		Enabled:      true,
 		IPHashSecret: quotaIPSalt[:],
 	}))
-	api.POST("/upload", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	api.POST("/upload", chargeByJob(func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) }))
 	api.POST("/image-restore/start", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 
 	for _, path := range []string{"/api/upload", "/api/image-restore/start"} {
@@ -489,13 +489,13 @@ func TestQuotaRefundsRejectedRequests(t *testing.T) {
 		Enabled:      true,
 		IPHashSecret: quotaIPSalt[:],
 	}))
-	api.POST("/upload", func(c *gin.Context) {
+	api.POST("/upload", chargeByJob(func(c *gin.Context) {
 		if c.GetHeader("X-Test-Reject") != "" {
 			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "Video framerate 90000.0fps exceeds the limit of 120 fps.", "reason": "video_fps"})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
-	})
+	}))
 
 	post := func(reject bool) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
@@ -545,9 +545,9 @@ func TestQuotaRefundsServerErrorsButNotTheOverLimit429(t *testing.T) {
 		Enabled:      true,
 		IPHashSecret: quotaIPSalt[:],
 	}))
-	api.POST("/upload", func(c *gin.Context) {
+	api.POST("/upload", chargeByJob(func(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
-	})
+	}))
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/upload", nil)
 	req.Header.Set("X-MM-Session-ID", "session-e")

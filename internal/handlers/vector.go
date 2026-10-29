@@ -18,6 +18,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
@@ -745,6 +746,8 @@ func (h *VectorHandler) spendExport(c *gin.Context, req vector.ExportRequest) (c
 	}
 	c.Header(middleware.HeaderTier, string(res.Tier))
 	c.Header(middleware.HeaderQuotaReset, reset.Format(time.RFC3339))
+	// MM90: these headers describe Motion's own allowance, not `ops`.
+	c.Header(middleware.HeaderQuotaMetric, models.MetricVectorExport)
 	if limit > 0 {
 		out.remaining = limit - used
 		if out.remaining < 0 {

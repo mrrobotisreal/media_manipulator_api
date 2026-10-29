@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 )
@@ -101,6 +102,11 @@ func (h *ConversionHandler) CompleteVideoUpload(c *gin.Context) {
 
 	// MM18: refuse an explicit over-cap output height before touching S3.
 	if refuseOutputHeight(c, requestedOutputHeight(req.Options)) {
+		return
+	}
+
+	// MM90: one allowance, chosen by the job (see UploadFile).
+	if !middleware.SpendDeferredQuota(c, QuotaMetricForJob(req.Options)) {
 		return
 	}
 

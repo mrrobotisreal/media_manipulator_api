@@ -527,6 +527,49 @@ idempotent and the over-limit 429 is never refunded. The `X-MM-Quota-*` headers
 on a refused response were written before the refund and overstate usage by
 one; the UI discards them on non-2xx and re-reads `/api/account/usage`.
 
+#### Everyday and AI allowances (MM90)
+
+Two **separate** daily counters, both rolling over at UTC midnight. A request
+spends exactly one of them: an AI job spends one `ai_ops` and never touches
+`ops`; an everyday job spends one `ops` and never touches `ai_ops`. They add
+up: Premium's 300 everyday + 100 AI jobs are 400 jobs a day, and using all
+100 AI jobs still leaves all 300 everyday jobs (`TestMM90PremiumGets400JobsADay`).
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `TIER_ANON_OPS_PER_DAY` | `5` | Everyday jobs per UTC day, signed out. |
+| `TIER_FREE_OPS_PER_DAY` | `30` | Same, free accounts. |
+| `TIER_PREMIUM_OPS_PER_DAY` | `300` | Same, Premium. |
+| `TIER_ANON_AI_OPS_PER_DAY` | `3` (was 1 before MM90) | AI jobs per UTC day, signed out. |
+| `TIER_FREE_AI_OPS_PER_DAY` | `10` (was 5) | Same, free accounts. |
+| `TIER_PREMIUM_AI_OPS_PER_DAY` | `100` (was 60) | Same, Premium. |
+| Pro | see the Pro table below | `TIER_PRO_OPS_PER_DAY` 700, `TIER_PRO_AI_OPS_PER_DAY` 200 (was 120). |
+
+**A set `TIER_*_AI_OPS_PER_DAY` overrides these defaults.** After deploying
+MM90, remove any such line from the server env (or set it to 3 / 10 / 100 /
+200) before restarting, or the old numbers stay in force.
+
+What spends `ai_ops` (everything that runs a model, `cmd/api/main.go`
+`quotaRoutes`): AI image/video restoration, document scan, video/audio
+summaries, voices (create, design, speak, preset speak, convert), Darkroom
+captions/derive/voiceover, caption translation (`/api/tools/caption-translator`)
+and, through `POST /api/upload` and `POST /api/video-upload/complete`, the jobs
+whose options ask for AI upscale, face blur (`face_privacy`), text redaction,
+object removal, isolate vocals, remove vocals, AI frame interpolation, or a
+transcription (`mode:"transcribe"`, Whisper). Everything else spends `ops`,
+including, on purpose, AI background removal, Clean Voice and background-noise
+removal (`handlers.QuotaMetricForJob`).
+
+The two upload routes are **job-decided**: the multipart upload puts the file
+before `options`, so the middleware cannot see the job without reading the
+whole upload. `middleware.DeferQuota` installs a spender instead, and the
+handler calls `middleware.SpendDeferredQuota(c, handlers.QuotaMetricForJob(options))`
+once, right after parsing the options and the output-height check and before
+saving anything. Same 429 body (`metric` names the counter that ran out), same
+headers plus `X-MM-Quota-Metric` (which counter the `X-MM-Quota-*` headers
+describe; exposed via CORS), same 4xx/5xx refund and job-failure refund
+(MM73) for both metrics.
+
 The **operator** tier is the site's own people. It is not a plan: it does not
 appear in `/api/tiers`, cannot be stored on `mm_users` (the CHECK forbids it),
 and `cmd/grant-tier` cannot grant it. It is re-derived on **every request** from
@@ -589,7 +632,7 @@ tiers). Priority GPU and no ads, like Premium. The operator row is derived from 
 | Var | Default | Effect |
 | --- | --- | --- |
 | `TIER_PRO_OPS_PER_DAY` | `700` | Operations per UTC day. |
-| `TIER_PRO_AI_OPS_PER_DAY` | `120` | AI operations per UTC day. |
+| `TIER_PRO_AI_OPS_PER_DAY` | `200` (was 120 before MM90) | AI jobs per UTC day, a separate counter from `TIER_PRO_OPS_PER_DAY`. |
 | `TIER_PRO_EXPORTS_PER_DAY` | `TIER_PRO_OPS_PER_DAY` (700) | Studio exports per UTC day. |
 | `TIER_PRO_MAX_FILE_BYTES` | Premium's (5 GiB) | Per-upload cap. |
 | `TIER_PRO_MAX_VIDEO_SECONDS` | Premium's (7200) | Source duration cap. |
@@ -1078,9 +1121,9 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/system/health` | MM34 status-page feed: `{status healthy/degraded/down, service, version, uptimeSeconds, checks{database, redis (omitted if unconfigured), storage: ok/fail}, queue{gpuEnabled, running, waiting}}`. 200 for healthy/degraded, 503 for down (body still valid). down = DB ping fails; degraded = Redis ping or output-dir write fails. 1 s probe timeouts, 5 s cache, no error strings/hosts/paths. Public, never quota-charged. | No |
 | POST | `/api/contact` | MM85. Public. JSON `{name (1-100), email (bare address), subject (bug\|billing\|privacy\|press\|other), message (1-2000 chars), website?}`. `website` is a honeypot: filled → `202` with a reference and nothing sent. Valid → mails `CONTACT_TO` (Reply-To the visitor), `202 {reference}` (12 chars, also in the email subject). `400 {error:"invalid_contact", field}`; `503 contact_unavailable` when email is off; `502 contact_send_failed` when Resend refuses. `contact` bucket (`CONTACT_PER_SESSION_PER_HOUR` 3, `CONTACT_PER_IP_PER_HOUR` 10; operators exempt). Never quota-charged, no DB row. | No (sync, ≤ 15 s) |
 | POST | `/api/metadata/inspect` | Inspect a file's metadata with exiftool/ffprobe (no job created). | No (sync, each tool capped at 20 s) |
-| POST | `/api/upload` | Multipart upload + conversion. Returns `{jobId}`. | Yes (goroutine) |
+| POST | `/api/upload` | Multipart upload + conversion. Returns `{jobId}`. Spends one `ai_ops` for a model-run AI operation or a transcription, otherwise one `ops` (MM90, §4.11). | Yes (goroutine) |
 | POST | `/api/video-upload/presign` | Presigned S3 PUT URL for the UI to upload a video directly. | No |
-| POST | `/api/video-upload/complete` | Tells the API "the S3 upload finished, do something with it". Used by the convert/transcribe flows. | Yes |
+| POST | `/api/video-upload/complete` | Tells the API "the S3 upload finished, do something with it". Used by the convert/transcribe flows. Same one-allowance rule as `/api/upload` (MM90). | Yes |
 | POST | `/api/ai/faces/detect` | Detect faces and store the boxes for the next conversion. | No |
 | POST | `/api/video-transcode/probe` | ffprobe an uploaded S3 video and return the rung selector data. | No |
 | POST | `/api/video-transcode/start` | Kick off an HLS or DASH transcode job against an S3 key. Returns `{jobId, probe, selectedRungs}`. | Yes |
