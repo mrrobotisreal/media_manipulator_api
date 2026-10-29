@@ -19,13 +19,16 @@ import (
 )
 
 // Response headers the UI reads on every gated request so the quota meter can
-// stay accurate without a separate poll. All four are in the CORS
+// stay accurate without a separate poll. All five are in the CORS
 // ExposeHeaders list in cmd/api/main.go — without that the browser hides them.
 const (
 	HeaderQuotaLimit     = "X-MM-Quota-Limit"
 	HeaderQuotaRemaining = "X-MM-Quota-Remaining"
 	HeaderQuotaReset     = "X-MM-Quota-Reset"
 	HeaderTier           = "X-MM-Tier"
+	// HeaderQuotaMetric names the allowance the other quota headers describe
+	// (`ops`, `ai_ops`, `export`, `vector_export`). MM90.
+	HeaderQuotaMetric = "X-MM-Quota-Metric"
 )
 
 // QuotaStore is the slice of telemetry.Store the quota middleware needs. An
@@ -247,100 +250,178 @@ func (q QuotaConfig) emitQuotaRejected(c *gin.Context, metric, tier string, limi
 // fixed-window limiter. A dead database must never break the free product; the
 // global per-IP rate limiter is still in front of this as an abuse backstop.
 func RequireQuota(cfg QuotaConfig, metric string) gin.HandlerFunc {
-	logger := cfg.Logger
-	if logger == nil {
-		logger = slog.Default()
-	}
-
+	logger := cfg.logger()
 	return func(c *gin.Context) {
-		if !cfg.Enabled || cfg.Store == nil || !cfg.Store.Enabled() || cfg.Registry == nil {
-			c.Next()
+		charge, proceed := cfg.spend(c, metric, logger)
+		if !proceed {
 			return
 		}
-
-		ctx := c.Request.Context()
-
-		// Identity → account row → tier, shared with every other consumer on
-		// this request so mm_users is read at most once.
-		resolution := cfg.resolution(c)
-		tier := resolution.Tier
-		user := resolution.User
-		limit := limitFor(resolution.Limits, metric)
-
-		now := time.Now().UTC()
-		reset := nextUTCMidnight(now)
-		c.Header(HeaderTier, string(tier))
-		c.Header(HeaderQuotaReset, reset.Format(time.RFC3339))
-
-		if limit <= 0 {
-			// No countable allowance for this metric under this tier — either
-			// the metric is uncounted, or the tier is unlimited (operator,
-			// whose OpsPerDay is tiers.Unlimited). Nothing is incremented, so
-			// an operator's testing never lands in the usage ledger either.
-			c.Next()
-			return
-		}
-
-		subject := cfg.resolveSubject(c, user)
-		count, err := cfg.Store.IncrementUsage(ctx, subject.kind, subject.key, metric, now)
-		if err != nil {
-			logger.Warn("quota: increment failed, failing open",
-				"metric", metric, "subject_kind", string(subject.kind), "error", err.Error())
-			c.Next()
-			return
-		}
-		charge := &QuotaCharge{
-			SubjectKind: subject.kind,
-			SubjectKey:  subject.key,
-			Metric:      metric,
-			Day:         now,
-			store:       cfg.Store,
-			logger:      logger,
-		}
-		c.Set(CtxQuotaCharge, charge)
-
-		remaining := limit - count
-		if remaining < 0 {
-			remaining = 0
-		}
-		c.Header(HeaderQuotaLimit, strconv.FormatInt(limit, 10))
-		c.Header(HeaderQuotaRemaining, strconv.FormatInt(remaining, 10))
-
-		if count > limit {
-			// Server truth for the exact instant of monetization friction. The UI
-			// emits its own `quota_exceeded_shown` when it renders the block, and
-			// both are wanted: the client event says the visitor SAW it, this one
-			// says it HAPPENED, and the gap between the two counts is how often the
-			// 429 lands somewhere the UI never surfaced.
-			cfg.emitQuotaRejected(c, metric, string(tier), limit, count)
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":       "quota_exceeded",
-				"tier":        string(tier),
-				"metric":      metric,
-				"limit":       limit,
-				"used":        count,
-				"resetsAt":    reset.Format(time.RFC3339),
-				"upgradePath": upgradePathFor(tier),
-			})
-			return
-		}
-
 		c.Next()
-
-		// The handler has run. A request it refused (any 4xx; a 5xx is our
-		// failure, not theirs, and is refunded too) delivered nothing, so the
-		// unit goes back. A 2xx that started a job keeps its charge: the job
-		// carries it (handlers pass QuotaChargeOf(c) to the job manager) and
-		// refunds it itself if the pipeline fails. The over-limit 429 above
-		// never reaches this line because the request was aborted there, and
-		// that charge is correct: the allowance was spent before it.
-		//
-		// The X-MM-Quota-Remaining header on such a response still shows the
-		// charged value: gin writes headers with the body, so they cannot be
-		// corrected here. The UI treats quota headers on a non-2xx response as
-		// stale and re-reads /api/account/usage instead.
-		if status := c.Writer.Status(); status >= 400 {
-			charge.Refund("rejected_" + strconv.Itoa(status))
-		}
+		refundIfRefused(c, charge)
 	}
+}
+
+// DeferQuota is RequireQuota for a route whose metric depends on the request
+// body (MM90: POST /api/upload and /api/video-upload/complete spend `ai_ops`
+// for a model-run job and `ops` for everything else). The metric is only known
+// once the handler has parsed the job's options, and the multipart upload puts
+// the file BEFORE the options, so the middleware cannot peek without reading
+// the whole upload first. It therefore installs a spender the handler calls
+// (SpendDeferredQuota) exactly once, after it knows the metric and before it
+// does any work. Everything else is RequireQuota's: one metric per request,
+// the same 429 body, headers and analytics, the same refund on a refused
+// request, and the same hand-off of the charge to the job.
+func DeferQuota(cfg QuotaConfig) gin.HandlerFunc {
+	logger := cfg.logger()
+	return func(c *gin.Context) {
+		var spent bool
+		c.Set(CtxQuotaSpender, QuotaSpender(func(metric string) bool {
+			if spent {
+				// A second call would charge a second unit for one request.
+				return true
+			}
+			spent = true
+			_, proceed := cfg.spend(c, metric, logger)
+			return proceed
+		}))
+		c.Next()
+		refundIfRefused(c, QuotaChargeOf(c))
+	}
+}
+
+// CtxQuotaSpender is the gin context key DeferQuota stores its spender under.
+// Read it through SpendDeferredQuota, never by key.
+const CtxQuotaSpender = "mm_quota_spender"
+
+// QuotaSpender spends one unit of the metric it is given. False means the
+// allowance is spent and the 429 has already been written.
+type QuotaSpender func(metric string) bool
+
+// SpendDeferredQuota spends one unit of `metric` on a DeferQuota route. It
+// returns false when the request was refused with the over-limit 429 (already
+// written; the handler must return). On a route without DeferQuota (quota
+// disabled, a test router, a route that is not gated) it is a no-op that
+// returns true, the same fail-open posture as RequireQuota.
+func SpendDeferredQuota(c *gin.Context, metric string) bool {
+	if c == nil {
+		return true
+	}
+	v, ok := c.Get(CtxQuotaSpender)
+	if !ok {
+		return true
+	}
+	spend, _ := v.(QuotaSpender)
+	if spend == nil {
+		return true
+	}
+	return spend(metric)
+}
+
+func (q QuotaConfig) logger() *slog.Logger {
+	if q.Logger != nil {
+		return q.Logger
+	}
+	return slog.Default()
+}
+
+// refundIfRefused gives the unit back when the handler refused the request.
+//
+// The handler has run. A request it refused (any 4xx; a 5xx is our failure,
+// not theirs, and is refunded too) delivered nothing, so the unit goes back. A
+// 2xx that started a job keeps its charge: the job carries it (handlers pass
+// QuotaChargeOf(c) to the job manager) and refunds it itself if the pipeline
+// fails. The over-limit 429 never leaves a charge on the context (spend only
+// sets it on a request that proceeds), and that unit is correctly counted: the
+// allowance was spent before it.
+//
+// The X-MM-Quota-Remaining header on such a response still shows the charged
+// value: gin writes headers with the body, so they cannot be corrected here.
+// The UI treats quota headers on a non-2xx response as stale and re-reads
+// /api/account/usage instead.
+func refundIfRefused(c *gin.Context, charge *QuotaCharge) {
+	if charge == nil {
+		return
+	}
+	if status := c.Writer.Status(); status >= 400 {
+		charge.Refund("rejected_" + strconv.Itoa(status))
+	}
+}
+
+// spend counts one unit of `metric` for this request. It returns the charge
+// (nil when nothing was counted) and whether the request may proceed; false
+// means the over-limit 429 has been written and the chain aborted.
+func (cfg QuotaConfig) spend(c *gin.Context, metric string, logger *slog.Logger) (*QuotaCharge, bool) {
+	if !cfg.Enabled || cfg.Store == nil || !cfg.Store.Enabled() || cfg.Registry == nil {
+		return nil, true
+	}
+
+	ctx := c.Request.Context()
+
+	// Identity → account row → tier, shared with every other consumer on
+	// this request so mm_users is read at most once.
+	resolution := cfg.resolution(c)
+	tier := resolution.Tier
+	user := resolution.User
+	limit := limitFor(resolution.Limits, metric)
+
+	now := time.Now().UTC()
+	reset := nextUTCMidnight(now)
+	c.Header(HeaderTier, string(tier))
+	c.Header(HeaderQuotaReset, reset.Format(time.RFC3339))
+	// MM90: which allowance these headers describe. One endpoint can now spend
+	// either `ops` or `ai_ops`, so the UI must not assume the metric.
+	c.Header(HeaderQuotaMetric, metric)
+
+	if limit <= 0 {
+		// No countable allowance for this metric under this tier — either
+		// the metric is uncounted, or the tier is unlimited (operator,
+		// whose OpsPerDay is tiers.Unlimited). Nothing is incremented, so
+		// an operator's testing never lands in the usage ledger either.
+		return nil, true
+	}
+
+	subject := cfg.resolveSubject(c, user)
+	count, err := cfg.Store.IncrementUsage(ctx, subject.kind, subject.key, metric, now)
+	if err != nil {
+		logger.Warn("quota: increment failed, failing open",
+			"metric", metric, "subject_kind", string(subject.kind), "error", err.Error())
+		return nil, true
+	}
+
+	remaining := limit - count
+	if remaining < 0 {
+		remaining = 0
+	}
+	c.Header(HeaderQuotaLimit, strconv.FormatInt(limit, 10))
+	c.Header(HeaderQuotaRemaining, strconv.FormatInt(remaining, 10))
+
+	if count > limit {
+		// Server truth for the exact instant of monetization friction. The UI
+		// emits its own `quota_exceeded_shown` when it renders the block, and
+		// both are wanted: the client event says the visitor SAW it, this one
+		// says it HAPPENED, and the gap between the two counts is how often the
+		// 429 lands somewhere the UI never surfaced.
+		cfg.emitQuotaRejected(c, metric, string(tier), limit, count)
+		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+			"error":       "quota_exceeded",
+			"tier":        string(tier),
+			"metric":      metric,
+			"limit":       limit,
+			"used":        count,
+			"resetsAt":    reset.Format(time.RFC3339),
+			"upgradePath": upgradePathFor(tier),
+		})
+		return nil, false
+	}
+
+	charge := &QuotaCharge{
+		SubjectKind: subject.kind,
+		SubjectKey:  subject.key,
+		Metric:      metric,
+		Day:         now,
+		store:       cfg.Store,
+		logger:      logger,
+	}
+	c.Set(CtxQuotaCharge, charge)
+	return charge, true
 }

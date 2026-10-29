@@ -204,6 +204,14 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
+	// MM90: spend exactly one allowance, chosen by the job: `ai_ops` for a
+	// model-run AI operation or a transcription, `ops` for everything else.
+	// False means the 429 is already written. A later refusal below refunds
+	// the unit, and a job that fails refunds it through recordJobCreated.
+	if !middleware.SpendDeferredQuota(c, QuotaMetricForJob(options)) {
+		return
+	}
+
 	// The job id is chosen up front so the upload lands inside its job directory
 	// (uploads/<jobId>/) from the first byte; a directory is the retention unit.
 	jobID := newJobID()

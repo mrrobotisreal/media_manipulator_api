@@ -124,7 +124,7 @@ func TestSummarizeSignedInChargesAiOpsAndRefundsRefusal(t *testing.T) {
 		r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, summarizeStartPath, nil))
 		return w
 	}
-	if w := post(); w.Code != http.StatusAccepted || w.Header().Get(middleware.HeaderQuotaLimit) != "5" {
+	if w := post(); w.Code != http.StatusAccepted || w.Header().Get(middleware.HeaderQuotaLimit) != "10" {
 		t.Fatalf("free summary: %d limit=%q", w.Code, w.Header().Get(middleware.HeaderQuotaLimit))
 	}
 	if store.counts["user|u-1|ai_ops"] != 1 {

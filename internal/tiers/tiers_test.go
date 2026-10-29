@@ -177,14 +177,14 @@ func TestLimitsAreMonotonic(t *testing.T) {
 	}
 }
 
-// Pro (MM39, design PRO_TIER.md §2.3): ops 700, AI 120, exports 700, the top
+// Pro (MM39, design PRO_TIER.md §2.3; AI 200 since MM90): ops 700, AI 200, exports 700, the top
 // Motion row (MM49, TestProVectorRow), every other cap equal to Premium,
 // priority GPU and no ads.
 func TestProRow(t *testing.T) {
 	r := testRegistry(t)
 	pro, premium := r.For(TierPro), r.For(TierPremium)
-	if pro.OpsPerDay != 700 || pro.AIOpsPerDay != 120 || pro.ExportsPerDay != 700 {
-		t.Fatalf("pro allowances = ops %d / ai %d / exports %d, want 700 / 120 / 700", pro.OpsPerDay, pro.AIOpsPerDay, pro.ExportsPerDay)
+	if pro.OpsPerDay != 700 || pro.AIOpsPerDay != 200 || pro.ExportsPerDay != 700 {
+		t.Fatalf("pro allowances = ops %d / ai %d / exports %d, want 700 / 200 / 700", pro.OpsPerDay, pro.AIOpsPerDay, pro.ExportsPerDay)
 	}
 	same := premium
 	same.OpsPerDay, same.AIOpsPerDay, same.ExportsPerDay = pro.OpsPerDay, pro.AIOpsPerDay, pro.ExportsPerDay
@@ -247,7 +247,7 @@ func TestPublishedMatrix(t *testing.T) {
 
 	want := map[Tier]Limits{
 		TierAnonymous: {
-			OpsPerDay: 5, AIOpsPerDay: 1, ExportsPerDay: 5,
+			OpsPerDay: 5, AIOpsPerDay: 3, ExportsPerDay: 5,
 			MaxFileBytes: 200 * 1024 * 1024, MaxVideoSeconds: 300,
 			MaxOutputHeight: 1080, MaxLadderHeight: 720,
 			StudioProjects: 1, StudioVersionAutoKeep: 20, PriorityGPU: false,
@@ -256,7 +256,7 @@ func TestPublishedMatrix(t *testing.T) {
 			VectorMaxDurationMs: 10000,
 		},
 		TierFree: {
-			OpsPerDay: 30, AIOpsPerDay: 5, ExportsPerDay: 30,
+			OpsPerDay: 30, AIOpsPerDay: 10, ExportsPerDay: 30,
 			MaxFileBytes: 1024 * 1024 * 1024, MaxVideoSeconds: 1200,
 			MaxOutputHeight: 1440, MaxLadderHeight: 1080,
 			StudioProjects: 5, StudioVersionAutoKeep: 20, PriorityGPU: false,
@@ -266,7 +266,7 @@ func TestPublishedMatrix(t *testing.T) {
 			VectorFormats: "svg_animated,lottie,import_lottie,import_svg_vectorize",
 		},
 		TierPremium: {
-			OpsPerDay: 300, AIOpsPerDay: 60, ExportsPerDay: 300,
+			OpsPerDay: 300, AIOpsPerDay: 100, ExportsPerDay: 300,
 			MaxFileBytes: 5 * 1024 * 1024 * 1024, MaxVideoSeconds: 7200,
 			MaxOutputHeight: 2160, MaxLadderHeight: 2160,
 			StudioProjects: Unlimited, StudioVersionAutoKeep: 20, PriorityGPU: true,
@@ -277,7 +277,7 @@ func TestPublishedMatrix(t *testing.T) {
 			VectorVideo:   VectorVideo{MaxHeight: 720, MaxSeconds: 15},
 		},
 		TierPro: {
-			OpsPerDay: 700, AIOpsPerDay: 120, ExportsPerDay: 700,
+			OpsPerDay: 700, AIOpsPerDay: 200, ExportsPerDay: 700,
 			MaxFileBytes: 5 * 1024 * 1024 * 1024, MaxVideoSeconds: 7200,
 			MaxOutputHeight: 2160, MaxLadderHeight: 2160,
 			StudioProjects: Unlimited, StudioVersionAutoKeep: 20, PriorityGPU: true,

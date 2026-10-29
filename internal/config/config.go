@@ -249,7 +249,7 @@ type Config struct {
 	TierPremiumRetentionHours        int
 	TierPremiumStudioVersionAutoKeep int
 
-	// Pro (MM39, ADR-0011). Ops 700 / AI ops 120 / exports = ops; every other
+	// Pro (MM39, ADR-0011). Ops 700 / AI ops 200 (MM90) / exports = ops; every other
 	// TIER_PRO_* defaults to the resolved Premium value so the ladder stays
 	// non-decreasing when only Premium is retuned.
 	TierProOpsPerDay             int
@@ -748,7 +748,7 @@ func Load() *Config {
 
 		TierAnonOpsPerDay:             anonOps,
 		TierAnonExportsPerDay:         getEnvInt("TIER_ANON_EXPORTS_PER_DAY", anonOps),
-		TierAnonAIOpsPerDay:           getEnvInt("TIER_ANON_AI_OPS_PER_DAY", 1),
+		TierAnonAIOpsPerDay:           getEnvInt("TIER_ANON_AI_OPS_PER_DAY", 3),
 		TierAnonMaxFileBytes:          getEnvInt64("TIER_ANON_MAX_FILE_BYTES", 200*1024*1024),
 		TierAnonMaxVideoSeconds:       getEnvInt("TIER_ANON_MAX_VIDEO_SECONDS", 5*60),
 		TierAnonMaxOutputHeight:       getEnvInt("TIER_ANON_MAX_OUTPUT_HEIGHT", 1080),
@@ -759,7 +759,7 @@ func Load() *Config {
 
 		TierFreeOpsPerDay:             freeOps,
 		TierFreeExportsPerDay:         getEnvInt("TIER_FREE_EXPORTS_PER_DAY", freeOps),
-		TierFreeAIOpsPerDay:           getEnvInt("TIER_FREE_AI_OPS_PER_DAY", 5),
+		TierFreeAIOpsPerDay:           getEnvInt("TIER_FREE_AI_OPS_PER_DAY", 10),
 		TierFreeMaxFileBytes:          getEnvInt64("TIER_FREE_MAX_FILE_BYTES", 1024*1024*1024),
 		TierFreeMaxVideoSeconds:       getEnvInt("TIER_FREE_MAX_VIDEO_SECONDS", 20*60),
 		TierFreeMaxOutputHeight:       getEnvInt("TIER_FREE_MAX_OUTPUT_HEIGHT", 1440),
@@ -770,7 +770,7 @@ func Load() *Config {
 
 		TierPremiumOpsPerDay:             premiumOps,
 		TierPremiumExportsPerDay:         getEnvInt("TIER_PREMIUM_EXPORTS_PER_DAY", premiumOps),
-		TierPremiumAIOpsPerDay:           getEnvInt("TIER_PREMIUM_AI_OPS_PER_DAY", 60),
+		TierPremiumAIOpsPerDay:           getEnvInt("TIER_PREMIUM_AI_OPS_PER_DAY", 100),
 		TierPremiumMaxFileBytes:          getEnvInt64("TIER_PREMIUM_MAX_FILE_BYTES", 5*1024*1024*1024),
 		TierPremiumMaxVideoSeconds:       getEnvInt("TIER_PREMIUM_MAX_VIDEO_SECONDS", 2*60*60),
 		TierPremiumMaxOutputHeight:       getEnvInt("TIER_PREMIUM_MAX_OUTPUT_HEIGHT", 2160),
@@ -781,7 +781,7 @@ func Load() *Config {
 
 		TierProOpsPerDay:     proOps,
 		TierProExportsPerDay: getEnvInt("TIER_PRO_EXPORTS_PER_DAY", proOps),
-		TierProAIOpsPerDay:   getEnvInt("TIER_PRO_AI_OPS_PER_DAY", 120),
+		TierProAIOpsPerDay:   getEnvInt("TIER_PRO_AI_OPS_PER_DAY", 200),
 		// The remaining TIER_PRO_* default to Premium; filled in after the
 		// literal below, once the Premium values are resolved.
 

@@ -23,6 +23,10 @@ A saved editor document (EDL + metadata), and an ingested media source (video/au
 **Pro**:
 The fourth public tier (`tiers.TierPro`, `"pro"`), above Premium: `anonymous < free < premium < pro`, with the derived `operator` above it and inheriting from it (ADR-0011). Granted by the Stripe Price id through `billing.PriceTiers` (an unknown price id grants `premium`, never `pro`) or by `cmd/grant-tier -tier pro`. API bodies call it a **plan** (`plan`, `target`: `premium | pro`); the stored column is still `tier`.
 
+**Everyday allowance / AI allowance** (MM90):
+Two separate daily counters in `mm_usage_counters`: `ops` (everyday jobs, 5 / 30 / 300 / 700 by tier) and `ai_ops` (AI jobs, 3 / 10 / 100 / 200). A request spends exactly one: an AI job is one `ai_ops` and never touches `ops`, an everyday job is one `ops` and never touches `ai_ops`, so Premium is 300 + 100 = 400 jobs a day. An **AI job** is one that runs a model: the dedicated AI routes, caption translation, and `/api/upload` / `/api/video-upload/complete` jobs that ask for upscale, face blur, text redaction, object removal, vocal separation, frame interpolation or transcription (`handlers.QuotaMetricForJob`, charged in the handler through `middleware.DeferQuota`). AI background removal, Clean Voice and background-noise removal are everyday jobs by decision.
+_Avoid_: describing AI jobs as part of, or a subset of, the everyday total; "AI operations" for `ops`.
+
 **Pending plan**:
 A plan change that has been scheduled but has not happened yet: the Pro-to-Premium downgrade, a Stripe Subscription Schedule that switches the price at `current_period_end`. Exposed as `pendingPlan {to, at}` on `GET /api/billing/status`; released by `DELETE /api/billing/change-plan` ("Keep Pro"). The tier stays `pro` until the switch; the webhook then reads the Premium price and grants `premium`.
 _Avoid_: "downgrade pending" as a tier or a stored column; nothing about it is stored on our side.
