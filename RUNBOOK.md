@@ -1306,8 +1306,11 @@ the user's selection on the eventual convert request.
 opus, ac3, dts}`. AI audio operations (in `ai_tools.go`):
 
 - `remove_background_noise` → DeepFilterNet (`$AI_DEEPFILTER_BIN`).
-- `isolate_vocals` → Demucs, keep `vocals.wav` stem.
-- `remove_vocals` → Demucs, sum all non-vocal stems.
+- `clean_voice` → DeepFilterNet with the polish pass.
+- `isolate_vocals` → Demucs `htdemucs --two-stems=vocals`, keep the `vocals.wav` stem.
+- `remove_vocals` → the same two-stem Demucs run, keep the `no_vocals.wav` stem
+  (Demucs writes the accompaniment itself; nothing is summed). Both stems are
+  re-encoded to the job's output format (MM81).
 
 **Failure modes specific to audio AI:**
 
