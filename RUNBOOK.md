@@ -1185,8 +1185,13 @@ All routes live under `/api/` except `/healthz`.
 **CORS** allowed request headers include `If-Match` (MM43, Motion saves).
 **CORS** allow-list (in `cmd/api/main.go`): `https://media-manipulator.com`,
 `https://www.media-manipulator.com`, `https://dr.media-manipulator.com`
-(restricted restoration deployment), `http://localhost:5175`. Add origins
-there if you ever serve a staging UI from elsewhere.
+(restricted restoration deployment), `https://*.translate.media-manipulator.com`
+(MM92: the per-locale translator deployments, one wildcard rule, `AllowWildcard`
+on), `http://localhost:3000`, `http://localhost:41999` and
+`https://drportal.wintrow.dev` (Double Raven portal). Add origins there if you
+ever serve a staging UI from elsewhere; a browser on an origin that is missing
+sees every request fail with a CORS error, and the UI's `/status` page on that
+origin reads "Status unavailable" (it used to read "Down").
 
 ---
 

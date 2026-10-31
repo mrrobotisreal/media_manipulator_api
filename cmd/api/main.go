@@ -455,6 +455,15 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// Standalone Double Raven portal — web deployment on Vercel.
 		"https://drportal.wintrow.dev",
 	}
+	// MM92: the per-locale translator deployments (MM52/MM56, design
+	// TRANSLATOR_WORKBENCH.md §2.6) live at `<prefix>.translate.media-manipulator.com`
+	// and call this API like production does. They were never on the list, so
+	// every browser request from them failed with a CORS error, and the /status
+	// page there read "Down" while the service was healthy. One rule covers
+	// every current and future locale prefix (`uk`, `pt-br`, `zh-cn`, ...); the
+	// library only accepts a single `*` per entry, so it cannot match a dot.
+	corsConfig.AllowWildcard = true
+	corsConfig.AllowOrigins = append(corsConfig.AllowOrigins, "https://*.translate.media-manipulator.com")
 	// PUT is required by the Content Studio project save (PUT /api/studio/projects/:id);
 	// PATCH/DELETE are allowed too so the editor's CRUD surface doesn't trip CORS.
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
