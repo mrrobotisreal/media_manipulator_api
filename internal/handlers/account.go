@@ -458,6 +458,9 @@ type historyEntry struct {
 	// public origin from a client-supplied Host header; the client resolves it
 	// against the API base it already knows.
 	DownloadPath string `json:"downloadPath,omitempty"`
+	// DownloadAbsoluteURL (MA08) is PUBLIC_API_BASE_URL + "/api" + DownloadPath for
+	// native clients. Presigned DownloadURL rows are already absolute and omit it.
+	DownloadAbsoluteURL string `json:"downloadAbsoluteUrl,omitempty"`
 	// MetadataAvailable says which cached metadata documents (MM07/MM08) still exist
 	// for the job. Additive and omitted when neither exists. It stays true after the
 	// media itself has expired: the routes read the cached JSON, not the file.
@@ -636,6 +639,7 @@ func (h *AccountHandler) buildHistoryEntries(ctx context.Context, user *models.U
 				// A local result is addressed by job id (/api/download/:jobId). The
 				// ledger, not the in-memory job map, says whether it still exists.
 				out.DownloadPath = "/download/" + r.JobID
+				out.DownloadAbsoluteURL = publicAPIURL(h.cfg, "/api"+out.DownloadPath)
 			}
 		}
 		if h.cfg != nil {

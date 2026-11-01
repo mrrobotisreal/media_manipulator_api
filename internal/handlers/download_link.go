@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/dllink"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
@@ -153,12 +154,25 @@ func (h *ConversionHandler) mintDownloadLink(c *gin.Context, job *models.Convers
 			name = swapExt(name, ".mp3")
 		}
 	}
+	rel := "/api/download/" + url.PathEscape(job.ID) + "?token=" + url.QueryEscape(token)
 	return gin.H{
-		"url":       "/api/download/" + url.PathEscape(job.ID) + "?token=" + url.QueryEscape(token),
-		"expiresAt": expires.Format(time.RFC3339),
-		"sizeBytes": size,
-		"fileName":  name,
+		"url": rel,
+		// MA08: absolute form for native download managers; `url` is unchanged.
+		"absoluteUrl": publicAPIURL(h.cfg, rel),
+		"expiresAt":   expires.Format(time.RFC3339),
+		"sizeBytes":   size,
+		"fileName":    name,
 	}, http.StatusOK
+}
+
+// publicAPIURL prefixes an API-relative path (starting with /api/) with
+// PUBLIC_API_BASE_URL (MA08). A nil/empty config falls back to the default host.
+func publicAPIURL(cfg *config.Config, rel string) string {
+	raw := ""
+	if cfg != nil {
+		raw = cfg.PublicAPIBaseURL
+	}
+	return config.NormalizePublicAPIBaseURL(raw) + rel
 }
 
 // acceptDownloadToken verifies ?token= against the :jobId in the path and

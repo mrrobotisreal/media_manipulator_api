@@ -760,7 +760,7 @@ func Load() *Config {
 
 		ResultOwnershipEnforce:    getEnvBool("RESULT_OWNERSHIP_ENFORCE", true),
 		JobStatusOwnershipEnforce: getEnvBool("JOB_STATUS_OWNERSHIP_ENFORCE", false),
-		PublicAPIBaseURL:          normalizePublicAPIBaseURL(getEnv("PUBLIC_API_BASE_URL", "https://api.media-manipulator.com")),
+		PublicAPIBaseURL:          NormalizePublicAPIBaseURL(getEnv("PUBLIC_API_BASE_URL", "https://api.media-manipulator.com")),
 		DownloadLinkSecret:        getEnv("DOWNLOAD_LINK_SECRET", ""),
 		DownloadLinkTTL:           clampDuration(time.Duration(getEnvInt("DOWNLOAD_LINK_TTL_SECONDS", 300))*time.Second, 30*time.Second, time.Hour),
 
@@ -1167,10 +1167,10 @@ func splitCSVLower(raw string) []string {
 	return parts
 }
 
-// normalizePublicAPIBaseURL trims whitespace and trailing slashes and strips a
+// NormalizePublicAPIBaseURL (also applied by handlers on a hand-built Config) trims whitespace and trailing slashes and strips a
 // single trailing "/api" (the relative paths it prefixes already start with
 // /api/), logging a WARN when it does. Empty falls back to the default.
-func normalizePublicAPIBaseURL(raw string) string {
+func NormalizePublicAPIBaseURL(raw string) string {
 	v := strings.TrimRight(strings.TrimSpace(raw), "/")
 	if strings.HasSuffix(v, "/api") {
 		v = strings.TrimRight(strings.TrimSuffix(v, "/api"), "/")
