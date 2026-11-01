@@ -42,6 +42,7 @@ type Registry struct {
 	accountDeleted          *prometheus.CounterVec
 	dataDeleted             *prometheus.CounterVec
 	billingUnknownPrice     prometheus.Counter
+	jobStatusWouldDeny      prometheus.Counter
 }
 
 // New creates a fresh Registry with all metrics registered.
@@ -178,8 +179,13 @@ func New() *Registry {
 		Help: "Webhook entitlement decisions whose Stripe price id is not configured; granted premium, never pro (MM39).",
 	})
 
+	r.jobStatusWouldDeny = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "mm_job_status_ownership_would_deny_total",
+		Help: "Job status / SSE requests that would be 404 with JOB_STATUS_OWNERSHIP_ENFORCE=true but were allowed (MA08 rollout).",
+	})
+
 	reg.MustRegister(
-		r.billingUnknownPrice,
+		r.billingUnknownPrice, r.jobStatusWouldDeny,
 		r.accountDeleted, r.dataDeleted,
 		r.retentionSwept, r.retentionWouldDelete, r.retentionSweepErrors, r.retentionGaveUp, r.retentionBacklog,
 		r.httpDuration, r.httpStatus, r.conversionJobs, r.toolUsage,
@@ -432,4 +438,13 @@ func (r *Registry) BillingUnknownPrice() {
 		return
 	}
 	r.billingUnknownPrice.Inc()
+}
+
+// JobStatusWouldDeny counts a job-status/SSE request allowed only because
+// JOB_STATUS_OWNERSHIP_ENFORCE is off (MA08).
+func (r *Registry) JobStatusWouldDeny() {
+	if r == nil {
+		return
+	}
+	r.jobStatusWouldDeny.Inc()
 }

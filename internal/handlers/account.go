@@ -378,7 +378,7 @@ func (h *AccountHandler) emitSignupCompleted(c *gin.Context, firebaseUID string,
 	// through when present rather than guessed at: an absent method is honest,
 	// a wrong one is not.
 	props := map[string]any{}
-	if m := strings.TrimSpace(signupSource); m != "" {
+	if m := signupMethod(signupSource); m != "" {
 		props["method"] = m
 	}
 	if tier != "" {
@@ -396,6 +396,22 @@ func (h *AccountHandler) emitSignupCompleted(c *gin.Context, firebaseUID string,
 		Context:    analyticsemit.Context("", "", "", tier),
 		Properties: props,
 	})
+}
+
+// signupMethod maps the client's free-text signupSource onto the closed
+// `method` vocabulary (MA08, MA-0003): google|email|apple pass through (case- and
+// space-insensitive), empty stays empty (omitted), anything else becomes "other"
+// so garbage cannot mint new analytics values. mm_users.signup_source keeps the raw value.
+func signupMethod(raw string) string {
+	v := strings.ToLower(strings.TrimSpace(raw))
+	switch v {
+	case "":
+		return ""
+	case "google", "email", "apple":
+		return v
+	default:
+		return "other"
+	}
 }
 
 // Me returns the signed-in caller's account, tier, limits and today's usage.
@@ -458,6 +474,9 @@ type historyEntry struct {
 	// public origin from a client-supplied Host header; the client resolves it
 	// against the API base it already knows.
 	DownloadPath string `json:"downloadPath,omitempty"`
+	// DownloadAbsoluteURL (MA08) is PUBLIC_API_BASE_URL + "/api" + DownloadPath for
+	// native clients. Presigned DownloadURL rows are already absolute and omit it.
+	DownloadAbsoluteURL string `json:"downloadAbsoluteUrl,omitempty"`
 	// MetadataAvailable says which cached metadata documents (MM07/MM08) still exist
 	// for the job. Additive and omitted when neither exists. It stays true after the
 	// media itself has expired: the routes read the cached JSON, not the file.
@@ -636,6 +655,7 @@ func (h *AccountHandler) buildHistoryEntries(ctx context.Context, user *models.U
 				// A local result is addressed by job id (/api/download/:jobId). The
 				// ledger, not the in-memory job map, says whether it still exists.
 				out.DownloadPath = "/download/" + r.JobID
+				out.DownloadAbsoluteURL = publicAPIURL(h.cfg, "/api"+out.DownloadPath)
 			}
 		}
 		if h.cfg != nil {

@@ -52,6 +52,25 @@ type Limiter struct {
 	// request. cmd/api wires it to the tier resolver; nil (tests, tools) means
 	// nobody is exempt. GlobalIPRPS never consults it.
 	RouteExempt func(c *gin.Context) bool
+	// UserSubject (MA08), when set, names the signed-in synced user behind a
+	// request. Route then keys ONE hourly bucket on the hashed user id (limit =
+	// the route's session limit, scope "user") instead of the IP + session
+	// buckets, so carrier-grade NAT cannot exhaust a real account's allowance.
+	// cmd/api wires it to a verified principal with an mm_users row. nil or
+	// ok=false keeps the IP + session buckets.
+	UserSubject func(c *gin.Context) (userID string, ok bool)
+	// Authed (MA08), when set, marks a request as carrying a verified Firebase
+	// principal; GlobalIPRPS then uses RateLimitPerIPBurstAuthed. The key stays
+	// the IP: the burst guard is DoS protection.
+	Authed func(c *gin.Context) bool
+	// windowCounter replaces the Redis INCR in tests (no Redis in unit tests).
+	windowCounter func(ctx context.Context, key string, limit int, window time.Duration) Decision
+}
+
+// SetWindowCounterForTest swaps the fixed-window counter for a fake and marks
+// the limiter enabled. Tests only.
+func (l *Limiter) SetWindowCounterForTest(f func(ctx context.Context, key string, limit int, window time.Duration) Decision) {
+	l.windowCounter = f
 }
 
 // Decision describes the outcome of a single limiter check.
@@ -79,7 +98,7 @@ func New(rdb *redis.Client, cfg *config.Config, store *telemetry.Store, m *metri
 
 // Enabled reports whether the limiter has the Redis it needs to enforce.
 func (l *Limiter) Enabled() bool {
-	return l != nil && l.Redis != nil && l.Cfg != nil && l.Cfg.RateLimitEnabled
+	return l != nil && (l.Redis != nil || l.windowCounter != nil) && l.Cfg != nil && l.Cfg.RateLimitEnabled
 }
 
 // GlobalIPRPS limits all requests by client IP using a 1-second sliding
@@ -98,6 +117,7 @@ func (l *Limiter) GlobalIPRPS() gin.HandlerFunc {
 	// window at burst (which gives a peak of burst per second and a long-run
 	// average bounded by burst).
 	limit := burst
+	authedLimit := l.Cfg.RateLimitPerIPBurstAuthed
 	return func(c *gin.Context) {
 		ip := geo.ExtractIP(c)
 		if ip == "" {
@@ -106,7 +126,11 @@ func (l *Limiter) GlobalIPRPS() gin.HandlerFunc {
 		}
 		ipHash := l.hash(ip)
 		key := keyPrefix + "ip:" + ipHash + ":global"
-		decision := l.fixedWindow(c.Request.Context(), key, limit, time.Second)
+		lim := limit
+		if authedLimit > lim && l.Authed != nil && l.Authed(c) {
+			lim = authedLimit
+		}
+		decision := l.fixedWindow(c.Request.Context(), key, lim, time.Second)
 		decision.Scope = "ip"
 		decision.KeyHash = ipHash
 		if !decision.Allowed {
@@ -138,6 +162,23 @@ func (l *Limiter) Route(routeKey, tool string, sessionLimit, ipLimit int) gin.Ha
 		if l.RouteExempt != nil && l.RouteExempt(c) {
 			c.Next()
 			return
+		}
+		// MA08: a signed-in synced user is counted per account, not per IP/session.
+		if sessionLimit > 0 && l.UserSubject != nil {
+			if uid, ok := l.UserSubject(c); ok && uid != "" {
+				uHash := l.hash(uid)
+				key := keyPrefix + "user:" + uHash + ":" + routeKey + ":hour"
+				decision := l.fixedWindow(c.Request.Context(), key, sessionLimit, time.Hour)
+				decision.Scope = "user"
+				decision.KeyHash = uHash
+				if !decision.Allowed {
+					l.deny(c, "user", routeKey, tool, geo.ExtractIP(c), decision)
+					return
+				}
+				l.allow(c, "user", routeKey, tool, geo.ExtractIP(c), decision)
+				c.Next()
+				return
+			}
 		}
 		// IP per hour first — cheaper to evaluate and a stronger guard
 		// against anonymous flooding.
@@ -176,6 +217,9 @@ func (l *Limiter) Route(routeKey, tool string, sessionLimit, ipLimit int) gin.Ha
 // fixedWindow implements a fixed-window counter. INCR returns the new value;
 // on the first hit we set the TTL with EXPIRE.
 func (l *Limiter) fixedWindow(ctx context.Context, key string, limit int, window time.Duration) Decision {
+	if l.windowCounter != nil {
+		return l.windowCounter(ctx, key, limit, window)
+	}
 	if l.Redis == nil {
 		return Decision{Allowed: true, LimitCount: limit, Remaining: limit, RetryAfterSeconds: 0}
 	}

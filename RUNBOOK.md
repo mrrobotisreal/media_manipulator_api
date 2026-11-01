@@ -183,6 +183,9 @@ after changing them.
 | `PROD` | `false` | Legacy flag that used to pin whisper to GPU 0. Now mostly inert; the GPU scheduler is the source of truth. | `transcribe.go` |
 | `DOWNLOAD_LINK_SECRET` | _(empty)_ | **Secret** (MM80). Keys the AES-GCM sealed tokens of `POST /api/download/:jobId/link`. Empty = a random per-process key: links minted before a restart stop working (they live for minutes; the UI mints one per click), so it is optional. Set any long random string (`openssl rand -hex 32`) to survive restarts. Never log it. | `config.go`, `internal/dllink` |
 | `DOWNLOAD_LINK_TTL_SECONDS` | `300` | Lifetime of a signed download link (MM80), clamped to 30..3600. Only the START of a download must happen inside it; a running download and its Range resumes keep the token they began with, so keep it short. | `config.go` |
+| `JOB_STATUS_OWNERSHIP_ENFORCE` | `false` | MA08 rollout switch. `true` makes `GET /api/job/:id` and `/events` 404 (byte-identical to a missing job) for callers who do not own the job; `false` logs `job status ownership: would deny job <id>` once per job, counts `mm_job_status_ownership_would_deny_total`, and allows. Turn on only after the web UI deploy (it sends identity on every poll and `?sid=` on every EventSource). | `config.go`, `handlers/job_access.go` |
+| `RATE_LIMIT_PER_IP_BURST_AUTHED` | `60` | MA08. Per-IP per-second burst for requests carrying a verified Firebase principal (anonymous keeps `RATE_LIMIT_PER_IP_BURST`, 20). The key is still the IP; invalid tokens count as anonymous. | `config.go`, `limits.GlobalIPRPS` |
+| `PUBLIC_API_BASE_URL` | `https://api.media-manipulator.com` | MA08. Origin prefixed to `/api/...` paths to build `absoluteUrl` / `downloadAbsoluteUrl` for native clients. Trailing `/` trimmed; a trailing `/api` is stripped once with a WARN (paths already start with `/api/`). | `config.go` |
 | `RATE_LIMIT_RESULT_MP3_PER_SESSION_PER_HOUR` / `_PER_IP_PER_HOUR` | `20` / `40` | MM81. Route bucket `result_mp3` (tool `result_mp3`) on `POST /api/download/:jobId/mp3` ("Download as MP3" of a WAV result: one ffmpeg encode, no GPU, no quota). Every POST counts, including repeat clicks answered from the cache. Operators exempt. | `config.go`, `cmd/api/main.go` |
 
 ### 4.2 S3
@@ -1139,7 +1142,7 @@ All routes live under `/api/` except `/healthz`.
 | GET | `/api/job/:jobId` | Poll a job's full JSON state. `queueWaitMs` (ms, MM33) is the total time the job parked in the shared GPU scheduler (`GPUScheduler.AcquireTimed`, enqueue to acquire, summed across GPU stages); omitted when the job never queued (also on the SSE status). | No |
 | GET | `/api/job/:jobId/events` | SSE event stream of job state changes. Closes on completed/failed. | Yes (open connection) |
 | GET | `/api/download/:jobId` | Stream the converted output file for jobs that produced one locally (image/audio/video convert + transcribe). | No |
-| POST | `/api/download/:jobId/link` | MM80. Owner only (MM05 header rules: owner `X-MM-Session-ID`, signed-in owner or operator; `?sid=` NOT accepted). Optional body `{fileName}` (save-as name, sanitized). Same lookup as `/download` (404 stranger/missing, 400 not completed, 404 file gone). `200 {url,expiresAt,sizeBytes,fileName}`; `url` is `/api/download/:jobId?token=<sealed>`, valid `DOWNLOAD_LINK_TTL_SECONDS` (300). Never charges quota (download of finished work). | No |
+| POST | `/api/download/:jobId/link` | MM80. Owner only (MM05 header rules: owner `X-MM-Session-ID`, signed-in owner or operator; `?sid=` NOT accepted). Optional body `{fileName}` (save-as name, sanitized). Same lookup as `/download` (404 stranger/missing, 400 not completed, 404 file gone). `200 {url,absoluteUrl,expiresAt,sizeBytes,fileName}`; `url` is `/api/download/:jobId?token=<sealed>`, `absoluteUrl` (MA08) is `PUBLIC_API_BASE_URL` + that (the MM81 `/api/download/:jobId/mp3` ready response carries it too), valid `DOWNLOAD_LINK_TTL_SECONDS` (300). Never charges quota (download of finished work). | No |
 | POST | `/api/download/:jobId/mp3` | MM81. "Download as MP3" of a **WAV** result (400 otherwise). Owner only (same lookup and rules as `/link`). First call starts one ffmpeg MP3 320k encode of the finished file into `OUTPUT_DIR/<jobId>/derived.mp3` → `202 {status:"processing"}`; once cached → `200 {status:"ready",url,expiresAt,sizeBytes,fileName}` where `url` is a signed `/api/download/:jobId?token=` whose sealed claims carry `Variant:"mp3"` (serves `derived.mp3` as `<name>.mp3`). Never charges quota (no `ai_ops`); bucket `result_mp3`. | No |
 | GET | `/api/download/:jobId/mp3` | MM81. Status poll for the above, owner only: `{status:"none"|"processing"|"failed"|"ready",...}` (ready carries a fresh signed link). Never starts an encode; not rate-bucketed. | No |
 | GET | `/api/download/:jobId?token=` | MM80. The token alone authorizes (identical 404 for expired/tampered/other-job tokens, even with owner headers). Attachment, real `Content-Length`, Range `206`/`416`, `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer`, `X-Accel-Buffering: no`. Lets the browser's download manager fetch huge results (no JS buffering). | No |
@@ -1672,6 +1675,20 @@ package/
 
 Two parallel APIs for monitoring a job:
 
+**Ownership (MA08).** Both routes run the result-route ownership check after the
+job lookup and before `TouchJobPoll` (a stranger must not suppress the
+job-finished email by polling): operator, signed-in owner (`mm_users.id`), or the
+owner's session id via `X-MM-Session-ID` or `?sid=` (EventSource cannot send
+headers). A stranger gets **404 `{"error":"Job not found"}`**, identical to a
+missing job. Jobs with no recorded owner stay open. Switch:
+`JOB_STATUS_OWNERSHIP_ENFORCE` (default `false`). Rollout: deploy the web UI
+(polls via `authedFetch`, SSE with `?sid=`) -> deploy the API with the flag off ->
+watch `job status ownership: would deny` / `mm_job_status_ownership_would_deny_total`
+for ~24 h (expected about 0; non-zero is an unfixed caller) -> set `true`, restart.
+Edge: a signed-in user whose session id rotated mid-job and whose job is owned only
+by session fails the SSE check; the stream errors and the UI falls back to polling,
+which sends the Bearer token (works when the owner has a `user_id`).
+
 1. `GET /api/job/:jobId` — single-shot poll, returns the full
    `ConversionJob` JSON. Backwards-compatible with the old UI.
 2. `GET /api/job/:jobId/events` — long-lived SSE stream. One `update` event
@@ -1743,6 +1760,26 @@ media routes (`/result/:jobId`, `/video-restore/:id/result/:name`,
 owner stay open. Owners live in memory with the job. `RESULT_OWNERSHIP_ENFORCE`
 (default `true`; `false` logs would-be denials and allows them) is the rollout
 switch.
+
+**Absolute URLs (MA08).** Native download managers need absolute links:
+`POST /api/download/:jobId/link` and the MM81 mp3 ready response add
+`absoluteUrl` (`PUBLIC_API_BASE_URL` + `url`) beside the unchanged relative `url`;
+account history rows with a local result add `downloadAbsoluteUrl`
+(`PUBLIC_API_BASE_URL` + `/api` + `downloadPath`); presigned `downloadUrl` rows are
+already absolute and unchanged.
+
+**Per-user rate buckets (MA08).** The per-route hourly buckets used to key on hashed
+IP and session only; behind carrier-grade NAT one busy network exhausted `upload`
+60/h/IP for everyone. A signed-in caller with a synced `mm_users` row now gets ONE
+bucket `...:user:<hash(user id)>:<route>:hour` with the route's session limit, and
+429 bodies / `server_rate_limited.scope` say `user`; anonymous and unsynced callers
+keep IP + session. `RATE_LIMIT_PER_IP_BURST_AUTHED` raises the global burst for a
+verified principal (still keyed per IP). Ordering finding: `OptionalFirebaseAuth`
+and `TierContext` used to be installed on the `/api` group, AFTER the engine-level
+`GlobalIPRPS` and `routeLimitDispatcher`, so `ResolveTier` returned "no resolver"
+inside the limiter and the operator `RouteExempt` was dead code (operators were
+rate-limited like everyone). Both now run at engine level (for `/api/` paths only)
+before the limiters; the operator exemption works as designed since this change.
 
 **Signed download links (MM80).** Large results (an 87-minute vocal-removal WAV
 is ~880 MB) cannot go through the UI's old `fetch` + `blob()` path: nothing

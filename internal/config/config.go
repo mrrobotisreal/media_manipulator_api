@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -156,9 +157,13 @@ type Config struct {
 	LogFormat          string
 
 	// Rate limiting
-	RateLimitEnabled                     bool
-	RateLimitPerIPRPS                    float64
-	RateLimitPerIPBurst                  int
+	RateLimitEnabled    bool
+	RateLimitPerIPRPS   float64
+	RateLimitPerIPBurst int
+	// RateLimitPerIPBurstAuthed (RATE_LIMIT_PER_IP_BURST_AUTHED, default 60, MA08)
+	// is the per-IP per-second burst for requests carrying a verified Firebase
+	// principal (carrier-grade NAT headroom). The key is still the IP.
+	RateLimitPerIPBurstAuthed            int
 	RateLimitUploadsPerSessionPerHour    int
 	RateLimitUploadsPerIPPerHour         int
 	RateLimitTranscodesPerSessionPerHour int
@@ -200,6 +205,16 @@ type Config struct {
 	// result/download routes 404 for callers who do not own the job. False logs
 	// would-be denials and allows them (rollout mode).
 	ResultOwnershipEnforce bool
+	// JobStatusOwnershipEnforce (JOB_STATUS_OWNERSHIP_ENFORCE, default false, MA08)
+	// gives GET /api/job/:id and its /events stream the same ownership check as
+	// the result routes. False logs would-be denials (and counts
+	// mm_job_status_ownership_would_deny_total) and allows them: the rollout mode
+	// until the web UI sends identity on every poll and ?sid= on every EventSource.
+	JobStatusOwnershipEnforce bool
+	// PublicAPIBaseURL (PUBLIC_API_BASE_URL, default https://api.media-manipulator.com,
+	// MA08) prefixes the relative download paths to build absoluteUrl /
+	// downloadAbsoluteUrl for native clients. No trailing slash, no /api suffix.
+	PublicAPIBaseURL string
 	// DownloadLinkSecret (DOWNLOAD_LINK_SECRET, MM80) keys the AES-GCM sealed
 	// download tokens minted by POST /api/download/:jobId/link. A SECRET: never
 	// log it. Empty (the default) uses a random per-process key, so links only
@@ -711,6 +726,7 @@ func Load() *Config {
 		RateLimitEnabled:                     getEnvBool("RATE_LIMIT_ENABLED", true),
 		RateLimitPerIPRPS:                    getEnvFloat("RATE_LIMIT_PER_IP_RPS", 2),
 		RateLimitPerIPBurst:                  getEnvInt("RATE_LIMIT_PER_IP_BURST", 20),
+		RateLimitPerIPBurstAuthed:            getEnvInt("RATE_LIMIT_PER_IP_BURST_AUTHED", 60),
 		RateLimitUploadsPerSessionPerHour:    getEnvInt("RATE_LIMIT_UPLOADS_PER_SESSION_PER_HOUR", 30),
 		RateLimitUploadsPerIPPerHour:         getEnvInt("RATE_LIMIT_UPLOADS_PER_IP_PER_HOUR", 60),
 		RateLimitTranscodesPerSessionPerHour: getEnvInt("RATE_LIMIT_TRANSCODES_PER_SESSION_PER_HOUR", 10),
@@ -742,9 +758,11 @@ func Load() *Config {
 		// pre-tier global-config behaviour exactly.
 		TierQuotaEnabled: getEnvBool("TIER_QUOTA_ENABLED", true),
 
-		ResultOwnershipEnforce: getEnvBool("RESULT_OWNERSHIP_ENFORCE", true),
-		DownloadLinkSecret:     getEnv("DOWNLOAD_LINK_SECRET", ""),
-		DownloadLinkTTL:        clampDuration(time.Duration(getEnvInt("DOWNLOAD_LINK_TTL_SECONDS", 300))*time.Second, 30*time.Second, time.Hour),
+		ResultOwnershipEnforce:    getEnvBool("RESULT_OWNERSHIP_ENFORCE", true),
+		JobStatusOwnershipEnforce: getEnvBool("JOB_STATUS_OWNERSHIP_ENFORCE", false),
+		PublicAPIBaseURL:          NormalizePublicAPIBaseURL(getEnv("PUBLIC_API_BASE_URL", "https://api.media-manipulator.com")),
+		DownloadLinkSecret:        getEnv("DOWNLOAD_LINK_SECRET", ""),
+		DownloadLinkTTL:           clampDuration(time.Duration(getEnvInt("DOWNLOAD_LINK_TTL_SECONDS", 300))*time.Second, 30*time.Second, time.Hour),
 
 		TierAnonOpsPerDay:             anonOps,
 		TierAnonExportsPerDay:         getEnvInt("TIER_ANON_EXPORTS_PER_DAY", anonOps),
@@ -1147,4 +1165,19 @@ func splitCSVLower(raw string) []string {
 		parts[i] = strings.ToLower(p)
 	}
 	return parts
+}
+
+// NormalizePublicAPIBaseURL (also applied by handlers on a hand-built Config) trims whitespace and trailing slashes and strips a
+// single trailing "/api" (the relative paths it prefixes already start with
+// /api/), logging a WARN when it does. Empty falls back to the default.
+func NormalizePublicAPIBaseURL(raw string) string {
+	v := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if strings.HasSuffix(v, "/api") {
+		v = strings.TrimRight(strings.TrimSuffix(v, "/api"), "/")
+		log.Printf("WARN: PUBLIC_API_BASE_URL ends with /api; stripped (download paths already start with /api/)")
+	}
+	if v == "" {
+		return "https://api.media-manipulator.com"
+	}
+	return v
 }

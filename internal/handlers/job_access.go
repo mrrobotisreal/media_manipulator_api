@@ -25,6 +25,45 @@ func init() { resultOwnershipEnforce.Store(true) }
 // SetResultOwnershipEnforce is called once at boot from configuration.
 func SetResultOwnershipEnforce(on bool) { resultOwnershipEnforce.Store(on) }
 
+// jobStatusOwnershipEnforce is the JOB_STATUS_OWNERSHIP_ENFORCE switch (default
+// false, MA08): GET /api/job/:id and /events get the result-route ownership check.
+var jobStatusOwnershipEnforce atomic.Bool
+
+// SetJobStatusOwnershipEnforce is called once at boot from configuration.
+func SetJobStatusOwnershipEnforce(on bool) { jobStatusOwnershipEnforce.Store(on) }
+
+// jobStatusWouldDeny is the metric hook (mm_job_status_ownership_would_deny_total),
+// set at boot; nil in tests.
+var jobStatusWouldDeny atomic.Pointer[func()]
+
+// SetJobStatusWouldDenyHook registers the would-deny counter increment.
+func SetJobStatusWouldDenyHook(f func()) { jobStatusWouldDeny.Store(&f) }
+
+// jobStatusWouldDenyLogged logs the would-deny line once per job.
+var jobStatusWouldDenyLogged sync.Map
+
+// authorizeJobStatus reports whether the caller may read a job's status or SSE
+// stream. Same rules as authorizeJobAccessSID(..., true): ?sid= is accepted
+// because EventSource cannot send headers. With the flag off a would-be denial is
+// logged once per job, counted, and allowed. On false answer denyJobAccess.
+// Call it after the job lookup and BEFORE TouchJobPoll: a stranger must not
+// suppress the job-finished email by polling.
+func authorizeJobStatus(c *gin.Context, jm *services.JobManager, job *models.ConversionJob) bool {
+	if jobAccessAllowed(c, jm, job, true) {
+		return true
+	}
+	if !jobStatusOwnershipEnforce.Load() {
+		if _, seen := jobStatusWouldDenyLogged.LoadOrStore(job.ID, struct{}{}); !seen {
+			log.Printf("job status ownership: would deny job %s (JOB_STATUS_OWNERSHIP_ENFORCE=false)", job.ID)
+		}
+		if f := jobStatusWouldDeny.Load(); f != nil && *f != nil {
+			(*f)()
+		}
+		return true
+	}
+	return false
+}
+
 // legacyOwnerLogged ensures the "no recorded owner" exception logs once per job.
 var legacyOwnerLogged sync.Map
 

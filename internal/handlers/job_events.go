@@ -31,8 +31,13 @@ func (h *ConversionHandler) StreamJobEvents(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Job ID is required"})
 		return
 	}
-	if _, err := h.jobManager.GetJob(jobID); err != nil {
+	job, err := h.jobManager.GetJob(jobID)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
+		return
+	}
+	if !authorizeJobStatus(c, h.jobManager, job) { // MA08
+		denyJobAccess(c)
 		return
 	}
 

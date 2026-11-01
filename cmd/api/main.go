@@ -59,6 +59,7 @@ func main() {
 	loadDotEnv()
 	cfg := config.Load()
 	handlers.SetResultOwnershipEnforce(cfg.ResultOwnershipEnforce)
+	handlers.SetJobStatusOwnershipEnforce(cfg.JobStatusOwnershipEnforce)
 	logging := logger.New(cfg)
 	slog.SetDefault(logging)
 
@@ -126,6 +127,7 @@ func main() {
 
 	// Metrics + GPU + rate limiter
 	metricsReg := metrics.New()
+	handlers.SetJobStatusWouldDenyHook(metricsReg.JobStatusWouldDeny)
 
 	// MM22: the retained-objects ledger every producer of durable data writes to.
 	// A no-op when the database is unavailable; a failed write never fails a request.
@@ -189,6 +191,23 @@ func main() {
 	limiter.RouteExempt = func(c *gin.Context) bool {
 		res, ok := middleware.ResolveTier(c)
 		return ok && res.Limits.RateLimitExempt
+	}
+	// MA08: per-user buckets for signed-in synced accounts, and the larger burst
+	// for any verified principal. Both need the identity middleware installed
+	// before the limiter (see setupRouter).
+	limiter.UserSubject = func(c *gin.Context) (string, bool) {
+		if _, signedIn := middleware.PrincipalFrom(c); !signedIn {
+			return "", false
+		}
+		res, ok := middleware.ResolveTier(c)
+		if !ok || res.User == nil {
+			return "", false
+		}
+		return res.User.ID, true
+	}
+	limiter.Authed = func(c *gin.Context) bool {
+		_, signedIn := middleware.PrincipalFrom(c)
+		return signedIn
 	}
 	conversionHandler := handlers.NewConversionHandler(jobManager, converter, cfg, inspector, analysisQueue, transcription, s3Client, faceDetectionStore, tierRegistry)
 	// `server_download_served` — the one server-truth event whose call site is a
@@ -496,6 +515,20 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 	router.Use(middleware.RequestContext())
 	router.Use(middleware.AccessLog(store, enricher))
 	router.Use(m.Middleware())
+	// MA08: identity and tier resolution run BEFORE the limiters so GlobalIPRPS
+	// can see a verified principal (authed burst) and Route can see the tier
+	// (operator exemption) and the synced user (per-user bucket). Before this the
+	// resolver was installed on the /api group, after the engine-level dispatcher,
+	// so ResolveTier never succeeded inside the limiter and RouteExempt was dead.
+	// Both are cheap, never reject, and ResolveTier is lazy. Scoped to /api/ so
+	// routes outside the group keep "no resolver installed". The group no longer
+	// installs them again (that would verify the token twice).
+	router.Use(onAPIPaths(middleware.OptionalFirebaseAuth(true, firebaseVerifier)))
+	router.Use(onAPIPaths(middleware.TierContext(middleware.TierConfig{
+		Store:    store,
+		Registry: tierRegistry,
+		Logger:   slog.Default(),
+	}, cfg.TierQuotaEnabled)))
 	// Global per-IP rate limit guard.
 	router.Use(limiter.GlobalIPRPS())
 
@@ -526,15 +559,11 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// OptionalFirebaseAuth is safe everywhere on /api: with no Bearer header
 		// it returns immediately, and it never rejects. Quota is applied only to
 		// the paths in quotaRoutes.
-		api.Use(middleware.OptionalFirebaseAuth(true, firebaseVerifier))
-		// TierContext resolves the caller's entitlement lazily and once. The
-		// quota middleware, the upload byte caps and the transcode ladder all
-		// read the same answer through middleware.ResolveTier.
-		api.Use(middleware.TierContext(middleware.TierConfig{
-			Store:    store,
-			Registry: tierRegistry,
-			Logger:   slog.Default(),
-		}, cfg.TierQuotaEnabled))
+		// MA08: OptionalFirebaseAuth and TierContext are installed at engine level
+		// above (before the limiters) via onAPIPaths. TierContext resolves the
+		// caller's entitlement lazily and once; the quota middleware, the upload
+		// byte caps and the transcode ladder all read the same answer through
+		// middleware.ResolveTier.
 		// MM77: voices sign-in / plan refusals run before any unit is spent.
 		api.Use(voicesPreCharge())
 		api.Use(quotaDispatcher(middleware.QuotaConfig{
@@ -1283,3 +1312,15 @@ var (
 	_ = pgxpool.New
 	_ = redis.Nil
 )
+
+// onAPIPaths wraps a middleware so it only runs for /api/ requests; any other
+// path passes straight through. The wrapped handler calls c.Next() itself.
+func onAPIPaths(h gin.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !strings.HasPrefix(c.Request.URL.Path, "/api/") {
+			c.Next()
+			return
+		}
+		h(c)
+	}
+}
