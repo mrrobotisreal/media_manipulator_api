@@ -59,6 +59,7 @@ func main() {
 	loadDotEnv()
 	cfg := config.Load()
 	handlers.SetResultOwnershipEnforce(cfg.ResultOwnershipEnforce)
+	handlers.SetJobStatusOwnershipEnforce(cfg.JobStatusOwnershipEnforce)
 	logging := logger.New(cfg)
 	slog.SetDefault(logging)
 
@@ -126,6 +127,7 @@ func main() {
 
 	// Metrics + GPU + rate limiter
 	metricsReg := metrics.New()
+	handlers.SetJobStatusWouldDenyHook(metricsReg.JobStatusWouldDeny)
 
 	// MM22: the retained-objects ledger every producer of durable data writes to.
 	// A no-op when the database is unavailable; a failed write never fails a request.

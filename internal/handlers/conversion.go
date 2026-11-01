@@ -289,6 +289,10 @@ func (h *ConversionHandler) GetJobStatus(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
 		return
 	}
+	if !authorizeJobStatus(c, h.jobManager, job) { // MA08
+		denyJobAccess(c)
+		return
+	}
 	h.jobManager.TouchJobPoll(jobID) // MM31: a tab is watching this job
 	c.JSON(http.StatusOK, h.withMetadataFields(job))
 }
