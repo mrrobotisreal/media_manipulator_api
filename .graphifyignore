@@ -1,0 +1,21 @@
+# graphify: paths kept out of the knowledge graph (on top of .gitignore).
+# .git, __pycache__ and gitignored dirs (uploads/, outputs/, job-*/) are pruned already.
+
+graphify-out/
+
+# Fonts and licence texts: binary assets, no project knowledge
+assets/
+
+# Test fixtures and golden data (expectations, not source)
+**/testdata/
+
+# Generated data: catalog.json is the input to catalog_gen.go (DO NOT EDIT),
+# which yields one init() node — the human source is the MD catalog in docs/design
+internal/metadata/catalog.json
+internal/metadata/catalog_gen.go
+
+# Email copy string bundles (pure translation data)
+internal/email/locales/*.json
+
+# Superseded script kept for reference
+scripts/server/face_privacy_old.py
