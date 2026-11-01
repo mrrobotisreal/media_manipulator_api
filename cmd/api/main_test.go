@@ -578,3 +578,44 @@ func TestQuotaRefundsServerErrorsButNotTheOverLimit429(t *testing.T) {
 		t.Fatalf("the over-limit 429 must not refund itself: ledger %d, want %d", aiUsed, cfg.TierAnonAIOpsPerDay+1)
 	}
 }
+
+// MA08 ordering test: the tier resolver (and so the operator RouteExempt, the
+// user bucket and the authed burst) must be visible INSIDE routeLimitDispatcher.
+// Before MA08 TierContext was installed on the /api group after the engine-level
+// dispatcher, so this was false and limiter.RouteExempt never fired.
+func TestSetupRouterTierResolverVisibleToLimiter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var mu sync.Mutex
+	seen := map[string]bool{}
+	original := newRouteGuard
+	newRouteGuard = func(_ *limits.Limiter) func(routeKey, tool string, sessionLimit, ipLimit int) gin.HandlerFunc {
+		return func(routeKey, tool string, sessionLimit, ipLimit int) gin.HandlerFunc {
+			return func(c *gin.Context) {
+				_, has := c.Get(middleware.CtxTierResolver)
+				mu.Lock()
+				seen[routeKey] = has
+				mu.Unlock()
+				c.Next()
+			}
+		}
+	}
+	t.Cleanup(func() { newRouteGuard = original })
+
+	cfg := config.Load()
+	router := setupRouter(
+		cfg, nil, nil, nil, nil, nil, nil, nil, tiers.New(cfg), nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, limits.New(nil, cfg, nil, nil), metrics.New(),
+		nil,
+	)
+	func() {
+		defer func() { _ = recover() }()
+		req := httptest.NewRequest(http.MethodPost, "/api/upload", strings.NewReader(""))
+		req.Header.Set("Content-Type", "multipart/form-data; boundary=x")
+		router.ServeHTTP(httptest.NewRecorder(), req)
+	}()
+	mu.Lock()
+	defer mu.Unlock()
+	if has, ran := seen["upload"]; !ran || !has {
+		t.Fatalf("tier resolver not installed before the limiter dispatcher (ran=%v has=%v)", ran, has)
+	}
+}
