@@ -70,3 +70,11 @@ _Avoid_: calling it "the voices API" (that is `/api/voices` in this repo).
 **Contact** (MM85):
 The public contact form, `POST /api/contact` (`internal/handlers/contact.go`). It mails the support inbox (`CONTACT_TO`) through the transactional `email.Sender` with Reply-To the visitor and a 12-character **reference** in the subject and the `202` body; the email is the only record (no table, no quota). Subjects are a closed set: `bug`, `billing`, `privacy`, `press`, `other`. A filled `website` field is the honeypot. Limited by the `contact` bucket; `503 contact_unavailable` when email is off.
 _Avoid_: "support ticket" (there is no ticket system), storing contact messages in Postgres.
+
+**Job-status ownership** (MA08):
+`GET /api/job/:id` and `/events` apply the result-route ownership rule (operator, signed-in owner, or the owner's session id by `X-MM-Session-ID` or `?sid=`); a stranger gets the same 404 as a missing job. Behind `JOB_STATUS_OWNERSHIP_ENFORCE` (default off: would-deny log and `mm_job_status_ownership_would_deny_total`). Checked before `TouchJobPoll`.
+_Avoid_: confusing it with `RESULT_OWNERSHIP_ENFORCE`, which guards downloads and results.
+
+**User bucket** (MA08):
+The per-route hourly rate-limit bucket keyed on the hashed `mm_users.id` of a verified, synced caller (`limits.Limiter.UserSubject`), with the route's session limit and scope `user`; it replaces the IP and session buckets for that caller. Anonymous and unsynced callers keep IP + session.
+_Avoid_: per-account quota (the tier quota is a separate daily allowance).

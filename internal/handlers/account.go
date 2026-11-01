@@ -378,7 +378,7 @@ func (h *AccountHandler) emitSignupCompleted(c *gin.Context, firebaseUID string,
 	// through when present rather than guessed at: an absent method is honest,
 	// a wrong one is not.
 	props := map[string]any{}
-	if m := strings.TrimSpace(signupSource); m != "" {
+	if m := signupMethod(signupSource); m != "" {
 		props["method"] = m
 	}
 	if tier != "" {
@@ -396,6 +396,22 @@ func (h *AccountHandler) emitSignupCompleted(c *gin.Context, firebaseUID string,
 		Context:    analyticsemit.Context("", "", "", tier),
 		Properties: props,
 	})
+}
+
+// signupMethod maps the client's free-text signupSource onto the closed
+// `method` vocabulary (MA08, MA-0003): google|email|apple pass through (case- and
+// space-insensitive), empty stays empty (omitted), anything else becomes "other"
+// so garbage cannot mint new analytics values. mm_users.signup_source keeps the raw value.
+func signupMethod(raw string) string {
+	v := strings.ToLower(strings.TrimSpace(raw))
+	switch v {
+	case "":
+		return ""
+	case "google", "email", "apple":
+		return v
+	default:
+		return "other"
+	}
 }
 
 // Me returns the signed-in caller's account, tier, limits and today's usage.
