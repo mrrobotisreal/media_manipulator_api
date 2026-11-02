@@ -39,6 +39,9 @@ func recordJobCreated(c *gin.Context, jm *services.JobManager, job *models.Conve
 		return
 	}
 	jm.RecordJobCreated(c.Request.Context(), job.ID, jobOwnerFor(c), facts)
+	// MM94: pipelines that only get a job id (upload AI tools, caption
+	// translation) read the caller's GPU queue priority from here.
+	jm.SetJobGPUPriority(job.ID, gpuPriorityFor(c))
 	// The allowance unit RequireQuota spent on this request now belongs to the
 	// job: if the pipeline fails, the job gives it back. Typed-nil guard: a
 	// nil *QuotaCharge must not become a non-nil interface.

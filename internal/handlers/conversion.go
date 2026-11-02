@@ -1146,7 +1146,7 @@ func (h *ConversionHandler) DetectFaces(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.aiService.DetectFaces(ctx, tempPath)
+	resp, err := h.aiService.DetectFaces(ctx, tempPath, gpuPriorityFor(c))
 	if err != nil {
 		log.Printf("face detect failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Face detection failed"})
