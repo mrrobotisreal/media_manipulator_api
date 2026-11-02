@@ -55,6 +55,9 @@ type ConversionHandler struct {
 	share *ShareHandler
 	// videoSummary serves the MM74 /summarize routes. nil = not mounted.
 	videoSummary *VideoSummaryHandler
+
+	// enqueueAnalysis overrides analysisJobs.Enqueue (tests).
+	enqueueAnalysis func(services.AnalysisJob)
 }
 
 // SetJobRecords attaches the durable job lookup (MM24 download-after-restart).
@@ -270,10 +273,11 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 
 	// Skip background analysis for PDFs — the analysis queue targets image,
 	// video, and audio media and has nothing to do with documents.
-	if shouldEnqueueAnalysis(job) && fileType != models.FileTypeDocument {
-		h.analysisJobs.Enqueue(services.AnalysisJob{JobID: job.ID, InputPath: uploadPath, OutputDir: jobOutputDir, FileType: fileType, MimeType: mimeType})
+	var after *pendingAnalysis
+	if fileType != models.FileTypeDocument {
+		after = h.planAnalysis(job, services.AnalysisJob{JobID: job.ID, InputPath: uploadPath, OutputDir: jobOutputDir, FileType: fileType, MimeType: mimeType})
 	}
-	go h.processConversion(job, uploadPath, jobOutputDir)
+	go h.processConversion(job, uploadPath, jobOutputDir, after)
 
 	c.JSON(http.StatusOK, models.UploadResponse{JobID: job.ID})
 }
@@ -569,7 +573,10 @@ func (h *ConversionHandler) GetAnalysisResult(c *gin.Context) {
 	c.File(resultPath)
 }
 
-func (h *ConversionHandler) processConversion(job *models.ConversionJob, inputPath string, outputDir string) {
+// processConversion runs a conversion job. after, when non-nil, is the
+// upload's analysis, enqueued only once the job has completed (an AI-tool job,
+// MM94) so it never competes with the job's own GPU step.
+func (h *ConversionHandler) processConversion(job *models.ConversionJob, inputPath string, outputDir string, after *pendingAnalysis) {
 	if err := h.jobManager.UpdateJobStatus(job.ID, models.StatusProcessing); err != nil {
 		log.Printf("failed to update job %s status: %v", job.ID, err)
 		return
@@ -597,6 +604,10 @@ func (h *ConversionHandler) processConversion(job *models.ConversionJob, inputPa
 	}
 	if err := h.jobManager.UpdateJobStatus(job.ID, models.StatusCompleted); err != nil {
 		log.Printf("failed to mark job %s completed: %v", job.ID, err)
+		return
+	}
+	if after != nil {
+		h.enqueue(after.job)
 	}
 }
 
@@ -939,21 +950,67 @@ var stemCodecProbe = func(ctx context.Context, cfg *config.Config, path string) 
 
 // shouldEnqueueAnalysis reports whether an upload also gets the background
 // "product intelligence" analysis (analysis_queue.go). Transcription and the
-// specialized tools never did. AI-tool jobs are skipped too: for an image the
-// analysis loads Ollama's vision model (qwen3-vl:8b, ~14.7 GB) on the same GPU
-// the AI tools use, outside the GPU scheduler, and on a 16 GB card the AI job
-// that starts a second later fails with an onnxruntime/CUDA "Failed to
-// allocate memory" (observed 2026-11-02 for remove_background). Nothing a user
-// sees waits on the analysis of an AI job. Coordinating the two through the
-// GPU scheduler is a follow-up (docs/tickets).
+// specialized tools never did.
+//
+// AI-tool jobs get it again (MM94, reversing the 2026-11-02 stopgap 81258aa):
+// every AI tool and every Ollama call now takes a GPU slot from the shared
+// scheduler, and the analysis runs at background priority, so it can no longer
+// fill the AI tool's card behind the scheduler's back. It is still enqueued
+// only once the AI job has COMPLETED (analysisAfterJob), never alongside it;
+// see analysisTiming.
 func shouldEnqueueAnalysis(job *models.ConversionJob) bool {
 	if isTranscribeMode(job) || specializedMode(job) != "" {
 		return false
 	}
-	if _, ok := aiOperation(job); ok {
-		return false
-	}
 	return true
+}
+
+// analysisTiming is when an upload's analysis is enqueued.
+type analysisTiming int
+
+const (
+	analysisNone     analysisTiming = iota
+	analysisAtUpload                // plain conversion: at upload, background priority
+	analysisAfterJob                // AI-tool job: after the job completes
+)
+
+// analysisTimingFor decides whether and when an upload is analysed.
+func analysisTimingFor(job *models.ConversionJob) analysisTiming {
+	if !shouldEnqueueAnalysis(job) {
+		return analysisNone
+	}
+	if _, ok := aiOperation(job); ok {
+		return analysisAfterJob
+	}
+	return analysisAtUpload
+}
+
+// enqueue hands one analysis to the background queue.
+func (h *ConversionHandler) enqueue(aj services.AnalysisJob) {
+	if h.enqueueAnalysis != nil {
+		h.enqueueAnalysis(aj)
+		return
+	}
+	if h.analysisJobs != nil {
+		h.analysisJobs.Enqueue(aj)
+	}
+}
+
+// pendingAnalysis is an analysis that waits for its job to complete.
+type pendingAnalysis struct {
+	job services.AnalysisJob
+}
+
+// planAnalysis enqueues the upload's analysis now (plain conversion) or
+// returns it for processConversion to enqueue on completion (AI-tool job).
+func (h *ConversionHandler) planAnalysis(job *models.ConversionJob, aj services.AnalysisJob) *pendingAnalysis {
+	switch analysisTimingFor(job) {
+	case analysisAtUpload:
+		h.enqueue(aj)
+	case analysisAfterJob:
+		return &pendingAnalysis{job: aj}
+	}
+	return nil
 }
 
 func aiOperation(job *models.ConversionJob) (string, bool) {

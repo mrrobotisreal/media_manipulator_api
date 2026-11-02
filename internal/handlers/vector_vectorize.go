@@ -85,7 +85,7 @@ func (h *ConversionHandler) LaunchVectorize(c *gin.Context, threshold, turdSize 
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize upload"})
 		return
 	}
-	go h.processConversion(job, uploadPath, jobOutputDir)
+	go h.processConversion(job, uploadPath, jobOutputDir, nil)
 	c.JSON(http.StatusOK, models.UploadResponse{JobID: job.ID})
 }
 
