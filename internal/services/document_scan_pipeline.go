@@ -416,8 +416,22 @@ func (s *DocumentScanService) precleanDocumentPages(ctx context.Context, req Doc
 
 // runPrimaryWrapper runs the wrapper under a 5080 (primary) GPU permit — for the
 // Ollama-served VLM / text-model stages.
+//
+// MM94: the slot is on the card the DOCUMENT_SCAN_OLLAMA_URL daemon is pinned
+// to (OLLAMA_GPU_INDEX_BY_URL), falling back to AI_DOCUMENT_OCR_GPU when the
+// daemon is not mapped, and asks for the stage model's VRAM (OLLAMA_VRAM_MIB*,
+// default 10000 as before). document_ocr.py sends keep_alive 0, so the model
+// is unloaded before the slot is released.
 func (s *DocumentScanService) runPrimaryWrapper(ctx context.Context, req DocumentScanRequest, paths documentScanPaths, stageKey, mode string, extra []string, floor, ceil int) error {
-	return s.runWrapperWithGPU(ctx, req, paths, stageKey, mode, extra, floor, ceil, s.cfg.AIDocumentOCRGPU, gpu.TaskOllama, 10000)
+	card := s.cfg.AIDocumentOCRGPU
+	if idx := OllamaGPUIndexFor(s.cfg.DocumentScanOllamaURL); idx != nil {
+		card = *idx
+	}
+	model := s.cfg.OllamaVLMModel
+	if mode == "summary" {
+		model = s.cfg.OllamaTextModel
+	}
+	return s.runWrapperWithGPU(ctx, req, paths, stageKey, mode, extra, floor, ceil, card, gpu.TaskOllama, OllamaVRAMMiBFor(model))
 }
 
 // runSecondaryWrapper runs the wrapper under a 5060 Ti (secondary) GPU permit —
@@ -438,8 +452,12 @@ func (s *DocumentScanService) runCPUWrapper(ctx context.Context, req DocumentSca
 func (s *DocumentScanService) runWrapperWithGPU(ctx context.Context, req DocumentScanRequest, paths documentScanPaths, stageKey, mode string, extra []string, floor, ceil, cudaIndex int, task gpu.TaskType, vramMiB int64) error {
 	if cudaIndex >= 0 {
 		force := cudaIndex
+		kind := "document-scan-" + mode
+		if task == gpu.TaskOllama {
+			kind = "ollama[document-scan-" + mode + "]"
+		}
 		_, releaseGPU, err := acquireGPUForJob(ctx, s.jobManager, req.JobID, GPURequest{
-			Kind:            "document-scan-" + mode,
+			Kind:            kind,
 			VRAMRequiredMiB: vramMiB,
 			ForceIndex:      &force,
 			Priority:        req.GPUPriority,

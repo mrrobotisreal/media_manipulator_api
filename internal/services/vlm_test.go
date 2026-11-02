@@ -190,7 +190,9 @@ func (e errFieldMissing) Error() string { return string(e) + " is required" }
 
 // The S1 refactor must not change what the internal analysis sends to Ollama:
 // same model, same prompt, images on the single user message, format json, no
-// system turn, and the raw response object returned as-is.
+// system turn, and the raw response object returned as-is. MM94 adds exactly
+// one field: keep_alive 0s, so the model is unloaded before the GPU slot is
+// released.
 func TestAnalysisQueueAnalyzeImagesPayloadUnchanged(t *testing.T) {
 	f := newFakeOllama(t, `{"scene":"x"}`)
 	t.Setenv("OLLAMA_URL", f.srv.URL)
@@ -219,6 +221,7 @@ func TestAnalysisQueueAnalyzeImagesPayloadUnchanged(t *testing.T) {
 			"content": "PROMPT",
 			"images":  []any{base64.StdEncoding.EncodeToString([]byte("jpeg-bytes"))},
 		}},
+		"keep_alive": "0s",
 	}
 	if !reflect.DeepEqual(req, want) {
 		t.Fatalf("payload changed:\n got %#v\nwant %#v", req, want)

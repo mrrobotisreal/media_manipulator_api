@@ -23,6 +23,7 @@ func (jm *JobManager) ForgetJob(jobID string) bool {
 	delete(jm.emitOwners, jobID)
 	delete(jm.ownerByJob, jobID)
 	delete(jm.quotaByJob, jobID)
+	delete(jm.gpuPriorityByJob, jobID)
 	delete(jm.lastPoll, jobID)
 	delete(jm.notified, jobID)
 	jm.emitMu.Unlock()

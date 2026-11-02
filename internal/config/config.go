@@ -62,6 +62,15 @@ type Config struct {
 	// on the Go side and passed via --mask.
 	LamaPython         string
 	RemoveObjectScript string
+	// AIToolVRAMMiB is the VRAM each upload AI tool asks the GPU scheduler for
+	// (MM94), keyed by tool: remove_background, ai_upscale, face_privacy,
+	// redact_text, remove_object, deepfilter, demucs, frame_interpolation.
+	// AI_VRAM_MIB_<KEY> overrides each. Defaults are a conservative 4096 MiB
+	// until measured on the server (RUNBOOK section 7.2, VRAM table).
+	AIToolVRAMMiB map[string]int64
+	// AnalysisGPUMaxWait bounds how long the background analysis waits for a
+	// GPU slot before it is dropped (ANALYSIS_GPU_MAX_WAIT_SECONDS, default 120).
+	AnalysisGPUMaxWait time.Duration
 
 	// AIFrameInterpolationScript is the runtime path on the GPU host to the
 	// helper script that drives rife-ncnn-vulkan plus ffmpeg I/O. The Go API
@@ -659,6 +668,17 @@ func Load() *Config {
 
 		LamaPython:         getEnv("AI_LAMA_PYTHON", "/opt/media-manipulator-ai/venvs/inpaint/bin/python"),
 		RemoveObjectScript: getEnv("AI_REMOVE_OBJECT_SCRIPT", "/opt/media-manipulator-ai/scripts/remove_object_lama.py"),
+		AIToolVRAMMiB: map[string]int64{
+			"remove_background":   getEnvInt64("AI_VRAM_MIB_REMOVE_BACKGROUND", 4096),
+			"ai_upscale":          getEnvInt64("AI_VRAM_MIB_AI_UPSCALE", 4096),
+			"face_privacy":        getEnvInt64("AI_VRAM_MIB_FACE_PRIVACY", 4096),
+			"redact_text":         getEnvInt64("AI_VRAM_MIB_REDACT_TEXT", 4096),
+			"remove_object":       getEnvInt64("AI_VRAM_MIB_REMOVE_OBJECT", 4096),
+			"deepfilter":          getEnvInt64("AI_VRAM_MIB_DEEPFILTER", 4096),
+			"demucs":              getEnvInt64("AI_VRAM_MIB_DEMUCS", 4096),
+			"frame_interpolation": getEnvInt64("AI_VRAM_MIB_FRAME_INTERPOLATION", 4096),
+		},
+		AnalysisGPUMaxWait: time.Duration(getEnvInt("ANALYSIS_GPU_MAX_WAIT_SECONDS", 120)) * time.Second,
 
 		AIFrameInterpolationEnabled:            getEnvBool("AI_FRAME_INTERPOLATION_ENABLED", true),
 		AIFrameInterpolationScript:             getEnv("AI_FRAME_INTERPOLATION_SCRIPT", "/opt/media-manipulator-ai/scripts/frame_interpolate_rife.py"),

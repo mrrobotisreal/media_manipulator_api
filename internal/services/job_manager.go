@@ -128,6 +128,12 @@ type JobManager struct {
 	// by emitMu.
 	quotaByJob map[string]QuotaRefunder
 
+	// gpuPriorityByJob is the GPU queue priority the creating request earned
+	// (Premium for paid tiers), read by pipelines that only get a job id (the
+	// upload AI tools, caption translation; MM94). Same lifetime as
+	// ownerByJob. Guarded by emitMu.
+	gpuPriorityByJob map[string]int
+
 	// MM31: lastPoll is when a client last read a job's status (GET status, or an
 	// open SSE stream). notifier gets the one "AI job finished" callback for long
 	// jobs nobody was watching. Both guarded by emitMu.
@@ -138,16 +144,17 @@ type JobManager struct {
 
 func NewJobManager() *JobManager {
 	jm := &JobManager{
-		jobs:        make(map[string]*models.ConversionJob),
-		progressCh:  make(chan models.ProgressUpdate, 100),
-		subscribers: make(map[string][]chan *models.ConversionJob),
-		recordCh:    make(chan telemetry.JobUpsert, 256),
-		recFlush:    make(chan chan struct{}, 4),
-		emitOwners:  make(map[string]jobEmitContext),
-		ownerByJob:  make(map[string]JobOwner),
-		quotaByJob:  make(map[string]QuotaRefunder),
-		lastPoll:    make(map[string]time.Time),
-		notified:    make(map[string]struct{}),
+		jobs:             make(map[string]*models.ConversionJob),
+		progressCh:       make(chan models.ProgressUpdate, 100),
+		subscribers:      make(map[string][]chan *models.ConversionJob),
+		recordCh:         make(chan telemetry.JobUpsert, 256),
+		recFlush:         make(chan chan struct{}, 4),
+		emitOwners:       make(map[string]jobEmitContext),
+		ownerByJob:       make(map[string]JobOwner),
+		quotaByJob:       make(map[string]QuotaRefunder),
+		gpuPriorityByJob: make(map[string]int),
+		lastPoll:         make(map[string]time.Time),
+		notified:         make(map[string]struct{}),
 	}
 	go jm.handleProgressUpdates()
 	return jm
@@ -220,6 +227,33 @@ func (jm *JobManager) SetJobOwner(jobID string, owner JobOwner) {
 	}
 	jm.ownerByJob[jobID] = owner
 	jm.emitMu.Unlock()
+}
+
+// SetJobGPUPriority records the GPU queue priority a job's request earned.
+func (jm *JobManager) SetJobGPUPriority(jobID string, priority int) {
+	if jm == nil || jobID == "" {
+		return
+	}
+	jm.emitMu.Lock()
+	if jm.gpuPriorityByJob == nil {
+		jm.gpuPriorityByJob = make(map[string]int)
+	}
+	jm.gpuPriorityByJob[jobID] = priority
+	jm.emitMu.Unlock()
+}
+
+// GPUPriorityOf is a job's recorded GPU queue priority; GPUPriorityStandard
+// when none was recorded.
+func (jm *JobManager) GPUPriorityOf(jobID string) int {
+	if jm == nil || jobID == "" {
+		return GPUPriorityStandard
+	}
+	jm.emitMu.RLock()
+	defer jm.emitMu.RUnlock()
+	if p, ok := jm.gpuPriorityByJob[jobID]; ok {
+		return p
+	}
+	return GPUPriorityStandard
 }
 
 // SetJobQuotaCharge attaches the allowance unit a job's request spent, so the
@@ -906,6 +940,11 @@ func (jm *JobManager) CleanupOldJobs(maxAge time.Duration) {
 	for jobID := range jm.quotaByJob {
 		if _, ok := live[jobID]; !ok {
 			delete(jm.quotaByJob, jobID)
+		}
+	}
+	for jobID := range jm.gpuPriorityByJob {
+		if _, ok := live[jobID]; !ok {
+			delete(jm.gpuPriorityByJob, jobID)
 		}
 	}
 	for jobID := range jm.lastPoll {

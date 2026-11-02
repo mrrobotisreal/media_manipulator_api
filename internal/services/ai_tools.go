@@ -26,6 +26,12 @@ import (
 type AIService struct {
 	cfg        *config.Config
 	jobManager *JobManager
+
+	// acquire and run are injectable for tests: acquire is the shared GPU
+	// scheduler (nil = acquireGPUForJob), run executes one subprocess
+	// (nil = runAI).
+	acquire gpuAcquireFunc
+	run     func(ctx context.Context, label string, env []string, name string, args ...string) error
 }
 
 func NewAIService(cfg *config.Config) *AIService {
@@ -106,6 +112,61 @@ var validTextRedaction = map[string]bool{
 	"pixelate": true,
 }
 
+// AI tool keys for the GPU scheduler (MM94): the slot Kind and the
+// AI_VRAM_MIB_<KEY> entry in cfg.AIToolVRAMMiB.
+const (
+	aiGPUKeyRemoveBackground   = "remove_background"
+	aiGPUKeyUpscale            = "ai_upscale"
+	aiGPUKeyFacePrivacy        = "face_privacy"
+	aiGPUKeyRedactText         = "redact_text"
+	aiGPUKeyRemoveObject       = "remove_object"
+	aiGPUKeyDeepFilter         = "deepfilter"
+	aiGPUKeyDemucs             = "demucs"
+	aiGPUKeyFrameInterpolation = "frame_interpolation"
+)
+
+// defaultAIToolVRAMMiB is the request for a tool with no configured figure.
+const defaultAIToolVRAMMiB = 4096
+
+// withToolGPU runs fn under a GPU slot pinned to card (MM94): the queue waits
+// for the card the tool is configured for instead of moving it somewhere its
+// environment does not expect. fn receives the card to put in the tool's env
+// or argv — card itself, also when the scheduler is disabled — so the slot and
+// the subprocess can never disagree. The slot is held only while fn runs.
+func (a *AIService) withToolGPU(ctx context.Context, jobID, tool string, card int, fn func(card int) error) error {
+	force := card
+	req := GPURequest{
+		Kind:            tool,
+		VRAMRequiredMiB: a.toolVRAM(tool),
+		ForceIndex:      &force,
+		Priority:        a.jobManager.GPUPriorityOf(jobID),
+	}
+	return withGPUVia(ctx, a.acquire, a.jobManager, jobID, req, func(idx int) error {
+		if idx >= 0 {
+			return fn(idx)
+		}
+		return fn(card)
+	})
+}
+
+// toolVRAM is the VRAM a tool's slot asks for (AI_VRAM_MIB_<KEY>).
+func (a *AIService) toolVRAM(tool string) int64 {
+	if a.cfg != nil {
+		if v, ok := a.cfg.AIToolVRAMMiB[tool]; ok && v > 0 {
+			return v
+		}
+	}
+	return defaultAIToolVRAMMiB
+}
+
+// exec runs one subprocess through the injectable runner.
+func (a *AIService) exec(ctx context.Context, label string, env []string, name string, args ...string) error {
+	if a.run != nil {
+		return a.run(ctx, label, env, name, args...)
+	}
+	return a.runAI(ctx, label, env, name, args...)
+}
+
 func (a *AIService) sendProgress(jobID string, progress int) {
 	if a.jobManager != nil {
 		a.jobManager.SendProgressUpdate(jobID, progress)
@@ -145,10 +206,12 @@ func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
-func (a *AIService) cudaEnv() []string {
+// cudaEnv pins a CUDA subprocess to one physical card. CUDA_DEVICE_ORDER
+// makes the index the nvidia-smi index, which is what the scheduler probes.
+func cudaEnv(card int) []string {
 	return []string{
 		"CUDA_DEVICE_ORDER=PCI_BUS_ID",
-		fmt.Sprintf("CUDA_VISIBLE_DEVICES=%d", a.cfg.AICUDAGPU),
+		fmt.Sprintf("CUDA_VISIBLE_DEVICES=%d", card),
 		"PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True",
 	}
 }
@@ -177,16 +240,18 @@ func (a *AIService) runDeepFilter(ctx context.Context, jobID, inputPath, outputP
 
 	a.sendProgress(jobID, 25)
 	normalizedWav := filepath.Join(workDir, "input_48k_mono.wav")
-	if err := a.runAI(ctx, "ffmpeg normalize", nil, "ffmpeg",
+	if err := a.exec(ctx, "ffmpeg normalize", nil, "ffmpeg",
 		"-y", "-i", inputPath, "-ac", "1", "-ar", "48000", normalizedWav,
 	); err != nil {
 		return err
 	}
 
 	a.sendProgress(jobID, 55)
-	if err := a.runAI(ctx, "deepFilter", a.cudaEnv(), a.cfg.DeepFilterBin,
-		"--output-dir", workDir, normalizedWav,
-	); err != nil {
+	if err := a.withToolGPU(ctx, jobID, aiGPUKeyDeepFilter, a.cfg.AICUDAGPU, func(card int) error {
+		return a.exec(ctx, "deepFilter", cudaEnv(card), a.cfg.DeepFilterBin,
+			"--output-dir", workDir, normalizedWav,
+		)
+	}); err != nil {
 		return err
 	}
 
@@ -205,7 +270,7 @@ func (a *AIService) runDeepFilter(ctx context.Context, jobID, inputPath, outputP
 	}
 	args = append(args, audioEncoderArgs(outputPath)...)
 	args = append(args, outputPath)
-	if err := a.runAI(ctx, "ffmpeg encode", nil, "ffmpeg", args...); err != nil {
+	if err := a.exec(ctx, "ffmpeg encode", nil, "ffmpeg", args...); err != nil {
 		return err
 	}
 	a.sendProgress(jobID, 95)
@@ -283,13 +348,15 @@ func (a *AIService) SeparateVocals(ctx context.Context, jobID, inputPath, output
 	defer os.RemoveAll(workDir)
 
 	a.sendProgress(jobID, 25)
-	if err := a.runAI(ctx, "demucs", a.cudaEnv(), a.cfg.DemucsBin,
-		"-n", "htdemucs",
-		"--two-stems=vocals",
-		"--segment", "7",
-		"-o", workDir,
-		inputPath,
-	); err != nil {
+	if err := a.withToolGPU(ctx, jobID, aiGPUKeyDemucs, a.cfg.AICUDAGPU, func(card int) error {
+		return a.exec(ctx, "demucs", cudaEnv(card), a.cfg.DemucsBin,
+			"-n", "htdemucs",
+			"--two-stems=vocals",
+			"--segment", "7",
+			"-o", workDir,
+			inputPath,
+		)
+	}); err != nil {
 		return err
 	}
 
@@ -304,7 +371,7 @@ func (a *AIService) SeparateVocals(ctx context.Context, jobID, inputPath, output
 	// MM81: stems use 320k for MP3/AAC (StemEncoderArgs); WAV/FLAC unchanged.
 	args = append(args, StemEncoderArgs(outputPath)...)
 	args = append(args, outputPath)
-	if err := a.runAI(ctx, "ffmpeg encode stem", nil, "ffmpeg", args...); err != nil {
+	if err := a.exec(ctx, "ffmpeg encode stem", nil, "ffmpeg", args...); err != nil {
 		return err
 	}
 	a.sendProgress(jobID, 95)
@@ -383,7 +450,9 @@ func (a *AIService) FacePrivacy(ctx context.Context, jobID, inputPath, outputPat
 	if strings.TrimSpace(selectionJSONPath) != "" {
 		args = append(args, "--selection-json", selectionJSONPath)
 	}
-	if err := a.runAI(ctx, "face_privacy", a.cudaEnv(), a.cfg.VisionPython, args...); err != nil {
+	if err := a.withToolGPU(ctx, jobID, aiGPUKeyFacePrivacy, a.cfg.AICUDAGPU, func(card int) error {
+		return a.exec(ctx, "face_privacy", cudaEnv(card), a.cfg.VisionPython, args...)
+	}); err != nil {
 		return err
 	}
 	a.sendProgress(jobID, 95)
@@ -395,8 +464,9 @@ func (a *AIService) FacePrivacy(ctx context.Context, jobID, inputPath, outputPat
 // /opt/media-manipulator-ai/scripts/face_privacy.py) writes a JSON document
 // with image dimensions and normalized face boxes; we parse and return them so
 // the handler can persist a session and respond to the UI. The temp working
-// directory is removed before returning.
-func (a *AIService) DetectFaces(ctx context.Context, inputPath string) (*models.FaceDetectionResponse, error) {
+// directory is removed before returning. priority is the caller's GPU queue
+// priority (a GPUPriority* constant; detection has no job id to look it up).
+func (a *AIService) DetectFaces(ctx context.Context, inputPath string, priority int) (*models.FaceDetectionResponse, error) {
 	workDir, err := os.MkdirTemp(a.cfg.TempDir, "ai_face_detect_")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
@@ -404,12 +474,25 @@ func (a *AIService) DetectFaces(ctx context.Context, inputPath string) (*models.
 	defer os.RemoveAll(workDir)
 
 	jsonOut := filepath.Join(workDir, "faces.json")
-	if err := a.runAI(ctx, "face_privacy detect", a.cudaEnv(), a.cfg.VisionPython,
-		a.cfg.FacePrivacyScript,
-		"--input", inputPath,
-		"--detect-only",
-		"--json-out", jsonOut,
-	); err != nil {
+	force := a.cfg.AICUDAGPU
+	detectReq := GPURequest{
+		Kind:            aiGPUKeyFacePrivacy + "[detect]",
+		VRAMRequiredMiB: a.toolVRAM(aiGPUKeyFacePrivacy),
+		ForceIndex:      &force,
+		Priority:        priority,
+	}
+	if err := withGPUVia(ctx, a.acquire, nil, "", detectReq, func(idx int) error {
+		card := a.cfg.AICUDAGPU
+		if idx >= 0 {
+			card = idx
+		}
+		return a.exec(ctx, "face_privacy detect", cudaEnv(card), a.cfg.VisionPython,
+			a.cfg.FacePrivacyScript,
+			"--input", inputPath,
+			"--detect-only",
+			"--json-out", jsonOut,
+		)
+	}); err != nil {
 		return nil, err
 	}
 
@@ -458,7 +541,8 @@ func clampUnit(v float64) float64 {
 // RemoveBackground runs rembg through the project's CUDA/ONNXRuntime helper
 // script. The helper must be sourced in a shell so its environment exports
 // reach rembg, so we use bash -lc with explicit shell quoting on user-supplied
-// paths.
+// paths. The card is exported AFTER sourcing the helper (which defaults
+// CUDA_VISIBLE_DEVICES on its own), so AI_CUDA_GPU alone decides it (MM94).
 func (a *AIService) RemoveBackground(ctx context.Context, jobID, inputPath, outputPath, model string) error {
 	if model == "" {
 		model = "birefnet-general"
@@ -474,16 +558,19 @@ func (a *AIService) RemoveBackground(ctx context.Context, jobID, inputPath, outp
 		return fmt.Errorf("create output dir: %w", err)
 	}
 	a.sendProgress(jobID, 30)
-	script := fmt.Sprintf(
-		"set -e; source %s; U2NET_HOME=%s %s i -m %s %s %s",
-		shellQuote(a.cfg.RembgEnvScript),
-		shellQuote(a.cfg.RembgModelDir),
-		shellQuote(a.cfg.RembgBin),
-		shellQuote(model),
-		shellQuote(inputPath),
-		shellQuote(outputPath),
-	)
-	if err := a.runAI(ctx, "rembg", nil, "bash", "-lc", script); err != nil {
+	if err := a.withToolGPU(ctx, jobID, aiGPUKeyRemoveBackground, a.cfg.AICUDAGPU, func(card int) error {
+		script := fmt.Sprintf(
+			"set -e; source %s; export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=%d; U2NET_HOME=%s %s i -m %s %s %s",
+			shellQuote(a.cfg.RembgEnvScript),
+			card,
+			shellQuote(a.cfg.RembgModelDir),
+			shellQuote(a.cfg.RembgBin),
+			shellQuote(model),
+			shellQuote(inputPath),
+			shellQuote(outputPath),
+		)
+		return a.exec(ctx, "rembg", nil, "bash", "-lc", script)
+	}); err != nil {
 		return err
 	}
 	a.sendProgress(jobID, 95)
@@ -523,16 +610,18 @@ func (a *AIService) UpscaleImage(ctx context.Context, jobID, inputPath, outputPa
 		"VK_DRIVER_FILES=/opt/media-manipulator-ai/vulkan/nvidia_icd_egl.json",
 		"VK_LOADER_LAYERS_DISABLE=*",
 	}
-	args := []string{
-		"-i", inputPath,
-		"-o", outputPath,
-		"-n", model,
-		"-s", strconv.Itoa(scale),
-		"-t", "0",
-		"-g", strconv.Itoa(a.cfg.AIVulkanGPU),
-		"-f", "png",
-	}
-	if err := a.runAI(ctx, "realesrgan-ncnn-vulkan", env, a.cfg.RealESRGANBin, args...); err != nil {
+	if err := a.withToolGPU(ctx, jobID, aiGPUKeyUpscale, a.cfg.AIVulkanGPU, func(card int) error {
+		args := []string{
+			"-i", inputPath,
+			"-o", outputPath,
+			"-n", model,
+			"-s", strconv.Itoa(scale),
+			"-t", "0",
+			"-g", strconv.Itoa(card),
+			"-f", "png",
+		}
+		return a.exec(ctx, "realesrgan-ncnn-vulkan", env, a.cfg.RealESRGANBin, args...)
+	}); err != nil {
 		return err
 	}
 	a.sendProgress(jobID, 95)
@@ -560,14 +649,16 @@ func (a *AIService) RedactText(ctx context.Context, jobID, inputPath, outputPath
 		return fmt.Errorf("create output dir: %w", err)
 	}
 	a.sendProgress(jobID, 30)
-	if err := a.runAI(ctx, "redact_text_pii", a.cudaEnv(), a.cfg.VisionPython,
-		a.cfg.TextRedactScript,
-		"--input", inputPath,
-		"--output", outputPath,
-		"--detect", detect,
-		"--redaction", redaction,
-		"--gpu",
-	); err != nil {
+	if err := a.withToolGPU(ctx, jobID, aiGPUKeyRedactText, a.cfg.AICUDAGPU, func(card int) error {
+		return a.exec(ctx, "redact_text_pii", cudaEnv(card), a.cfg.VisionPython,
+			a.cfg.TextRedactScript,
+			"--input", inputPath,
+			"--output", outputPath,
+			"--detect", detect,
+			"--redaction", redaction,
+			"--gpu",
+		)
+	}); err != nil {
 		return err
 	}
 	a.sendProgress(jobID, 95)
@@ -589,7 +680,7 @@ func (a *AIService) RemoveObject(ctx context.Context, jobID, inputPath, outputPa
 		return fmt.Errorf("create output dir: %w", err)
 	}
 
-	width, height, err := imageDimensions(ctx, inputPath)
+	width, height, err := imageDimensionsFn(ctx, inputPath)
 	if err != nil {
 		return fmt.Errorf("inspect image for mask: %w", err)
 	}
@@ -623,17 +714,22 @@ func (a *AIService) RemoveObject(ctx context.Context, jobID, inputPath, outputPa
 	if script == "" {
 		return fmt.Errorf("remove_object script path is not configured")
 	}
-	if err := a.runAI(ctx, "remove_object_lama", a.cudaEnv(), python,
-		script,
-		"--input", inputPath,
-		"--mask", maskPath,
-		"--output", outputPath,
-	); err != nil {
+	if err := a.withToolGPU(ctx, jobID, aiGPUKeyRemoveObject, a.cfg.AICUDAGPU, func(card int) error {
+		return a.exec(ctx, "remove_object_lama", cudaEnv(card), python,
+			script,
+			"--input", inputPath,
+			"--mask", maskPath,
+			"--output", outputPath,
+		)
+	}); err != nil {
 		return err
 	}
 	a.sendProgress(jobID, 95)
 	return nil
 }
+
+// imageDimensionsFn is imageDimensions, swappable in tests (no ImageMagick).
+var imageDimensionsFn = imageDimensions
 
 // imageDimensions returns the pixel dimensions of inputPath via ImageMagick's
 // identify. We use identify rather than decoding in Go because the broader
@@ -817,25 +913,26 @@ func (a *AIService) InterpolateFrames(ctx context.Context, jobID, inputPath, out
 		threads = "1:2:2"
 	}
 
-	args := []string{
-		"--input", inputPath,
-		"--output", outputPath,
-		"--target-fps", strconv.Itoa(targetFPS),
-		"--rife-bin", rifeBin,
-		"--rife-model", modelPath,
-		"--gpu", strconv.Itoa(a.cfg.AIRIFEGPU),
-		"--threads", threads,
-		"--quality", quality,
-		"--max-height", strconv.Itoa(maxHeight),
-		"--max-duration-seconds", strconv.Itoa(a.cfg.AIFrameInterpolationMaxDurationSeconds),
-		"--temp-root", a.cfg.AIFrameInterpolationTempRoot,
-	}
-
 	a.sendProgress(jobID, 20)
 	// Invoke the script directly — it has a shebang and is marked executable
 	// by the deployment script. This avoids depending on a specific system
 	// python interpreter path.
-	if err := a.runAI(ctx, "frame_interpolate_rife", env, script, args...); err != nil {
+	if err := a.withToolGPU(ctx, jobID, aiGPUKeyFrameInterpolation, a.cfg.AIRIFEGPU, func(card int) error {
+		args := []string{
+			"--input", inputPath,
+			"--output", outputPath,
+			"--target-fps", strconv.Itoa(targetFPS),
+			"--rife-bin", rifeBin,
+			"--rife-model", modelPath,
+			"--gpu", strconv.Itoa(card),
+			"--threads", threads,
+			"--quality", quality,
+			"--max-height", strconv.Itoa(maxHeight),
+			"--max-duration-seconds", strconv.Itoa(a.cfg.AIFrameInterpolationMaxDurationSeconds),
+			"--temp-root", a.cfg.AIFrameInterpolationTempRoot,
+		}
+		return a.exec(ctx, "frame_interpolate_rife", env, script, args...)
+	}); err != nil {
 		a.sendProgress(jobID, 0)
 		return err
 	}

@@ -123,6 +123,9 @@ type videoSummaryDeps struct {
 	transcribe func(ctx context.Context, req VideoSummaryRequest, workDir string) (models.VideoSummaryTranscript, error)
 	leaser     summaryLeaser
 	httpClient *http.Client
+	// acquire is the shared GPU scheduler for the Ollama stages (MM94);
+	// nil = acquireGPUForJob.
+	acquire gpuAcquireFunc
 }
 
 // NewVideoSummaryService wires the production dependencies. gpuMgr may be nil.
@@ -702,22 +705,53 @@ func (s *VideoSummaryService) stageVision(ctx context.Context, run *summaryRun) 
 		}
 	}()
 
+	// One GPU slot for every batch (MM94): Whisper's slot was released when the
+	// audio stage ended, so the job never holds two slots at once.
+	var stageErr error
+	slotErr := withOllamaSlot(stageCtx, s.ollamaSlot("summary-vision", s.settings.OllamaURL, s.settings.VLMModel, run), func() error {
+		b := &ollamaBatch{client: s.deps.httpClient, baseURL: s.settings.OllamaURL, model: s.settings.VLMModel}
+		defer b.finish()
+		stageErr = s.visionBatches(stageCtx, run, b, &visionErr)
+		return stageErr
+	})
+	if stageErr != nil {
+		return stageErr
+	}
+	if slotErr != nil {
+		visionErr = slotErr
+		return userErrWrap("Timed out waiting for a free GPU", slotErr)
+	}
+	return nil
+}
+
+// ollamaSlot is the GPU slot for one of the summary's Ollama stages.
+func (s *VideoSummaryService) ollamaSlot(caller, baseURL, model string, run *summaryRun) ollamaSlot {
+	return ollamaSlot{
+		Caller:   caller,
+		BaseURL:  baseURL,
+		Model:    model,
+		JobID:    run.req.JobID,
+		JM:       s.jobManager,
+		Priority: run.req.GPUPriority,
+		Acquire:  s.deps.acquire,
+	}
+}
+
+// visionBatches describes every frame batch; the caller holds the GPU slot.
+func (s *VideoSummaryService) visionBatches(stageCtx context.Context, run *summaryRun, b *ollamaBatch, visionErr *error) error {
 	batches := BatchFrames(run.frames, summaryVisionBatchSize, run.duration)
 	skipped := 0
 	for i, batch := range batches {
 		run.st.progress(SummaryStageVision, float64(i)/float64(len(batches)), fmt.Sprintf("Batch %d of %d", i+1, len(batches)))
 		images, err := encodeImagesBase64(FramePaths(batch.Frames))
 		if err != nil {
-			visionErr = err
+			*visionErr = err
 			return userErrWrap("Failed to read the extracted frames", err)
 		}
 		// Keep the VLM loaded between batches (the daemon runs with
 		// OLLAMA_KEEP_ALIVE=0); the last call lets it unload so synthesis has
-		// the card.
-		keepAlive := "2m"
-		if i == len(batches)-1 {
-			keepAlive = "0s"
-		}
+		// the card, and the batch unloads it if the loop stops early.
+		keepAlive := b.keepAlive(i, len(batches))
 		res, err := ChatJSON(stageCtx, JSONChatRequest{
 			Client:    s.deps.httpClient,
 			BaseURL:   s.settings.OllamaURL,
@@ -730,7 +764,7 @@ func (s *VideoSummaryService) stageVision(ctx context.Context, run *summaryRun) 
 		}, func(raw []byte) error { _, err := ParseBatchNote(raw, batch); return err })
 		if err != nil {
 			if stageCtx.Err() != nil || !isRepairFailure(err) {
-				visionErr = err
+				*visionErr = err
 				if stageCtx.Err() != nil {
 					return userErrWrap("Describing the frames took too long", err)
 				}
@@ -744,14 +778,14 @@ func (s *VideoSummaryService) stageVision(ctx context.Context, run *summaryRun) 
 		run.notes = append(run.notes, note)
 	}
 	if len(run.notes) == 0 {
-		visionErr = errors.New("no batch described")
+		*visionErr = errors.New("no batch described")
 		return userErr("The vision model returned no usable description")
 	}
 	if skipped > 0 {
 		run.addCaveat(CaveatSomeFramesSkipped)
 	}
 	if err := writeJSON(filepath.Join(run.req.OutputDir, SummaryVisionFile), run.notes); err != nil {
-		visionErr = err
+		*visionErr = err
 		return userErrWrap("Failed to save the frame notes", err)
 	}
 	run.st.set(SummaryStageVision, models.StageStatusCompleted, fmt.Sprintf("%d batches", len(run.notes)))
@@ -842,18 +876,29 @@ func (s *VideoSummaryService) stageSynthesisAndRender(ctx context.Context, run *
 	system := BuildSummarySystemPrompt(duration, run.req.OutputLanguage, run.transcript.Language, hasSpeech, len(run.notes) > 0)
 
 	lease, _ := s.deps.leaser.Acquire(stageCtx, gpu.TaskOllama, models.VideoSummaryTool, run.req.JobID, run.req.RequestID)
-	res, err := ChatJSON(stageCtx, JSONChatRequest{
-		Client:    s.deps.httpClient,
-		BaseURL:   baseURL,
-		Model:     model,
-		System:    system,
-		User:      in.Text,
-		Options:   map[string]any{"num_ctx": s.settings.MaxInputTokens + 4096, "temperature": 0.3},
-		KeepAlive: "0s",
-	}, SummaryValidator(duration))
+	var res JSONChatResult
+	var chatErr error
+	// MM94: a slot on the synthesis daemon's card (none for the unpinned deep
+	// daemon); keep_alive 0 on every call, so the model is gone on release.
+	err := withOllamaSlot(stageCtx, s.ollamaSlot("summary-synthesis", baseURL, model, run), func() error {
+		res, chatErr = ChatJSON(stageCtx, JSONChatRequest{
+			Client:    s.deps.httpClient,
+			BaseURL:   baseURL,
+			Model:     model,
+			System:    system,
+			User:      in.Text,
+			Options:   map[string]any{"num_ctx": s.settings.MaxInputTokens + 4096, "temperature": 0.3},
+			KeepAlive: ollamaKeepAliveUnload,
+		}, SummaryValidator(duration))
+		return chatErr
+	})
 	if lease != nil {
 		lease.Release(context.Background(), err)
 	}
+	if err != nil && chatErr == nil {
+		return userErrWrap("Timed out waiting for a free GPU", err)
+	}
+	err = chatErr
 	if err != nil {
 		switch {
 		case stageCtx.Err() != nil:

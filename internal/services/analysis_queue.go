@@ -26,6 +26,11 @@ type AnalysisQueue struct {
 	// telemetry is set via SetTelemetry at startup. When nil, persistence
 	// hooks become no-ops so unit tests don't need a DB.
 	telemetry *analysisTelemetry
+
+	// acquire is the shared GPU scheduler (nil = acquireGPUForJob);
+	// injectable for tests. Every GPU step of the analysis (Whisper, each
+	// Ollama call) takes a background-priority slot (MM94).
+	acquire gpuAcquireFunc
 }
 
 type AnalysisJob struct {
@@ -201,7 +206,15 @@ func (q *AnalysisQueue) transcribeVideo(ctx context.Context, job AnalysisJob) (s
 	}
 	gpuReq := ResolveWhisperGPURequest(cfg)
 	gpuReq.Kind = "whisper-ct2[analysis]"
-	gpuIdx, releaseGPU, gpuErr := SharedGPUScheduler().Acquire(ctx, gpuReq)
+	// Background work (MM94): never ahead of a user's job, dropped after
+	// ANALYSIS_GPU_MAX_WAIT_SECONDS.
+	gpuReq.Priority = GPUPriorityBackground
+	gpuReq.MaxWait = q.gpuMaxWait()
+	acquire := q.acquire
+	if acquire == nil {
+		acquire = acquireGPUForJob
+	}
+	gpuIdx, releaseGPU, gpuErr := acquire(ctx, nil, "", gpuReq)
 	if gpuErr != nil {
 		return "", fmt.Errorf("acquire GPU for whisper: %w", gpuErr)
 	}
@@ -258,38 +271,90 @@ func (q *AnalysisQueue) analyzeFrameBatches(ctx context.Context, frames []string
 	}
 	transcript := readOptionalText(transcriptPath, 8000)
 	var out []any
-	for start := 0; start < len(frames); start += batchSize {
-		end := start + batchSize
-		if end > len(frames) {
-			end = len(frames)
+	n := (len(frames) + batchSize - 1) / batchSize
+	// One slot for the whole video: the model stays loaded between batches
+	// and is unloaded by the last call (or by the batch on an early return).
+	err := q.withOllamaSlot(ctx, "analysis-frames", vlmModel(), func(b *ollamaBatch) error {
+		for i := 0; i < n; i++ {
+			start := i * batchSize
+			end := start + batchSize
+			if end > len(frames) {
+				end = len(frames)
+			}
+			prompt := "Analyze these sampled video frames for internal product intelligence. Return concise JSON with scene progression, visual quality, likely editing intent, notable objects/text, and issues."
+			if transcript != "" {
+				prompt += " Transcript context: " + transcript
+			}
+			res, err := q.chatImages(ctx, frames[start:end], prompt, b.keepAlive(i, n))
+			if err != nil {
+				return err
+			}
+			out = append(out, res)
 		}
-		prompt := "Analyze these sampled video frames for internal product intelligence. Return concise JSON with scene progression, visual quality, likely editing intent, notable objects/text, and issues."
-		if transcript != "" {
-			prompt += " Transcript context: " + transcript
-		}
-		res, err := q.analyzeImages(ctx, frames[start:end], prompt)
-		if err != nil {
-			return out, err
-		}
-		out = append(out, res)
-	}
-	return out, nil
+		return nil
+	})
+	return out, err
 }
 
+// vlmModel is the analysis vision model (OLLAMA_VLM_MODEL).
+func vlmModel() string { return envOrDefault("OLLAMA_VLM_MODEL", defaultVLMModel) }
+
+// gpuMaxWait is how long a background analysis step waits for a GPU slot
+// before the analysis is dropped (ANALYSIS_GPU_MAX_WAIT_SECONDS, default 120).
+func (q *AnalysisQueue) gpuMaxWait() time.Duration {
+	if q.cfg != nil && q.cfg.AnalysisGPUMaxWait > 0 {
+		return q.cfg.AnalysisGPUMaxWait
+	}
+	return time.Duration(envInt("ANALYSIS_GPU_MAX_WAIT_SECONDS", 120)) * time.Second
+}
+
+// withOllamaSlot runs fn under a background-priority slot on the OLLAMA_URL
+// daemon's card (MM94). fn sends keep_alive from the batch; whatever fn does,
+// the model is unloaded before the slot is released.
+func (q *AnalysisQueue) withOllamaSlot(ctx context.Context, caller, model string, fn func(b *ollamaBatch) error) error {
+	client, baseURL := analysisOllamaClient()
+	slot := ollamaSlot{
+		Caller:   caller,
+		BaseURL:  baseURL,
+		Model:    model,
+		Priority: GPUPriorityBackground,
+		MaxWait:  q.gpuMaxWait(),
+		Acquire:  q.acquire,
+	}
+	return withOllamaSlot(ctx, slot, func() error {
+		b := &ollamaBatch{client: client, baseURL: baseURL, model: model}
+		defer b.finish()
+		return fn(b)
+	})
+}
+
+// analyzeImages is one VLM call under its own GPU slot.
 func (q *AnalysisQueue) analyzeImages(ctx context.Context, paths []string, prompt string) (any, error) {
+	var out any
+	err := q.withOllamaSlot(ctx, "analysis-image", vlmModel(), func(b *ollamaBatch) error {
+		var err error
+		out, err = q.chatImages(ctx, paths, prompt, b.keepAlive(0, 1))
+		return err
+	})
+	return out, err
+}
+
+// chatImages sends one VLM request. The caller holds the GPU slot.
+func (q *AnalysisQueue) chatImages(ctx context.Context, paths []string, prompt, keepAlive string) (any, error) {
 	images, err := encodeImagesBase64(paths)
 	if err != nil {
 		return nil, err
 	}
 	payload := map[string]any{
-		"model":  envOrDefault("OLLAMA_VLM_MODEL", defaultVLMModel),
+		"model":  vlmModel(),
 		"stream": false,
 		"messages": []map[string]any{{
 			"role":    "user",
 			"content": prompt,
 			"images":  images,
 		}},
-		"format": "json",
+		"format":     "json",
+		"keep_alive": keepAlive,
 	}
 	// Shared Ollama call (vlm.go, MM74); the raw response is kept as before.
 	client, baseURL := analysisOllamaClient()
@@ -317,14 +382,21 @@ func (q *AnalysisQueue) analyzeTranscript(ctx context.Context, transcript, langu
 		}, nil
 	}
 	prompt := buildTranscriptAnalysisPrompt(transcript, language)
-	payload := map[string]any{
-		"model":    envOrDefault("OLLAMA_TEXT_MODEL", envOrDefault("OLLAMA_VLM_MODEL", defaultVLMModel)),
-		"stream":   false,
-		"messages": []map[string]any{{"role": "user", "content": prompt}},
-		"format":   "json",
-	}
-	client, baseURL := analysisOllamaClient()
-	response, err := ollamaChat(ctx, client, baseURL, payload)
+	model := envOrDefault("OLLAMA_TEXT_MODEL", vlmModel())
+	var response map[string]any
+	err := q.withOllamaSlot(ctx, "analysis-transcript", model, func(b *ollamaBatch) error {
+		payload := map[string]any{
+			"model":      model,
+			"stream":     false,
+			"messages":   []map[string]any{{"role": "user", "content": prompt}},
+			"format":     "json",
+			"keep_alive": b.keepAlive(0, 1),
+		}
+		client, baseURL := analysisOllamaClient()
+		var err error
+		response, err = ollamaChat(ctx, client, baseURL, payload)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}

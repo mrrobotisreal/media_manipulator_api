@@ -653,41 +653,49 @@ func (s *TranscodeService) generateCaptionTracks(ctx context.Context, req Transc
 		} else if len(segments) == 0 {
 			warnings = append(warnings, "no transcript segments to translate; additional caption languages were skipped")
 		} else {
-			for _, raw := range req.CaptionLanguages {
-				targetCode := strings.ToLower(strings.TrimSpace(raw))
-				if targetCode == "" || targetCode == primaryLang {
-					continue
+			// One GPU slot for every language (MM94); a slot that cannot be had
+			// skips the extra tracks like an unreachable backend does.
+			slotErr := captionTranslationSlot(ctx, s.jobManager, req.JobID, nil, func(b *ollamaBatch) error {
+				for _, raw := range req.CaptionLanguages {
+					targetCode := strings.ToLower(strings.TrimSpace(raw))
+					if targetCode == "" || targetCode == primaryLang {
+						continue
+					}
+					translated, terr := translateSegmentsBatch(ctx, b, segments, primaryLang, targetCode, 30)
+					if terr != nil {
+						warnings = append(warnings, fmt.Sprintf("translation to %s failed: %v", targetCode, terr))
+						continue
+					}
+					targetDir := filepath.Join(packageDir, "captions", sanitizeLangDirName(targetCode))
+					if err := os.MkdirAll(targetDir, 0o755); err != nil {
+						warnings = append(warnings, fmt.Sprintf("create %s dir: %v", targetCode, err))
+						continue
+					}
+					targetVTT := filepath.Join(targetDir, "auto.vtt")
+					if err := writeVTTFromSegments(targetVTT, translated); err != nil {
+						warnings = append(warnings, fmt.Sprintf("write %s VTT: %v", targetCode, err))
+						continue
+					}
+					targetVTTRel, targetWrapperRel, _ := captionsRelativePaths(sanitizeLangDirName(targetCode))
+					if err := writeHLSSubtitleWrapper(filepath.Join(packageDir, targetWrapperRel), filepath.Base(targetVTT), durationSeconds); err != nil {
+						warnings = append(warnings, fmt.Sprintf("%s HLS wrapper: %v", targetCode, err))
+					}
+					display := displayNameForCode(targetCode)
+					if display == "" {
+						display = strings.ToUpper(targetCode)
+					}
+					tracks = append(tracks, CaptionTrack{
+						Language:    targetCode,
+						DisplayName: display,
+						IsPrimary:   false,
+						VTTRelPath:  targetVTTRel,
+						HLSWrapper:  targetWrapperRel,
+					})
 				}
-				translated, terr := translateSegmentsBatch(ctx, segments, primaryLang, targetCode, 30)
-				if terr != nil {
-					warnings = append(warnings, fmt.Sprintf("translation to %s failed: %v", targetCode, terr))
-					continue
-				}
-				targetDir := filepath.Join(packageDir, "captions", sanitizeLangDirName(targetCode))
-				if err := os.MkdirAll(targetDir, 0o755); err != nil {
-					warnings = append(warnings, fmt.Sprintf("create %s dir: %v", targetCode, err))
-					continue
-				}
-				targetVTT := filepath.Join(targetDir, "auto.vtt")
-				if err := writeVTTFromSegments(targetVTT, translated); err != nil {
-					warnings = append(warnings, fmt.Sprintf("write %s VTT: %v", targetCode, err))
-					continue
-				}
-				targetVTTRel, targetWrapperRel, _ := captionsRelativePaths(sanitizeLangDirName(targetCode))
-				if err := writeHLSSubtitleWrapper(filepath.Join(packageDir, targetWrapperRel), filepath.Base(targetVTT), durationSeconds); err != nil {
-					warnings = append(warnings, fmt.Sprintf("%s HLS wrapper: %v", targetCode, err))
-				}
-				display := displayNameForCode(targetCode)
-				if display == "" {
-					display = strings.ToUpper(targetCode)
-				}
-				tracks = append(tracks, CaptionTrack{
-					Language:    targetCode,
-					DisplayName: display,
-					IsPrimary:   false,
-					VTTRelPath:  targetVTTRel,
-					HLSWrapper:  targetWrapperRel,
-				})
+				return nil
+			})
+			if slotErr != nil {
+				warnings = append(warnings, fmt.Sprintf("additional caption languages were skipped: %v", slotErr))
 			}
 		}
 	}

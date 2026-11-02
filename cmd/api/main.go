@@ -174,6 +174,11 @@ func main() {
 		hookable.SetTelemetry(store, sanitizer, enricher, cfg)
 	}
 	analysisQueue.Start()
+	// MM94: show which card each Ollama daemon's GPU slots are pinned to, so it
+	// can be checked against the systemd units (OLLAMA_GPU_INDEX_BY_URL).
+	if services.SharedGPUScheduler().Enabled() {
+		services.LogOllamaGPUMap(cfg.VideoSummary.OllamaURL, cfg.DocumentScanOllamaURL, cfg.VideoSummary.DeepURL)
+	}
 
 	transcription := services.NewTranscriptionService(cfg, inspector, jobManager, analysisQueue)
 	s3Client := newS3Client(cfg)
