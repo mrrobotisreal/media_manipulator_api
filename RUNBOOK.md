@@ -179,6 +179,7 @@ after changing them.
 | `MAX_VIDEO_UPLOAD_SIZE_BYTES` | matches `MAX_FILE_SIZE_BYTES` | Hard cap on direct-to-S3 video uploads. Independent so you can let videos be bigger. | `config.go` |
 | `COMMAND_TIMEOUT_SECONDS` | `21600` (6 h) | Per-command timeout passed to FFmpeg/ImageMagick/etc. via `context.WithTimeout`. | `config.go` |
 | `ANALYSIS_WORKERS` | `1` | Concurrent goroutines draining the analysis (Ollama) queue. | `config.go` |
+| `ANALYSIS_GPU_MAX_WAIT_SECONDS` | `120` | MM94. How long one GPU step of the background analysis (its Whisper or Ollama call) waits for a GPU slot at background priority before the analysis is dropped (logged `gpu-scheduler: ... dropped after waiting ... (max wait)`; no retry). | `config.go`, `analysis_queue.go` |
 | `AI_ENABLED` | `true` | Master switch — when `false`, the `AIService` is not built and AI ops fail with "AI service is not enabled". | `config.go` |
 | `PROD` | `false` | Legacy flag that used to pin whisper to GPU 0. Now mostly inert; the GPU scheduler is the source of truth. | `transcribe.go` |
 | `DOWNLOAD_LINK_SECRET` | _(empty)_ | **Secret** (MM80). Keys the AES-GCM sealed tokens of `POST /api/download/:jobId/link`. Empty = a random per-process key: links minted before a restart stop working (they live for minutes; the UI mints one per click), so it is optional. Set any long random string (`openssl rand -hex 32`) to survive restarts. Never log it. | `config.go`, `internal/dllink` |
@@ -326,12 +327,16 @@ Note: the earliest this rule deletes anything is 737 days after the oldest objec
 | `WHISPER_ALLOW_HF_NETWORK` | `false` | Default is offline (`HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`). Set to `true` only when downloading a new model. |
 | `GPU_SCHED_MAX_JOBS_PER_GPU` | `1` | Per-GPU concurrent job cap. |
 | `GPU_SCHED_SAFETY_MARGIN_MIB` | `512` | Required-free padding on top of the VRAM estimate. |
+| `GPU_SCHED_AGING_MINUTES` | `10` | A standard waiter older than this is served ahead of Premium (0 disables). Background waiters never age. |
 
 ### 4.4 Ollama (analysis + caption translation)
 
 | Var | Default | Effect |
 | --- | --- | --- |
 | `OLLAMA_URL` | `http://localhost:11434` | Base URL of the Ollama HTTP API. |
+| `OLLAMA_GPU_INDEX_BY_URL` | empty | **MM94, set this on the server.** Which card each Ollama daemon is pinned to, so the API's GPU slot for an Ollama call waits for that card: comma-separated `<daemon>=<nvidia-smi index>`, `<daemon>` a URL or `host:port` (`localhost` = `127.0.0.1`), `none` for an unpinned daemon. Server value: `127.0.0.1:11434=1,127.0.0.1:11435=1,127.0.0.1:11436=none`. A daemon not listed gets unpinned slots (logged once). Startup logs `gpu-scheduler: ollama daemon <host:port> → GPU <n>` for each configured daemon; check it against the systemd units. |
+| `OLLAMA_VRAM_MIB` | `10000` | MM94. VRAM an Ollama slot asks for when the model has no entry below (document scan's long-standing figure). |
+| `OLLAMA_VRAM_MIB_BY_MODEL` | empty | MM94. Per-model slot VRAM, `model=MiB,...` (exact model names). Fill from the section 7.2 VRAM table, e.g. `qwen3-vl:8b-instruct-q8_0=14700`. |
 | `OLLAMA_TIMEOUT_SECONDS` | `300` | Per-request timeout for chat completions. |
 | `OLLAMA_VLM_MODEL` | `qwen3-vl:8b-instruct-q8_0` | Vision-language model used by the transcript analyzer (`analysis_queue.go`). |
 | `OLLAMA_TEXT_MODEL` | falls back to `OLLAMA_VLM_MODEL` | Text-only model for transcript summary/safety review. |
@@ -353,8 +358,10 @@ Note: the earliest this rule deletes anything is 737 days after the oldest objec
 | Var | Default | Effect |
 | --- | --- | --- |
 | `AI_ROOT_DIR` | `/opt/media-manipulator-ai` | Root of every Python venv / script / model directory below. |
-| `AI_CUDA_GPU` | `1` | CUDA device index passed to the Python AI scripts. Should be the RTX 5080. |
-| `AI_VULKAN_GPU` | `1` | GPU index for Vulkan-based realesrgan-ncnn. |
+| `AI_CUDA_GPU` | `1` | nvidia-smi index of the card the CUDA AI tools run on (rembg, face privacy, redaction, LaMa, DeepFilterNet, Demucs). MM94: it is BOTH the GPU slot's `ForceIndex` and the subprocess's `CUDA_VISIBLE_DEVICES` (with `CUDA_DEVICE_ORDER=PCI_BUS_ID`); rembg exports it after sourcing `AI_REMBG_ENV_SCRIPT`, so the script's own default no longer decides the card. |
+| `AI_VULKAN_GPU` | `1` | Card for Real-ESRGAN ncnn (`-g`), and that op's slot `ForceIndex`. Assumes the Vulkan device index equals the nvidia-smi index (true on the two-5080 host); if they ever differ, the slot guards the wrong card. |
+| `AI_RIFE_GPU` | `1` | Card for RIFE frame interpolation (`--gpu`), and that op's slot `ForceIndex`. Same Vulkan-index note. |
+| `AI_VRAM_MIB_<TOOL>` | `4096` each | MM94. VRAM the tool's GPU slot asks for (plus `GPU_SCHED_SAFETY_MARGIN_MIB`). `<TOOL>`: `REMOVE_BACKGROUND`, `AI_UPSCALE`, `FACE_PRIVACY`, `REDACT_TEXT`, `REMOVE_OBJECT`, `DEEPFILTER`, `DEMUCS`, `FRAME_INTERPOLATION`. 4096 is an unmeasured placeholder; set each from the section 7.2 VRAM table. |
 | `AI_DEEPFILTER_BIN` | `${AI_ROOT_DIR}/venvs/audio-clean/bin/deepFilter` | DeepFilterNet (audio denoise). |
 | `AI_DEMUCS_BIN` | `${AI_ROOT_DIR}/venvs/audio-separate/bin/demucs` | Demucs (vocals isolate/remove). |
 | `AI_VISION_PYTHON` | `${AI_ROOT_DIR}/venvs/vision-privacy/bin/python` | Python that runs face_privacy and text-PII scripts. |
@@ -1324,8 +1331,45 @@ flowchart TD
 | `face_privacy: image SHA mismatch` | User changed the image between detect and convert. | Expected — UI should re-detect. |
 | `realesrgan-ncnn-vulkan: ...` errors | Vulkan driver missing or env script not sourced. | `$AI_VULKAN_ENV_SCRIPT` exports + `vulkaninfo` should work. |
 | `rembg: ...` errors with `onnxruntime` mentions | CUDA/cuDNN mismatch for ONNXRuntime. | Re-source `$AI_REMBG_ENV_SCRIPT`. |
-| `rembg failed` with `BFCArena::AllocateRawInternal ... Failed to allocate memory` on an idle card | Another GPU user filled the AI GPU first. On 2026-11-02 this was the upload's own background analysis loading Ollama `qwen3-vl:8b` (~14.7 GB) on GPU 1 a second before rembg. AI-tool jobs no longer enqueue the analysis (`shouldEnqueueAnalysis`). | Record per-GPU usage while reproducing (`nvidia-smi --query-compute-apps=... -l`); anything else loading on the AI GPU at that moment is the culprit. GPU-scheduler coordination is the follow-up ticket. |
+| `rembg failed` (or any AI tool) with `BFCArena::AllocateRawInternal ... Failed to allocate memory` / CUDA `out of memory` on an idle card | Another GPU user filled the AI GPU first. On 2026-11-02 this was the upload's background analysis loading Ollama `qwen3-vl:8b` (~14.7 GB) on GPU 1 a second before rembg. Since MM94 every AI tool and every Ollama call takes a GPU slot (`gpu-scheduler: slot kind=... card=... waited=...`), and the analysis runs at background priority and, for an AI job, only after it. | 1. `journalctl -u <api unit> --since -10min \| grep gpu-scheduler`: the failing tool's `acquired GPU n` line should be there; if another consumer ran on the card at that time without a `gpu-scheduler` line, it is un-scheduled (a process outside the API, or a new code path). 2. Run the recorder (section 7.2.1) while reproducing. 3. If Ollama's process is still on the card after its `released` line, the daemon ignored `keep_alive` (see section 8.5). 4. If the tool simply needs more than its slot asked for, raise `AI_VRAM_MIB_<TOOL>`. |
 | Job silently uses ImageMagick when you expected AI | `options.ai.enabled` was false or `operation` was `"none"`. | Inspect the job's `options` in `GET /api/job/:id`. |
+| AI job sits in `processing` at its first progress step, then finishes | It waited for a GPU slot (another AI job, an Ollama call or a Premium job held the card). Expected; `queueWaitMs` on the job says how long. | `grep 'gpu-scheduler: .* queued'` in the API log. |
+
+#### 7.2.1 AI tools on the GPU: slots and VRAM (MM94)
+
+Every GPU step of an AI tool runs inside a GPU slot (section 8): `withToolGPU` in `ai_tools.go` acquires `GPURequest{Kind: <tool>, VRAMRequiredMiB: AI_VRAM_MIB_<TOOL>, ForceIndex: <the tool's card>, Priority: <the job's tier>}`, runs the subprocess with that same card in its env/argv, and releases when it exits. ffmpeg pre/post steps run outside the slot. Face detection (`POST /api/ai/faces/detect`) takes a `face_privacy[detect]` slot with the caller's tier priority.
+
+**VRAM table** (fill from the recorder below; until then every value is the unmeasured 4096 MiB placeholder):
+
+| Op | Slot kind | Card env | Env var for the request | Measured peak (MiB) | Set to |
+| --- | --- | --- | --- | ---: | ---: |
+| Remove background (rembg, `birefnet-general`) | `remove_background` | `AI_CUDA_GPU` | `AI_VRAM_MIB_REMOVE_BACKGROUND` | **not measured** | 4096 (placeholder) |
+| AI upscale (Real-ESRGAN x4) | `ai_upscale` | `AI_VULKAN_GPU` | `AI_VRAM_MIB_AI_UPSCALE` | **not measured** | 4096 (placeholder) |
+| Face privacy (+ detect) | `face_privacy` | `AI_CUDA_GPU` | `AI_VRAM_MIB_FACE_PRIVACY` | **not measured** | 4096 (placeholder) |
+| Redact text | `redact_text` | `AI_CUDA_GPU` | `AI_VRAM_MIB_REDACT_TEXT` | **not measured** | 4096 (placeholder) |
+| Remove object (LaMa) | `remove_object` | `AI_CUDA_GPU` | `AI_VRAM_MIB_REMOVE_OBJECT` | **not measured** | 4096 (placeholder) |
+| Clean voice / Remove background noise (DeepFilterNet) | `deepfilter` | `AI_CUDA_GPU` | `AI_VRAM_MIB_DEEPFILTER` | **not measured** | 4096 (placeholder) |
+| Isolate / Remove vocals (Demucs htdemucs) | `demucs` | `AI_CUDA_GPU` | `AI_VRAM_MIB_DEMUCS` | **not measured** | 4096 (placeholder) |
+| Frame interpolation (RIFE) | `frame_interpolation` | `AI_RIFE_GPU` | `AI_VRAM_MIB_FRAME_INTERPOLATION` | **not measured** | 4096 (placeholder) |
+| Analysis VLM `qwen3-vl:8b-instruct-q8_0` | `ollama[analysis-*]`, `ollama[summary-vision]`, doc scan | `OLLAMA_GPU_INDEX_BY_URL` | `OLLAMA_VRAM_MIB_BY_MODEL` | ~14700 (2026-11-02 incident recording, image analysis) | `OLLAMA_VRAM_MIB` 10000 until measured |
+| Captions `mm-captions-translategemma-12b` | `ollama[caption-translate]` | `OLLAMA_GPU_INDEX_BY_URL` | `OLLAMA_VRAM_MIB_BY_MODEL` | **not measured** | 10000 (default) |
+| Summary text `qwen3.5:9b-q8_0` | `ollama[summary-synthesis]`, doc scan summary | `OLLAMA_GPU_INDEX_BY_URL` | `OLLAMA_VRAM_MIB_BY_MODEL` | **not measured** | 10000 (default) |
+
+Set "Set to" = measured peak rounded up to the next 256 MiB; the scheduler adds `GPU_SCHED_SAFETY_MARGIN_MIB` (512) on top. A number that is too low lets two consumers share a card that cannot hold both; too high only costs queue time.
+
+**Recorder** (server terminal; prints only while something other than the always-on Voices process is on a GPU; Ctrl-C to stop):
+
+```bash
+for i in $(seq 1 600); do
+  apps=$(nvidia-smi --query-compute-apps=gpu_bus_id,pid,process_name,used_memory --format=csv,noheader | grep -v qwen3-tts)
+  if [ -n "$apps" ]; then
+    echo "$(date +%T.%3N) | $(nvidia-smi --query-gpu=index,memory.used --format=csv,noheader | tr '\n' ' ') | $(echo "$apps" | tr '\n' ' ')"
+  fi
+  sleep 0.3
+done
+```
+
+The peak for an op is the largest `used_memory` of its process (or the card's `memory.used` rise over idle) while it runs, one job at a time with nothing else on the card.
 
 ---
 
@@ -1982,12 +2026,46 @@ Retention is chosen by the user, not by tier: every signed-in account sets 24 h 
 ## 8. GPU scheduling
 
 The `GPUScheduler` is a process-wide singleton (created on first call to
-`SharedGPUScheduler()` from `internal/services/gpu_scheduler.go`). It's
-specifically for **whisper-ctranslate2 subprocesses** today — Ollama is
-treated as opaque and not scheduled by us (it has its own internal queue).
-The video summary (MM74, section 7.14) additionally records `gpu.Manager`
-leases (`TaskWhisper`, `TaskVLM`, `TaskOllama`, tool `video_summary`) for
-accounting; Ollama still places its own models.
+`SharedGPUScheduler()` from `internal/services/gpu_scheduler.go`). Since MM94
+it is the ONE queue every GPU consumer in the API takes a **GPU slot** from
+before it touches a card, and releases when its subprocess exits or its Ollama
+call returns: Whisper, video/image restoration, document scan, voices, the
+upload AI tools (section 7.2.1) and every Ollama call (analysis, caption
+translation, document scan, video summary). `gpu.Manager` leases (video summary,
+restoration, document scan, voices) stay as audit/metrics only; they never
+block. Folding the two together is out of scope.
+
+**Ollama.** Ollama places and keeps its own models, so an Ollama slot is pinned
+(`ForceIndex`) to the card the daemon is pinned to (`OLLAMA_GPU_INDEX_BY_URL`;
+the unpinned deep daemon gets an unpinned slot), asks for the model's VRAM
+(`OLLAMA_VRAM_MIB[_BY_MODEL]`), and every scheduled request sends
+`keep_alive: "0s"` (or `"2m"` between calls of one batch, with the last call or
+an explicit `/api/generate {"keep_alive":0}` unloading it) so the VRAM is free
+when the slot is released. A batch holds ONE slot: analysis frame batches,
+caption translation (all batches and languages of a job), video-summary
+vision. Video summary takes its slots strictly in order (Whisper, then vision,
+then synthesis) and never holds two at once, so it cannot deadlock.
+
+**Inventory (MM94 S1).** Scheduled: everything above. Deliberately unscheduled:
+Darkroom NVENC ffmpeg (`studio_ffmpeg.go`, a dedicated encoder block with a few
+hundred MiB, not a compute workload) and the resident `mm-voices` service's own
+models (the voices job takes a slot per request; the resident process holds its
+memory permanently on GPU 0 and is part of every probe's `used`). Full table in
+`docs/tickets/MM94-gpu-coordination-ai-tools-and-ollama.md`.
+
+**Priorities.** `GPUPriorityPremium` (10) > `GPUPriorityStandard` (0) >
+`GPUPriorityBackground` (-10). User jobs get Standard or Premium from the tier
+(`PriorityGPU`); the upload analysis is Background: it stands aside for every
+queued user job on one of its cards, never ages, and gives up after
+`ANALYSIS_GPU_MAX_WAIT_SECONDS`. A plain conversion's analysis is enqueued at
+upload; an AI-tool job's only after the job completed. A parked waiter
+re-probes every 2 s, so VRAM freed without a release (Ollama unloading) is
+picked up.
+
+**Logs.** `gpu-scheduler: <kind> queued`, `... acquired GPU n (...) free=... required=...`,
+`... waited Ns in queue`, `gpu-scheduler: slot kind=<kind> card=<n> waited=<d> job=<id>`,
+`... released GPU n`, `... dropped after waiting ... (max wait)`. `queueWaitMs`
+on the job (MM33) sums every queued wait.
 
 ### 8.1 Decision flow per Acquire call
 
@@ -2044,6 +2122,21 @@ added on top before deciding a card "fits".
 | Job is stuck in `transcoding_*` for ages | Scheduler is parked waiting for a GPU that never frees. | Check for orphaned whisper / Ollama processes hogging VRAM. `nvidia-smi`. |
 | Job lands on the "wrong" GPU | `CUDA_DEVICE_ORDER` wasn't `PCI_BUS_ID`. | The scheduler forces this on the subprocess env; if you ran whisper manually outside the API, set it yourself. |
 | `out of memory` from whisper-ct2 despite scheduler approval | Another non-API process allocated VRAM between the probe and the launch. | Reduce concurrency or set `GPU_SCHED_SAFETY_MARGIN_MIB` higher. |
+| An AI tool OOMs although its slot was granted | Its `AI_VRAM_MIB_<TOOL>` is below its real peak, or an un-scheduled consumer was on the card. | Section 7.2 troubleshooting row; measure with the section 7.2.1 recorder. |
+| Analysis never appears for uploads (no `analysis.json`) while the box is busy | Background analysis dropped after `ANALYSIS_GPU_MAX_WAIT_SECONDS` (log `dropped after waiting`). By design: user jobs always go first. | Raise `ANALYSIS_GPU_MAX_WAIT_SECONDS` if analyses matter more than that. |
+| Ollama slot released but `nvidia-smi --query-compute-apps` still shows `ollama`/`llama-server` holding GBs on that card | The daemon ignored `keep_alive: 0`. | See 8.5. |
+| `ollama daemon ... → not configured` at startup | `OLLAMA_GPU_INDEX_BY_URL` is not set; Ollama slots are not pinned to a card and do not protect the daemon's card. | Set it (section 4.4). |
+
+### 8.5 Verifying Ollama really frees the card
+
+After a scheduled Ollama call (`gpu-scheduler: ollama[...] released GPU n`), the
+recorder (section 7.2.1) must stop showing the Ollama process on card n within a
+second or two. If it does not: check `ollama --version` (keep_alive per request
+has been honoured since 0.1.x), check the unit's `OLLAMA_KEEP_ALIVE`, and `curl
+-s 127.0.0.1:11434/api/ps`. The API already sends an explicit unload
+(`/api/generate {"model":..,"keep_alive":0}`) when a batch stops after a warm
+call; a daemon that ignores even that needs restarting with
+`OLLAMA_KEEP_ALIVE=0`.
 
 ---
 
