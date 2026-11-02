@@ -270,7 +270,7 @@ func (h *ConversionHandler) UploadFile(c *gin.Context) {
 
 	// Skip background analysis for PDFs — the analysis queue targets image,
 	// video, and audio media and has nothing to do with documents.
-	if !isTranscribeMode(job) && specializedMode(job) == "" && fileType != models.FileTypeDocument {
+	if shouldEnqueueAnalysis(job) && fileType != models.FileTypeDocument {
 		h.analysisJobs.Enqueue(services.AnalysisJob{JobID: job.ID, InputPath: uploadPath, OutputDir: jobOutputDir, FileType: fileType, MimeType: mimeType})
 	}
 	go h.processConversion(job, uploadPath, jobOutputDir)
@@ -935,6 +935,25 @@ var stemCodecProbe = func(ctx context.Context, cfg *config.Config, path string) 
 		return ""
 	}
 	return report.AudioCodec
+}
+
+// shouldEnqueueAnalysis reports whether an upload also gets the background
+// "product intelligence" analysis (analysis_queue.go). Transcription and the
+// specialized tools never did. AI-tool jobs are skipped too: for an image the
+// analysis loads Ollama's vision model (qwen3-vl:8b, ~14.7 GB) on the same GPU
+// the AI tools use, outside the GPU scheduler, and on a 16 GB card the AI job
+// that starts a second later fails with an onnxruntime/CUDA "Failed to
+// allocate memory" (observed 2026-11-02 for remove_background). Nothing a user
+// sees waits on the analysis of an AI job. Coordinating the two through the
+// GPU scheduler is a follow-up (docs/tickets).
+func shouldEnqueueAnalysis(job *models.ConversionJob) bool {
+	if isTranscribeMode(job) || specializedMode(job) != "" {
+		return false
+	}
+	if _, ok := aiOperation(job); ok {
+		return false
+	}
+	return true
 }
 
 func aiOperation(job *models.ConversionJob) (string, bool) {

@@ -1324,6 +1324,7 @@ flowchart TD
 | `face_privacy: image SHA mismatch` | User changed the image between detect and convert. | Expected — UI should re-detect. |
 | `realesrgan-ncnn-vulkan: ...` errors | Vulkan driver missing or env script not sourced. | `$AI_VULKAN_ENV_SCRIPT` exports + `vulkaninfo` should work. |
 | `rembg: ...` errors with `onnxruntime` mentions | CUDA/cuDNN mismatch for ONNXRuntime. | Re-source `$AI_REMBG_ENV_SCRIPT`. |
+| `rembg failed` with `BFCArena::AllocateRawInternal ... Failed to allocate memory` on an idle card | Another GPU user filled the AI GPU first. On 2026-11-02 this was the upload's own background analysis loading Ollama `qwen3-vl:8b` (~14.7 GB) on GPU 1 a second before rembg. AI-tool jobs no longer enqueue the analysis (`shouldEnqueueAnalysis`). | Record per-GPU usage while reproducing (`nvidia-smi --query-compute-apps=... -l`); anything else loading on the AI GPU at that moment is the culprit. GPU-scheduler coordination is the follow-up ticket. |
 | Job silently uses ImageMagick when you expected AI | `options.ai.enabled` was false or `operation` was `"none"`. | Inspect the job's `options` in `GET /api/job/:id`. |
 
 ---

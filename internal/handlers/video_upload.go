@@ -194,7 +194,7 @@ func (h *ConversionHandler) CompleteVideoUpload(c *gin.Context) {
 
 	h.writeOriginalMetadata(ctx, job.ID, uploadPath, fileType, fileName, mimeType, jobOutputDir)
 
-	if !isTranscribeMode(job) && specializedMode(job) == "" {
+	if shouldEnqueueAnalysis(job) {
 		h.analysisJobs.Enqueue(services.AnalysisJob{JobID: job.ID, InputPath: uploadPath, OutputDir: jobOutputDir, FileType: fileType, MimeType: mimeType})
 	}
 	go h.processConversion(job, uploadPath, jobOutputDir)
