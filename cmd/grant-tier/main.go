@@ -9,6 +9,12 @@
 //	go run ./cmd/grant-tier -uid <firebase-uid> -tier premium -expires 2026-12-31
 //	go run ./cmd/grant-tier -uid <firebase-uid> -tier pro -reason "support"
 //	go run ./cmd/grant-tier -uid <firebase-uid> -tier free -reason "grant revoked"
+//
+// An account normally gets its mm_users row on first sign-in (POST
+// /api/account/sync). For a Firebase user that has never signed in (e.g. a test
+// account added in the Firebase console), grant-tier creates the row from the
+// Firebase user record first (MA01). Like sync, that never sends the welcome
+// email; -no-create turns it off.
 package main
 
 import (
@@ -21,12 +27,15 @@ import (
 	"strings"
 	"time"
 
+	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/auth"
 	"github.com/joho/godotenv"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/db"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/logger"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
@@ -37,6 +46,7 @@ func main() {
 	grantedBy := flag.String("by", "", "who is granting this (defaults to the OS user)")
 	reason := flag.String("reason", "", "why, for the audit trail")
 	expires := flag.String("expires", "", "optional expiry, YYYY-MM-DD (UTC). Omit for no expiry")
+	noCreate := flag.Bool("no-create", false, "fail instead of creating a missing account from its Firebase user record")
 	flag.Parse()
 
 	if strings.TrimSpace(*uid) == "" {
@@ -101,14 +111,26 @@ func main() {
 	// The tier before the change, for server_tier_changed {from}. A failed lookup
 	// only costs the event its "from"; it never blocks the grant.
 	fromTier := "unknown"
-	if prior, err := store.UserByFirebaseUID(ctx, *uid); err == nil && prior != nil {
+	prior, err := store.UserByFirebaseUID(ctx, *uid)
+	switch {
+	case err == nil && prior != nil:
 		fromTier = string(tiers.Resolve(true, prior))
+	case err == nil && prior == nil && !*noCreate:
+		created, cerr := createFromFirebase(ctx, cfg, store, *uid)
+		if cerr != nil {
+			fmt.Fprintf(os.Stderr, "account %s is not in mm_users and could not be created: %v\n", *uid, cerr)
+			os.Exit(1)
+		}
+		fmt.Printf("created mm_users row for %s (%s) from Firebase\n", created.FirebaseUID, created.Email)
+		fromTier = string(tiers.Resolve(true, created))
 	}
 
 	updated, err := store.SetUserTier(ctx, *uid, *tier, source, *grantedBy, *reason, expiresAt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "grant failed: %v\n", err)
-		fmt.Fprintln(os.Stderr, "(the account must already exist — it is created on first sign-in via POST /api/account/sync)")
+		if *noCreate {
+			fmt.Fprintln(os.Stderr, "(-no-create: the account must already exist; it is created on first sign-in via POST /api/account/sync)")
+		}
 		os.Exit(1)
 	}
 
@@ -120,6 +142,70 @@ func main() {
 	}
 	fmt.Printf("%s (%s)\n  tier:    %s\n  source:  %s\n  expires: %s\n  by:      %s\n",
 		updated.FirebaseUID, updated.Email, updated.Tier, updated.TierSource, expiry, *grantedBy)
+}
+
+// createFromFirebase inserts the mm_users row for a Firebase user that has never
+// called /api/account/sync, using the same upsert sync uses (it never touches
+// tier). It needs the Firebase Admin credentials the API already runs with
+// (GOOGLE_APPLICATION_CREDENTIALS + FIREBASE_PROJECT_ID), and refuses a UID that
+// Firebase does not know, so a typo cannot mint a phantom account.
+func createFromFirebase(ctx context.Context, cfg *config.Config, store *telemetry.Store, uid string) (*models.User, error) {
+	if strings.TrimSpace(cfg.FirebaseProjectID) == "" {
+		return nil, fmt.Errorf("FIREBASE_PROJECT_ID is not set")
+	}
+	app, err := firebase.NewApp(ctx, &firebase.Config{ProjectID: cfg.FirebaseProjectID})
+	if err != nil {
+		return nil, fmt.Errorf("firebase init: %w", err)
+	}
+	client, err := app.Auth(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("firebase auth client: %w", err)
+	}
+	fu, err := client.GetUser(ctx, uid)
+	if auth.IsUserNotFound(err) {
+		return nil, fmt.Errorf("no Firebase user with UID %q in project %s", uid, cfg.FirebaseProjectID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("firebase lookup: %w", err)
+	}
+	user, _, err := store.UpsertUser(ctx, syncInputFromFirebase(fu.UserInfo, fu.EmailVerified, providerIDs(fu.ProviderUserInfo)))
+	return user, err
+}
+
+func providerIDs(infos []*auth.UserInfo) []string {
+	out := make([]string, 0, len(infos))
+	for _, p := range infos {
+		if p != nil {
+			out = append(out, p.ProviderID)
+		}
+	}
+	return out
+}
+
+// syncInputFromFirebase maps a Firebase user record to the sync input, with
+// signup_source from the first linked provider (password -> email, google.com ->
+// google, apple.com -> apple), the vocabulary /api/account/sync stores.
+func syncInputFromFirebase(info *auth.UserInfo, emailVerified bool, providers []string) telemetry.UserSyncInput {
+	in := telemetry.UserSyncInput{EmailVerified: emailVerified}
+	if info != nil {
+		in.FirebaseUID = info.UID
+		in.Email = info.Email
+		in.DisplayName = info.DisplayName
+	}
+	for _, p := range providers {
+		switch p {
+		case "password":
+			in.SignupSource = "email"
+		case "google.com":
+			in.SignupSource = "google"
+		case "apple.com":
+			in.SignupSource = "apple"
+		default:
+			continue
+		}
+		break
+	}
+	return in
 }
 
 // validateGrantTier accepts exactly the storable tiers: free, premium, pro.

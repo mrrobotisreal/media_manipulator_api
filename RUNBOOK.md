@@ -646,7 +646,10 @@ tiers). Priority GPU and no ads, like Premium. The operator row is derived from 
 | `TIER_PRO_STUDIO_VERSION_AUTO_KEEP` | Premium's (20) | Auto version checkpoints kept. |
 
 Grant it by hand with `go run ./cmd/grant-tier -uid <firebase-uid> -tier pro`
-(`free | premium | pro`; `operator` is still refused). The `mm_tier_grants` row
+(`free | premium | pro`; `operator` is still refused). Since MA01, an account that has never signed
+in (e.g. a test user added in the Firebase console) is created first from its Firebase record
+(same upsert as `/api/account/sync`, no welcome email; needs the API's Firebase Admin env);
+`-no-create` restores the old "must already exist" behaviour. The `mm_tier_grants` row
 names the tier.
 
 **Migration (server only, before deploying MM39):** `20261025001_add_pro_tier`
