@@ -192,7 +192,9 @@ func TestInvoicePaymentFailedExtendsExpiryToGrace(t *testing.T) {
 
 func TestCancelAtPeriodEndKeepsPremiumAndSetsColumn(t *testing.T) {
 	r := newRig(freeUser())
-	end := t0.Add(10 * 24 * time.Hour)
+	// Relative to the wall clock, not t0: tiers.Resolve compares the expiry with time.Now, so a
+	// fixed date turns this test red once it passes (it did on 2026-11-02).
+	end := time.Now().UTC().Add(10 * 24 * time.Hour).Truncate(time.Second)
 	sub := activeSub(end)
 	sub.CancelAtPeriodEnd = true
 	r.fc.PutSubscription(sub)
