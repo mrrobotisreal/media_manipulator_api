@@ -44,14 +44,34 @@ type GPURequest struct {
 	// GPUPriority* constants. The default zero value is the standard queue, so
 	// every existing call site keeps its current behaviour.
 	Priority int
+	// MaxWait, when > 0, bounds how long the caller may wait for a slot; past
+	// it Acquire gives up with ErrGPUMaxWait. Used by background work that may
+	// be dropped rather than queue forever (MM94, ANALYSIS_GPU_MAX_WAIT_SECONDS).
+	MaxWait time.Duration
 }
 
-// GPU queue priorities. Two levels is all the tier matrix sells, and a wider
-// scale would only invite fine-grained tuning nobody can reason about.
+// GPU queue priorities. Two levels is all the tier matrix sells, plus one for
+// work no user is waiting on; a wider scale would only invite fine-grained
+// tuning nobody can reason about.
 const (
-	GPUPriorityStandard = 0
-	GPUPriorityPremium  = 10
+	// GPUPriorityBackground is internal work no user waits on (the upload
+	// "product intelligence" analysis, MM94). It yields to every queued user
+	// job whose cards overlap its own, never ages, and is normally given a
+	// MaxWait so it is dropped rather than queued forever.
+	GPUPriorityBackground = -10
+	GPUPriorityStandard   = 0
+	GPUPriorityPremium    = 10
 )
+
+// ErrGPUMaxWait is returned by Acquire when GPURequest.MaxWait elapsed before
+// a slot was free.
+var ErrGPUMaxWait = errors.New("gpu-scheduler: gave up waiting for a GPU slot (max wait reached)")
+
+// gpuReprobeInterval is how often a parked waiter re-probes nvidia-smi even
+// without a release. A slot is often blocked by memory another process is
+// still freeing (an Ollama model unloading, a subprocess exiting), and no
+// release wakes the queue when that memory comes back.
+const gpuReprobeInterval = 2 * time.Second
 
 // GPUScheduler is a process-wide, GPU-aware queue. Multiple goroutines can
 // call Acquire concurrently; whoever can fit on a free card gets it,
@@ -75,6 +95,10 @@ type GPUScheduler struct {
 	// agingAfter is how long a waiter may wait before it is promoted past
 	// every un-aged waiter (GPU_SCHED_AGING_MINUTES). Zero disables aging.
 	agingAfter time.Duration
+	// reprobe is the parked waiters' re-probe interval (gpuReprobeInterval);
+	// ticking is whether the re-probe goroutine is running. Guarded by mu.
+	reprobe time.Duration
+	ticking bool
 }
 
 // gpuWaiter is one in-flight Acquire.
@@ -97,6 +121,27 @@ type gpuWaiter struct {
 	// parked is true while the waiter sleeps on the condition variable, i.e. it
 	// is genuinely queued. Guarded by s.mu; read by Snapshot.
 	parked bool
+	// cards is the waiter's candidate set from its latest probe (nil before
+	// the first probe). A background waiter only stands aside for a waiter
+	// that wants one of the same cards.
+	cards map[int]bool
+}
+
+// background reports whether w is background work (below the standard queue).
+func (w *gpuWaiter) background() bool { return w.priority < GPUPriorityStandard }
+
+// sharesCard reports whether w and other want at least one common card. A
+// waiter that has not probed yet is assumed to overlap.
+func (w *gpuWaiter) sharesCard(other *gpuWaiter) bool {
+	if w.cards == nil || other.cards == nil {
+		return true
+	}
+	for idx := range w.cards {
+		if other.cards[idx] {
+			return true
+		}
+	}
+	return false
 }
 
 // blocksOthers reports whether lower-ranked callers must stand aside for w.
@@ -149,6 +194,7 @@ func newGPUScheduler(probe func(context.Context) ([]GPUSnapshot, error)) *GPUSch
 		probe:      probe,
 		now:        time.Now,
 		agingAfter: gpuAgingFromEnv(),
+		reprobe:    gpuReprobeInterval,
 	}
 	s.cond = sync.NewCond(&s.mu)
 	return s
@@ -177,6 +223,10 @@ func (s *GPUScheduler) refreshAging() {
 	}
 	now := s.now()
 	for w := range s.waiters {
+		// Background work never ages: it must never jump a user's job.
+		if w.background() {
+			continue
+		}
 		if !w.aged && now.Sub(w.enqueued) >= s.agingAfter {
 			w.aged = true
 			log.Printf("gpu-scheduler: waiter (priority %d) aged after %s; promoted ahead of un-aged jobs",
@@ -194,9 +244,19 @@ func (s *GPUScheduler) refreshAging() {
 // Premium jobs cannot starve the standard queue. Aged waiters order among
 // themselves by arrival (oldest first). Aging is per waiter and monotonic, and
 // an aged waiter that no card could ever hold still blocks nobody.
+//
+// Background contract (MM94): a background waiter additionally stands aside
+// for every higher-ranked waiter that wants one of its cards and could ever be
+// served there, so internal work never delays a queued user job.
 func (s *GPUScheduler) blockedByHigherPriority(w *gpuWaiter) bool {
 	for other := range s.waiters {
-		if other == w || !other.blocksOthers() {
+		if other == w {
+			continue
+		}
+		if w.background() && !other.impossible && other.rank() > w.rank() && w.sharesCard(other) {
+			return true
+		}
+		if !other.blocksOthers() {
 			continue
 		}
 		if other.rank() > w.rank() {
@@ -277,6 +337,22 @@ func (s *GPUScheduler) AcquireTimed(ctx context.Context, req GPURequest) (int, f
 	}
 	required := req.VRAMRequiredMiB + safety
 
+	// MaxWait: a derived deadline, reported as ErrGPUMaxWait rather than as the
+	// caller's own cancellation.
+	parentCtx := ctx
+	if req.MaxWait > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, req.MaxWait)
+		defer cancel()
+	}
+	ctxErr := func() error {
+		if req.MaxWait > 0 && parentCtx.Err() == nil && ctx.Err() != nil {
+			log.Printf("gpu-scheduler: %s dropped after waiting %s (max wait)", req.Kind, req.MaxWait)
+			return ErrGPUMaxWait
+		}
+		return ctx.Err()
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -303,7 +379,7 @@ func (s *GPUScheduler) AcquireTimed(ctx context.Context, req GPURequest) (int, f
 		s.mu.Lock()
 
 		if ctx.Err() != nil {
-			return -1, nil, GPUWait{}, ctx.Err()
+			return -1, nil, GPUWait{}, ctxErr()
 		}
 		if err != nil {
 			return -1, nil, GPUWait{}, fmt.Errorf("nvidia-smi probe: %w", err)
@@ -315,13 +391,17 @@ func (s *GPUScheduler) AcquireTimed(ctx context.Context, req GPURequest) (int, f
 		}
 
 		cands := s.buildCandidateOrder(req, snaps, gpuByIdx)
+		w.cards = make(map[int]bool, len(cands))
+		for _, idx := range cands {
+			w.cards[idx] = true
+		}
 
 		s.refreshAging()
 
-		// A prioritised (or aged) request that no card could ever hold — not
-		// "is busy", but "is too small even when idle" — stops deterring
-		// everyone else.
-		if !w.impossible && (w.blocking || w.aged) && !fitsAnyCard(required, cands, gpuByIdx) {
+		// A request that no card could ever hold — not "is busy", but "is too
+		// small even when idle" — stops deterring everyone else (Premium and
+		// aged waiters directly, any waiter for the background queue).
+		if !w.impossible && !fitsAnyCard(required, cands, gpuByIdx) {
 			w.blocking = false
 			w.impossible = true
 			s.cond.Broadcast()
@@ -385,10 +465,11 @@ func (s *GPUScheduler) AcquireTimed(ctx context.Context, req GPURequest) (int, f
 			log.Printf("gpu-scheduler: %s queued (required=%dMiB+%dMiB safety); waiting for GPU", req.Kind, req.VRAMRequiredMiB, safety)
 		}
 		w.parked = true
+		s.startReprobeTicker()
 		err = s.waitOrCtx(ctx, s.agingWake(w))
 		w.parked = false
 		if err != nil {
-			return -1, nil, GPUWait{}, err
+			return -1, nil, GPUWait{}, ctxErr()
 		}
 	}
 }
@@ -406,6 +487,37 @@ func acquireGPUForJobOn(ctx context.Context, s *GPUScheduler, jm *JobManager, jo
 		jm.AddQueueWait(jobID, waited.Wait)
 	}
 	return idx, release, err
+}
+
+// gpuAcquireFunc is acquireGPUForJob's shape, so services can inject a fake
+// scheduler in tests (VoicesService, AIService, VideoSummaryService).
+type gpuAcquireFunc func(ctx context.Context, jm *JobManager, jobID string, req GPURequest) (int, func(), error)
+
+// withGPU acquires a slot from the shared scheduler, runs fn with the chosen
+// card, and releases the slot when fn returns (MM94). fn gets -1 when the
+// scheduler is disabled (no nvidia-smi, CPU-only host, tests) and must then
+// use its configured card exactly as before the scheduler existed.
+func withGPU(ctx context.Context, jm *JobManager, jobID string, req GPURequest, fn func(idx int) error) error {
+	return withGPUVia(ctx, acquireGPUForJob, jm, jobID, req, fn)
+}
+
+// withGPUVia is withGPU with an injectable acquire (nil = the shared scheduler).
+// It logs one line per slot with the kind, card and time waited.
+func withGPUVia(ctx context.Context, acquire gpuAcquireFunc, jm *JobManager, jobID string, req GPURequest, fn func(idx int) error) error {
+	if acquire == nil {
+		acquire = acquireGPUForJob
+	}
+	start := time.Now()
+	idx, release, err := acquire(ctx, jm, jobID, req)
+	if err != nil {
+		return fmt.Errorf("waiting for a GPU (%s): %w", req.Kind, err)
+	}
+	defer release()
+	if idx >= 0 {
+		log.Printf("gpu-scheduler: slot kind=%s card=%d waited=%s job=%s",
+			req.Kind, idx, time.Since(start).Round(time.Millisecond), jobID)
+	}
+	return fn(idx)
 }
 
 // fitsAnyCard reports whether any candidate card has enough TOTAL memory for
@@ -452,10 +564,41 @@ func (s *GPUScheduler) buildCandidateOrder(req GPURequest, snaps []GPUSnapshot, 
 	return cands
 }
 
+// startReprobeTicker makes sure one goroutine broadcasts every s.reprobe while
+// any waiter is parked, so parked waiters re-probe free memory that came back
+// without a release (an Ollama model unloading after keep_alive 0, a crashed
+// subprocess). It stops itself when the queue is empty. Callers hold s.mu.
+func (s *GPUScheduler) startReprobeTicker() {
+	if s.reprobe <= 0 || s.ticking {
+		return
+	}
+	s.ticking = true
+	go func() {
+		for {
+			time.Sleep(s.reprobe)
+			s.mu.Lock()
+			parked := false
+			for w := range s.waiters {
+				if w.parked {
+					parked = true
+					break
+				}
+			}
+			if !parked {
+				s.ticking = false
+				s.mu.Unlock()
+				return
+			}
+			s.cond.Broadcast()
+			s.mu.Unlock()
+		}
+	}()
+}
+
 // agingWake is how long until w ages, or 0 when there is nothing to schedule
 // (aging disabled or already aged). Callers must hold s.mu.
 func (s *GPUScheduler) agingWake(w *gpuWaiter) time.Duration {
-	if s.agingAfter <= 0 || w.aged {
+	if s.agingAfter <= 0 || w.aged || w.background() {
 		return 0
 	}
 	remaining := s.agingAfter - s.now().Sub(w.enqueued)
