@@ -127,6 +127,17 @@ type gpuWaiter struct {
 	cards map[int]bool
 }
 
+// hasBackgroundWaiter reports whether any background waiter is in flight.
+// Callers hold s.mu.
+func (s *GPUScheduler) hasBackgroundWaiter() bool {
+	for w := range s.waiters {
+		if w.background() {
+			return true
+		}
+	}
+	return false
+}
+
 // background reports whether w is background work (below the standard queue).
 func (w *gpuWaiter) background() bool { return w.priority < GPUPriorityStandard }
 
@@ -362,8 +373,9 @@ func (s *GPUScheduler) AcquireTimed(ctx context.Context, req GPURequest) (int, f
 	s.waiters[w] = struct{}{}
 	defer func() {
 		delete(s.waiters, w)
-		// Whoever was standing aside for this caller can stop now.
-		if w.blocksOthers() {
+		// Whoever was standing aside for this caller can stop now: callers
+		// below a Premium/aged waiter, and background waiters below anyone.
+		if w.blocksOthers() || s.hasBackgroundWaiter() {
 			s.cond.Broadcast()
 		}
 	}()
