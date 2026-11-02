@@ -220,6 +220,13 @@ func (b *ollamaBatch) keepAlive(i, n int) string {
 	return ollamaKeepAliveUnload
 }
 
+// warmCall is the keep_alive for a call whose count is not known up front: keep
+// the model warm; finish unloads it.
+func (b *ollamaBatch) warmCall() string {
+	b.warm = true
+	return ollamaKeepAliveWarm
+}
+
 // finish unloads the model if the last call it saw was a warm one.
 func (b *ollamaBatch) finish() {
 	if !b.warm {

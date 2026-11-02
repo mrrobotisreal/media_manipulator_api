@@ -178,6 +178,10 @@ def ollama_chat(ollama_url: str, model: str, prompt: str, image_path: Path | Non
         "stream": False,
         "options": {"temperature": 0.1},
         "messages": [message],
+        # MM94: unload as soon as the call returns. The API holds a GPU slot for
+        # this stage and releases it when the wrapper exits; the card must be
+        # free by then, whatever the daemon's OLLAMA_KEEP_ALIVE says.
+        "keep_alive": 0,
     }
     if want_json:
         payload["format"] = "json"

@@ -23,6 +23,8 @@ import (
 type CaptionTranslatorService struct {
 	cfg        *config.Config
 	jobManager *JobManager
+	// acquire is the shared GPU scheduler (nil = acquireGPUForJob); tests.
+	acquire gpuAcquireFunc
 }
 
 func NewCaptionTranslatorService(cfg *config.Config, jm *JobManager) *CaptionTranslatorService {
@@ -84,7 +86,12 @@ func (s *CaptionTranslatorService) Translate(ctx context.Context, in CaptionTran
 	if batchSize <= 0 {
 		batchSize = 30
 	}
-	translated, err := translateSegmentsBatch(ctx, segments, in.SourceLanguage, in.TargetLanguage, batchSize)
+	var translated []TranslateCaptionsSegment
+	err = captionTranslationSlot(ctx, s.jobManager, in.JobID, s.acquire, func(b *ollamaBatch) error {
+		var terr error
+		translated, terr = translateSegmentsBatch(ctx, b, segments, in.SourceLanguage, in.TargetLanguage, batchSize)
+		return terr
+	})
 	if err != nil {
 		return fmt.Errorf("translate captions: %w", err)
 	}

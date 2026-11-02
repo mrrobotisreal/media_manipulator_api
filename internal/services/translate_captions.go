@@ -47,7 +47,10 @@ type TranslateCaptionsSegment struct {
 // targetLang is a BCP-47 code (e.g. "es", "pt-BR", "zh-Hans"). The function
 // pins original timings back on the way out so the downstream VTT writer
 // always uses whisper's timing source-of-truth.
-func translateSegmentsBatch(ctx context.Context, segments []TranslateCaptionsSegment, sourceLang, targetLang string, batchSize int) ([]TranslateCaptionsSegment, error) {
+//
+// The caller holds the GPU slot (captionTranslationSlot); every call keeps the
+// model warm and the slot unloads it on release.
+func translateSegmentsBatch(ctx context.Context, b *ollamaBatch, segments []TranslateCaptionsSegment, sourceLang, targetLang string, batchSize int) ([]TranslateCaptionsSegment, error) {
 	if batchSize <= 0 {
 		batchSize = 30
 	}
@@ -58,7 +61,7 @@ func translateSegmentsBatch(ctx context.Context, segments []TranslateCaptionsSeg
 			end = len(segments)
 		}
 		batch := segments[start:end]
-		translated, err := callOllamaTranslate(ctx, batch, sourceLang, targetLang)
+		translated, err := callOllamaTranslate(ctx, batch, sourceLang, targetLang, b.warmCall())
 		if err != nil {
 			return nil, fmt.Errorf("translate batch %d-%d: %w", start, end, err)
 		}
@@ -81,6 +84,33 @@ func translateSegmentsBatch(ctx context.Context, segments []TranslateCaptionsSeg
 	return out, nil
 }
 
+// captionTranslationSlot holds one GPU slot on the OLLAMA_URL daemon's card for
+// all of a job's translation calls (every batch, every language; MM94), keeps
+// the model warm in between and unloads it before the slot is released.
+// acquire nil = the shared scheduler.
+func captionTranslationSlot(ctx context.Context, jm *JobManager, jobID string, acquire gpuAcquireFunc, fn func(b *ollamaBatch) error) error {
+	baseURL := envOrDefault("OLLAMA_URL", "http://localhost:11434")
+	model := captionsTranslationModel()
+	slot := ollamaSlot{
+		Caller:   "caption-translate",
+		BaseURL:  baseURL,
+		Model:    model,
+		JobID:    jobID,
+		JM:       jm,
+		Priority: jm.GPUPriorityOf(jobID),
+		Acquire:  acquire,
+	}
+	return withOllamaSlot(ctx, slot, func() error {
+		b := &ollamaBatch{
+			client:  &http.Client{Timeout: time.Duration(envInt("OLLAMA_TIMEOUT_SECONDS", 300)) * time.Second},
+			baseURL: baseURL,
+			model:   model,
+		}
+		defer b.finish()
+		return fn(b)
+	})
+}
+
 // callOllamaTranslate makes a single non-streaming chat completion. Format is
 // forced to JSON at the Ollama API level so we can decode the body directly;
 // the user-prompt header also declares `Format: json` so the model knows it
@@ -90,13 +120,14 @@ func translateSegmentsBatch(ctx context.Context, segments []TranslateCaptionsSeg
 // We do NOT pass `options.temperature` here: the Modelfile already sets it to
 // 0 and overriding it would mean the deployed model semantics change behind
 // the operator's back if they tune the Modelfile.
-func callOllamaTranslate(ctx context.Context, segments []TranslateCaptionsSegment, sourceLang, targetLang string) ([]TranslateCaptionsSegment, error) {
+func callOllamaTranslate(ctx context.Context, segments []TranslateCaptionsSegment, sourceLang, targetLang, keepAlive string) ([]TranslateCaptionsSegment, error) {
 	prompt := buildTranslationPrompt(segments, sourceLang, targetLang)
 	payload := map[string]any{
-		"model":    captionsTranslationModel(),
-		"stream":   false,
-		"format":   "json",
-		"messages": []map[string]any{{"role": "user", "content": prompt}},
+		"model":      captionsTranslationModel(),
+		"stream":     false,
+		"format":     "json",
+		"messages":   []map[string]any{{"role": "user", "content": prompt}},
+		"keep_alive": keepAlive,
 	}
 	body, _ := json.Marshal(payload)
 	url := strings.TrimRight(envOrDefault("OLLAMA_URL", "http://localhost:11434"), "/") + "/api/chat"
