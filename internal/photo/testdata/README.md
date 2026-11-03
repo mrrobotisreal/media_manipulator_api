@@ -104,6 +104,6 @@ The goldens are rendered by `lib/photo/colorMath.ts` (8-bit RGBA, rounding
 `floor(v*255+0.5)`) and are what MM96's `photo_render.py --selftest` must match
 within the design §3.3 tolerances. They cover the shared docs `blank`, `defaults`,
 `curves-s`, `hsl-grey-except-red`, `levels-channels`, `rung1-all-layers` and every
-`golden-docs/*.json`; geometry, mask and detail goldens arrive with MM98/MM99.
+`golden-docs/*.json`; mask, geometry and red-eye goldens came from MM98 (2026-11-03, with `golden-manifest.json`: per-golden size and `borderPx`, the border the selftest excludes for geometry docs); detail goldens arrive with MM99.
 `TestPhotoGoldenDocsCanonical` checks every golden doc is Go-canonical;
 `TestPhotoGoldensComplete` checks one golden per doc × image.
