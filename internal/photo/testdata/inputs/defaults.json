@@ -1,0 +1,117 @@
+{
+ "version": 1,
+ "source": {
+  "width": 1200,
+  "height": 800
+ },
+ "layers": [
+  {
+   "id": "l-exposure",
+   "type": "exposure"
+  },
+  {
+   "id": "l-brightnessContrast",
+   "type": "brightnessContrast"
+  },
+  {
+   "id": "l-tone",
+   "type": "tone"
+  },
+  {
+   "id": "l-levels",
+   "type": "levels"
+  },
+  {
+   "id": "l-curves",
+   "type": "curves"
+  },
+  {
+   "id": "l-whiteBalance",
+   "type": "whiteBalance"
+  },
+  {
+   "id": "l-vibranceSaturation",
+   "type": "vibranceSaturation"
+  },
+  {
+   "id": "l-hsl",
+   "type": "hsl"
+  },
+  {
+   "id": "l-colorBalance",
+   "type": "colorBalance"
+  },
+  {
+   "id": "l-blackWhite",
+   "type": "blackWhite"
+  },
+  {
+   "id": "l-channelMixer",
+   "type": "channelMixer"
+  },
+  {
+   "id": "l-photoFilter",
+   "type": "photoFilter"
+  },
+  {
+   "id": "l-splitTone",
+   "type": "splitTone"
+  },
+  {
+   "id": "l-lut",
+   "type": "lut"
+  },
+  {
+   "id": "l-invert",
+   "type": "invert"
+  },
+  {
+   "id": "l-posterize",
+   "type": "posterize"
+  },
+  {
+   "id": "l-threshold",
+   "type": "threshold"
+  },
+  {
+   "id": "l-gamma",
+   "type": "gamma"
+  },
+  {
+   "id": "l-redEye",
+   "type": "redEye"
+  },
+  {
+   "id": "l-sharpen",
+   "type": "sharpen"
+  },
+  {
+   "id": "l-blur",
+   "type": "blur"
+  },
+  {
+   "id": "l-noiseReduction",
+   "type": "noiseReduction"
+  },
+  {
+   "id": "l-clarity",
+   "type": "clarity"
+  },
+  {
+   "id": "l-texture",
+   "type": "texture"
+  },
+  {
+   "id": "l-dehaze",
+   "type": "dehaze"
+  },
+  {
+   "id": "l-vignette",
+   "type": "vignette"
+  },
+  {
+   "id": "l-grain",
+   "type": "grain"
+  }
+ ]
+}

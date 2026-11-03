@@ -1,0 +1,68 @@
+{
+ "version": 1,
+ "source": {
+  "width": 1200,
+  "height": 800
+ },
+ "geometry": {
+  "rotate": 400,
+  "crop": {
+   "x": 0.75,
+   "y": 0.5,
+   "width": 0.5,
+   "height": 0.75
+  },
+  "fill": "#AABBCC"
+ },
+ "layers": [
+  {
+   "id": "exp",
+   "type": "exposure",
+   "params": {
+    "ev": 9,
+    "offset": -3,
+    "gamma": 0
+   }
+  },
+  {
+   "id": "hsl",
+   "type": "hsl",
+   "params": {
+    "ranges": [
+     {
+      "id": "r1",
+      "center": 400,
+      "width": 500,
+      "feather": -5,
+      "hue": 999
+     }
+    ]
+   },
+   "opacity": 3
+  },
+  {
+   "id": "bc",
+   "type": "brightnessContrast",
+   "params": {
+    "brightness": -500,
+    "contrast": 500
+   }
+  },
+  {
+   "id": "post",
+   "type": "posterize",
+   "params": {
+    "levels": 2.6
+   }
+  },
+  {
+   "id": "sh",
+   "type": "sharpen",
+   "params": {
+    "amount": 9000,
+    "radius": 0,
+    "threshold": -4
+   }
+  }
+ ]
+}

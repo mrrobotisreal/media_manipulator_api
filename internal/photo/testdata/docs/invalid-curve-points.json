@@ -1,0 +1,36 @@
+{
+ "version": 1,
+ "source": {
+  "width": 4000,
+  "height": 3000,
+  "orientation": 1
+ },
+ "layers": [
+  {
+   "id": "c",
+   "type": "curves",
+   "params": {
+    "master": {
+     "points": [
+      {
+       "x": 0,
+       "y": 0
+      },
+      {
+       "x": 0.5,
+       "y": 0.6
+      },
+      {
+       "x": 0.5,
+       "y": 0.7
+      },
+      {
+       "x": 1,
+       "y": 1
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

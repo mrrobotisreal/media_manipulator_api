@@ -1,0 +1,15 @@
+{
+ "version": 1,
+ "source": {
+  "width": 4000,
+  "height": 3000,
+  "orientation": 1
+ },
+ "layers": [
+  {
+   "id": "a",
+   "type": "sparkle",
+   "params": {}
+  }
+ ]
+}
