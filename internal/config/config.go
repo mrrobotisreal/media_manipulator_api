@@ -349,11 +349,19 @@ type Config struct {
 	TierAnonPhotoProjects, TierFreePhotoProjects, TierPremiumPhotoProjects, TierProPhotoProjects                     int
 	TierAnonPhotoMaxMegapixels, TierFreePhotoMaxMegapixels, TierPremiumPhotoMaxMegapixels, TierProPhotoMaxMegapixels int
 	TierAnonPhotoBatch, TierFreePhotoBatch, TierPremiumPhotoBatch, TierProPhotoBatch                                 int
-	PhotoEnabled                                                                                                     bool
-	PhotoDir                                                                                                         string
-	PhotoMaxDocBytes                                                                                                 int
-	PhotoMaxMegapixels                                                                                               int
-	PhotoIngestTimeoutSeconds                                                                                        int
+	// TierXPhotoPresets (MM103): saved-preset cap per account, -1 unlimited,
+	// anonymous 0 (guests keep presets in the browser). PROPOSED numbers (Mitch has
+	// not confirmed): 0 / 10 / 100 / unlimited.
+	TierAnonPhotoPresets, TierFreePhotoPresets, TierPremiumPhotoPresets, TierProPhotoPresets int
+	// RateLimitPhotoPresets*: the photo_presets bucket (POST /api/photo/presets and
+	// its thumbnail upload).
+	RateLimitPhotoPresetsPerSessionPerHour int
+	RateLimitPhotoPresetsPerIPPerHour      int
+	PhotoEnabled                           bool
+	PhotoDir                               string
+	PhotoMaxDocBytes                       int
+	PhotoMaxMegapixels                     int
+	PhotoIngestTimeoutSeconds              int
 	// MM96 render/AI (RUNBOOK §4.17): PhotoPython + PhotoRenderScript are the
 	// venv interpreter and the deployed photo_render.py; PhotoSubjectModel is the
 	// rembg model for subject masks; the timeouts bound render, subject mask and
@@ -896,27 +904,32 @@ func Load() *Config {
 		TierPremiumVectorVideoMaxSeconds: getEnvIntDefault("TIER_PREMIUM_VECTOR_VIDEO_MAX_SECONDS", 15),
 		VectorMaxDocBytes:                getEnvInt("VECTOR_MAX_DOC_BYTES", 4*1024*1024),
 
-		TierAnonPhotoProjects:         getEnvIntDefault("TIER_ANON_PHOTO_PROJECTS", 0),
-		TierFreePhotoProjects:         getEnvIntDefault("TIER_FREE_PHOTO_PROJECTS", 5),
-		TierPremiumPhotoProjects:      getEnvIntDefault("TIER_PREMIUM_PHOTO_PROJECTS", 50),
-		TierAnonPhotoMaxMegapixels:    getEnvInt("TIER_ANON_PHOTO_MAX_MEGAPIXELS", 12),
-		TierFreePhotoMaxMegapixels:    getEnvInt("TIER_FREE_PHOTO_MAX_MEGAPIXELS", 12),
-		TierPremiumPhotoMaxMegapixels: getEnvInt("TIER_PREMIUM_PHOTO_MAX_MEGAPIXELS", 120),
-		TierAnonPhotoBatch:            getEnvIntDefault("TIER_ANON_PHOTO_BATCH", 0),
-		TierFreePhotoBatch:            getEnvIntDefault("TIER_FREE_PHOTO_BATCH", 3),
-		TierPremiumPhotoBatch:         getEnvIntDefault("TIER_PREMIUM_PHOTO_BATCH", 10),
-		PhotoEnabled:                  getEnvBool("PHOTO_ENABLED", true),
-		PhotoDir:                      getEnv("PHOTO_DIR", "uploads/photo"),
-		PhotoMaxDocBytes:              getEnvInt("PHOTO_MAX_DOC_BYTES", 8*1024*1024),
-		PhotoMaxMegapixels:            getEnvInt("PHOTO_MAX_MEGAPIXELS", 120),
-		PhotoIngestTimeoutSeconds:     getEnvInt("PHOTO_INGEST_TIMEOUT_SECONDS", 60),
-		PhotoPython:                   getEnv("PHOTO_PYTHON", "/opt/media-manipulator-ai/venvs/photo/bin/python"),
-		PhotoRenderScript:             getEnv("PHOTO_RENDER_SCRIPT", "/opt/media-manipulator-ai/scripts/photo_render.py"),
-		PhotoRenderTimeoutSeconds:     getEnvInt("PHOTO_RENDER_TIMEOUT_SECONDS", 300),
-		PhotoSubjectModel:             getEnv("PHOTO_SUBJECT_MODEL", "isnet-general-use"),
-		PhotoSubjectTimeoutSeconds:    getEnvInt("PHOTO_SUBJECT_TIMEOUT_SECONDS", 90),
-		PhotoHealTimeoutSeconds:       getEnvInt("PHOTO_HEAL_TIMEOUT_SECONDS", 300),
-		PhotoRenderConcurrency:        getEnvInt("PHOTO_RENDER_CONCURRENCY", 2),
+		TierAnonPhotoProjects:                  getEnvIntDefault("TIER_ANON_PHOTO_PROJECTS", 0),
+		TierFreePhotoProjects:                  getEnvIntDefault("TIER_FREE_PHOTO_PROJECTS", 5),
+		TierPremiumPhotoProjects:               getEnvIntDefault("TIER_PREMIUM_PHOTO_PROJECTS", 50),
+		TierAnonPhotoMaxMegapixels:             getEnvInt("TIER_ANON_PHOTO_MAX_MEGAPIXELS", 12),
+		TierFreePhotoMaxMegapixels:             getEnvInt("TIER_FREE_PHOTO_MAX_MEGAPIXELS", 12),
+		TierPremiumPhotoMaxMegapixels:          getEnvInt("TIER_PREMIUM_PHOTO_MAX_MEGAPIXELS", 120),
+		TierAnonPhotoPresets:                   getEnvIntDefault("TIER_ANON_PHOTO_PRESETS", 0),
+		TierFreePhotoPresets:                   getEnvIntDefault("TIER_FREE_PHOTO_PRESETS", 10),
+		TierPremiumPhotoPresets:                getEnvIntDefault("TIER_PREMIUM_PHOTO_PRESETS", 100),
+		RateLimitPhotoPresetsPerSessionPerHour: getEnvInt("RATE_LIMIT_PHOTO_PRESETS_PER_SESSION_PER_HOUR", 200),
+		RateLimitPhotoPresetsPerIPPerHour:      getEnvInt("RATE_LIMIT_PHOTO_PRESETS_PER_IP_PER_HOUR", 400),
+		TierAnonPhotoBatch:                     getEnvIntDefault("TIER_ANON_PHOTO_BATCH", 0),
+		TierFreePhotoBatch:                     getEnvIntDefault("TIER_FREE_PHOTO_BATCH", 3),
+		TierPremiumPhotoBatch:                  getEnvIntDefault("TIER_PREMIUM_PHOTO_BATCH", 10),
+		PhotoEnabled:                           getEnvBool("PHOTO_ENABLED", true),
+		PhotoDir:                               getEnv("PHOTO_DIR", "uploads/photo"),
+		PhotoMaxDocBytes:                       getEnvInt("PHOTO_MAX_DOC_BYTES", 8*1024*1024),
+		PhotoMaxMegapixels:                     getEnvInt("PHOTO_MAX_MEGAPIXELS", 120),
+		PhotoIngestTimeoutSeconds:              getEnvInt("PHOTO_INGEST_TIMEOUT_SECONDS", 60),
+		PhotoPython:                            getEnv("PHOTO_PYTHON", "/opt/media-manipulator-ai/venvs/photo/bin/python"),
+		PhotoRenderScript:                      getEnv("PHOTO_RENDER_SCRIPT", "/opt/media-manipulator-ai/scripts/photo_render.py"),
+		PhotoRenderTimeoutSeconds:              getEnvInt("PHOTO_RENDER_TIMEOUT_SECONDS", 300),
+		PhotoSubjectModel:                      getEnv("PHOTO_SUBJECT_MODEL", "isnet-general-use"),
+		PhotoSubjectTimeoutSeconds:             getEnvInt("PHOTO_SUBJECT_TIMEOUT_SECONDS", 90),
+		PhotoHealTimeoutSeconds:                getEnvInt("PHOTO_HEAL_TIMEOUT_SECONDS", 300),
+		PhotoRenderConcurrency:                 getEnvInt("PHOTO_RENDER_CONCURRENCY", 2),
 
 		// Operator allowlist — see the struct doc. Same loader as
 		// DR_ALLOWED_EMAILS so membership is a plain lowercase compare.
@@ -1161,6 +1174,8 @@ func applyProTierDefaults(c *Config) {
 	c.TierProPhotoProjects = getEnvIntDefault("TIER_PRO_PHOTO_PROJECTS", -1)
 	c.TierProPhotoMaxMegapixels = getEnvInt("TIER_PRO_PHOTO_MAX_MEGAPIXELS", 120)
 	c.TierProPhotoBatch = getEnvIntDefault("TIER_PRO_PHOTO_BATCH", 25)
+	// MM103: Pro saves unlimited presets (proposed; env-overridable).
+	c.TierProPhotoPresets = getEnvIntDefault("TIER_PRO_PHOTO_PRESETS", -1)
 }
 
 // clampDuration bounds d to [lo, hi].
