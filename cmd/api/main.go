@@ -406,6 +406,11 @@ func main() {
 	voicesHandler.SetVoiceover(studioHandler)
 	voicesHandler.SetAnalyticsEmitter(analyticsEmitter)
 
+	// MM95 Aperture: its deletes use the same user-delete sweeper as the others.
+	photoHandler = newPhotoHandler(cfg, store)
+	photoHandler.SetDeletion(newUserDeleteSweeper(cfg, store, jobManager, s3Client, metricsReg, logging))
+	photoHandler.SetDeletionMetric(func(scope string) { metricsReg.DataDeleted(scope) })
+
 	router := setupRouter(cfg, conversionHandler, studioHandler, vectorHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg, analyticsEmitter)
 
 	server := &http.Server{
@@ -618,6 +623,13 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// quotaRoutes. A nil handler (tests) mounts nothing.
 		if vectorHandler != nil {
 			handlers.RegisterVectorRoutes(api, vectorHandler)
+		}
+		// Aperture (code name photo, MM95): projects, files, capabilities (and the
+		// MM96 route stubs). Not in quotaRoutes: project CRUD is free of charge
+		// (the photoProjects cap and the photo_projects bucket gate it) and
+		// MaxOutputHeight never applies. nil (tests) mounts nothing.
+		if photoHandler != nil {
+			handlers.RegisterPhotoRoutes(api, photoHandler)
 		}
 		// Voices (MM77): saved voices, presets, speak, convert, shift. nil
 		// (tests) mounts nothing.
@@ -909,6 +921,10 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 		// bucket, like /api/upload. The counted-export call itself is cheap
 		// and bounded by its own daily allowance.
 		{path: "/api/vector/vectorize", routeKey: "vector_vectorize", tool: "vector_vectorize", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
+		// Aperture project create (MM95) ingests an upload (ImageMagick proxy and
+		// thumb): the photo_projects bucket, defaulting to the uploads numbers.
+		// Only POST /api/photo/projects; reads and saves are cheap.
+		{path: "/api/photo/projects", routeKey: "photo_projects", tool: "photo_projects", sessionLimit: cfg.RateLimitPhotoProjectsPerSessionPerHour, ipLimit: cfg.RateLimitPhotoProjectsPerIPPerHour},
 		// Frame-as-PNG export (part 20): one synchronous ffmpeg frame render.
 		// Not a job and not an export allowance spend, so it shares the
 		// analysis bucket (like caption generation) rather than the transcode one.

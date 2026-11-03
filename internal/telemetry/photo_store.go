@@ -139,6 +139,15 @@ RETURNING ` + photoFullColumns
 	photoSoftDeleteSQL = `UPDATE photo_projects SET deleted_at = coalesce(deleted_at, now()) WHERE id = $1::uuid AND owner_user_id = $2::uuid`
 	photoHardDeleteSQL = `DELETE FROM photo_projects WHERE id = $1::uuid`
 
+	// photoCompleteSQL ends a successful ingest: the facts about the original,
+	// the final doc (source size set from the file), status ready.
+	photoCompleteSQL = `
+UPDATE photo_projects
+SET status = 'ready', error = NULL, original_width = $2, original_height = $3, has_alpha = $4,
+    doc = $5::jsonb, updated_at = now()
+WHERE id = $1::uuid AND deleted_at IS NULL
+RETURNING ` + photoFullColumns
+
 	photoSetStatusSQL = `
 UPDATE photo_projects
 SET status = $2, error = nullif($3, ''), updated_at = now()
@@ -299,6 +308,21 @@ func (s *Store) SetPhotoProjectStatus(ctx context.Context, id, status, errMsg st
 	ctx, cancel := s.ctx(ctx)
 	defer cancel()
 	p, err := scanPhotoProject(s.Pool.QueryRow(ctx, photoSetStatusSQL, id, status, errMsg), true)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrPhotoNotFound
+	}
+	return p, err
+}
+
+// CompletePhotoIngest ends a successful ingest (status ready, real pixel size,
+// alpha flag and the final doc).
+func (s *Store) CompletePhotoIngest(ctx context.Context, id string, width, height int, hasAlpha bool, doc []byte) (*PhotoProject, error) {
+	if !s.Enabled() {
+		return nil, ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	p, err := scanPhotoProject(s.Pool.QueryRow(ctx, photoCompleteSQL, id, width, height, hasAlpha, string(doc)), true)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrPhotoNotFound
 	}

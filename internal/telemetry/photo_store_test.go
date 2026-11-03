@@ -64,6 +64,14 @@ func TestPhotoDeleteAndDerivativeSQL(t *testing.T) {
 	}
 }
 
+func TestPhotoCompleteIngestSQL(t *testing.T) {
+	for _, want := range []string{"status = 'ready'", "error = NULL", "original_width = $2", "has_alpha = $4", "doc = $5::jsonb", "deleted_at IS NULL"} {
+		if !strings.Contains(photoCompleteSQL, want) {
+			t.Errorf("complete statement is missing %q", want)
+		}
+	}
+}
+
 func TestPhotoErrors(t *testing.T) {
 	var e error = &PhotoProjectLimitError{Limit: 5, Used: 5}
 	var le *PhotoProjectLimitError
