@@ -1,0 +1,1 @@
+{"geometry":{"crop":null,"fill":"transparent","flipH":false,"flipV":false,"perspective":null,"rotate":0},"heals":[],"layers":[{"blend":"normal","enabled":true,"id":"l1","mask":null,"opacity":1,"params":{"temperature":40,"tint":-15},"type":"whiteBalance"}],"output":{},"source":{"height":192,"orientation":1,"width":256},"version":1}
