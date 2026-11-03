@@ -53,7 +53,7 @@ func (f *fakeSettingsStore) GetOrCreateUserSettings(_ context.Context, id string
 		return s, nil
 	}
 	f.writes++
-	s := &telemetry.UserSettings{UserID: id, RetentionHours: def, RetentionScope: "all", HistoryVisibility: "full", EmailExpiryDigest: true, UpdatedAt: time.Now()}
+	s := &telemetry.UserSettings{UserID: id, RetentionHours: def, RetentionScope: "all", HistoryVisibility: "full", EmailExpiryDigest: true, PushJobFinished: true, UpdatedAt: time.Now()}
 	f.settings[id] = s
 	return s, nil
 }
@@ -91,6 +91,9 @@ func (f *fakeSettingsStore) ApplyUserSettings(ctx context.Context, id string, de
 	}
 	if p.Currency != nil {
 		s.Currency = *p.Currency
+	}
+	if p.PushJobFinished != nil {
+		s.PushJobFinished = *p.PushJobFinished
 	}
 	return s, n, nil
 }
@@ -373,5 +376,33 @@ func TestSettingsCurrency(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &got)
 	if got["currency"] != "eur" {
 		t.Errorf("response currency = %v, want eur", got["currency"])
+	}
+}
+
+// MA23: pushJobFinished defaults on, round-trips through PATCH and GET, and a
+// push-only patch is a valid (non-empty) patch.
+func TestSettingsPushJobFinishedRoundTrip(t *testing.T) {
+	now := time.Now().UTC()
+	st := newSettingsStore(now)
+	r := settingsRouter(st, now)
+	var got map[string]any
+	w := doReq(r, "GET", "/api/account/settings", "alice", "")
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if got["pushJobFinished"] != true {
+		t.Fatalf("pushJobFinished default = %v, want true", got["pushJobFinished"])
+	}
+	w = doReq(r, "PATCH", "/api/account/settings", "alice", `{"pushJobFinished":false}`)
+	if w.Code != 200 {
+		t.Fatalf("patch %d: %s", w.Code, w.Body)
+	}
+	p := st.applied[len(st.applied)-1]
+	if p.PushJobFinished == nil || *p.PushJobFinished || p.RetentionHours != nil || p.EmailAIJobFinished != nil {
+		t.Errorf("patch not forwarded alone: %+v", p)
+	}
+	got = nil
+	w = doReq(r, "GET", "/api/account/settings", "alice", "")
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if got["pushJobFinished"] != false {
+		t.Errorf("pushJobFinished after patch = %v, want false", got["pushJobFinished"])
 	}
 }
