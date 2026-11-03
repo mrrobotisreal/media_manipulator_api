@@ -228,7 +228,7 @@ func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *tel
 			kind = "studio"
 		}
 		proj = append(proj, map[string]any{
-			// kind: "studio" (Darkroom) or "vector" (Motion, MM43).
+			// kind: "studio" (Darkroom), "vector" (Motion, MM43) or "photo" (Aperture, MM95).
 			"kind": kind,
 			"id":   p.ID, "name": p.Name, "createdAt": rfc(p.CreatedAt), "updatedAt": rfc(p.UpdatedAt),
 			"assetCount": p.AssetCount, "durationSeconds": p.DurationSeconds,
@@ -388,7 +388,7 @@ Generated ` + now.Format(time.RFC3339) + `
 
 history.json     Every conversion on your account: tool, mode, formats, status, timestamps
                  and the date it will be deleted ("deletesOn", null when nothing is stored).
-projects.json    Your Darkroom and Motion projects ("kind": studio | vector): name,
+projects.json    Your Darkroom, Motion and Aperture projects ("kind": studio | vector | photo): name,
                  created/updated, asset count, duration. Documents are not included.
 files.json       Every file we hold for you right now, with its size and expiry. Files are
                  not included here; re-download them individually from your history while

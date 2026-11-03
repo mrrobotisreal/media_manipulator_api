@@ -10,36 +10,26 @@ import (
 	"strings"
 )
 
-const (
-	studioImageProxyMaxDim = 1920
-	studioImageThumbMaxDim = 320
-	studioImageJPEGQuality = "92"
-)
+// The display-derivative helpers live in image_derivatives.go (shared with the
+// Aperture ingest, MM95). These studio-named wrappers keep Darkroom's call sites
+// and golden-args tests unchanged.
 
 // studioMagickLimits caps ImageMagick resources on every Darkroom call.
-var studioMagickLimits = []string{"-limit", "memory", "512MiB", "-limit", "map", "1GiB", "-limit", "disk", "2GiB"}
+var studioMagickLimits = imageMagickLimits
 
-// buildStudioImageArgs builds the (pure) ImageMagick argument list for a
-// display derivative: first frame only, EXIF-upright, sRGB, downscale-only,
-// metadata stripped. JPEG output gets quality 92; PNG (alpha) keeps alpha.
+// buildStudioImageArgs: see buildImageDerivativeArgs.
 func buildStudioImageArgs(in, out string, maxDim int, alpha bool) []string {
-	args := append([]string{}, studioMagickLimits...)
-	args = append(args, in+"[0]", "-auto-orient", "-colorspace", "sRGB",
-		"-resize", fmt.Sprintf("%dx%d>", maxDim, maxDim), "-strip")
-	if !alpha {
-		args = append(args, "-quality", studioImageJPEGQuality)
-	}
-	return append(args, out)
+	return buildImageDerivativeArgs(in, out, maxDim, alpha)
 }
 
 // buildStudioImageProxyArgs: 1920px display proxy.
 func buildStudioImageProxyArgs(in, out string, alpha bool) []string {
-	return buildStudioImageArgs(in, out, studioImageProxyMaxDim, alpha)
+	return buildImageProxyArgs(in, out, alpha)
 }
 
 // buildStudioImageThumbArgs: 320px thumbnail.
 func buildStudioImageThumbArgs(in, out string, alpha bool) []string {
-	return buildStudioImageArgs(in, out, studioImageThumbMaxDim, alpha)
+	return buildImageThumbArgs(in, out, alpha)
 }
 
 // buildStudioSVGRsvgArgs rasterizes an SVG to a PNG that fits 1920x1920.
@@ -53,67 +43,16 @@ func buildStudioSVGMagickArgs(in, out string) []string {
 	return append(args, "-density", "192", "-background", "none", in+"[0]", out)
 }
 
-// studioImageExt is the derivative extension for the alpha decision.
-func studioImageExt(alpha bool) string {
-	if alpha {
-		return "png"
-	}
-	return "jpg"
-}
-
-func studioImageContentType(alpha bool) string {
-	if alpha {
-		return "image/png"
-	}
-	return "image/jpeg"
-}
-
-// studioAlphaFromIdentify interprets `identify -format %A` output.
-func studioAlphaFromIdentify(out string) bool {
-	v := strings.ToLower(strings.TrimSpace(out))
-	return v == "true" || v == "blend" || v == "activate" || v == "associate" || v == "on" || v == "set" || v == "copy" || v == "transparent"
-}
-
-// studioExtMayHaveAlpha is the fallback when identify cannot answer.
-func studioExtMayHaveAlpha(ext string) bool {
-	switch strings.ToLower(strings.TrimPrefix(ext, ".")) {
-	case "png", "webp", "gif", "avif", "svg", "tif", "tiff":
-		return true
-	}
-	return false
-}
-
-func studioMagickBinary() string {
-	if _, err := exec.LookPath("magick"); err == nil {
-		return "magick"
-	}
-	return "convert"
-}
+func studioImageExt(alpha bool) string         { return imageDerivativeExt(alpha) }
+func studioImageContentType(alpha bool) string { return imageDerivativeContentType(alpha) }
+func studioAlphaFromIdentify(out string) bool  { return alphaFromIdentify(out) }
+func studioExtMayHaveAlpha(ext string) bool    { return extMayHaveAlpha(ext) }
+func studioMagickBinary() string               { return magickBinary() }
 
 // runStudioMagick runs ImageMagick (magick, else legacy convert).
-func runStudioMagick(ctx context.Context, args ...string) error {
-	bin := studioMagickBinary()
-	_, stderr, err := runCommand(ctx, bin, args...)
-	if err != nil {
-		return fmt.Errorf("%s: %w (%s)", bin, err, commandTail(stderr, 600))
-	}
-	return nil
-}
+func runStudioMagick(ctx context.Context, args ...string) error { return runMagick(ctx, args...) }
 
-func studioImageHasAlpha(ctx context.Context, in string) bool {
-	ext := filepath.Ext(in)
-	bin := "identify"
-	var args []string
-	if _, err := exec.LookPath("magick"); err == nil {
-		bin, args = "magick", []string{"identify"}
-	}
-	args = append(args, "-format", "%A", in+"[0]")
-	stdout, _, err := runCommand(ctx, bin, args...)
-	if err != nil {
-		return studioExtMayHaveAlpha(ext)
-	}
-	return studioAlphaFromIdentify(stdout)
-}
+func studioImageHasAlpha(ctx context.Context, in string) bool { return imageHasAlpha(ctx, in) }
 
 // generateImage produces proxy.(jpg|png) and a 320px thumbnail. A proxy
 // failure fails the job; a thumbnail failure is logged and leaves SpriteKey

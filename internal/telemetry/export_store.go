@@ -28,7 +28,7 @@ type ExportJob struct {
 
 // ExportProject is one Darkroom project of the user.
 type ExportProject struct {
-	// Kind is "studio" (Darkroom) or "vector" (Motion, MM43).
+	// Kind is "studio" (Darkroom), "vector" (Motion, MM43) or "photo" (Aperture, MM95).
 	Kind            string
 	ID              string
 	Name            string
@@ -121,7 +121,24 @@ FROM studio_projects p WHERE p.user_id = $1::uuid ORDER BY p.updated_at DESC`, u
 		}
 		out = append(out, e)
 	}
-	return out, vrows.Err()
+	if err := vrows.Err(); err != nil {
+		return out, err
+	}
+	vrows.Close()
+	// MM95: Aperture projects (kind photo; no duration, assets = 0).
+	prows, err := s.Pool.Query(ctx, photoExportProjectsSQL, userID)
+	if err != nil {
+		return out, err
+	}
+	defer prows.Close()
+	for prows.Next() {
+		e := ExportProject{Kind: "photo"}
+		if err := prows.Scan(&e.ID, &e.Name, &e.CreatedAt, &e.UpdatedAt, &e.DurationSeconds, &e.AssetCount); err != nil {
+			return out, err
+		}
+		out = append(out, e)
+	}
+	return out, prows.Err()
 }
 
 // ExportFiles lists the user's live ledger rows (expired-but-unswept rows are

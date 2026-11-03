@@ -172,14 +172,18 @@ type Config struct {
 	// RateLimitPerIPBurstAuthed (RATE_LIMIT_PER_IP_BURST_AUTHED, default 60, MA08)
 	// is the per-IP per-second burst for requests carrying a verified Firebase
 	// principal (carrier-grade NAT headroom). The key is still the IP.
-	RateLimitPerIPBurstAuthed            int
-	RateLimitUploadsPerSessionPerHour    int
-	RateLimitUploadsPerIPPerHour         int
-	RateLimitTranscodesPerSessionPerHour int
-	RateLimitTranscodesPerIPPerHour      int
-	RateLimitAnalysisPerSessionPerHour   int
-	RateLimitAnalysisPerIPPerHour        int
-	RateLimitAuditAllowed                bool
+	RateLimitPerIPBurstAuthed         int
+	RateLimitUploadsPerSessionPerHour int
+	RateLimitUploadsPerIPPerHour      int
+	// RateLimitPhotoProjects* (MM95): the photo_projects bucket (POST
+	// /api/photo/projects); defaults equal the uploads numbers.
+	RateLimitPhotoProjectsPerSessionPerHour int
+	RateLimitPhotoProjectsPerIPPerHour      int
+	RateLimitTranscodesPerSessionPerHour    int
+	RateLimitTranscodesPerIPPerHour         int
+	RateLimitAnalysisPerSessionPerHour      int
+	RateLimitAnalysisPerIPPerHour           int
+	RateLimitAuditAllowed                   bool
 	// MM32: per-IP hourly cap on the public share routes (descriptor + file
 	// range requests). Keyed by IP only; the caller has no session.
 	RateLimitSharePerIPPerHour int
@@ -326,6 +330,23 @@ type Config struct {
 	// VectorMaxDocBytes (VECTOR_MAX_DOC_BYTES, default 4 MiB) caps one saved
 	// Motion document; the sanitizer refuses anything larger.
 	VectorMaxDocBytes int
+
+	// Aperture (photo, MM95; RUNBOOK §4.16). PhotoEnabled=false turns the
+	// editor's server side off (capabilities report enabled:false, project
+	// routes answer 503). PhotoDir holds one directory per project. The
+	// megapixel ceiling is the deployment maximum; the per-tier cap
+	// (TIER_*_PHOTO_MAX_MEGAPIXELS) applies at export.
+	// TierXPhotoProjects: server project cap, -1 unlimited, anonymous 0 (no
+	// server projects). TierXPhotoMaxMegapixels: export cap. TierXPhotoBatch:
+	// photos per batch apply, 0 = not available.
+	TierAnonPhotoProjects, TierFreePhotoProjects, TierPremiumPhotoProjects, TierProPhotoProjects                     int
+	TierAnonPhotoMaxMegapixels, TierFreePhotoMaxMegapixels, TierPremiumPhotoMaxMegapixels, TierProPhotoMaxMegapixels int
+	TierAnonPhotoBatch, TierFreePhotoBatch, TierPremiumPhotoBatch, TierProPhotoBatch                                 int
+	PhotoEnabled                                                                                                     bool
+	PhotoDir                                                                                                         string
+	PhotoMaxDocBytes                                                                                                 int
+	PhotoMaxMegapixels                                                                                               int
+	PhotoIngestTimeoutSeconds                                                                                        int
 
 	// OperatorEmails is the allowlist behind the `operator` tier: the site's
 	// own people, who get no daily allowance, no saved-project cap and no
@@ -747,23 +768,25 @@ func Load() *Config {
 		LogFormat:          getEnv("LOG_FORMAT", "json"),
 
 		// Rate limiting
-		RateLimitEnabled:                     getEnvBool("RATE_LIMIT_ENABLED", true),
-		RateLimitPerIPRPS:                    getEnvFloat("RATE_LIMIT_PER_IP_RPS", 2),
-		RateLimitPerIPBurst:                  getEnvInt("RATE_LIMIT_PER_IP_BURST", 20),
-		RateLimitPerIPBurstAuthed:            getEnvInt("RATE_LIMIT_PER_IP_BURST_AUTHED", 60),
-		RateLimitUploadsPerSessionPerHour:    getEnvInt("RATE_LIMIT_UPLOADS_PER_SESSION_PER_HOUR", 30),
-		RateLimitUploadsPerIPPerHour:         getEnvInt("RATE_LIMIT_UPLOADS_PER_IP_PER_HOUR", 60),
-		RateLimitTranscodesPerSessionPerHour: getEnvInt("RATE_LIMIT_TRANSCODES_PER_SESSION_PER_HOUR", 10),
-		RateLimitTranscodesPerIPPerHour:      getEnvInt("RATE_LIMIT_TRANSCODES_PER_IP_PER_HOUR", 20),
-		RateLimitAnalysisPerSessionPerHour:   getEnvInt("RATE_LIMIT_ANALYSIS_PER_SESSION_PER_HOUR", 20),
-		RateLimitAnalysisPerIPPerHour:        getEnvInt("RATE_LIMIT_ANALYSIS_PER_IP_PER_HOUR", 40),
-		RateLimitAuditAllowed:                getEnvBool("RATE_LIMIT_AUDIT_ALLOWED", false),
-		RateLimitSharePerIPPerHour:           getEnvInt("RATE_LIMIT_SHARE_PER_IP_PER_HOUR", 1200),
-		RateLimitResultMP3PerSessionPerHour:  getEnvInt("RATE_LIMIT_RESULT_MP3_PER_SESSION_PER_HOUR", 20),
-		RateLimitResultMP3PerIPPerHour:       getEnvInt("RATE_LIMIT_RESULT_MP3_PER_IP_PER_HOUR", 40),
-		ContactTo:                            getEnv("CONTACT_TO", "support@media-manipulator.com"),
-		ContactPerSessionPerHour:             getEnvInt("CONTACT_PER_SESSION_PER_HOUR", 3),
-		ContactPerIPPerHour:                  getEnvInt("CONTACT_PER_IP_PER_HOUR", 10),
+		RateLimitEnabled:                        getEnvBool("RATE_LIMIT_ENABLED", true),
+		RateLimitPerIPRPS:                       getEnvFloat("RATE_LIMIT_PER_IP_RPS", 2),
+		RateLimitPerIPBurst:                     getEnvInt("RATE_LIMIT_PER_IP_BURST", 20),
+		RateLimitPerIPBurstAuthed:               getEnvInt("RATE_LIMIT_PER_IP_BURST_AUTHED", 60),
+		RateLimitUploadsPerSessionPerHour:       getEnvInt("RATE_LIMIT_UPLOADS_PER_SESSION_PER_HOUR", 30),
+		RateLimitUploadsPerIPPerHour:            getEnvInt("RATE_LIMIT_UPLOADS_PER_IP_PER_HOUR", 60),
+		RateLimitPhotoProjectsPerSessionPerHour: getEnvInt("RATE_LIMIT_PHOTO_PROJECTS_PER_SESSION_PER_HOUR", getEnvInt("RATE_LIMIT_UPLOADS_PER_SESSION_PER_HOUR", 30)),
+		RateLimitPhotoProjectsPerIPPerHour:      getEnvInt("RATE_LIMIT_PHOTO_PROJECTS_PER_IP_PER_HOUR", getEnvInt("RATE_LIMIT_UPLOADS_PER_IP_PER_HOUR", 60)),
+		RateLimitTranscodesPerSessionPerHour:    getEnvInt("RATE_LIMIT_TRANSCODES_PER_SESSION_PER_HOUR", 10),
+		RateLimitTranscodesPerIPPerHour:         getEnvInt("RATE_LIMIT_TRANSCODES_PER_IP_PER_HOUR", 20),
+		RateLimitAnalysisPerSessionPerHour:      getEnvInt("RATE_LIMIT_ANALYSIS_PER_SESSION_PER_HOUR", 20),
+		RateLimitAnalysisPerIPPerHour:           getEnvInt("RATE_LIMIT_ANALYSIS_PER_IP_PER_HOUR", 40),
+		RateLimitAuditAllowed:                   getEnvBool("RATE_LIMIT_AUDIT_ALLOWED", false),
+		RateLimitSharePerIPPerHour:              getEnvInt("RATE_LIMIT_SHARE_PER_IP_PER_HOUR", 1200),
+		RateLimitResultMP3PerSessionPerHour:     getEnvInt("RATE_LIMIT_RESULT_MP3_PER_SESSION_PER_HOUR", 20),
+		RateLimitResultMP3PerIPPerHour:          getEnvInt("RATE_LIMIT_RESULT_MP3_PER_IP_PER_HOUR", 40),
+		ContactTo:                               getEnv("CONTACT_TO", "support@media-manipulator.com"),
+		ContactPerSessionPerHour:                getEnvInt("CONTACT_PER_SESSION_PER_HOUR", 3),
+		ContactPerIPPerHour:                     getEnvInt("CONTACT_PER_IP_PER_HOUR", 10),
 		SharePublicBaseURL: strings.TrimRight(strings.TrimSpace(getEnv("SHARE_PUBLIC_BASE_URL",
 			getEnv("BILLING_PUBLIC_BASE_URL", "https://media-manipulator.com"))), "/"),
 
@@ -850,6 +873,21 @@ func Load() *Config {
 		TierPremiumVectorVideoMaxFps:     getEnvIntDefault("TIER_PREMIUM_VECTOR_VIDEO_MAX_FPS", 0),
 		TierPremiumVectorVideoMaxSeconds: getEnvIntDefault("TIER_PREMIUM_VECTOR_VIDEO_MAX_SECONDS", 15),
 		VectorMaxDocBytes:                getEnvInt("VECTOR_MAX_DOC_BYTES", 4*1024*1024),
+
+		TierAnonPhotoProjects:         getEnvIntDefault("TIER_ANON_PHOTO_PROJECTS", 0),
+		TierFreePhotoProjects:         getEnvIntDefault("TIER_FREE_PHOTO_PROJECTS", 5),
+		TierPremiumPhotoProjects:      getEnvIntDefault("TIER_PREMIUM_PHOTO_PROJECTS", 50),
+		TierAnonPhotoMaxMegapixels:    getEnvInt("TIER_ANON_PHOTO_MAX_MEGAPIXELS", 12),
+		TierFreePhotoMaxMegapixels:    getEnvInt("TIER_FREE_PHOTO_MAX_MEGAPIXELS", 12),
+		TierPremiumPhotoMaxMegapixels: getEnvInt("TIER_PREMIUM_PHOTO_MAX_MEGAPIXELS", 120),
+		TierAnonPhotoBatch:            getEnvIntDefault("TIER_ANON_PHOTO_BATCH", 0),
+		TierFreePhotoBatch:            getEnvIntDefault("TIER_FREE_PHOTO_BATCH", 3),
+		TierPremiumPhotoBatch:         getEnvIntDefault("TIER_PREMIUM_PHOTO_BATCH", 10),
+		PhotoEnabled:                  getEnvBool("PHOTO_ENABLED", true),
+		PhotoDir:                      getEnv("PHOTO_DIR", "uploads/photo"),
+		PhotoMaxDocBytes:              getEnvInt("PHOTO_MAX_DOC_BYTES", 8*1024*1024),
+		PhotoMaxMegapixels:            getEnvInt("PHOTO_MAX_MEGAPIXELS", 120),
+		PhotoIngestTimeoutSeconds:     getEnvInt("PHOTO_INGEST_TIMEOUT_SECONDS", 60),
 
 		// Operator allowlist — see the struct doc. Same loader as
 		// DR_ALLOWED_EMAILS so membership is a plain lowercase compare.
@@ -1089,6 +1127,11 @@ func applyProTierDefaults(c *Config) {
 	c.TierProVectorVideoMaxHeight = getEnvIntDefault("TIER_PRO_VECTOR_VIDEO_MAX_HEIGHT", 2160)
 	c.TierProVectorVideoMaxFps = getEnvIntDefault("TIER_PRO_VECTOR_VIDEO_MAX_FPS", 60)
 	c.TierProVectorVideoMaxSeconds = getEnvIntDefault("TIER_PRO_VECTOR_VIDEO_MAX_SECONDS", 60)
+
+	// Aperture (MM95): Pro's own row (unlimited projects, 120 MP, batch 25).
+	c.TierProPhotoProjects = getEnvIntDefault("TIER_PRO_PHOTO_PROJECTS", -1)
+	c.TierProPhotoMaxMegapixels = getEnvInt("TIER_PRO_PHOTO_MAX_MEGAPIXELS", 120)
+	c.TierProPhotoBatch = getEnvIntDefault("TIER_PRO_PHOTO_BATCH", 25)
 }
 
 // clampDuration bounds d to [lo, hi].

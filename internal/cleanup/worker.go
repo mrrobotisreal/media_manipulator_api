@@ -216,6 +216,13 @@ func (w *Worker) tick(ctx context.Context) {
 			kinds: []string{retention.KindOutputDir, retention.KindMetadata}},
 		{root: w.Cfg.TempDir, retention: w.Cfg.TempRetention, jobAware: false},
 	}
+	// MM95: Aperture project directories. A directory with no live photo_project
+	// ledger row is an orphan after the upload window (24 h). Needs the ledger:
+	// without it every project would look orphaned, so the root is skipped.
+	if w.Orphans != nil && strings.TrimSpace(w.Cfg.PhotoDir) != "" {
+		sweeps = append(sweeps, sweepSpec{root: w.Cfg.PhotoDir, retention: w.Cfg.UploadRetention,
+			kinds: []string{retention.KindPhotoProject}})
+	}
 	var orphanFiles, orphanDirs int64
 	for _, sp := range sweeps {
 		if strings.TrimSpace(sp.root) == "" || sp.retention <= 0 {
@@ -364,6 +371,12 @@ func (w *Worker) sweepRoot(ctx context.Context, root string, retention time.Dura
 		// Guard against symlink escapes.
 		if !isWithin(full, absRoot) {
 			w.Logger.Warn("cleanup skipping path outside root", "path", "<root>/"+name)
+			continue
+		}
+		// MM95: PHOTO_DIR defaults to uploads/photo, i.e. inside the upload root.
+		// The upload walker must never treat that directory as an orphan job dir;
+		// the photo root has its own, ledger-aware pass.
+		if w.isPhotoRoot(full) {
 			continue
 		}
 		if jobAware && e.IsDir() {
@@ -518,4 +531,13 @@ func dirSize(root string) (int64, int64, error) {
 		return nil
 	})
 	return files, bytes, err
+}
+
+// isPhotoRoot reports whether full is the configured PHOTO_DIR itself.
+func (w *Worker) isPhotoRoot(full string) bool {
+	if w.Cfg == nil || strings.TrimSpace(w.Cfg.PhotoDir) == "" {
+		return false
+	}
+	abs, err := filepath.Abs(w.Cfg.PhotoDir)
+	return err == nil && filepath.Clean(abs) == filepath.Clean(full)
 }

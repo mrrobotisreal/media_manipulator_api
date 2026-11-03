@@ -69,6 +69,7 @@ type SweepStore interface {
 	DeleteStudioAssetRow(ctx context.Context, assetID string) error
 	DeleteStudioProjectRows(ctx context.Context, projectID string) ([]string, error)
 	DeleteVectorProjectRows(ctx context.Context, projectID string) ([]string, error)
+	DeletePhotoProjectRows(ctx context.Context, projectID string) error
 	DeleteVoiceRow(ctx context.Context, voiceID string) ([]string, error)
 	AnonymizeJob(ctx context.Context, jobID string) error
 	JobHasLiveRows(ctx context.Context, jobID string) (bool, error)
@@ -114,6 +115,7 @@ func (NopMeter) Backlog(int64, int64)    {}
 type SweepConfig struct {
 	UploadDir       string
 	OutputDir       string
+	PhotoDir        string // MM95: Aperture project directories (photo_project rows)
 	Bucket          string
 	AllowedPrefixes []string // first S3 key segment(s) the sweeper may delete under
 	Batch           int
@@ -331,6 +333,8 @@ func (s *Sweeper) processBatch(ctx context.Context, rows []telemetry.LedgerRow, 
 			s.finish(ctx, row, res, s.deleteStudioProject(ctx, row))
 		case KindVectorProject:
 			s.finish(ctx, row, res, s.deleteVectorProject(ctx, row))
+		case KindPhotoProject:
+			s.finish(ctx, row, res, s.deletePhotoProject(ctx, row))
 		case KindVoice:
 			s.finish(ctx, row, res, s.deleteVoice(ctx, row))
 		case KindJobRow:
@@ -808,6 +812,29 @@ func (s *Sweeper) deleteVectorProject(ctx context.Context, row telemetry.LedgerR
 	return outcome{done: true, bytes: row.SizeBytes, files: int64(len(keys))}
 }
 
+// deletePhotoProject removes an Aperture project (MM95): the directory
+// <PhotoDir>/<id> (original, proxy, thumb, masks, bases) first, then the row
+// (photo_derivatives cascade). The locator must be exactly one safe segment, so
+// nothing outside PhotoDir can ever be named. Both steps are idempotent: a
+// retry after a half-done sweep finds the directory or the row already gone.
+func (s *Sweeper) deletePhotoProject(ctx context.Context, row telemetry.LedgerRow) outcome {
+	path := PhotoProjectPath(s.cfg.PhotoDir, row.Locator)
+	if path == "" {
+		return fail(errors.New("refusing unsafe or unconfigured photo project locator"))
+	}
+	size := s.disk.Size(path)
+	if err := s.disk.RemoveAll(path); err != nil {
+		return fail(fmt.Errorf("remove photo project directory: %w", err))
+	}
+	if err := s.store.DeletePhotoProjectRows(ctx, row.Locator); err != nil {
+		return fail(fmt.Errorf("delete photo project row: %w", err))
+	}
+	if size == 0 {
+		size = row.SizeBytes
+	}
+	return outcome{done: true, bytes: size, dirs: 1}
+}
+
 // deleteVoice removes a saved voice (MM77): the mm_voices row first, then its
 // reference and preview objects. The keys come from the row AND from the
 // s3_object ledger rows registered with the voice id as parent, so a retry after
@@ -887,7 +914,7 @@ func (s *Sweeper) deleteKeysWithDerived(ctx context.Context, keys []string) erro
 
 func pathTypeFor(kind string) string {
 	switch kind {
-	case KindUploadDir, KindOutputDir:
+	case KindUploadDir, KindOutputDir, KindPhotoProject:
 		return "dir"
 	case KindS3Object, KindMetadata, KindDerivedFile:
 		return "file"

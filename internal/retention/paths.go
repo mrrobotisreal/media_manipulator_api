@@ -62,3 +62,13 @@ func DerivedFilePath(root, locator string) string {
 	}
 	return p
 }
+
+// PhotoProjectPath resolves a photo_project locator (the project id) to its
+// directory <root>/<id> (MM95), or "" when the locator is not exactly one safe
+// segment (so "a/b" and "../x" never reach RemoveAll) or the root is unset.
+func PhotoProjectPath(root, locator string) string {
+	if strings.Contains(locator, "/") {
+		return ""
+	}
+	return JobDirPath(root, locator)
+}

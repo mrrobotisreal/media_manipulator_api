@@ -31,6 +31,10 @@ const (
 	// KindDerivedFile is a file cached beside a job's result (MM81: the MP3 of
 	// a WAV stem): locator "<jobId>/<file>", parent_locator the job id.
 	KindDerivedFile = telemetry.RetainedDerivedFile
+	// KindPhotoProject is an Aperture project (MM95): locator = the project id,
+	// which is also the directory name under PHOTO_DIR; the sweeper removes the
+	// directory, then the photo_projects row (derivatives cascade).
+	KindPhotoProject = telemetry.RetainedPhotoProject
 )
 
 // Store is the slice of *telemetry.Store the ledger needs. Tests pass a fake.

@@ -28,7 +28,7 @@ func newUserDeleteSweeper(cfg *config.Config, store *telemetry.Store, jobManager
 	}
 	return retention.NewSweeper(store, retention.OSDisk{}, objStore, jobManager.ActiveJobIDs,
 		retention.NewMeter(m), log, retention.SweepConfig{
-			UploadDir: cfg.UploadDir, OutputDir: cfg.OutputDir, Bucket: cfg.S3Bucket,
+			UploadDir: cfg.UploadDir, OutputDir: cfg.OutputDir, PhotoDir: cfg.PhotoDir, Bucket: cfg.S3Bucket,
 			AllowedPrefixes: retentionS3Prefixes(cfg),
 			Batch:           cfg.RetentionSweepBatch, Budget: cfg.RetentionSweepBudget,
 			MaxAttempts: cfg.RetentionMaxAttempts,

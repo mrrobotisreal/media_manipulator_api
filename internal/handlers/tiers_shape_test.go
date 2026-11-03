@@ -73,6 +73,22 @@ func TestTiersResponseShape(t *testing.T) {
 			t.Errorf("%v: exportsPerDay must be present", d["tier"])
 		}
 		assertVectorShape(t, d["tier"], limits)
+		// MM95: the three Aperture fields are numbers on every tier.
+		for _, k := range []string{"photoProjects", "photoMaxMegapixels", "photoBatch"} {
+			if _, isNum := limits[k].(float64); !isNum {
+				t.Errorf("%v: %s must be a number, got %T", d["tier"], k, limits[k])
+			}
+		}
+		switch d["tier"] {
+		case "anonymous":
+			if limits["photoProjects"] != 0.0 || limits["photoMaxMegapixels"] != 12.0 || limits["photoBatch"] != 0.0 {
+				t.Errorf("anonymous photo row = %v", limits)
+			}
+		case "pro":
+			if limits["photoProjects"] != -1.0 || limits["photoMaxMegapixels"] != 120.0 || limits["photoBatch"] != 25.0 {
+				t.Errorf("pro photo row = %v", limits)
+			}
+		}
 		// MM74: the summary frame budget and deep flag are on every tier.
 		if _, isNum := limits["summaryMaxFrames"].(float64); !isNum {
 			t.Errorf("%v: summaryMaxFrames must be a number", d["tier"])
