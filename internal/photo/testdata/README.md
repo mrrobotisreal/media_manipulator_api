@@ -92,3 +92,17 @@ Every component has `kind` and `mode` (`add | subtract | intersect`, default `ad
 
 - The Go sanitizer is the *server* normalizer (clamps). The Zod schema used by the editor may refuse instead of clamp; the parity requirement is only: for every `docs/` valid fixture and every `inputs/` file, canonical output == the fixture bytes, and the four invalid fixtures are rejected.
 - `canonicalPhotoDoc` must parse then re-emit with the rules above; `JSON.parse` + a recursive sorted-key stringifier is enough because defaults are already in the fixtures.
+
+## Goldens (copied from the UI, MM97, 2026-11-03)
+
+`images/{photo,chart,alpha}.png`, `golden-docs/*.json` and `goldens/<doc>.<image>.png`
+are byte-identical copies of `media-manipulator-ui/lib/photo/fixtures/` (UI `main`
+merge of MM97). **The UI is now the source**: regenerate there with
+`npm run photo:goldens`, then copy all three directories here in the same change.
+The goldens are rendered by `lib/photo/colorMath.ts` (8-bit RGBA, rounding
+`floor(v*255+0.5)`) and are what MM96's `photo_render.py --selftest` must match
+within the design §3.3 tolerances. They cover the shared docs `blank`, `defaults`,
+`curves-s`, `hsl-grey-except-red`, `levels-channels`, `rung1-all-layers` and every
+`golden-docs/*.json`; geometry, mask and detail goldens arrive with MM98/MM99.
+`TestPhotoGoldenDocsCanonical` checks every golden doc is Go-canonical;
+`TestPhotoGoldensComplete` checks one golden per doc × image.
