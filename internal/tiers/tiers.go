@@ -105,6 +105,15 @@ type Limits struct {
 	// VectorVideo caps the raster exports (GIF, PNG sequence, MP4, WebM).
 	VectorVideo VectorVideo `json:"vectorVideo"`
 
+	// Aperture (photo, MM95, decided 2026-11-03). PhotoProjects is the server
+	// project cap (-1 unlimited; anonymous 0: anonymous visitors have no server
+	// projects, only one browser-local project). PhotoMaxMegapixels caps the
+	// pixels of an export. PhotoBatch is the photos per batch apply (0 = no
+	// batch). MaxOutputHeight does NOT apply to Aperture.
+	PhotoProjects      int `json:"photoProjects"`
+	PhotoMaxMegapixels int `json:"photoMaxMegapixels"`
+	PhotoBatch         int `json:"photoBatch"`
+
 	// Voices (MM77, design VOICES.md §4.3). Generations draw from AIOpsPerDay
 	// and the shifter from OpsPerDay; these only cap size and saved voices.
 	// VoicesSaved is the saved-voice cap (-1 unlimited; anonymous 0).
@@ -188,6 +197,7 @@ func New(cfg *config.Config) *Registry {
 			VectorFormats:         NewFormatSet(cfg.TierAnonVectorFormats...),
 			VectorProjects:        cfg.TierAnonVectorProjects,
 			VectorMaxDurationMs:   cfg.TierAnonVectorMaxDurationMs,
+			PhotoProjects:         cfg.TierAnonPhotoProjects, PhotoMaxMegapixels: cfg.TierAnonPhotoMaxMegapixels, PhotoBatch: cfg.TierAnonPhotoBatch,
 			VectorVideo: VectorVideo{
 				MaxHeight: cfg.TierAnonVectorVideoMaxHeight, MaxFps: cfg.TierAnonVectorVideoMaxFps, MaxSeconds: cfg.TierAnonVectorVideoMaxSeconds,
 			},
@@ -212,6 +222,7 @@ func New(cfg *config.Config) *Registry {
 			VectorFormats:       NewFormatSet(cfg.TierFreeVectorFormats...),
 			VectorProjects:      cfg.TierFreeVectorProjects,
 			VectorMaxDurationMs: cfg.TierFreeVectorMaxDurationMs,
+			PhotoProjects:       cfg.TierFreePhotoProjects, PhotoMaxMegapixels: cfg.TierFreePhotoMaxMegapixels, PhotoBatch: cfg.TierFreePhotoBatch,
 			VectorVideo: VectorVideo{
 				MaxHeight: cfg.TierFreeVectorVideoMaxHeight, MaxFps: cfg.TierFreeVectorVideoMaxFps, MaxSeconds: cfg.TierFreeVectorVideoMaxSeconds,
 			},
@@ -233,6 +244,7 @@ func New(cfg *config.Config) *Registry {
 			VectorFormats:         NewFormatSet(cfg.TierPremiumVectorFormats...),
 			VectorProjects:        cfg.TierPremiumVectorProjects,
 			VectorMaxDurationMs:   cfg.TierPremiumVectorMaxDurationMs,
+			PhotoProjects:         cfg.TierPremiumPhotoProjects, PhotoMaxMegapixels: cfg.TierPremiumPhotoMaxMegapixels, PhotoBatch: cfg.TierPremiumPhotoBatch,
 			VectorVideo: VectorVideo{
 				MaxHeight: cfg.TierPremiumVectorVideoMaxHeight, MaxFps: cfg.TierPremiumVectorVideoMaxFps, MaxSeconds: cfg.TierPremiumVectorVideoMaxSeconds,
 			},
@@ -258,6 +270,7 @@ func New(cfg *config.Config) *Registry {
 			VectorFormats:       NewFormatSet(cfg.TierProVectorFormats...),
 			VectorProjects:      cfg.TierProVectorProjects,
 			VectorMaxDurationMs: cfg.TierProVectorMaxDurationMs,
+			PhotoProjects:       cfg.TierProPhotoProjects, PhotoMaxMegapixels: cfg.TierProPhotoMaxMegapixels, PhotoBatch: cfg.TierProPhotoBatch,
 			VectorVideo: VectorVideo{
 				MaxHeight: cfg.TierProVectorVideoMaxHeight, MaxFps: cfg.TierProVectorVideoMaxFps, MaxSeconds: cfg.TierProVectorVideoMaxSeconds,
 			},
@@ -320,6 +333,8 @@ func New(cfg *config.Config) *Registry {
 	operator.VectorExportsPerDay = Unlimited
 	operator.VectorFormats = NewFormatSet(AllVectorFormats()...)
 	operator.VectorProjects = Unlimited
+	// Aperture (MM95): derived from Pro, no cap on saved projects.
+	operator.PhotoProjects = Unlimited
 	operator.VectorMaxDurationMs = 0
 	operator.VectorVideo = VectorVideo{
 		MaxHeight: DeploymentMaxOutputHeight, MaxFps: DeploymentMaxVectorFps, MaxSeconds: cfg.MaxVideoDurationSeconds,

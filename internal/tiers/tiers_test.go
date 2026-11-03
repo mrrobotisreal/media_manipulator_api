@@ -123,6 +123,10 @@ func TestLimitsAreMonotonic(t *testing.T) {
 		{"ExportsPerDay", func(l Limits) int64 { return int64(l.ExportsPerDay) }},
 		{"StudioVersionAutoKeep", func(l Limits) int64 { return int64(l.StudioVersionAutoKeep) }},
 		{"ResultRetentionHours", func(l Limits) int64 { return int64(l.ResultRetentionHours) }},
+		// Aperture (MM95).
+		{"PhotoProjects", func(l Limits) int64 { return unlimitedHigh(l.PhotoProjects) }},
+		{"PhotoMaxMegapixels", func(l Limits) int64 { return int64(l.PhotoMaxMegapixels) }},
+		{"PhotoBatch", func(l Limits) int64 { return int64(l.PhotoBatch) }},
 		// Motion (MM43).
 		{"VectorExportsPerDay", func(l Limits) int64 { return unlimitedHigh(l.VectorExportsPerDay) }},
 		{"VectorProjects", func(l Limits) int64 { return unlimitedHigh(l.VectorProjects) }},
@@ -190,6 +194,8 @@ func TestProRow(t *testing.T) {
 	same.OpsPerDay, same.AIOpsPerDay, same.ExportsPerDay = pro.OpsPerDay, pro.AIOpsPerDay, pro.ExportsPerDay
 	same.VectorExportsPerDay, same.VectorFormats, same.VectorProjects = pro.VectorExportsPerDay, pro.VectorFormats, pro.VectorProjects
 	same.VectorMaxDurationMs, same.VectorVideo = pro.VectorMaxDurationMs, pro.VectorVideo
+	// MM95: Pro's own Aperture row (unlimited projects, batch 25).
+	same.PhotoProjects, same.PhotoMaxMegapixels, same.PhotoBatch = pro.PhotoProjects, pro.PhotoMaxMegapixels, pro.PhotoBatch
 	// MM74: Pro's own summary row (96 frames, deep synthesis).
 	same.SummaryMaxFrames, same.SummaryDeep = pro.SummaryMaxFrames, pro.SummaryDeep
 	// MM77: Pro has its own voices row (design VOICES.md §4.3).
@@ -254,6 +260,7 @@ func TestPublishedMatrix(t *testing.T) {
 			ResultRetentionHours: 24, AdsRemoved: false,
 			VectorExportsPerDay: 2, VectorFormats: "svg_animated", VectorProjects: 1,
 			VectorMaxDurationMs: 10000,
+			PhotoProjects:       0, PhotoMaxMegapixels: 12, PhotoBatch: 0, // MM95
 		},
 		TierFree: {
 			OpsPerDay: 30, AIOpsPerDay: 10, ExportsPerDay: 30,
@@ -264,6 +271,7 @@ func TestPublishedMatrix(t *testing.T) {
 			SummaryMaxFrames:    24, // MM74
 			VectorExportsPerDay: 5, VectorProjects: 3,
 			VectorFormats: "svg_animated,lottie,import_lottie,import_svg_vectorize",
+			PhotoProjects: 5, PhotoMaxMegapixels: 12, PhotoBatch: 3, // MM95
 		},
 		TierPremium: {
 			OpsPerDay: 300, AIOpsPerDay: 100, ExportsPerDay: 300,
@@ -275,6 +283,7 @@ func TestPublishedMatrix(t *testing.T) {
 			VectorExportsPerDay: 30, VectorProjects: 25,
 			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,import_lottie,import_svg_vectorize",
 			VectorVideo:   VectorVideo{MaxHeight: 720, MaxSeconds: 15},
+			PhotoProjects: 50, PhotoMaxMegapixels: 120, PhotoBatch: 10, // MM95
 		},
 		TierPro: {
 			OpsPerDay: 700, AIOpsPerDay: 200, ExportsPerDay: 700,
@@ -288,6 +297,7 @@ func TestPublishedMatrix(t *testing.T) {
 			VectorExportsPerDay: 150, VectorProjects: Unlimited,
 			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,png_sequence,mp4,webm,import_lottie,import_svg_vectorize",
 			VectorVideo:   VectorVideo{MaxHeight: 2160, MaxFps: 60, MaxSeconds: 60},
+			PhotoProjects: Unlimited, PhotoMaxMegapixels: 120, PhotoBatch: 25, // MM95
 		},
 	}
 
@@ -529,5 +539,44 @@ func TestSummaryLimitsEnvOverride(t *testing.T) {
 	r := New(config.Load())
 	if r.For(TierFree).SummaryMaxFrames != 12 || r.For(TierAnonymous).SummaryMaxFrames != 6 {
 		t.Errorf("overrides not applied: free %d anon %d", r.For(TierFree).SummaryMaxFrames, r.For(TierAnonymous).SummaryMaxFrames)
+	}
+}
+
+// MM95: the Aperture ladder (decided 2026-11-03): projects 0 / 5 / 50 / unlimited,
+// export cap 12 / 12 / 120 / 120 MP, batch 0 / 3 / 10 / 25. Non-decreasing is
+// also asserted by TestLimitsAreMonotonic; this pins the numbers, the operator
+// derivation and the env overrides.
+func TestPhotoTierLadder(t *testing.T) {
+	r := testRegistry(t)
+	want := map[Tier][3]int{
+		TierAnonymous: {0, 12, 0}, TierFree: {5, 12, 3}, TierPremium: {50, 120, 10}, TierPro: {Unlimited, 120, 25},
+	}
+	for tier, w := range want {
+		l := r.For(tier)
+		if l.PhotoProjects != w[0] || l.PhotoMaxMegapixels != w[1] || l.PhotoBatch != w[2] {
+			t.Errorf("%s photo row = %d/%d/%d, want %v", tier, l.PhotoProjects, l.PhotoMaxMegapixels, l.PhotoBatch, w)
+		}
+	}
+	op, pro := r.For(TierOperator), r.For(TierPro)
+	if op.PhotoProjects != Unlimited || op.PhotoMaxMegapixels != pro.PhotoMaxMegapixels || op.PhotoBatch != pro.PhotoBatch {
+		t.Errorf("operator photo row %d/%d/%d must derive from pro %d/%d/%d",
+			op.PhotoProjects, op.PhotoMaxMegapixels, op.PhotoBatch, pro.PhotoProjects, pro.PhotoMaxMegapixels, pro.PhotoBatch)
+	}
+}
+
+func TestPhotoTierEnvOverrides(t *testing.T) {
+	t.Setenv("TIER_FREE_PHOTO_PROJECTS", "9")
+	t.Setenv("TIER_PREMIUM_PHOTO_MAX_MEGAPIXELS", "64")
+	t.Setenv("TIER_PRO_PHOTO_BATCH", "40")
+	t.Setenv("TIER_ANON_PHOTO_PROJECTS", "0")
+	r := testRegistry(t)
+	if r.For(TierFree).PhotoProjects != 9 || r.For(TierPremium).PhotoMaxMegapixels != 64 || r.For(TierPro).PhotoBatch != 40 {
+		t.Errorf("overrides not honoured: %+v %+v %+v", r.For(TierFree), r.For(TierPremium), r.For(TierPro))
+	}
+	if r.For(TierAnonymous).PhotoProjects != 0 {
+		t.Error("anonymous keeps no server projects")
+	}
+	if r.For(TierOperator).PhotoBatch != 40 {
+		t.Error("operator derives from the (overridden) Pro row")
 	}
 }
