@@ -73,6 +73,8 @@ type PhotoHandler struct {
 	pipe     *PhotoPipeline
 	capsOnce sync.Once
 	caps     PhotoCaps
+	// counted is the server_photo_export_counted seam (see emitCounted).
+	counted func(c *gin.Context, format, tier, mpBucket string, batch bool)
 }
 
 const (
