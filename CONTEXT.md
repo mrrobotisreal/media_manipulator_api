@@ -52,6 +52,9 @@ A server-made full-resolution image (`bases/<hash>.png` + a 1920 px `bases/<hash
 **Photo project**:
 One saved Aperture project: a `photo_projects` row (the doc, `revision`, the original's facts, `status ingesting|ready|failed`) plus a directory `<PHOTO_DIR>/<id>/` holding the untouched `original.<ext>`, the 1920 px `proxy`, the 320 px `thumb`, and `masks/` (stroke masks, subject masks) and `bases/` (heal bases and their proxies, MM96). Signed-in only: anonymous visitors have one browser-local project and stateless routes (decided 2026-11-03). One ledger row of kind `photo_project` (locator = the id) covers the whole directory. Saves are compare-and-set on `revision` (`If-Match`, 428/409) exactly like Motion.
 
+**Photo preset**:
+A signed-in user's own Aperture preset (MM103): a `photo_presets` row `{name ≤ 60, category color|bw|film|fix|custom|null, layers (jsonb: an array of AdjustmentLayer, sanitized by `photo.SanitizeLayers`, ≤ 64 layers, ≤ 1 MiB), thumbnail_key, revision}` with an optional 96 px PNG at `<PHOTO_DIR>/presets/<owner>/<id>.png`. Account settings, not content: capped per tier (`photoPresets`, proposed 0 / 10 / 100 / unlimited), never charged, never expiring by time (its ledger row, kind `photo_preset`, is `keep_with_account`; only a preset or account delete sweeps it). Anonymous visitors keep presets in the browser (IndexedDB). Built-in presets are repo JSON, not rows. _Avoid_: saved look, template.
+
 **VectorDoc**:
 The persisted Motion document (v1): canvas, a layer tree, `defs` (gradients, masks, clipPaths, filters, symbols) and keyframe `animations` tracks. Zod model in the UI (`lib/vector/vectorTypes.ts`); `internal/vector.Sanitize` is the Go mirror that validates and canonicalises it before storage. Additive-only: unknown fields round-trip, an unknown `version` is refused. The shared fixtures in `internal/vector/testdata/` are the contract.
 

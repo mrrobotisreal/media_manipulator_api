@@ -41,6 +41,7 @@ import (
 //	GET    /photo/projects/:id/thumb       320 px thumbnail
 //	GET    /photo/projects/:id/files/*rel  masks/<id>.png and bases/<hash>.png only
 //	GET    /photo/capabilities             what this caller's tier can do
+//	/photo/presets...                      MM103 user presets (photo_presets.go)
 //
 // Every project route needs an account: anonymous Aperture projects live only in
 // the browser (IndexedDB) and use MM96's stateless routes. Ownership is strict
@@ -65,6 +66,7 @@ type PhotoStore interface {
 // PhotoHandler serves /api/photo/*.
 type PhotoHandler struct {
 	store    PhotoStore
+	presets  PhotoPresetStore // MM103 (photo_presets.go)
 	cfg      *config.Config
 	ingest   services.PhotoIngester
 	expirer  Expirer
@@ -132,6 +134,14 @@ func (h *PhotoHandler) SetDeletionMetric(f func(scope string)) {
 func RegisterPhotoRoutes(r gin.IRouter, h *PhotoHandler) {
 	p := r.Group("/photo")
 	p.GET("/capabilities", h.Capabilities)
+	// MM103: the signed-in user's presets (photo_presets.go).
+	p.GET("/presets", h.ListPresets)
+	p.POST("/presets", h.CreatePreset)
+	p.GET("/presets/:id", h.GetPreset)
+	p.PUT("/presets/:id", h.SavePreset)
+	p.DELETE("/presets/:id", h.DeletePreset)
+	p.POST("/presets/:id/thumbnail", h.UploadPresetThumbnail)
+	p.GET("/presets/:id/thumbnail", h.ServePresetThumbnail)
 	p.GET("/projects", h.ListProjects)
 	p.POST("/projects", h.CreateProject)
 	p.GET("/projects/:id", h.GetProject)
@@ -339,7 +349,7 @@ func (h *PhotoHandler) withSource(doc []byte, w, hgt int) ([]byte, error) {
 
 // Capabilities handles GET /photo/capabilities (anyone).
 //
-//	200 {enabled, render, formats, maxMegapixels, photoProjects, photoBatch, aiMasks, heal, tier}
+//	200 {enabled, render, formats, maxMegapixels, photoProjects, photoBatch, photoPresets, aiMasks, heal, tier}
 //
 // render, aiMasks and heal report whether the renderer venv, rembg and LaMa are
 // installed (checked once, cached; MM96).
@@ -358,6 +368,7 @@ func (h *PhotoHandler) Capabilities(c *gin.Context) {
 		"maxMegapixels": limits.PhotoMaxMegapixels,
 		"photoProjects": limits.PhotoProjects,
 		"photoBatch":    limits.PhotoBatch,
+		"photoPresets":  limits.PhotoPresets,
 		"aiMasks":       caps.AIMasks,
 		"heal":          caps.Heal,
 		"tier":          string(tier),

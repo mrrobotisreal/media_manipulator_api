@@ -330,6 +330,13 @@ func (s *Store) DeleteUserProjects(ctx context.Context, userID string) (int64, e
 		return n + m + ph, err
 	}
 	n += ph
+	// MM103: saved Aperture presets go with the account (thumbnails are ledgered
+	// photo_preset rows the preceding sweep already removed).
+	pr, err := s.deleteUserPhotoPresets(ctx, userID)
+	if err != nil {
+		return n + m + pr, err
+	}
+	n += pr
 	// MM77: saved voices go with the account too. Their reference and preview
 	// objects are ledgered (kind voice + s3_object children) and the preceding
 	// account-wide sweep already removed them; this catches any row the ledger

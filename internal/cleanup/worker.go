@@ -379,6 +379,11 @@ func (w *Worker) sweepRoot(ctx context.Context, root string, retention time.Dura
 		if w.isPhotoRoot(full) {
 			continue
 		}
+		// MM103: PHOTO_DIR/presets holds preset thumbnails, tracked by photo_preset
+		// ledger rows (not by directory name): never an orphan project directory.
+		if name == "presets" && w.isPhotoRoot(absRoot) {
+			continue
+		}
 		if jobAware && e.IsDir() {
 			if _, busy := active[name]; busy {
 				continue

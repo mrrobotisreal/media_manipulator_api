@@ -53,6 +53,12 @@ type VoiceExportStore interface {
 	ExportVoices(ctx context.Context, userID string) ([]telemetry.ExportVoice, error)
 }
 
+// PresetExportStore lists saved Aperture presets for the export (MM103).
+// Optional: a store that does not implement it exports an empty presets.json.
+type PresetExportStore interface {
+	ExportPhotoPresets(ctx context.Context, userID string) ([]telemetry.PhotoPreset, error)
+}
+
 // PushExportStore lists push-token metadata for the export (MA23). Optional.
 // The token itself is never exported.
 type PushExportStore interface {
@@ -187,6 +193,12 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 							voices, serr = vs.ExportVoices(ctx, u.ID)
 						}
 					}
+					var presets []telemetry.PhotoPreset
+					if serr == nil {
+						if ps, ok := d.Store.(PresetExportStore); ok {
+							presets, serr = ps.ExportPhotoPresets(ctx, u.ID)
+						}
+					}
 					var pushMeta []telemetry.PushTokenMeta
 					if serr == nil {
 						if ps, ok := d.Store.(PushExportStore); ok {
@@ -196,7 +208,7 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 					if serr != nil {
 						err = serr
 					} else {
-						h.writeExport(c, u, settings, jobs, projects, files, metaJobs, voices, pushMeta, now)
+						h.writeExport(c, u, settings, jobs, projects, files, metaJobs, voices, presets, pushMeta, now)
 						return
 					}
 				}
@@ -209,7 +221,7 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 
 func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *telemetry.UserSettings,
 	jobs []telemetry.ExportJob, projects []telemetry.ExportProject, files []telemetry.ExportFile, metaJobs []string,
-	voices []telemetry.ExportVoice, pushMeta []telemetry.PushTokenMeta, now time.Time) {
+	voices []telemetry.ExportVoice, presets []telemetry.PhotoPreset, pushMeta []telemetry.PushTokenMeta, now time.Time) {
 	d := h.export
 
 	history := make([]map[string]any, 0, len(jobs))
@@ -258,6 +270,18 @@ func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *tel
 			"consentAt": rfcp(v.ConsentAt), "consentTextVersion": nilIfEmpty(v.ConsentTextVersion),
 			"createdAt": rfc(v.CreatedAt), "updatedAt": rfc(v.UpdatedAt),
 		})
+	}
+	// MM103: saved Aperture presets, with their layers (the user's own settings).
+	presetList := make([]map[string]any, 0, len(presets))
+	for _, p := range presets {
+		entry := map[string]any{
+			"id": p.ID, "name": p.Name, "category": nilIfEmpty(p.Category),
+			"createdAt": rfc(p.CreatedAt), "updatedAt": rfc(p.UpdatedAt),
+		}
+		if len(p.Layers) > 0 && json.Valid(p.Layers) {
+			entry["layers"] = json.RawMessage(p.Layers)
+		}
+		presetList = append(presetList, entry)
 	}
 	// MA23: push registrations, metadata only. The token is a credential for the
 	// device's push channel and is never exported.
@@ -312,6 +336,9 @@ func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *tel
 	}}, {"voices.json", map[string]any{
 		"note":   "Your saved voices: name, kind, language, consent record and dates. No audio is included; generated speech is in your history.",
 		"voices": voiceList,
+	}}, {"presets.json", map[string]any{
+		"note":    "Your saved Aperture presets: name, category, dates and the adjustment layers each one applies. Thumbnails are not included.",
+		"presets": presetList,
 	}}, {"account.json", account}} {
 		if err := put(m.name, m.v); err != nil {
 			fail(err)
@@ -395,6 +422,8 @@ files.json       Every file we hold for you right now, with its size and expiry.
                  they exist.
 voices.json      Your saved voices: name, kind (cloned | designed), language, the consent you
                  gave and when. No audio is included.
+presets.json     Your saved Aperture presets: name, category, dates and the adjustments each
+                 one applies. Thumbnails are not included.
 metadata-reports Metadata reports we keep for you (one document per job), if you keep them.
 account.json     Your profile, plan, retention settings and the phones registered for push
                  notifications (platform, app version, dates; never the push token itself).

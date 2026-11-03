@@ -25,7 +25,11 @@ func newPhotoHandler(cfg *config.Config, store *telemetry.Store) *handlers.Photo
 		ps = store
 	}
 	ingest := services.NewPhotoIngest(time.Duration(cfg.PhotoIngestTimeoutSeconds) * time.Second)
-	return handlers.NewPhotoHandler(ps, cfg, ingest, nil)
+	h := handlers.NewPhotoHandler(ps, cfg, ingest, nil)
+	if store.Enabled() {
+		h.SetPresetStore(store) // MM103
+	}
+	return h
 }
 
 // newPhotoPipeline wires the MM96 render and AI collaborators: the NumPy

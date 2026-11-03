@@ -29,7 +29,7 @@ func TestPhotoProjectsBucketWiring(t *testing.T) {
 			cfg.RateLimitPhotoProjectsPerSessionPerHour, cfg.RateLimitPhotoProjectsPerIPPerHour,
 			cfg.RateLimitUploadsPerSessionPerHour, cfg.RateLimitUploadsPerIPPerHour)
 	}
-	for _, path := range []string{"/api/photo/projects", "/api/photo/projects/x", "/api/photo/capabilities", "/api/photo/projects/x/proxy", "/api/photo/projects/x/files/bases/h.proxy.jpg"} {
+	for _, path := range []string{"/api/photo/projects", "/api/photo/projects/x", "/api/photo/capabilities", "/api/photo/projects/x/proxy", "/api/photo/projects/x/files/bases/h.proxy.jpg", "/api/photo/presets", "/api/photo/presets/x/thumbnail"} {
 		if got := metricFor(path); got != "" {
 			t.Errorf("%s spends %q; project CRUD must be free of charge", path, got)
 		}
@@ -70,6 +70,10 @@ func TestPhotoProjectsBucketWiring(t *testing.T) {
 		{http.MethodPost, "/api/photo/export", "photo_export"},
 		{http.MethodPost, "/api/photo/projects/abc/masks/subject", "photo_ai"},
 		{http.MethodPost, "/api/photo/projects/abc/heal", "photo_ai"},
+		{http.MethodPost, "/api/photo/presets", "photo_presets"},
+		{http.MethodPost, "/api/photo/presets/abc/thumbnail", "photo_presets"},
+		{http.MethodPut, "/api/photo/presets/abc", ""},
+		{http.MethodGet, "/api/photo/presets", ""},
 		{http.MethodPost, "/api/photo/masks/subject", "photo_ai"},
 		{http.MethodPost, "/api/photo/heal", "photo_ai"},
 	} {

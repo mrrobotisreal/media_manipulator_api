@@ -127,6 +127,7 @@ func TestLimitsAreMonotonic(t *testing.T) {
 		{"PhotoProjects", func(l Limits) int64 { return unlimitedHigh(l.PhotoProjects) }},
 		{"PhotoMaxMegapixels", func(l Limits) int64 { return int64(l.PhotoMaxMegapixels) }},
 		{"PhotoBatch", func(l Limits) int64 { return int64(l.PhotoBatch) }},
+		{"PhotoPresets", func(l Limits) int64 { return unlimitedHigh(l.PhotoPresets) }}, // MM103
 		// Motion (MM43).
 		{"VectorExportsPerDay", func(l Limits) int64 { return unlimitedHigh(l.VectorExportsPerDay) }},
 		{"VectorProjects", func(l Limits) int64 { return unlimitedHigh(l.VectorProjects) }},
@@ -196,6 +197,7 @@ func TestProRow(t *testing.T) {
 	same.VectorMaxDurationMs, same.VectorVideo = pro.VectorMaxDurationMs, pro.VectorVideo
 	// MM95: Pro's own Aperture row (unlimited projects, batch 25).
 	same.PhotoProjects, same.PhotoMaxMegapixels, same.PhotoBatch = pro.PhotoProjects, pro.PhotoMaxMegapixels, pro.PhotoBatch
+	same.PhotoPresets = pro.PhotoPresets // MM103
 	// MM74: Pro's own summary row (96 frames, deep synthesis).
 	same.SummaryMaxFrames, same.SummaryDeep = pro.SummaryMaxFrames, pro.SummaryDeep
 	// MM77: Pro has its own voices row (design VOICES.md §4.3).
@@ -260,7 +262,7 @@ func TestPublishedMatrix(t *testing.T) {
 			ResultRetentionHours: 24, AdsRemoved: false,
 			VectorExportsPerDay: 2, VectorFormats: "svg_animated", VectorProjects: 1,
 			VectorMaxDurationMs: 10000,
-			PhotoProjects:       0, PhotoMaxMegapixels: 12, PhotoBatch: 0, // MM95
+			PhotoProjects:       0, PhotoMaxMegapixels: 12, PhotoBatch: 0, PhotoPresets: 0, // MM95, MM103
 		},
 		TierFree: {
 			OpsPerDay: 30, AIOpsPerDay: 10, ExportsPerDay: 30,
@@ -271,7 +273,7 @@ func TestPublishedMatrix(t *testing.T) {
 			SummaryMaxFrames:    24, // MM74
 			VectorExportsPerDay: 5, VectorProjects: 3,
 			VectorFormats: "svg_animated,lottie,import_lottie,import_svg_vectorize",
-			PhotoProjects: 5, PhotoMaxMegapixels: 12, PhotoBatch: 3, // MM95
+			PhotoProjects: 5, PhotoMaxMegapixels: 12, PhotoBatch: 3, PhotoPresets: 10, // MM95, MM103
 		},
 		TierPremium: {
 			OpsPerDay: 300, AIOpsPerDay: 100, ExportsPerDay: 300,
@@ -283,7 +285,7 @@ func TestPublishedMatrix(t *testing.T) {
 			VectorExportsPerDay: 30, VectorProjects: 25,
 			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,import_lottie,import_svg_vectorize",
 			VectorVideo:   VectorVideo{MaxHeight: 720, MaxSeconds: 15},
-			PhotoProjects: 50, PhotoMaxMegapixels: 120, PhotoBatch: 10, // MM95
+			PhotoProjects: 50, PhotoMaxMegapixels: 120, PhotoBatch: 10, PhotoPresets: 100, // MM95, MM103
 		},
 		TierPro: {
 			OpsPerDay: 700, AIOpsPerDay: 200, ExportsPerDay: 700,
@@ -297,7 +299,7 @@ func TestPublishedMatrix(t *testing.T) {
 			VectorExportsPerDay: 150, VectorProjects: Unlimited,
 			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,png_sequence,mp4,webm,import_lottie,import_svg_vectorize",
 			VectorVideo:   VectorVideo{MaxHeight: 2160, MaxFps: 60, MaxSeconds: 60},
-			PhotoProjects: Unlimited, PhotoMaxMegapixels: 120, PhotoBatch: 25, // MM95
+			PhotoProjects: Unlimited, PhotoMaxMegapixels: 120, PhotoBatch: 25, PhotoPresets: Unlimited, // MM95, MM103
 		},
 	}
 
@@ -578,5 +580,23 @@ func TestPhotoTierEnvOverrides(t *testing.T) {
 	}
 	if r.For(TierOperator).PhotoBatch != 40 {
 		t.Error("operator derives from the (overridden) Pro row")
+	}
+}
+
+// MM103: the preset cap ladder (PROPOSED, not yet confirmed by Mitch): 0 / 10 /
+// 100 / unlimited; operator unlimited; env overrides.
+func TestPhotoPresetsTierLadder(t *testing.T) {
+	r := testRegistry(t)
+	want := map[Tier]int{TierAnonymous: 0, TierFree: 10, TierPremium: 100, TierPro: Unlimited, TierOperator: Unlimited}
+	for tier, w := range want {
+		if got := r.For(tier).PhotoPresets; got != w {
+			t.Errorf("%s photoPresets = %d, want %d", tier, got, w)
+		}
+	}
+	t.Setenv("TIER_FREE_PHOTO_PRESETS", "7")
+	t.Setenv("TIER_ANON_PHOTO_PRESETS", "0")
+	r = testRegistry(t)
+	if r.For(TierFree).PhotoPresets != 7 || r.For(TierAnonymous).PhotoPresets != 0 {
+		t.Error("env overrides not honoured")
 	}
 }

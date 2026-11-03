@@ -113,6 +113,10 @@ type Limits struct {
 	PhotoProjects      int `json:"photoProjects"`
 	PhotoMaxMegapixels int `json:"photoMaxMegapixels"`
 	PhotoBatch         int `json:"photoBatch"`
+	// PhotoPresets (MM103) is the saved-preset cap per account (-1 unlimited;
+	// anonymous 0: guests keep presets in the browser only). Presets are settings:
+	// no quota is charged.
+	PhotoPresets int `json:"photoPresets"`
 
 	// Voices (MM77, design VOICES.md §4.3). Generations draw from AIOpsPerDay
 	// and the shifter from OpsPerDay; these only cap size and saved voices.
@@ -197,7 +201,7 @@ func New(cfg *config.Config) *Registry {
 			VectorFormats:         NewFormatSet(cfg.TierAnonVectorFormats...),
 			VectorProjects:        cfg.TierAnonVectorProjects,
 			VectorMaxDurationMs:   cfg.TierAnonVectorMaxDurationMs,
-			PhotoProjects:         cfg.TierAnonPhotoProjects, PhotoMaxMegapixels: cfg.TierAnonPhotoMaxMegapixels, PhotoBatch: cfg.TierAnonPhotoBatch,
+			PhotoProjects:         cfg.TierAnonPhotoProjects, PhotoMaxMegapixels: cfg.TierAnonPhotoMaxMegapixels, PhotoBatch: cfg.TierAnonPhotoBatch, PhotoPresets: cfg.TierAnonPhotoPresets,
 			VectorVideo: VectorVideo{
 				MaxHeight: cfg.TierAnonVectorVideoMaxHeight, MaxFps: cfg.TierAnonVectorVideoMaxFps, MaxSeconds: cfg.TierAnonVectorVideoMaxSeconds,
 			},
@@ -222,7 +226,7 @@ func New(cfg *config.Config) *Registry {
 			VectorFormats:       NewFormatSet(cfg.TierFreeVectorFormats...),
 			VectorProjects:      cfg.TierFreeVectorProjects,
 			VectorMaxDurationMs: cfg.TierFreeVectorMaxDurationMs,
-			PhotoProjects:       cfg.TierFreePhotoProjects, PhotoMaxMegapixels: cfg.TierFreePhotoMaxMegapixels, PhotoBatch: cfg.TierFreePhotoBatch,
+			PhotoProjects:       cfg.TierFreePhotoProjects, PhotoMaxMegapixels: cfg.TierFreePhotoMaxMegapixels, PhotoBatch: cfg.TierFreePhotoBatch, PhotoPresets: cfg.TierFreePhotoPresets,
 			VectorVideo: VectorVideo{
 				MaxHeight: cfg.TierFreeVectorVideoMaxHeight, MaxFps: cfg.TierFreeVectorVideoMaxFps, MaxSeconds: cfg.TierFreeVectorVideoMaxSeconds,
 			},
@@ -244,7 +248,7 @@ func New(cfg *config.Config) *Registry {
 			VectorFormats:         NewFormatSet(cfg.TierPremiumVectorFormats...),
 			VectorProjects:        cfg.TierPremiumVectorProjects,
 			VectorMaxDurationMs:   cfg.TierPremiumVectorMaxDurationMs,
-			PhotoProjects:         cfg.TierPremiumPhotoProjects, PhotoMaxMegapixels: cfg.TierPremiumPhotoMaxMegapixels, PhotoBatch: cfg.TierPremiumPhotoBatch,
+			PhotoProjects:         cfg.TierPremiumPhotoProjects, PhotoMaxMegapixels: cfg.TierPremiumPhotoMaxMegapixels, PhotoBatch: cfg.TierPremiumPhotoBatch, PhotoPresets: cfg.TierPremiumPhotoPresets,
 			VectorVideo: VectorVideo{
 				MaxHeight: cfg.TierPremiumVectorVideoMaxHeight, MaxFps: cfg.TierPremiumVectorVideoMaxFps, MaxSeconds: cfg.TierPremiumVectorVideoMaxSeconds,
 			},
@@ -270,7 +274,7 @@ func New(cfg *config.Config) *Registry {
 			VectorFormats:       NewFormatSet(cfg.TierProVectorFormats...),
 			VectorProjects:      cfg.TierProVectorProjects,
 			VectorMaxDurationMs: cfg.TierProVectorMaxDurationMs,
-			PhotoProjects:       cfg.TierProPhotoProjects, PhotoMaxMegapixels: cfg.TierProPhotoMaxMegapixels, PhotoBatch: cfg.TierProPhotoBatch,
+			PhotoProjects:       cfg.TierProPhotoProjects, PhotoMaxMegapixels: cfg.TierProPhotoMaxMegapixels, PhotoBatch: cfg.TierProPhotoBatch, PhotoPresets: cfg.TierProPhotoPresets,
 			VectorVideo: VectorVideo{
 				MaxHeight: cfg.TierProVectorVideoMaxHeight, MaxFps: cfg.TierProVectorVideoMaxFps, MaxSeconds: cfg.TierProVectorVideoMaxSeconds,
 			},
@@ -335,6 +339,7 @@ func New(cfg *config.Config) *Registry {
 	operator.VectorProjects = Unlimited
 	// Aperture (MM95): derived from Pro, no cap on saved projects.
 	operator.PhotoProjects = Unlimited
+	operator.PhotoPresets = Unlimited
 	operator.VectorMaxDurationMs = 0
 	operator.VectorVideo = VectorVideo{
 		MaxHeight: DeploymentMaxOutputHeight, MaxFps: DeploymentMaxVectorFps, MaxSeconds: cfg.MaxVideoDurationSeconds,

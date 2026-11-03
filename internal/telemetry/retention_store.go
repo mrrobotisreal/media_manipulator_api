@@ -86,6 +86,10 @@ type RetainedObject struct {
 	SizeBytes     int64
 	CreatedAt     time.Time
 	ExpiresAt     time.Time
+	// KeepWithAccount (MM103) marks a row that outlives every window and only
+	// comes due when its owner or the item is deleted (saved presets, ExpiresAt =
+	// ParkedExpiry).
+	KeepWithAccount bool
 }
 
 // RetentionPreview is what a shrink would delete right away.
@@ -238,7 +242,7 @@ SELECT
 	count(*) FILTER (WHERE kind NOT IN ('output_dir', 'studio_project', 'vector_project')),
 	coalesce(sum(size_bytes), 0)
 FROM mm_retained_objects
-WHERE owner_user_id = $1 AND deleted_at IS NULL
+WHERE owner_user_id = $1 AND deleted_at IS NULL AND NOT keep_with_account
   AND created_at + make_interval(hours => $2) < $3::timestamptz`
 
 // PreviewRetentionShrink reports what a window of `hours` would delete.
@@ -260,9 +264,9 @@ func (s *Store) PreviewRetentionShrink(ctx context.Context, userID string, hours
 const upsertRetainedQuery = `
 INSERT INTO mm_retained_objects
 	(owner_user_id, owner_session_id, kind, locator, parent_locator, job_id, project_id,
-	 size_bytes, created_at, expires_at)
+	 size_bytes, created_at, expires_at, keep_with_account)
 VALUES (nullif($1, '')::uuid, nullif($2, ''), $3, $4, nullif($5, ''), nullif($6, '')::uuid,
-	nullif($7, '')::uuid, $8, $9, $10)
+	nullif($7, '')::uuid, $8, $9, $10, $11)
 ON CONFLICT (kind, locator) DO UPDATE SET
 	size_bytes     = GREATEST(mm_retained_objects.size_bytes, EXCLUDED.size_bytes),
 	owner_user_id  = COALESCE(mm_retained_objects.owner_user_id, EXCLUDED.owner_user_id),
@@ -279,7 +283,7 @@ func (s *Store) UpsertRetainedObject(ctx context.Context, o RetainedObject) erro
 	defer cancel()
 	_, err := s.Pool.Exec(ctx, upsertRetainedQuery,
 		o.OwnerUserID, o.OwnerSession, o.Kind, o.Locator, o.ParentLocator, o.JobID, o.ProjectID,
-		o.SizeBytes, o.CreatedAt, o.ExpiresAt)
+		o.SizeBytes, o.CreatedAt, o.ExpiresAt, o.KeepWithAccount)
 	return err
 }
 

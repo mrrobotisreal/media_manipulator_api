@@ -72,3 +72,17 @@ func PhotoProjectPath(root, locator string) string {
 	}
 	return JobDirPath(root, locator)
 }
+
+// PhotoPresetThumbPath resolves a photo_preset's thumbnail
+// <root>/presets/<owner>/<id>.png (MM103), or "" when either segment is unsafe
+// or the root is unset, so a corrupt ledger value can never reach RemoveAll.
+func PhotoPresetThumbPath(root, ownerID, presetID string) string {
+	if strings.TrimSpace(root) == "" || !SafeSegment(ownerID) || !SafeSegment(presetID) {
+		return ""
+	}
+	p := filepath.Join(root, "presets", ownerID, presetID+".png")
+	if !IsWithin(p, filepath.Join(root, "presets")) {
+		return ""
+	}
+	return p
+}

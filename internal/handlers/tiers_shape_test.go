@@ -74,7 +74,7 @@ func TestTiersResponseShape(t *testing.T) {
 		}
 		assertVectorShape(t, d["tier"], limits)
 		// MM95: the three Aperture fields are numbers on every tier.
-		for _, k := range []string{"photoProjects", "photoMaxMegapixels", "photoBatch"} {
+		for _, k := range []string{"photoProjects", "photoMaxMegapixels", "photoBatch", "photoPresets"} {
 			if _, isNum := limits[k].(float64); !isNum {
 				t.Errorf("%v: %s must be a number, got %T", d["tier"], k, limits[k])
 			}

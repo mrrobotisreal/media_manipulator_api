@@ -937,6 +937,14 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 		// thumb): the photo_projects bucket, defaulting to the uploads numbers.
 		// Only POST /api/photo/projects; reads and saves are cheap.
 		{path: "/api/photo/projects", routeKey: "photo_projects", tool: "photo_projects", sessionLimit: cfg.RateLimitPhotoProjectsPerSessionPerHour, ipLimit: cfg.RateLimitPhotoProjectsPerIPPerHour},
+		// MM103: saving a preset and uploading its thumbnail (cheap writes, but a
+		// client loop could hammer them): the photo_presets bucket. Reads, saves
+		// and deletes are not limited.
+		{
+			routeKey: "photo_presets", tool: "photo_presets",
+			sessionLimit: cfg.RateLimitPhotoPresetsPerSessionPerHour, ipLimit: cfg.RateLimitPhotoPresetsPerIPPerHour,
+			matches: handlers.IsPhotoPresetWritePath,
+		},
 		// MM96: export (project, batch, stateless) shares the photo_export bucket
 		// (the uploads numbers); subject masks and heal are GPU work: photo_ai.
 		{
