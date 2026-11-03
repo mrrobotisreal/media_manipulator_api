@@ -67,3 +67,17 @@ func TestPhotoOrphanWalkerProtectsRootInsideUploads(t *testing.T) {
 }
 
 func chtimes(path string, when time.Time) error { return os.Chtimes(path, when, when) }
+
+// MM103: PHOTO_DIR/presets holds preset thumbnails; the orphan walker never reaps it.
+func TestPhotoOrphanWalkerKeepsPresetsDir(t *testing.T) {
+	photo := t.TempDir()
+	presets := agedDir(t, photo, "presets", 72*time.Hour)
+	orphan := agedDir(t, photo, "orphan-project", 72*time.Hour)
+	photoWorker(t.TempDir(), photo, &fakeOrphans{live: map[string]bool{}}).tick(context.Background())
+	if !exists(presets) {
+		t.Error("the presets directory must survive")
+	}
+	if exists(orphan) {
+		t.Error("a real orphan is still reaped")
+	}
+}

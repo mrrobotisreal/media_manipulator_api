@@ -35,6 +35,11 @@ const (
 	// which is also the directory name under PHOTO_DIR; the sweeper removes the
 	// directory, then the photo_projects row (derivatives cascade).
 	KindPhotoProject = telemetry.RetainedPhotoProject
+	// KindPhotoPreset is a saved Aperture preset (MM103): locator = project_id =
+	// the preset id. Kept with the account (presets never expire by time); the
+	// sweeper removes the thumbnail <PhotoDir>/presets/<owner>/<id>.png, then the
+	// photo_presets row.
+	KindPhotoPreset = telemetry.RetainedPhotoPreset
 )
 
 // Store is the slice of *telemetry.Store the ledger needs. Tests pass a fake.
@@ -58,6 +63,9 @@ type RegisterInput struct {
 	ProjectID     string
 	SizeBytes     int64
 	CreatedAt     time.Time // zero = now
+	// KeepWithAccount (MM103): the row never comes due by time (expires_at =
+	// telemetry.ParkedExpiry); only an item or account delete expires it.
+	KeepWithAccount bool
 }
 
 // Ledger writes mm_retained_objects rows. The zero value and a nil *Ledger are
@@ -133,6 +141,10 @@ func (l *Ledger) Register(ctx context.Context, in RegisterInput) {
 		SizeBytes:     in.SizeBytes,
 		CreatedAt:     created,
 		ExpiresAt:     ExpiresAt(created, WindowFor(owner)),
+	}
+	if in.KeepWithAccount {
+		row.KeepWithAccount = true
+		row.ExpiresAt = telemetry.ParkedExpiry
 	}
 	// A signed-in row keeps the session too, so a later claim has nothing to guess.
 	row.OwnerSession = strings.TrimSpace(owner.SessionID)

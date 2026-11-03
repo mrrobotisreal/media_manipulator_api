@@ -70,6 +70,7 @@ type SweepStore interface {
 	DeleteStudioProjectRows(ctx context.Context, projectID string) ([]string, error)
 	DeleteVectorProjectRows(ctx context.Context, projectID string) ([]string, error)
 	DeletePhotoProjectRows(ctx context.Context, projectID string) error
+	DeletePhotoPresetRow(ctx context.Context, presetID string) error
 	DeleteVoiceRow(ctx context.Context, voiceID string) ([]string, error)
 	AnonymizeJob(ctx context.Context, jobID string) error
 	JobHasLiveRows(ctx context.Context, jobID string) (bool, error)
@@ -335,6 +336,8 @@ func (s *Sweeper) processBatch(ctx context.Context, rows []telemetry.LedgerRow, 
 			s.finish(ctx, row, res, s.deleteVectorProject(ctx, row))
 		case KindPhotoProject:
 			s.finish(ctx, row, res, s.deletePhotoProject(ctx, row))
+		case KindPhotoPreset:
+			s.finish(ctx, row, res, s.deletePhotoPreset(ctx, row))
 		case KindVoice:
 			s.finish(ctx, row, res, s.deleteVoice(ctx, row))
 		case KindJobRow:
@@ -835,6 +838,28 @@ func (s *Sweeper) deletePhotoProject(ctx context.Context, row telemetry.LedgerRo
 	return outcome{done: true, bytes: size, dirs: 1}
 }
 
+// deletePhotoPreset removes a saved preset (MM103): its thumbnail file first
+// (<PhotoDir>/presets/<owner>/<id>.png, absent when none was uploaded), then the
+// photo_presets row. Both steps are idempotent. An unsafe owner/id segment fails
+// the row and deletes nothing.
+func (s *Sweeper) deletePhotoPreset(ctx context.Context, row telemetry.LedgerRow) outcome {
+	var size int64
+	if strings.TrimSpace(s.cfg.PhotoDir) != "" && row.OwnerUserID != "" {
+		path := PhotoPresetThumbPath(s.cfg.PhotoDir, row.OwnerUserID, row.Locator)
+		if path == "" {
+			return fail(errors.New("refusing unsafe photo preset locator"))
+		}
+		size = s.disk.Size(path)
+		if err := s.disk.RemoveAll(path); err != nil {
+			return fail(fmt.Errorf("remove photo preset thumbnail: %w", err))
+		}
+	}
+	if err := s.store.DeletePhotoPresetRow(ctx, row.Locator); err != nil {
+		return fail(fmt.Errorf("delete photo preset row: %w", err))
+	}
+	return outcome{done: true, bytes: size, files: 1}
+}
+
 // deleteVoice removes a saved voice (MM77): the mm_voices row first, then its
 // reference and preview objects. The keys come from the row AND from the
 // s3_object ledger rows registered with the voice id as parent, so a retry after
@@ -916,7 +941,7 @@ func pathTypeFor(kind string) string {
 	switch kind {
 	case KindUploadDir, KindOutputDir, KindPhotoProject:
 		return "dir"
-	case KindS3Object, KindMetadata, KindDerivedFile:
+	case KindS3Object, KindMetadata, KindDerivedFile, KindPhotoPreset:
 		return "file"
 	default:
 		return "unknown"
