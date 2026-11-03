@@ -15,8 +15,8 @@ import (
 // (canonical bytes plus one trailing newline).
 var canonicalDocs = []string{
 	"blank", "clamped", "curves-s", "defaults", "detail-all", "geometry-perspective",
-	"geometry-rotate-crop", "heal-two-bases", "hsl-grey-except-red", "levels-channels",
-	"masks-all-kinds", "rung1-all-layers", "unknown-fields",
+	"geometry-rotate-crop", "heal-base-refs", "heal-two-bases", "hsl-grey-except-red", "levels-channels",
+	"masks-all-kinds", "masks-named", "rung1-all-layers", "unknown-fields",
 }
 
 // inputPairs: non-canonical input -> the canonical fixture it must produce.
@@ -255,5 +255,21 @@ func TestPhotoSanitizeCanonicalRules(t *testing.T) {
 	// Optional fields absent, nullable present.
 	if strings.Contains(s, `"format"`) || !strings.Contains(s, `"crop":null`) || !strings.Contains(s, `"perspective":null`) {
 		t.Fatalf("optional/nullable: %s", s)
+	}
+}
+
+func TestPhotoNamedMasksAndHealRefs(t *testing.T) {
+	src := `"version":1,"source":{"width":10,"height":10}`
+	wantCode(t, `{`+src+`,"layers":[{"id":"a","type":"invert","mask":{"ref":"nope"}}]}`, Limits{}, CodeInvalidDoc)
+	wantCode(t, `{`+src+`,"heals":[{"id":"h"}]}`, Limits{}, CodeInvalidDoc)
+	wantCode(t, `{`+src+`,"heals":[{"id":"h","baseRef":"../x.png"}]}`, Limits{}, CodeInvalidDoc)
+	wantCode(t, `{`+src+`,"masks":{"bad id":{}}}`, Limits{}, CodeBadID)
+	m := sanitize(t, `{`+src+`,"masks":{}}`)
+	if _, has := m["masks"]; has {
+		t.Fatal("empty masks must canonicalise to absent")
+	}
+	m = sanitize(t, `{`+src+`,"masks":{"a":{}},"layers":[{"id":"l","type":"invert","mask":{"ref":"a"}}]}`)
+	if m["masks"].(map[string]any)["a"].(map[string]any)["opacity"].(float64) != 1 {
+		t.Fatal("named mask defaults not filled")
 	}
 }

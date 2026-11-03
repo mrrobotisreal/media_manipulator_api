@@ -20,6 +20,7 @@ var (
 	idRe      = regexp.MustCompile(`^[A-Za-z0-9_-]{1,40}$`)
 	colorRe   = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 	maskRefRe = regexp.MustCompile(`^masks/[A-Za-z0-9_-]{1,40}\.png$`)
+	baseRefRe = regexp.MustCompile(`^(bases/[A-Za-z0-9_-]{1,64}\.png|local:[A-Za-z0-9_-]{1,64})$`)
 )
 
 func typeErr(path, want string) *ValidationError {
