@@ -585,85 +585,112 @@ def ap_grain(c, p):  # 5.4 grain
 
 
 # --------------------------------------------------------------------------------------
-# Masks (5.2). Coordinates are normalised to the geometry-corrected image.
+# Masks (5.2), aligned to MM98 "Mask and geometry math as implemented" (UI renderMaskCPU).
+# Mask space = the geometry-corrected image (w x h); a layer's mask is computed ONCE on
+# the geometry-corrected SOURCE (luminosity / colorRange never see earlier layers' output).
+# Pixel (x, y) is sampled at (x + 0.5, y + 0.5); coordinates are normalised to w and h.
 # --------------------------------------------------------------------------------------
 
-def _decode_alpha(png_bytes):
-    arr = np.frombuffer(png_bytes, dtype=np.uint8)
-    im = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)
-    return _mask_plane(im)
+def snapped_trig(deg):
+    """cos/sin of `deg` degrees, exact for multiples of 90 (colorMath.ts snaps |v|<1e-12 -> 0, ~1 -> +-1)."""
+    a = math.radians(deg)
+    c, s = math.cos(a), math.sin(a)
+    out = []
+    for v in (c, s):
+        if abs(v) < 1e-12:
+            v = 0.0
+        elif abs(abs(v) - 1) < 1e-12:
+            v = math.copysign(1.0, v)
+        out.append(v)
+    return out[0], out[1]
 
 
-def _mask_plane(im):
+def _alpha_plane(im, prefer_alpha):
+    """8-bit-style coverage in [0,1] from a decoded PNG: alpha when asked (brush) or when the
+    image is transparent anywhere (subject cut-out), else the grey/red channel."""
     if im is None:
         return None
     scale = 65535.0 if im.dtype == np.uint16 else 255.0
     if im.ndim == 2:
         return im.astype(np.float64) / scale
     if im.shape[2] == 4:
-        return im[..., 3].astype(np.float64) / scale
-    return cv2.cvtColor(im, cv2.COLOR_BGR2GRAY).astype(np.float64) / scale
+        a = im[..., 3].astype(np.float64) / scale
+        if prefer_alpha or float(a.min()) < 1.0:
+            return a
+        return im[..., 2].astype(np.float64) / scale  # BGR -> red channel
+    if prefer_alpha:
+        return np.ones(im.shape[:2])
+    return im[..., 2].astype(np.float64) / scale
 
 
-def _resize_plane(m, w, h):
-    if m.shape[0] == h and m.shape[1] == w:
-        return m
-    return cv2.resize(m, (w, h), interpolation=cv2.INTER_LINEAR)
+def sample_alpha(A, w, h):
+    """Bilinear with texel centres, indices clamped (u = nx*aw - 0.5), over the whole mask space."""
+    ah, aw = A.shape
+    xs = (np.arange(w) + 0.5) / w * aw - 0.5
+    ys = (np.arange(h) + 0.5) / h * ah - 0.5
+    x0 = np.floor(xs).astype(np.int64)
+    y0 = np.floor(ys).astype(np.int64)
+    tx = (xs - x0)[None, :]
+    ty = (ys - y0)[:, None]
+    xa, xb = np.clip(x0, 0, aw - 1), np.clip(x0 + 1, 0, aw - 1)
+    ya, yb = np.clip(y0, 0, ah - 1), np.clip(y0 + 1, 0, ah - 1)
+    top = A[ya][:, xa] * (1 - tx) + A[ya][:, xb] * tx
+    bot = A[yb][:, xa] * (1 - tx) + A[yb][:, xb] * tx
+    return top * (1 - ty) + bot * ty
 
 
 class MaskCtx:
-    def __init__(self, masks_dir, geom_warp):
+    def __init__(self, masks_dir):
         self.masks_dir = masks_dir
-        self.geom_warp = geom_warp  # callable(plane)->plane in the geometry-corrected space, or None
         self.cache = {}
 
-    def subject_plane(self, ref):
+    def subject_alpha(self, ref):
         if ref in self.cache:
             return self.cache[ref]
         plane = None
-        name = os.path.basename(ref)
-        path = os.path.join(self.masks_dir, name) if self.masks_dir else None
+        path = os.path.join(self.masks_dir, os.path.basename(ref)) if self.masks_dir else None
         if path and os.path.isfile(path):
-            plane = _mask_plane(cv2.imread(path, cv2.IMREAD_UNCHANGED))
-        if plane is not None and self.geom_warp is not None:
-            plane = self.geom_warp(plane)
+            plane = _alpha_plane(cv2.imread(path, cv2.IMREAD_UNCHANGED), False)
         self.cache[ref] = plane
         return plane
 
 
-def mask_component(comp, c, w, h, mctx):
+def _gauss_replicate(m, sigma):
+    """Separable Gaussian, taps k=-r..r with r=ceil(3 sigma), normalised, edges replicated."""
+    r = int(math.ceil(3 * sigma))
+    k = np.exp(-(np.arange(-r, r + 1) ** 2) / (2 * sigma * sigma))
+    k = (k / k.sum()).astype(np.float64)
+    return cv2.sepFilter2D(np.ascontiguousarray(m), -1, k, k, borderType=cv2.BORDER_REPLICATE)
+
+
+def mask_component(comp, src, w, h, mctx):
+    """Value plane of one component, or None when a brush/subject has no pixels (skipped, not folded)."""
     kind = comp["kind"]
-    ys = np.arange(h, dtype=np.float64)[:, None] + 0.5
-    xs = np.arange(w, dtype=np.float64)[None, :] + 0.5
-    if kind == "gradient":  # linear ramp from -> to in pixel space; own feather = smoothing blend
+    px = np.arange(w, dtype=np.float64)[None, :] + 0.5
+    py = np.arange(h, dtype=np.float64)[:, None] + 0.5
+    if kind == "gradient":  # in pixel space; smoothstep(-f, 1+f, t)
         fx, fy = comp["from"]["x"] * w, comp["from"]["y"] * h
-        tx, ty = comp["to"]["x"] * w, comp["to"]["y"] * h
-        dx, dy = tx - fx, ty - fy
-        den = max(dx * dx + dy * dy, 1e-9)
-        t = clamp01(((xs - fx) * dx + (ys - fy) * dy) / den)
+        dx, dy = comp["to"]["x"] * w - fx, comp["to"]["y"] * h - fy
+        len2 = dx * dx + dy * dy
+        if len2 < 1e-12:
+            return np.zeros((h, w))
+        t = ((px - fx) * dx + (py - fy) * dy) / len2
         f = comp["feather"]
-        return t + (t * t * (3 - 2 * t) - t) * f
-    if kind == "radial":
-        cx, cy = comp["center"]["x"] * w, comp["center"]["y"] * h
+        return smoothstep(-f, 1 + f, t)
+    if kind == "radial":  # rotate clockwise on screen (y down); rx scales with width, ry with height
+        cdx, cdy = px - comp["center"]["x"] * w, py - comp["center"]["y"] * h
+        c, s = snapped_trig(comp["rotate"])
+        u = cdx * c + cdy * s
+        v = -cdx * s + cdy * c
         rx, ry = max(comp["rx"] * w, 1e-6), max(comp["ry"] * h, 1e-6)
-        a = math.radians(comp["rotate"])
-        u = (xs - cx) * math.cos(a) + (ys - cy) * math.sin(a)
-        v = -(xs - cx) * math.sin(a) + (ys - cy) * math.cos(a)
-        e = np.sqrt((u / rx) ** 2 + (v / ry) ** 2)
-        inner = 1 - comp["feather"]
-        return 1 - smoothstep(inner, 1.0, e) if inner < 1 else np.where(e <= 1, 1.0, 0.0)
-    if kind == "brush":
-        raw = comp["png"].split(",", 1)[1]
-        plane = _decode_alpha(base64.b64decode(raw))
-        return clamp01(_resize_plane(plane, w, h)) if plane is not None else np.zeros((h, w))
-    if kind == "luminosity":  # smoothstep(lo-f, lo, L) * (1 - smoothstep(hi, hi+f, L))
-        L = luma(c)
+        d = np.sqrt((u / rx) ** 2 + (v / ry) ** 2)
+        return 1 - smoothstep(1 - comp["feather"], 1, d)
+    if kind == "luminosity":
+        L = luma(src)
         f = comp["feather"]
         return smoothstep(comp["lo"] - f, comp["lo"], L) * (1 - smoothstep(comp["hi"], comp["hi"] + f, L))
-    if kind == "colorRange":  # 1 - smoothstep(0.5R, R, dE76), R = fuzziness/100*60, max over targets
-        if not comp["colors"]:
-            return np.zeros((h, w))
-        L, A, B = rgb_to_lab(c)
+    if kind == "colorRange":  # R = fuzziness/100*60; dE76; max over targets; none = 0
+        L, A, B = rgb_to_lab(src)
         R = comp["fuzziness"] / 100 * 60
         best = np.zeros((h, w))
         for t in comp["colors"]:
@@ -671,24 +698,31 @@ def mask_component(comp, c, w, h, mctx):
             de = np.sqrt((L - tl) ** 2 + (A - ta) ** 2 + (B - tb) ** 2)
             best = np.maximum(best, 1 - smoothstep(0.5 * R, R, de))
         return best
-    if kind == "subject":
-        plane = mctx.subject_plane(comp["maskRef"])
+    if kind == "brush":  # coverage = the PNG's alpha channel
+        try:
+            raw = base64.b64decode(comp["png"].split(",", 1)[1])
+            im = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        except (ValueError, IndexError):
+            im = None
+        plane = _alpha_plane(im, True)
+        return None if plane is None else sample_alpha(plane, w, h)
+    if kind == "subject":  # invert applies to the sampled value BEFORE the fold
+        plane = mctx.subject_alpha(comp["maskRef"])
         if plane is None:
-            sys.stderr.write("warning: subject mask %s missing, treated as empty\n" % comp["maskRef"])
-            m = np.zeros((h, w))
-        else:
-            m = clamp01(_resize_plane(plane, w, h))
-        return 1 - m if comp.get("invert") else m
-    return np.zeros((h, w))
+            return None
+        v = sample_alpha(plane, w, h)
+        return 1 - v if comp.get("invert") else v
+    return None
 
 
-def mask_value(mask, c, mctx):
-    """Fold left to right (add=max, subtract=min(m,1-c), intersect=min), feather (Gaussian
-    sigma = feather/100*0.05*longSide), invert, opacity (5.2)."""
-    h, w = c.shape[:2]
+def mask_value(mask, src, mctx):
+    """fold (add=max, subtract=min(m,1-v), intersect=min) -> feather -> invert -> opacity."""
+    h, w = src.shape[:2]
     m = np.zeros((h, w))
     for comp in mask["components"]:
-        v = mask_component(comp, c, w, h, mctx)
+        v = mask_component(comp, src, w, h, mctx)
+        if v is None:
+            continue
         mode = comp.get("mode", "add")
         if mode == "add":
             m = np.maximum(m, v)
@@ -696,12 +730,11 @@ def mask_value(mask, c, mctx):
             m = np.minimum(m, 1 - v)
         else:
             m = np.minimum(m, v)
-    sigma = mask["feather"] / 100 * 0.05 * max(w, h)
-    if sigma > 0:
-        m = gauss(m, sigma)
-    if mask["invert"]:
-        m = 1 - m
-    return clamp01(m * mask["opacity"])
+    if mask["feather"] > 0:
+        sigma = mask["feather"] / 100 * 0.05 * max(w, h)
+        if sigma >= 1e-3:
+            m = _gauss_replicate(m, sigma)
+    return clamp01((1 - m if mask["invert"] else m) * mask["opacity"])
 
 
 # --------------------------------------------------------------------------------------
@@ -762,13 +795,20 @@ def resolve_mask(layer, doc):
 
 
 def run_layers(doc, c, mctx):
+    src = c  # masks read the geometry-corrected SOURCE, never an earlier layer's output
     layers = [l for l in doc["layers"] if l.get("enabled", True) and l.get("opacity", 1) > 0]
     n = max(1, len(layers))
     cache_by_id = {}
+    raster = {}  # one raster per distinct mask object, shared by layers (named masks)
     for i, layer in enumerate(layers):
         cache = cache_by_id.setdefault(layer["id"], {})
         mask = resolve_mask(layer, doc)
-        mval = mask_value(mask, c, mctx) if mask else None
+        mval = None
+        if mask:
+            key = layer["mask"]["ref"] if "ref" in layer["mask"] and "components" not in layer["mask"] else id(mask)
+            if key not in raster:
+                raster[key] = mask_value(mask, src, mctx)
+            mval = raster[key]
         adjusted = blend_layer(layer.get("blend", "normal"), c, apply_type(c, layer, cache))
         a = layer.get("opacity", 1.0)
         if mval is not None:
@@ -783,7 +823,9 @@ def run_layers(doc, c, mctx):
 
 
 # --------------------------------------------------------------------------------------
-# Geometry (5.3): flip/rotate -> perspective -> crop, with fill
+# Geometry (5.3), aligned to MM98 (UI planGeometry / applyGeometryCPU): the forward order is
+# rotate -> flip -> perspective -> crop, evaluated as an inverse mapping of every OUTPUT pixel
+# centre into the source, bilinear with texel centres.
 # --------------------------------------------------------------------------------------
 
 class Img:
@@ -795,106 +837,96 @@ class Img:
 
 
 def geometry_is_identity(g):
-    return (not g["flipH"] and not g["flipV"] and g["rotate"] == 0 and not g.get("perspective") and not g.get("crop"))
+    return (g["rotate"] == 0 and not g["flipH"] and not g["flipV"] and not g.get("perspective") and not g.get("crop"))
 
 
-def _fill_rgb(fill):
-    if fill.startswith("#"):
-        return hex_to_rgb(fill)
-    return np.zeros(3)
+def _js_round(v):
+    return int(math.floor(v + 0.5))
 
 
-def _warp(plane, M, size, persp, border, value=0.0):
-    flags = cv2.INTER_LINEAR
-    fn = (lambda src, m: cv2.warpPerspective(src, m, size, flags=flags, borderMode=border, borderValue=value)) if persp else \
-        (lambda src, m: cv2.warpAffine(src, m, size, flags=flags, borderMode=border, borderValue=value))
-    return fn(np.ascontiguousarray(plane), M)
+def unit_square_to_quad(q):
+    """Heckbert's unit square -> quad map; returns (a..h) with the affine special case."""
+    (x0, y0), (x1, y1), (x2, y2), (x3, y3) = q
+    sx = x0 - x1 + x2 - x3
+    sy = y0 - y1 + y2 - y3
+    if abs(sx) < 1e-12 and abs(sy) < 1e-12:
+        return (x1 - x0, x3 - x0, x0, y1 - y0, y3 - y0, y0, 0.0, 0.0)
+    dx1, dx2, dy1, dy2 = x1 - x2, x3 - x2, y1 - y2, y3 - y2
+    den = dx1 * dy2 - dx2 * dy1
+    g = (sx * dy2 - dx2 * sy) / den
+    h = (dx1 * sy - sx * dy1) / den
+    return (x1 - x0 + g * x1, x3 - x0 + h * x3, x0, y1 - y0 + g * y1, y3 - y0 + h * y3, y0, g, h)
 
 
-def warp_pair(img, M, size, persp, fill):
-    """Warp rgb (+alpha) by M into `size`. fill: transparent | edge | #rrggbb. Returns Img;
-    alpha is created when the fill leaves transparent pixels."""
-    dtype = img.rgb.dtype
-    if fill == "edge":
-        rgb = _warp(img.rgb, M, size, persp, cv2.BORDER_REPLICATE)
-        al = _warp(img.alpha, M, size, persp, cv2.BORDER_REPLICATE) if img.alpha is not None else None
-    elif fill.startswith("#"):
-        col = tuple(float(v) for v in _fill_rgb(fill))
-        rgb = _warp(img.rgb, M, size, persp, cv2.BORDER_CONSTANT, col)
-        al = _warp(img.alpha, M, size, persp, cv2.BORDER_CONSTANT, 1.0) if img.alpha is not None else None
-    else:  # transparent: premultiplied warp so edges do not darken
-        a_src = img.alpha if img.alpha is not None else np.ones(img.rgb.shape[:2], dtype=dtype)
-        pre = img.rgb * a_src[..., None]
-        pre_w = _warp(pre, M, size, persp, cv2.BORDER_CONSTANT, 0.0)
-        al = _warp(a_src, M, size, persp, cv2.BORDER_CONSTANT, 0.0)
-        # unpremultiply; where alpha is 0 the colour is irrelevant (use the plain warp)
-        plain = _warp(img.rgb, M, size, persp, cv2.BORDER_REPLICATE)
-        rgb = np.where(al[..., None] > 1e-6, pre_w / np.maximum(al[..., None], 1e-6), plain)
-    return Img(np.ascontiguousarray(clamp01(rgb)), None if al is None else np.ascontiguousarray(clamp01(al)))
+def _bilinear(plane, sx, sy):
+    """Bilinear sample with texel centres (u = sx - 0.5), neighbours clamped to the edge."""
+    hh, ww = plane.shape[:2]
+    u, v = sx - 0.5, sy - 0.5
+    if plane.dtype == np.float32 and plane.size > F64_MAX_PIXELS:
+        out = cv2.remap(plane, u.astype(np.float32), v.astype(np.float32), cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+        return out.astype(plane.dtype)
+    x0 = np.floor(u).astype(np.int64)
+    y0 = np.floor(v).astype(np.int64)
+    tx, ty = (u - x0), (v - y0)
+    xa, xb = np.clip(x0, 0, ww - 1), np.clip(x0 + 1, 0, ww - 1)
+    ya, yb = np.clip(y0, 0, hh - 1), np.clip(y0 + 1, 0, hh - 1)
+    if plane.ndim == 3:
+        tx, ty = tx[..., None], ty[..., None]
+    p00, p01 = plane[ya, xa], plane[ya, xb]
+    p10, p11 = plane[yb, xa], plane[yb, xb]
+    top = p00 * (1 - tx) + p01 * tx
+    bot = p10 * (1 - tx) + p11 * tx
+    return top * (1 - ty) + bot * ty
 
 
 def apply_geometry(img, g):
-    """Order per design 6.3: flip, rotate (canvas grows to the bounding box), perspective
-    (source quad = corners + offset*size mapped onto the output rectangle), crop (normalised
-    rect in the post-rotate space). Positive rotate = clockwise. Returns (Img, warp_fn) where
-    warp_fn re-applies the same geometry to an extra plane (subject masks live in source space)."""
-    fill = g["fill"]
-    steps = []
-    cur = img
-    if g["flipH"]:
-        cur = Img(np.ascontiguousarray(cur.rgb[:, ::-1]), None if cur.alpha is None else np.ascontiguousarray(cur.alpha[:, ::-1]))
-        steps.append(("flipH",))
-    if g["flipV"]:
-        cur = Img(np.ascontiguousarray(cur.rgb[::-1]), None if cur.alpha is None else np.ascontiguousarray(cur.alpha[::-1]))
-        steps.append(("flipV",))
-    rot = g["rotate"]
-    if rot != 0:
-        quarter = rot / 90.0
-        if abs(quarter - round(quarter)) < 1e-9:
-            k = int(round(quarter)) % 4  # clockwise quarter turns
-            if k:
-                cur = Img(np.ascontiguousarray(np.rot90(cur.rgb, -k)), None if cur.alpha is None else np.ascontiguousarray(np.rot90(cur.alpha, -k)))
-                steps.append(("rot90", k))
-        else:
-            h, w = cur.rgb.shape[:2]
-            a = math.radians(rot)
-            nw = int(math.ceil(abs(w * math.cos(a)) + abs(h * math.sin(a)) - 1e-6))
-            nh = int(math.ceil(abs(w * math.sin(a)) + abs(h * math.cos(a)) - 1e-6))
-            M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), -rot, 1.0)
-            M[0, 2] += nw / 2.0 - w / 2.0
-            M[1, 2] += nh / 2.0 - h / 2.0
-            cur = warp_pair(cur, M, (nw, nh), False, fill)
-            steps.append(("affine", M, (nw, nh)))
-    p = g.get("perspective")
-    if p:
-        h, w = cur.rgb.shape[:2]
-        rect = np.float32([[0, 0], [w, 0], [w, h], [0, h]])
-        quad = np.float32([[rect[i][0] + p[k]["x"] * w, rect[i][1] + p[k]["y"] * h] for i, k in enumerate(("tl", "tr", "br", "bl"))])
-        M = cv2.getPerspectiveTransform(quad, rect)
-        cur = warp_pair(cur, M, (w, h), True, fill)
-        steps.append(("persp", M, (w, h)))
+    h0, w0 = img.rgb.shape[:2]
+    c, s = snapped_trig(g["rotate"])
+    wr = max(1, _js_round(abs(w0 * c) + abs(h0 * s) - 1e-9))
+    hr = max(1, _js_round(abs(w0 * s) + abs(h0 * c) - 1e-9))
     cr = g.get("crop")
     if cr:
-        h, w = cur.rgb.shape[:2]
-        x0 = int(round(cr["x"] * w))
-        y0 = int(round(cr["y"] * h))
-        x1 = max(x0 + 1, min(w, int(round((cr["x"] + cr["width"]) * w))))
-        y1 = max(y0 + 1, min(h, int(round((cr["y"] + cr["height"]) * h))))
-        cur = Img(np.ascontiguousarray(cur.rgb[y0:y1, x0:x1]), None if cur.alpha is None else np.ascontiguousarray(cur.alpha[y0:y1, x0:x1]))
-        steps.append(("crop", x0, y0, x1, y1))
-
-    def replay(plane):
-        out = plane
-        for s in steps:
-            if s[0] == "flipH": out = out[:, ::-1]
-            elif s[0] == "flipV": out = out[::-1]
-            elif s[0] == "rot90": out = np.rot90(out, -s[1])
-            elif s[0] == "affine": out = cv2.warpAffine(np.ascontiguousarray(out), s[1], s[2], flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0.0)
-            elif s[0] == "persp": out = cv2.warpPerspective(np.ascontiguousarray(out), s[1], s[2], flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0.0)
-            else: out = out[s[2]:s[4], s[1]:s[3]]
-        return np.ascontiguousarray(out)
-
-    return cur, replay
+        ox = min(wr - 1, _js_round(cr["x"] * wr))
+        oy = min(hr - 1, _js_round(cr["y"] * hr))
+        wo = max(1, min(wr - ox, _js_round(cr["width"] * wr)))
+        ho = max(1, min(hr - oy, _js_round(cr["height"] * hr)))
+    else:
+        ox = oy = 0
+        wo, ho = wr, hr
+    qx = ox + np.arange(wo, dtype=np.float64)[None, :] + 0.5 + np.zeros((ho, 1))
+    qy = oy + np.arange(ho, dtype=np.float64)[:, None] + 0.5 + np.zeros((1, wo))
+    p = g.get("perspective")
+    if p:
+        quad = [(p["tl"]["x"], p["tl"]["y"]), (1 + p["tr"]["x"], p["tr"]["y"]),
+                (1 + p["br"]["x"], 1 + p["br"]["y"]), (p["bl"]["x"], 1 + p["bl"]["y"])]
+        a_, b_, c_, d_, e_, f_, g_, h_ = unit_square_to_quad(quad)
+        u, v = qx / wr, qy / hr
+        den = g_ * u + h_ * v + 1
+        qx, qy = (a_ * u + b_ * v + c_) / den * wr, (d_ * u + e_ * v + f_) / den * hr
+    if g["flipH"]:
+        qx = wr - qx
+    if g["flipV"]:
+        qy = hr - qy
+    dx, dy = qx - wr / 2, qy - hr / 2
+    sx = w0 / 2 + dx * c + dy * s
+    sy = h0 / 2 - dx * s + dy * c
+    inside = (sx >= 0) & (sx <= w0) & (sy >= 0) & (sy <= h0)
+    rgb = _bilinear(img.rgb, sx, sy)
+    alpha = _bilinear(img.alpha, sx, sy) if img.alpha is not None else None
+    fill = g["fill"]
+    if fill != "edge":
+        out = ~inside
+        if fill == "transparent":
+            rgb = np.where(out[..., None], 0.0, rgb)
+            base = alpha if alpha is not None else np.ones((ho, wo), dtype=rgb.dtype)
+            alpha = np.where(out, 0.0, base)
+        else:
+            col = hex_to_rgb(fill)
+            rgb = np.where(out[..., None], col, rgb)
+            if alpha is not None:
+                alpha = np.where(out, 1.0, alpha)
+    dt = img.rgb.dtype
+    return Img(np.ascontiguousarray(rgb, dtype=dt), None if alpha is None else np.ascontiguousarray(alpha, dtype=dt))
 
 
 # --------------------------------------------------------------------------------------
@@ -937,11 +969,10 @@ def downscale(img, max_mp):
 def render(doc, rgb, alpha, masks_dir, max_mp=0):
     img = to_working(rgb, alpha)
     progress(0.05)
-    replay = None
     if not geometry_is_identity(doc["geometry"]):
-        img, replay = apply_geometry(img, doc["geometry"])
+        img = apply_geometry(img, doc["geometry"])
     progress(0.2)
-    mctx = MaskCtx(masks_dir, replay)
+    mctx = MaskCtx(masks_dir)
     out_rgb = run_layers(doc, img.rgb, mctx)
     out = downscale(Img(out_rgb, img.alpha), max_mp)
     progress(0.95)
@@ -985,12 +1016,15 @@ def run_cli(args):
 DETAIL_TYPES = {"sharpen", "blur", "clarity", "texture", "dehaze", "vignette"}
 
 
-def tolerance(doc):
-    """(mean, p99, max, border) for a doc, the loosest of its categories (design 3.3)."""
+def tolerance(doc, manifest_border=None):
+    """(mean, p99, max, border) for a doc, the loosest of its categories (design 3.3).
+    The golden manifest's borderPx (UI-generated) wins over the built-in 2 px for geometry."""
     mean, p99, mx, border = 1.0, 2.0, 4.0, 0
     types = {l["type"] for l in doc["layers"]}
     if not geometry_is_identity(doc["geometry"]):
         mx, border = max(mx, 2.0), 2
+    if manifest_border is not None:
+        border = int(manifest_border)
     if types & DETAIL_TYPES:
         mean, p99, mx = max(mean, 1.5), 99.0, max(mx, 8.0)
     if "noiseReduction" in types:
@@ -1006,6 +1040,11 @@ def selftest(goldens_dir):
     images_dir = os.path.join(root, "images")
     fails = 0
     count = 0
+    manifest = {}
+    mpath = os.path.join(root, "golden-manifest.json")
+    if os.path.isfile(mpath):
+        with open(mpath, "r", encoding="utf-8") as fh:
+            manifest = json.load(fh)
     for name in sorted(os.listdir(goldens_dir)):
         if not name.endswith(".png"):
             continue
@@ -1029,11 +1068,16 @@ def selftest(goldens_dir):
         gold = cv2.imread(os.path.join(goldens_dir, name), cv2.IMREAD_UNCHANGED)
         gold_a = gold[..., 3] if gold.ndim == 3 and gold.shape[2] == 4 else np.full(gold.shape[:2], 255, np.uint8)
         gold_rgb = cv2.cvtColor(gold[..., :3], cv2.COLOR_BGR2RGB)
+        entry = manifest.get(stem)
+        if entry and (entry["height"], entry["width"]) != tuple(got_rgb.shape[:2]):
+            print("FAIL %-48s size %dx%d != manifest %dx%d" % (stem, got_rgb.shape[1], got_rgb.shape[0], entry["width"], entry["height"]))
+            fails += 1
+            continue
         if gold_rgb.shape != got_rgb.shape:
             print("FAIL %-48s size %s != golden %s" % (stem, got_rgb.shape, gold_rgb.shape))
             fails += 1
             continue
-        mean_t, p99_t, max_t, border = tolerance(doc)
+        mean_t, p99_t, max_t, border = tolerance(doc, entry["borderPx"] if entry else None)
         diff = np.abs(got_rgb.astype(np.int16) - gold_rgb.astype(np.int16))
         a_diff = np.abs(got_a.astype(np.int16) - gold_a.astype(np.int16))
         if border:
