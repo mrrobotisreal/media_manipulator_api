@@ -1,0 +1,1 @@
+{"geometry":{"crop":null,"fill":"transparent","flipH":false,"flipV":false,"perspective":null,"rotate":0},"heals":[{"baseRef":"bases/0123abcd.png","id":"h1","maskRef":"masks/h1.png"},{"baseRef":"local:abc_123","id":"h2"},{"id":"h3","maskRef":"masks/h3.png"}],"layers":[],"output":{},"source":{"height":3000,"orientation":1,"width":4000},"version":1}

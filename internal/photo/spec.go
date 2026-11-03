@@ -20,7 +20,8 @@ func corner() objNode { return obj(f("x", num(-1, 1, 0)), f("y", num(-1, 1, 0)))
 var docSpec = obj(
 	f("version", fixedNum(1)),
 	f("source", sourceSpec),
-	f("heals", arrNode{item: obj(f("id", idNode{}), f("maskRef", refNode{})), max: maxHeals, post: uniqueIDs}),
+	f("heals", arrNode{item: healSpec, max: maxHeals, post: uniqueIDs}),
+	f("masks", namedMasks{}),
 	f("geometry", geometrySpec),
 	f("layers", layersSpec),
 	f("output", obj(
@@ -28,7 +29,106 @@ var docSpec = obj(
 		f("quality", optNode{intn(1, 100, 0)}),
 		f("metadataMode", optNode{enumNode{vals: []string{"keep", "strip"}}}),
 	)),
-)
+).withPost(checkMaskRefs)
+
+// healSpec: {id, maskRef?, baseRef?}, at least one of the two (MM96 D2).
+var healSpec = obj(f("id", idNode{}), f("maskRef", optNode{refNode{}}), f("baseRef", optNode{baseRefNode{}})).
+	withPost(func(m map[string]any, path string, _ *ctx) *ValidationError {
+		_, a := m["maskRef"]
+		_, b := m["baseRef"]
+		if !a && !b {
+			return fail(CodeInvalidDoc, path, "a heal needs maskRef or baseRef")
+		}
+		return nil
+	})
+
+// baseRefNode: bases/<hash>.png (server base) or local:<id> (a guest's
+// browser-local base, opaque to the server).
+type baseRefNode struct{}
+
+func (baseRefNode) clean(v any, present bool, path string, _ *ctx) (any, bool, *ValidationError) {
+	if !present {
+		return nil, false, fail(CodeInvalidDoc, path, "baseRef is required")
+	}
+	s, ok := v.(string)
+	if !ok || !baseRefRe.MatchString(s) {
+		return nil, false, fail(CodeInvalidDoc, path, "baseRef must match bases/<hash>.png or local:<id>")
+	}
+	return s, false, nil
+}
+
+// maxNamedMasks bounds doc.masks (MM96 D3).
+const maxNamedMasks = 64
+
+// namedMasks is the optional top-level {<maskId>: Mask} map. Absent when unset;
+// an empty object canonicalises to absent.
+type namedMasks struct{}
+
+func (namedMasks) clean(v any, present bool, path string, c *ctx) (any, bool, *ValidationError) {
+	if !present {
+		return nil, true, nil
+	}
+	in, ok := v.(map[string]any)
+	if !ok {
+		return nil, false, typeErr(path, "object")
+	}
+	if len(in) == 0 {
+		return nil, true, nil
+	}
+	if len(in) > maxNamedMasks {
+		return nil, false, fail(CodeInvalidDoc, path, "more than %d named masks", maxNamedMasks)
+	}
+	out := make(map[string]any, len(in))
+	for k, mv := range in {
+		if !idRe.MatchString(k) {
+			return nil, false, fail(CodeBadID, path+"/"+k, "mask id must match [A-Za-z0-9_-]{1,40}")
+		}
+		o, _, err := maskSpec.clean(mv, true, path+"/"+k, c)
+		if err != nil {
+			return nil, false, err
+		}
+		out[k] = o
+	}
+	return out, false, nil
+}
+
+// checkMaskRefs: every layer.mask = {ref} must name a key of doc.masks.
+func checkMaskRefs(m map[string]any, _ string, _ *ctx) *ValidationError {
+	named, _ := m["masks"].(map[string]any)
+	layers, _ := m["layers"].([]any)
+	for i, l := range layers {
+		lm, _ := l.(map[string]any)
+		mk, _ := lm["mask"].(map[string]any)
+		if mk == nil {
+			continue
+		}
+		if _, isRef := mk["ref"]; !isRef {
+			continue
+		}
+		ref, _ := mk["ref"].(string)
+		if _, ok := named[ref]; !ok {
+			return fail(CodeInvalidDoc, "/layers/"+itoa(i)+"/mask/ref", "mask ref %q is not in doc.masks", ref)
+		}
+	}
+	return nil
+}
+
+// layerMask: null | Mask | {ref}.
+type layerMask struct{}
+
+func (layerMask) clean(v any, present bool, path string, c *ctx) (any, bool, *ValidationError) {
+	if !present || v == nil {
+		return nil, false, nil
+	}
+	if m, ok := v.(map[string]any); ok {
+		if _, isRef := m["ref"]; isRef {
+			if _, full := m["components"]; !full {
+				return obj(f("ref", idNode{})).clean(v, true, path, c)
+			}
+		}
+	}
+	return maskSpec.clean(v, true, path, c)
+}
 
 // fixedNum always emits v (version, orientation).
 type fixedNum float64
@@ -150,7 +250,7 @@ func (layerNode) clean(v any, _ bool, path string, c *ctx) (any, bool, *Validati
 		f("opacity", num(0, 1, 1)),
 		f("blend", blendEnum),
 		f("params", params),
-		f("mask", nullNode{maskSpec}),
+		f("mask", layerMask{}),
 	)
 	return spec.clean(m, true, path, c)
 }

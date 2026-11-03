@@ -11,6 +11,7 @@ import (
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/limits"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 )
 
 // MM95: only POST /api/photo/projects is rate-limited (the photo_projects
@@ -28,7 +29,7 @@ func TestPhotoProjectsBucketWiring(t *testing.T) {
 			cfg.RateLimitPhotoProjectsPerSessionPerHour, cfg.RateLimitPhotoProjectsPerIPPerHour,
 			cfg.RateLimitUploadsPerSessionPerHour, cfg.RateLimitUploadsPerIPPerHour)
 	}
-	for _, path := range []string{"/api/photo/projects", "/api/photo/projects/x", "/api/photo/capabilities", "/api/photo/projects/x/proxy"} {
+	for _, path := range []string{"/api/photo/projects", "/api/photo/projects/x", "/api/photo/capabilities", "/api/photo/projects/x/proxy", "/api/photo/projects/x/files/bases/h.proxy.jpg"} {
 		if got := metricFor(path); got != "" {
 			t.Errorf("%s spends %q; project CRUD must be free of charge", path, got)
 		}
@@ -64,7 +65,13 @@ func TestPhotoProjectsBucketWiring(t *testing.T) {
 		{http.MethodGet, "/api/photo/projects", ""},
 		{http.MethodPut, "/api/photo/projects/abc", ""},
 		{http.MethodGet, "/api/photo/capabilities", ""},
-		{http.MethodPost, "/api/photo/projects/abc/export", ""}, // MM96's bucket
+		{http.MethodPost, "/api/photo/projects/abc/export", "photo_export"},
+		{http.MethodPost, "/api/photo/batch", "photo_export"},
+		{http.MethodPost, "/api/photo/export", "photo_export"},
+		{http.MethodPost, "/api/photo/projects/abc/masks/subject", "photo_ai"},
+		{http.MethodPost, "/api/photo/projects/abc/heal", "photo_ai"},
+		{http.MethodPost, "/api/photo/masks/subject", "photo_ai"},
+		{http.MethodPost, "/api/photo/heal", "photo_ai"},
 	} {
 		hits = nil
 		r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(tc.method, tc.path, strings.NewReader("")))
@@ -78,5 +85,41 @@ func TestPhotoProjectsBucketWiring(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("%s %s: bucket %q want %q", tc.method, tc.path, got, tc.want)
 		}
+	}
+}
+
+// MM96: the quota routes for Aperture (export both forms and subject mask both
+// forms spend ops, heal both forms spend ai_ops, batch is charged inside the
+// handler) and the env split of the two new buckets.
+func TestPhotoQuotaRoutesAndBuckets(t *testing.T) {
+	cases := map[string]string{
+		"/api/photo/projects/3f2b1c1e-0000-4000-8000-000000000001/export": models.MetricOps,
+		"/api/photo/export": models.MetricOps,
+		"/api/photo/projects/3f2b1c1e-0000-4000-8000-000000000001/masks/subject": models.MetricOps,
+		"/api/photo/masks/subject":                                      models.MetricOps,
+		"/api/photo/projects/3f2b1c1e-0000-4000-8000-000000000001/heal": models.MetricAIOps,
+		"/api/photo/heal":                                               models.MetricAIOps,
+		"/api/photo/batch":                                              quotaMetricByJob,
+		"/api/photo/projects":                                           "",
+		"/api/photo/projects/x/export/extra":                            "",
+	}
+	for path, want := range cases {
+		if got := metricFor(path); got != want {
+			t.Errorf("%s: metric %q want %q", path, got, want)
+		}
+	}
+	for _, k := range []string{"RATE_LIMIT_PHOTO_EXPORT_PER_SESSION_PER_HOUR", "RATE_LIMIT_PHOTO_EXPORT_PER_IP_PER_HOUR",
+		"RATE_LIMIT_PHOTO_AI_PER_SESSION_PER_HOUR", "RATE_LIMIT_PHOTO_AI_PER_IP_PER_HOUR",
+		"RATE_LIMIT_UPLOADS_PER_SESSION_PER_HOUR", "RATE_LIMIT_UPLOADS_PER_IP_PER_HOUR"} {
+		t.Setenv(k, "")
+	}
+	cfg := config.Load()
+	if cfg.RateLimitPhotoAIPerSessionPerHour != 30 || cfg.RateLimitPhotoAIPerIPPerHour != 60 ||
+		cfg.RateLimitPhotoExportPerSessionPerHour != cfg.RateLimitUploadsPerSessionPerHour {
+		t.Fatalf("defaults: ai %d/%d export %d", cfg.RateLimitPhotoAIPerSessionPerHour, cfg.RateLimitPhotoAIPerIPPerHour, cfg.RateLimitPhotoExportPerSessionPerHour)
+	}
+	t.Setenv("RATE_LIMIT_PHOTO_AI_PER_SESSION_PER_HOUR", "5")
+	if got := config.Load().RateLimitPhotoAIPerSessionPerHour; got != 5 {
+		t.Fatalf("override = %d", got)
 	}
 }

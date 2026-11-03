@@ -36,6 +36,12 @@ var aiOpsUploadOperations = map[string]bool{
 // spends `ops`.
 func QuotaMetricForJob(options map[string]interface{}) string {
 	job := &models.ConversionJob{Options: options}
+	// MM96: Aperture jobs. An export is everyday work; a heal runs LaMa.
+	if tool, _ := options["tool"].(string); tool == PhotoToolHeal {
+		return models.MetricAIOps
+	} else if tool == PhotoToolExport {
+		return models.MetricOps
+	}
 	if isTranscribeMode(job) {
 		return models.MetricAIOps
 	}

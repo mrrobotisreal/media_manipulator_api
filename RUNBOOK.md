@@ -1147,7 +1147,7 @@ FCM push for "your job finished". Ships **dark**: nothing is sent until `PUSH_EN
 
 ### 4.17 Aperture (MM95/MM96)
 
-Aperture (code name `photo`, ADR-0017) is the photo editor. MM95 ships the server side of projects: the original photo and its proxy/thumbnail on disk, the saved `PhotoDoc`, ownership, revisions, tiers. Ships **on**: `PHOTO_ENABLED` defaults to true and there is nothing to configure. The renderer, AI mask and heal come with MM96 (their env, `PHOTO_PYTHON`, `PHOTO_RENDER_*`, `PHOTO_SUBJECT_MODEL`, `RATE_LIMIT_PHOTO_AI_*`, is not read yet). (Numbered 4.17 because 4.16 is taken by push notifications.)
+Aperture (code name `photo`, ADR-0017) is the photo editor. MM95 ships the server side of projects: the original photo and its proxy/thumbnail on disk, the saved `PhotoDoc`, ownership, revisions, tiers. Ships **on**: `PHOTO_ENABLED` defaults to true and there is nothing to configure. MM96 adds the renderer (`scripts/server/photo_render.py`, a CPU NumPy/OpenCV script in its own venv), the export and batch jobs, the AI subject mask (rembg) and heal (LaMa), and the three stateless twins anonymous visitors use. (Numbered 4.17 because 4.16 is taken by push notifications.)
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -1157,13 +1157,37 @@ Aperture (code name `photo`, ADR-0017) is the photo editor. MM95 ships the serve
 | `PHOTO_MAX_MEGAPIXELS` | `120` | Deployment ceiling on an uploaded original, checked from the EXIF-oriented size **before** the proxy is made. 413 `photo_too_many_pixels {maxMegapixels}`. (The per-tier export cap is `TIER_*_PHOTO_MAX_MEGAPIXELS`.) |
 | `PHOTO_INGEST_TIMEOUT_SECONDS` | `60` | Budget of the synchronous ingest (size probe + proxy + thumbnail). On timeout/failure the row is `failed` with `error` and the call answers 502 `photo_ingest_failed`. |
 | `RATE_LIMIT_PHOTO_PROJECTS_PER_SESSION_PER_HOUR` / `_PER_IP_PER_HOUR` | the `RATE_LIMIT_UPLOADS_*` values (30 / 60) | Bucket `photo_projects`, applied to `POST /api/photo/projects` only. Operators are exempt. |
+| `PHOTO_PYTHON` | `/opt/media-manipulator-ai/venvs/photo/bin/python` | MM96. The venv interpreter (`numpy`, `opencv-python-headless`, `pillow`, `scipy`). Together with `PHOTO_RENDER_SCRIPT` it decides `capabilities.render` (both files must exist at boot; checked once). |
+| `PHOTO_RENDER_SCRIPT` | `/opt/media-manipulator-ai/scripts/photo_render.py` | MM96. The deployed copy of `scripts/server/photo_render.py`. |
+| `PHOTO_RENDER_TIMEOUT_SECONDS` | `300` | MM96. Budget of one render (python step); on expiry the job fails and the `ops` unit is refunded. |
+| `PHOTO_RENDER_CONCURRENCY` | `2` | MM96. Simultaneous renders (each is CPU and RAM hungry: roughly 0.5 GB per 10 MP in float64 below 4 MP, float32 above; note the peak RSS of your first 24 MP render here). |
+| `PHOTO_SUBJECT_MODEL` | `isnet-general-use` | MM96. rembg model of the subject mask (must be one of the background-removal models). `capabilities.aiMasks` = `AI_ENABLED` and `AI_REMBG_BIN` exists. |
+| `PHOTO_SUBJECT_TIMEOUT_SECONDS` | `90` | MM96. Subject mask budget; expiry answers 504 `photo_subject_timeout` and refunds. |
+| `PHOTO_HEAL_TIMEOUT_SECONDS` | `300` | MM96. Heal job budget (LaMa); `capabilities.heal` = `AI_ENABLED` and `AI_LAMA_PYTHON` + `AI_REMOVE_OBJECT_SCRIPT` exist. |
+| `RATE_LIMIT_PHOTO_EXPORT_PER_SESSION_PER_HOUR` / `_PER_IP_PER_HOUR` | the `RATE_LIMIT_UPLOADS_*` values (30 / 60) | MM96. Bucket `photo_export`: project export, batch and the stateless export. |
+| `RATE_LIMIT_PHOTO_AI_PER_SESSION_PER_HOUR` / `_PER_IP_PER_HOUR` | `30` / `60` | MM96. Bucket `photo_ai`: subject masks and heal (project and stateless). |
 | `TIER_<ANON\|FREE\|PREMIUM\|PRO>_PHOTO_PROJECTS` | `0` / `5` / `50` / `-1` | Server project cap (`-1` unlimited; anonymous 0: anonymous visitors have no server projects, only one browser-local project). |
-| `TIER_<T>_PHOTO_MAX_MEGAPIXELS` | `12` / `12` / `120` / `120` | Export cap in megapixels (the UI offers 12 / 24 / 64 / 120 under the cap). Enforced by MM96's export. |
+| `TIER_<T>_PHOTO_MAX_MEGAPIXELS` | `12` / `12` / `120` / `120` | Export cap in megapixels (the UI offers 12 / 24 / 64 / 120 under the cap). Enforced by MM96's export: `min(requested, tier cap, PHOTO_MAX_MEGAPIXELS)` is passed to the renderer as `--max-megapixels`. |
 | `TIER_<T>_PHOTO_BATCH` | `0` / `3` / `10` / `25` | Photos per batch apply (MM99/MM96). |
 
-Operator derives from Pro with `photoProjects` unlimited. `/api/tiers` serves `photoProjects`, `photoMaxMegapixels`, `photoBatch` for every tier. `MaxOutputHeight` does **not** apply to Aperture (a test pins that the photo handler never consults it). Photo routes are not in `quotaRoutes`: project CRUD spends no allowance (MM96's export spends `ops`, heal `ai_ops`).
+Operator derives from Pro with `photoProjects` unlimited. `/api/tiers` serves `photoProjects`, `photoMaxMegapixels`, `photoBatch` for every tier. `MaxOutputHeight` does **not** apply to Aperture (a test pins that the photo handler never consults it). Project CRUD is not in `quotaRoutes` and spends no allowance. MM96 routes: export (project and stateless), batch (n units, charged inside the handler) and subject mask (project and stateless) spend `ops`; heal (project and stateless) spends `ai_ops`; every one is refunded on a 4xx/5xx and when its job fails (MM73).
 
-**Database:** run `go run ./internal/migrations up` for `20261103001_photo_projects` BEFORE deploying this build.
+#### Install (Mitch, once; MM96)
+
+```bash
+sudo -u <api-user> python3 -m venv /opt/media-manipulator-ai/venvs/photo
+/opt/media-manipulator-ai/venvs/photo/bin/pip install --upgrade pip
+/opt/media-manipulator-ai/venvs/photo/bin/pip install "numpy==2.4.6" "opencv-python-headless==5.0.0.93" "pillow==13.0.0" "scipy==1.17.1"
+sudo cp scripts/server/photo_render.py /opt/media-manipulator-ai/scripts/photo_render.py
+rm -rf /tmp/photo-goldens && mkdir /tmp/photo-goldens
+cp -r internal/photo/testdata/goldens internal/photo/testdata/golden-docs internal/photo/testdata/docs internal/photo/testdata/images /tmp/photo-goldens/
+cp internal/photo/testdata/golden-manifest.json /tmp/photo-goldens/ 2>/dev/null || true   # present once MM98's goldens are merged
+/opt/media-manipulator-ai/venvs/photo/bin/python -I /opt/media-manipulator-ai/scripts/photo_render.py --selftest /tmp/photo-goldens/goldens
+```
+
+The pins above are the versions the script was verified with on the MacBook (Python 3.11). `--selftest <dir>` expects `docs/`, `golden-docs/`, `images/` (and the optional `golden-manifest.json`, which supplies the per-golden `borderPx`) next to `<dir>`, so pass the `goldens` folder of the copied tree. It prints one `PASS|FAIL` line per golden with mean / p99 / max error and exits 1 on any FAIL. Paste the lines into the MM96 ticket log. The `ops` allowance is not touched; no migration is needed. After the deploy `GET /api/photo/capabilities` must report `render:true, aiMasks:true, heal:true`.
+
+**Database:** run `go run ./internal/migrations up` for `20261103001_photo_projects` BEFORE deploying this build (MM96 adds no migration).
 
 ---
 
@@ -1219,15 +1243,21 @@ All routes live under `/api/` except `/healthz`.
 | POST | `/api/vector/projects/:id/thumbnail` | MM43. Owner only. `{sizeBytes (1..524288), contentType?: "image/png"}` -> `201 {uploadUrl, thumbnailKey, contentType, maxBytes, expiresAt}`; presigned PUT (TTL `S3_PRESIGN_TTL_SECONDS`) pinned to that length and `image/png`; key `vector/<ownerUid>/<projectId>/thumb.png`. 413 over 512 KB. Ledgered as an `s3_object` of the project. | No |
 | POST | `/api/vector/exports` | MM43. Optional auth + `X-MM-Session-ID`. `{projectId?, format, durationMs, height, fps}` -> `200 {ok:true, format, tier, limit, remaining (-1 = unlimited), resetsAt}` plus the `X-MM-Quota-*` headers. 400 `vector_format_not_countable` (`svg_static`, unknown); 403 `vector_format_locked {format,tier,upgradePath}`; 422 `vector_cap_exceeded {cap: duration\|height\|fps, max, tier}`; 429 `vector_export_limit {tier,metric,limit,used,resetsAt,upgradePath}`; 503 when the counter cannot be written (fails closed). Call BEFORE running the browser exporter. MM49: every 200 emits `server_vector_export_counted {format, tier}` (needs `X-MM-Visitor-ID` + `X-MM-Session-ID`; the editor sends the visitor id only with analytics consent); Pro unlocks `png_sequence`/`mp4`/`webm` (403 `upgradePath: "pro"` below it). | No |
 | POST | `/api/vector/vectorize` | MM43. Optional auth. Multipart `file` (raster image, at most the tier's `MaxFileBytes`) + optional `threshold` (1-99), `turd`. Counted as `import_svg_vectorize` through the same checks BEFORE the job exists (403/429 as above, 400 for SVG/non-image input, which costs nothing), then the potrace converter job: `200 {jobId}`; fetch the SVG with `/api/job/:id` + `/api/download/:id`. Upload rate bucket. | Yes (goroutine) |
-| GET | `/api/photo/capabilities` | MM95 Aperture. Anyone. `{enabled, render, formats:[jpg,png,webp,avif,tiff], maxMegapixels, photoProjects, photoBatch, aiMasks, heal, tier}` for the caller's tier; `render`, `aiMasks`, `heal` are false until MM96. `enabled:false` when `PHOTO_ENABLED=false`. | No |
+| GET | `/api/photo/capabilities` | MM95 Aperture. Anyone. `{enabled, render, formats:[jpg,png,webp,avif,tiff], maxMegapixels, photoProjects, photoBatch, aiMasks, heal, tier}` for the caller's tier; `render`, `aiMasks`, `heal` report whether the renderer venv + script, rembg and LaMa are installed (checked once at first use). `enabled:false` when `PHOTO_ENABLED=false`. | No |
 | GET | `/api/photo/projects` | MM95. Account required (401 `sign_in_required`; anonymous projects are browser-only). `?limit=` (default 50, max 200) `&offset=`; newest first, no doc: `{projects:[{id,name,revision,status,width,height,hasAlpha,originalBytes,originalExt,originalUrl,proxyUrl,thumbUrl,createdAt,updatedAt}]}`. | No |
 | POST | `/api/photo/projects` | MM95. Account required. Bucket `photo_projects`. Multipart `file` (JPG, PNG, WebP, AVIF, TIFF, BMP, GIF first frame, HEIC, HEIF; at most the tier's `MaxFileBytes`) + optional `name`, `doc` (PhotoDoc v1, sanitized). Stores `original.<ext>`, ingests synchronously, `201 {project, doc}` with `status: ready` and `doc.source` = the oriented size. 403 `photo_projects_limit {limit,used,upgradePath}`, 413 `photo_too_many_pixels {maxMegapixels}` / `photo_file_too_large {maxBytes}`, 415 `photo_unsupported_source` (SVG, even renamed), 422 `photo_doc_invalid {code,path,message}`, 502 `photo_ingest_failed {projectId}` (row kept, `status: failed`). | No |
 | GET | `/api/photo/projects/:id` | MM95. Owner (or operator); a stranger, a malformed id or a soft-deleted project gets the same 404. `{project, doc}`. | No |
 | PUT | `/api/photo/projects/:id` | MM95. Owner. Header `If-Match: <revision>` (also `"n"` / `W/"n"`); missing 428 `if_match_required`, non-integer 400, stale 409 `{error:"revision_conflict", revision}`. Body `{name?, doc?}`; the doc is sanitized (422 `photo_doc_invalid`, 413 `photo_doc_too_large`). 200 `{project, doc}` with `revision + 1`. | No |
 | DELETE | `/api/photo/projects/:id` | MM95. Owner. Soft-deletes the row at once, expires the ledger row now and sweeps the directory inline. `200 {deleted:{objects,bytes}, pending}`. | No |
 | GET | `/api/photo/projects/:id/original` / `/proxy` / `/thumb` | MM95. Owner. Inline bytes with the real MIME, `Range`, `Cache-Control: private, max-age=3600`. | No |
-| GET | `/api/photo/projects/:id/files/*relpath` | MM95. Owner. Only `masks/<id>.png` and `bases/<hash>.png` (regex-validated, two safe segments); anything else 404. | No |
-| POST | `/api/photo/projects/:id/masks/subject`, `/heal`, `/export`; `/api/photo/batch`, `/export`, `/masks/subject`, `/heal` | MM96. Registered now as `501 {error:"not_implemented"}` so clients can code against the final route table. | No |
+| GET | `/api/photo/projects/:id/files/*relpath` | MM95/MM96. Owner. Only `masks/<id>.png`, `bases/<hash>.png` and `bases/<hash>.proxy.(jpg\|png)` (regex-validated, two safe segments); anything else 404. | No |
+| POST | `/api/photo/projects/:id/export` | MM96. Owner. Bucket `photo_export`; one `ops`. JSON `{doc?, format: jpg\|png\|webp\|avif\|tiff, quality 1..100 (92), metadataMode keep\|strip (keep), maxMegapixels?, name?}`; `doc` is sanitized and saved first (`If-Match` honoured, 409 `revision_conflict`). 202 `{jobId}`; the job (`tool: photo_export`) lands `outputs/<jobId>/<name> (retouched).<ext>` like any conversion (`/api/job`, `/api/result`, download links, history, share). 400 `photo_export_invalid`, 422 `photo_doc_invalid`, 503 `photo_render_unavailable`. | No |
+| POST | `/api/photo/batch` | MM96. Owner of every project. Bucket `photo_export`; n x `ops` charged up front, each refunded if its own job fails. `{projectIds[], doc, format, quality, metadataMode}` -> 202 `{jobs:[{projectId,jobId}]}`; the doc is saved to each project (heals cleared, its own `source` size). 403 `sign_in_required` (anonymous), 403 `photo_batch_limit {limit, upgradePath}`. | No |
+| POST | `/api/photo/export` | MM96. Anyone (stateless twin). Multipart `file` + `doc` (JSON) + `format`, `quality`, `metadataMode`, `maxMegapixels?`, `name?`. The file is an ordinary `uploads/<jobId>/` input (`upload_dir` ledger row, guests 24 h); `Options.sourcePath` instead of `projectId`; the uploaded file IS the base (`heals` ignored). One `ops`. 202 `{jobId}`. | No |
+| POST | `/api/photo/projects/:id/masks/subject` | MM96. Owner. Bucket `photo_ai`; one `ops` (given back on a cache hit). Body `{}` or `{base: <hash>}`. rembg (`PHOTO_SUBJECT_MODEL`) at full resolution under MM94's GPU slot (`rembg[photo]`); cached in `photo_derivatives` (`subject_mask`, `params_hash = sha256(base + model)`). 200 `{maskId, maskRef:"masks/subj-<16hex>.png", url, width, height}`; 504 `photo_subject_timeout`, 502 `photo_subject_failed`, 404 `photo_base_not_found`. | No |
+| POST | `/api/photo/masks/subject` | MM96. Anyone. Multipart `file` -> 200 `image/png` (8-bit grey mask, same size as the oriented file); nothing stored; one `ops`; bucket `photo_ai`. | No |
+| POST | `/api/photo/projects/:id/heal` | MM96. Owner. Bucket `photo_ai`; one `ai_ops`. Multipart `mask` (PNG at the base's size, white = heal) + `base` (a base hash or `""`). 400 `photo_mask_size {expectedWidth, expectedHeight}`. 202 `{jobId, baseHash, maskRef}`; when the job completes `GET /api/job/:id` carries `healResult {baseHash, baseRef:"bases/<hash>.png", proxyRef:"bases/<hash>.proxy.jpg", maskRef, width, height}` (no output file, `resultMime` empty). `baseHash = sha256(previousBaseHash + sha256(mask bytes))`; a repeat is served from the cache and refunded. | No |
+| POST | `/api/photo/heal` | MM96. Anyone. Multipart `file` + `mask`. The job's result is `outputs/<jobId>/healed.png` (`/api/result/:id`, download links); no `healResult`, no derivative row; one `ai_ops`. | No |
 | POST | `/api/billing/checkout` | Firebase auth. `{interval: monthly\|yearly, plan?: premium\|pro, currency?: usd\|eur, locale}` -> `{url}`. The session's currency is always set (absent body field = `usd`). 400 `invalid_interval` / `invalid_plan` / `invalid_currency`; 409 `already_subscribed` / `already_on_plan` / `manual_grant_active` / `currency_locked {currency}` (MM69: the Stripe Customer is billed in the other currency); 403 `operator_account`; 503 `billing_unavailable` (also Pro without Pro prices). | No |
 | POST | `/api/billing/change-plan` | MM39. Firebase auth, own live subscription only. `{target: premium\|pro}` -> upgrade `{plan:"pro", pendingPlan:null, timing:"immediate"}` or downgrade `{plan:"pro", pendingPlan:{to:"premium", at}, timing:"period_end"}` (repeat downgrade idempotent). 409 `not_subscription` / `same_plan` / `change_not_available` (cancelling, or a schedule this API did not create); 400 `invalid_plan`; 502 `billing_provider_error`; 503 `billing_unavailable`. | No |
 | DELETE | `/api/billing/change-plan` | MM39. Same guards. Releases the scheduled downgrade -> `{plan, pendingPlan:null}`; 200 no-op when nothing is scheduled. | No |
@@ -2019,6 +2049,8 @@ leaves `vector_project` ledger rows it cannot write.
   Never reset `revision` by hand (it would make the other client's stale save
   win). There is no server version history in v1; the browser keeps an
   IndexedDB draft until a save succeeds.
+- **MM96 render, masks and heal.** Code: `scripts/server/photo_render.py` (renderer + `--selftest`), `internal/services/photo_render.go` (decode -> script -> encode -> exiftool), `internal/services/photo_ai.go` (rembg + LaMa through the GPU scheduler), `internal/handlers/photo_render.go` (routes). The export worker: `convert <src>[0] -auto-orient -colorspace sRGB -depth 16 PNG48|PNG64:base.png` (PNG64 only when the source has alpha) -> `python photo_render.py --input base.png --doc doc.json --masks <projectDir>/masks --out rendered.png [--max-megapixels N] --progress` under `cmdaudit` (`progress 0.35` lines feed the job progress) -> `convert rendered.png ... <name> (retouched).<ext>` (jpg flattens on white; webp/avif `-quality`; tiff 8-bit zip; png keeps alpha) -> `exiftool` (`keep`: copy the original's tags and reset Orientation to 1; `strip`: `-all=`). The project render base is the last `heals[]` entry whose `baseRef` is a server `bases/<hash>.png` that exists, else `original.<ext>` (`local:` refs are a guest's browser-local base and are skipped). Doc shape additions: `heals[]` = `{id, maskRef?, baseRef?}` (at least one), top-level `masks` = `{<id>: Mask}` (<= 64, empty = absent), `layer.mask` = `null | Mask | {ref}`.
+- **MM96 failure rows.** *python not found / `photo_render_unavailable`*: `PHOTO_PYTHON`/`PHOTO_RENDER_SCRIPT` missing, `capabilities.render` false (restart after installing: the flags are cached). *selftest FAIL*: goldens drifted from the script; rerun the UI's `npm run photo:goldens`, copy the folders, or fix the math (never loosen a tolerance silently: design §3.3). *LaMa mask size mismatch*: 400 `photo_mask_size`; the client painted on a different base than it named. *rembg OOM / CUDA out of memory*: subject mask 502; see section 8 (the slot is `rembg[photo]`, VRAM from `AI_VRAM_MIB_REMOVE_BACKGROUND`). *Heal job failed*: `Heal failed: ...` in the job error, `ai_ops` refunded, no row and no file; LaMa runs with `AI_LAMA_PYTHON` + `AI_REMOVE_OBJECT_SCRIPT` under the `lama[photo]` slot (`AI_VRAM_MIB_REMOVE_OBJECT`). *Export failed*: `Export failed: photo_render.py exit N: <stderr tail>` (500 chars, path-redacted), `ops` refunded.
 - **Sanitizer refusals.** 422 `vector_doc_invalid` carries `code` and `path`
   (e.g. `unsafe_content` at `layers[3].markup`). The Go sanitizer
   (`internal/vector`) mirrors the UI's Zod model; both are pinned by the shared
@@ -2669,7 +2701,7 @@ curl -sS -X POST -H 'Content-Type: application/json' -H 'X-MM-Session-ID: smoket
   http://localhost:59997/api/contact
 ```
 
-### 12.10 Aperture projects smoke test (MM95)
+### 12.10 Aperture projects smoke test (MM95; export and masks in 12.11)
 
 After `go run ./internal/migrations up` (`20261103001_photo_projects`) and the deploy. `$TOKEN` is a Firebase ID token of a **free test account**; `photo.jpg` any JPEG. Replace the host as needed.
 
@@ -2694,6 +2726,34 @@ curl -sS -X PUT -H "Authorization: Bearer $TOKEN" -H 'If-Match: 1' -d '{"name":"
 curl -sS -H "Authorization: Bearer $TOKEN" $H/projects | python3 -m json.tool | head -20
 curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" $H/projects/$ID
 ls ${PHOTO_DIR:-uploads/photo}/$ID 2>&1 | head -2
+```
+
+---
+
+### 12.11 Aperture render smoke test (MM96)
+
+After the venv install (section 4.17) and the deploy. Reuses `$TOKEN` and a fresh project from 12.10 step 3 (`ID`).
+
+```bash
+H=http://localhost:59997/api
+# 1. capabilities: render, aiMasks and heal all true
+curl -sS $H/photo/capabilities | python3 -m json.tool
+# 2. export the project (jpg), poll the job, download
+JOB=$(curl -sS -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"format":"jpg","quality":90}' $H/photo/projects/$ID/export | python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])')
+sleep 5; curl -sS -H "Authorization: Bearer $TOKEN" $H/job/$JOB | python3 -m json.tool | head -20   # status completed, resultFileName "... (retouched).jpg"
+curl -sS -o /tmp/out.jpg -H "Authorization: Bearer $TOKEN" $H/download/$JOB && file /tmp/out.jpg
+# 3. subject mask: 200 with maskRef; the second call is instant and does not run rembg
+curl -sS -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' $H/photo/projects/$ID/masks/subject
+curl -sS -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' $H/photo/projects/$ID/masks/subject
+# 4. heal: a same-size white-square mask; poll the job for healResult
+# make mask.png the project's pixel size (white = heal), e.g. with ImageMagick 6:
+#   convert -size WxH xc:black -fill white -draw 'rectangle 100,100 300,300' mask.png
+HJOB=$(curl -sS -X POST -H "Authorization: Bearer $TOKEN" -F mask=@mask.png -F base= $H/photo/projects/$ID/heal | python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])')
+sleep 20; curl -sS -H "Authorization: Bearer $TOKEN" $H/job/$HJOB | python3 -c 'import json,sys;print(json.load(sys.stdin)["healResult"])'
+# 5. stateless (no token, a session id): export + subject mask + heal
+curl -sS -H 'X-MM-Session-ID: smoke-1' -F file=@photo.jpg -F format=png -F 'doc={"version":1,"source":{"width":1,"height":1}}' $H/photo/export
+curl -sS -H 'X-MM-Session-ID: smoke-1' -F file=@photo.jpg -o /tmp/subject.png -w '%{http_code} %{content_type}\n' $H/photo/masks/subject
 ```
 
 ---

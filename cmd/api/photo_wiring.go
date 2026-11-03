@@ -3,6 +3,8 @@ package main
 import (
 	"time"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/cmdaudit"
+
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/handlers"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
@@ -24,4 +26,15 @@ func newPhotoHandler(cfg *config.Config, store *telemetry.Store) *handlers.Photo
 	}
 	ingest := services.NewPhotoIngest(time.Duration(cfg.PhotoIngestTimeoutSeconds) * time.Second)
 	return handlers.NewPhotoHandler(ps, cfg, ingest, nil)
+}
+
+// newPhotoPipeline wires the MM96 render and AI collaborators: the NumPy
+// renderer (photo_render.py, under cmdaudit) and rembg/LaMa through MM94's GPU
+// scheduler.
+func newPhotoPipeline(cfg *config.Config, jm *services.JobManager, runner *cmdaudit.Runner) *handlers.PhotoPipeline {
+	return &handlers.PhotoPipeline{
+		Jobs:   jm,
+		Render: services.NewPhotoRenderer(cfg, jm, runner),
+		AI:     services.NewPhotoAI(cfg, jm),
+	}
 }
