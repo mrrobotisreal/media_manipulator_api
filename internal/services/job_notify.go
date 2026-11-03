@@ -22,9 +22,10 @@ const (
 )
 
 // JobFinishedNotifier receives long, unwatched AI jobs. Implemented by
-// *email.Service; it must return immediately (it runs its work in a goroutine).
+// *push.Notifier (MA23, which wraps) and *email.Service; it must return
+// immediately (it runs its work in a goroutine).
 type JobFinishedNotifier interface {
-	AIJobFinished(userID, jobID string, failed bool)
+	AIJobFinished(n models.JobFinished)
 }
 
 // SetJobFinishedNotifier attaches the notifier. Nil leaves it off.
@@ -143,5 +144,12 @@ func (jm *JobManager) maybeNotifyFinished(jobID string, status models.JobStatus,
 	}
 	jm.notified[jobID] = struct{}{}
 	jm.emitMu.Unlock()
-	n.AIJobFinished(owner.UserID, jobID, status == models.StatusFailed)
+	tool := ""
+	if hasFacts {
+		tool = fctx.facts.Tool
+	}
+	n.AIJobFinished(models.JobFinished{
+		UserID: owner.UserID, JobID: jobID, Tool: tool, Failed: status == models.StatusFailed,
+		VisitorID: owner.VisitorID, SessionID: owner.SessionID,
+	})
 }

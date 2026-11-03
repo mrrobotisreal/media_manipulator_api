@@ -388,6 +388,10 @@ type Config struct {
 	// any visitor may switch. Default: DefaultBillingEURCountries.
 	BillingEURCountries []string
 
+	// PushEnabled (PUSH_ENABLED, default false, MA23) turns on FCM job-finished
+	// pushes. It also needs FIREBASE_PROJECT_ID and the service account's FCM role.
+	PushEnabled bool
+
 	// Transactional email (MM31). Off unless EmailEnabled AND EmailProviderAPIKey
 	// are both set; otherwise every send is a logged no-op.
 	EmailEnabled bool
@@ -864,6 +868,7 @@ func Load() *Config {
 		StripePriceProYearly:             strings.TrimSpace(getEnv("STRIPE_PRICE_PRO_YEARLY", "")),
 		StripeAutomaticTax:               getEnvBool("STRIPE_AUTOMATIC_TAX", false),
 		BillingGraceDays:                 getEnvInt("BILLING_GRACE_DAYS", 7),
+		PushEnabled:                      getEnvBool("PUSH_ENABLED", false),
 		EmailEnabled:                     getEnvBool("EMAIL_ENABLED", false),
 		EmailProviderAPIKey:              strings.TrimSpace(getEnv("EMAIL_PROVIDER_API_KEY", "")),
 		EmailFrom:                        strings.TrimSpace(getEnv("EMAIL_FROM", "")),

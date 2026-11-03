@@ -53,6 +53,12 @@ type VoiceExportStore interface {
 	ExportVoices(ctx context.Context, userID string) ([]telemetry.ExportVoice, error)
 }
 
+// PushExportStore lists push-token metadata for the export (MA23). Optional.
+// The token itself is never exported.
+type PushExportStore interface {
+	PushTokenMetadata(ctx context.Context, userID string) ([]telemetry.PushTokenMeta, error)
+}
+
 // ExportLimiter is the 3-per-hour guard. Redis-backed in production.
 type ExportLimiter interface {
 	AllowWindow(ctx context.Context, key string, limit int, window time.Duration) (bool, int)
@@ -181,10 +187,16 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 							voices, serr = vs.ExportVoices(ctx, u.ID)
 						}
 					}
+					var pushMeta []telemetry.PushTokenMeta
+					if serr == nil {
+						if ps, ok := d.Store.(PushExportStore); ok {
+							pushMeta, serr = ps.PushTokenMetadata(ctx, u.ID)
+						}
+					}
 					if serr != nil {
 						err = serr
 					} else {
-						h.writeExport(c, u, settings, jobs, projects, files, metaJobs, voices, now)
+						h.writeExport(c, u, settings, jobs, projects, files, metaJobs, voices, pushMeta, now)
 						return
 					}
 				}
@@ -197,7 +209,7 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 
 func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *telemetry.UserSettings,
 	jobs []telemetry.ExportJob, projects []telemetry.ExportProject, files []telemetry.ExportFile, metaJobs []string,
-	voices []telemetry.ExportVoice, now time.Time) {
+	voices []telemetry.ExportVoice, pushMeta []telemetry.PushTokenMeta, now time.Time) {
 	d := h.export
 
 	history := make([]map[string]any, 0, len(jobs))
@@ -247,6 +259,15 @@ func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *tel
 			"createdAt": rfc(v.CreatedAt), "updatedAt": rfc(v.UpdatedAt),
 		})
 	}
+	// MA23: push registrations, metadata only. The token is a credential for the
+	// device's push channel and is never exported.
+	pushList := make([]map[string]any, 0, len(pushMeta))
+	for _, m := range pushMeta {
+		pushList = append(pushList, map[string]any{
+			"platform": m.Platform, "appVersion": nilIfEmpty(m.AppVersion),
+			"createdAt": rfc(m.CreatedAt), "lastSeenAt": rfc(m.LastSeenAt), "disabled": m.Disabled,
+		})
+	}
 	account := map[string]any{
 		"email": u.Email, "emailVerified": u.EmailVerified, "displayName": u.DisplayName,
 		"tier": u.Tier, "tierSource": u.TierSource, "tierExpiresAt": rfcp(u.TierExpiresAt),
@@ -256,7 +277,9 @@ func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *tel
 		"settings": map[string]any{
 			"retentionHours": st.RetentionHours, "retentionScope": st.RetentionScope,
 			"deleteMetadataReports": st.DeleteMetadataReports, "historyVisibility": st.HistoryVisibility,
+			"pushJobFinished": st.PushJobFinished,
 		},
+		"pushTokens": pushList,
 	}
 
 	name := "mm-data-export-" + now.Format("2006-01-02") + ".zip"
@@ -373,7 +396,8 @@ files.json       Every file we hold for you right now, with its size and expiry.
 voices.json      Your saved voices: name, kind (cloned | designed), language, the consent you
                  gave and when. No audio is included.
 metadata-reports Metadata reports we keep for you (one document per job), if you keep them.
-account.json     Your profile, plan and retention settings.
+account.json     Your profile, plan, retention settings and the phones registered for push
+                 notifications (platform, app version, dates; never the push token itself).
 
 This export contains no media files and no payment card data.
 `

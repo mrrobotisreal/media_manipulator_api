@@ -40,6 +40,8 @@ type Registry struct {
 	retentionGaveUp         *prometheus.CounterVec
 	retentionBacklog        *prometheus.GaugeVec
 	accountDeleted          *prometheus.CounterVec
+	pushSends               *prometheus.CounterVec
+	pushTokensDisabled      *prometheus.CounterVec
 	dataDeleted             *prometheus.CounterVec
 	billingUnknownPrice     prometheus.Counter
 	jobStatusWouldDeny      prometheus.Counter
@@ -169,6 +171,14 @@ func New() *Registry {
 		Name: "mm_account_deleted_total",
 		Help: "DELETE /api/account outcomes: completed, incomplete (a step failed, retryable), files_pending (S3 not clean, nothing else touched) (MM24).",
 	}, []string{"result"})
+	r.pushSends = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mm_push_sends_total",
+		Help: "FCM send attempts per token by platform and outcome: sent, failed, token_disabled (MA23).",
+	}, []string{"platform", "outcome"})
+	r.pushTokensDisabled = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mm_push_tokens_disabled_total",
+		Help: "Push tokens disabled by reason: unregistered, invalid (FCM said so) (MA23).",
+	}, []string{"reason"})
 	r.dataDeleted = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "mm_data_deleted_total",
 		Help: "User-initiated deletions by scope: item (a job), project, all (MM24).",
@@ -186,7 +196,7 @@ func New() *Registry {
 
 	reg.MustRegister(
 		r.billingUnknownPrice, r.jobStatusWouldDeny,
-		r.accountDeleted, r.dataDeleted,
+		r.accountDeleted, r.dataDeleted, r.pushSends, r.pushTokensDisabled,
 		r.retentionSwept, r.retentionWouldDelete, r.retentionSweepErrors, r.retentionGaveUp, r.retentionBacklog,
 		r.httpDuration, r.httpStatus, r.conversionJobs, r.toolUsage,
 		r.commandDuration, r.commandFailures, r.ffmpegValidationRejects,
@@ -421,6 +431,22 @@ func (r *Registry) AccountDeleted(result string) {
 		return
 	}
 	r.accountDeleted.WithLabelValues(result).Inc()
+}
+
+// PushSend counts one FCM attempt (outcome: sent, failed, token_disabled).
+func (r *Registry) PushSend(platform, outcome string) {
+	if r == nil {
+		return
+	}
+	r.pushSends.WithLabelValues(platform, outcome).Inc()
+}
+
+// PushTokenDisabled counts a token disabled after an FCM verdict.
+func (r *Registry) PushTokenDisabled(reason string) {
+	if r == nil {
+		return
+	}
+	r.pushTokensDisabled.WithLabelValues(reason).Inc()
 }
 
 // DataDeleted counts a user-initiated deletion by scope (item, project, all).

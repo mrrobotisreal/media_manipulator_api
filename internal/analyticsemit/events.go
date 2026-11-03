@@ -89,6 +89,15 @@ const ServerAccountDeleted = "server_account_deleted"
 // is in media-manipulator-analytics (branch mm-m6-transactional-email).
 const ServerEmailSent = "server_email_sent"
 
+// Push notifications (MA23). Emitted by internal/push once per FCM token attempt for
+// a finished long AI job: {tool, status: completed|failed, platform: ios|android,
+// outcome: sent|failed|token_disabled}. Identity is the job creator's
+// VisitorID/SessionID from the job owner context (the app sends both headers); a
+// job without them drops the event, so this is a lower bound and mm_push_tokens +
+// the mm_push_sends_total counter are the record. Never a token or file name.
+// Catalog entry: media-manipulator-analytics MA23.
+const ServerPushSent = "server_push_sent"
+
 // Motion (MM49, design MOTION_SVG_ANIMATOR.md §3.8). Emitted by
 // POST /api/vector/exports once the export unit is spent (the counter row and
 // the increment committed): {format, tier}. format is the counted format name

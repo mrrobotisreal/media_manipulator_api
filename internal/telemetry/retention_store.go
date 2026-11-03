@@ -54,8 +54,11 @@ type UserSettings struct {
 	EmailExpiryDigest  bool
 	// Currency (MM69) is the chosen billing display currency, "usd" | "eur";
 	// "" = never chosen (the geographic default applies).
-	Currency  string
-	UpdatedAt time.Time
+	Currency string
+	// PushJobFinished (MA23) is the "push me when a long AI job finishes"
+	// preference; defaults on (a push needs a registered token anyway).
+	PushJobFinished bool
+	UpdatedAt       time.Time
 }
 
 // SettingsPatch is a partial update: nil fields are left alone.
@@ -67,6 +70,8 @@ type SettingsPatch struct {
 	EmailExpiryDigest     *bool
 	// Currency (MM69): "usd" | "eur". Validated by the handler.
 	Currency *string
+	// PushJobFinished (MA23).
+	PushJobFinished *bool
 }
 
 // RetainedObject is one ledger row to write.
@@ -99,13 +104,13 @@ type ClaimResult struct {
 }
 
 const settingsColumns = `user_id::text, retention_hours, retention_scope, delete_metadata_reports,
-	history_visibility, email_ai_job_finished, email_expiry_digest, coalesce(currency, ''), updated_at`
+	history_visibility, email_ai_job_finished, email_expiry_digest, coalesce(currency, ''), push_job_finished, updated_at`
 
 func scanSettings(row pgx.Row) (*UserSettings, error) {
 	var s UserSettings
 	if err := row.Scan(&s.UserID, &s.RetentionHours, &s.RetentionScope,
 		&s.DeleteMetadataReports, &s.HistoryVisibility,
-		&s.EmailAIJobFinished, &s.EmailExpiryDigest, &s.Currency, &s.UpdatedAt); err != nil {
+		&s.EmailAIJobFinished, &s.EmailExpiryDigest, &s.Currency, &s.PushJobFinished, &s.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &s, nil
@@ -160,6 +165,7 @@ UPDATE mm_user_settings SET
 	email_ai_job_finished   = COALESCE($5, email_ai_job_finished),
 	email_expiry_digest     = COALESCE($6, email_expiry_digest),
 	currency                = COALESCE($7, currency),
+	push_job_finished       = COALESCE($8, push_job_finished),
 	updated_at              = now()
 WHERE user_id = $1
 RETURNING ` + settingsColumns
@@ -202,7 +208,7 @@ func (s *Store) ApplyUserSettings(ctx context.Context, userID string, defaultHou
 	}
 	updated, err := scanSettings(tx.QueryRow(ctx, updateSettingsQuery,
 		userID, patch.RetentionHours, patch.DeleteMetadataReports, patch.HistoryVisibility,
-		patch.EmailAIJobFinished, patch.EmailExpiryDigest, patch.Currency))
+		patch.EmailAIJobFinished, patch.EmailExpiryDigest, patch.Currency, patch.PushJobFinished))
 	if err != nil {
 		return nil, 0, err
 	}

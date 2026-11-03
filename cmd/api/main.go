@@ -382,7 +382,8 @@ func main() {
 	// email disabled it answers 503 contact_unavailable.
 	contactHandler = handlers.NewContactHandler(emailSender, cfg.ContactTo, logging)
 	accountHandler.SetMailer(emailSvc)
-	jobManager.SetJobFinishedNotifier(emailSvc)
+	// MA23: push before email when PUSH_ENABLED; otherwise email only, as before.
+	jobManager.SetJobFinishedNotifier(buildJobNotifier(ctx, cfg, store, emailSvc, analyticsEmitter, metricsReg, logging, newFCMSender))
 	if cfg.EmailDigestInterval > 0 {
 		go emailSvc.RunDigestWorker(ctx, cfg.EmailDigestInterval)
 	}

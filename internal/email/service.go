@@ -267,7 +267,8 @@ func (s *Service) AccountDeleted(u *models.User) {
 // AIJobFinished is sent for a long AI job whose owner had no tab polling it.
 // The caller has already applied the duration and poll rules; this applies the
 // owner's opt-in. One email per job: the job id is the dedupe key.
-func (s *Service) AIJobFinished(userID, jobID string, failed bool) {
+func (s *Service) AIJobFinished(n models.JobFinished) {
+	userID, jobID, failed := n.UserID, n.JobID, n.Failed
 	if s == nil || userID == "" || jobID == "" {
 		return
 	}

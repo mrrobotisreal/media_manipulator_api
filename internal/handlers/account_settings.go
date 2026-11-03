@@ -61,9 +61,11 @@ type settingsResponse struct {
 	EmailExpiryDigest  bool `json:"emailExpiryDigest"`
 	// Currency (MM69) is the chosen billing currency, "usd" | "eur", or null
 	// when never chosen (the UI then uses the geographic default).
-	Currency  *string        `json:"currency"`
-	UpdatedAt time.Time      `json:"updatedAt"`
-	Limits    settingsLimits `json:"limits"`
+	Currency *string `json:"currency"`
+	// PushJobFinished (MA23): push when a long AI job finishes while the app is away.
+	PushJobFinished bool           `json:"pushJobFinished"`
+	UpdatedAt       time.Time      `json:"updatedAt"`
+	Limits          settingsLimits `json:"limits"`
 	// Restamped is the number of live items whose expiry moved. PATCH only.
 	Restamped *int64 `json:"restamped,omitempty"`
 }
@@ -98,6 +100,7 @@ func toSettingsResponse(s *telemetry.UserSettings, defaultHours int) settingsRes
 		EmailAIJobFinished:    s.EmailAIJobFinished,
 		EmailExpiryDigest:     s.EmailExpiryDigest,
 		Currency:              strPtr(s.Currency),
+		PushJobFinished:       s.PushJobFinished,
 		UpdatedAt:             s.UpdatedAt,
 		Limits:                limitsFor(defaultHours),
 	}
@@ -153,12 +156,14 @@ type settingsPatchBody struct {
 	// Currency (MM69): "usd" | "eur". Clearing it is not supported (a choice,
 	// once made, is only ever replaced by the other currency).
 	Currency *string `json:"currency"`
+	// PushJobFinished (MA23).
+	PushJobFinished *bool `json:"pushJobFinished"`
 }
 
 // validate returns the first field-level problem, or nil.
 func (b settingsPatchBody) validate() *settingsError {
 	if b.RetentionHours == nil && b.RetentionScope == nil && b.DeleteMetadataReports == nil && b.HistoryVisibility == nil &&
-		b.EmailAIJobFinished == nil && b.EmailExpiryDigest == nil && b.Currency == nil {
+		b.EmailAIJobFinished == nil && b.EmailExpiryDigest == nil && b.Currency == nil && b.PushJobFinished == nil {
 		return &settingsError{Error: "No settings provided"}
 	}
 	if b.RetentionHours != nil && !retention.ValidHours(*b.RetentionHours) {
@@ -271,6 +276,7 @@ func (h *SettingsHandler) Patch(c *gin.Context) {
 		EmailAIJobFinished:    body.EmailAIJobFinished,
 		EmailExpiryDigest:     body.EmailExpiryDigest,
 		Currency:              currency,
+		PushJobFinished:       body.PushJobFinished,
 	}, h.now().UTC())
 	if err != nil {
 		h.logger.Error("account settings: update failed", "error", err.Error())
