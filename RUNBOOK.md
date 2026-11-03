@@ -1044,7 +1044,7 @@ quota charge, no analytics on the server (the UI emits `contact_submitted`). Wit
 | `CONTACT_PER_SESSION_PER_HOUR` | `3` | `contact` limiter bucket, per `X-MM-Session-ID` per hour. |
 | `CONTACT_PER_IP_PER_HOUR` | `10` | `contact` limiter bucket, per IP per hour. The dial to turn if the form is abused (there is no CAPTCHA). |
 
-Settings API (additive): `GET/PATCH /api/account/settings` also carry `emailAiJobFinished` (default `false`) and `emailExpiryDigest` (default `true`); an email-only PATCH is valid. **Deploy:** run migration `20261024004_add_transactional_email` before this build serves traffic (settings reads select the new columns and `mm_users.locale`).
+Settings API (additive; MA23 adds `pushJobFinished`, default `true`, see 4.16): `GET/PATCH /api/account/settings` also carry `emailAiJobFinished` (default `false`) and `emailExpiryDigest` (default `true`); an email-only PATCH is valid. **Deploy:** run migration `20261024004_add_transactional_email` before this build serves traffic (settings reads select the new columns and `mm_users.locale`).
 
 **Go-live checklist (Mitch):** verify the sending domain in Resend (add the DKIM CNAME/TXT and
 SPF TXT records Resend shows, optionally DMARC), create an API key with "sending access" only,
@@ -1121,6 +1121,29 @@ Jobs: `mm_conversion_jobs.tool` = `voice_tts` | `voice_convert` |
 first delete the `voices/` objects (they are voice samples), then run the down
 migration.
 
+### 4.16 Push notifications (MA23)
+
+FCM push for "your job finished". Ships **dark**: nothing is sent until `PUSH_ENABLED=true`.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PUSH_ENABLED` | `false` | Build the FCM sender and wrap the email notifier with the push notifier. Also needs `FIREBASE_PROJECT_ID` (shared with auth) and the database. Unset/false, or an FCM init failure (logged as `push: FCM init failed; email only`), leaves email-only behaviour exactly as before. |
+| `FIREBASE_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS` | | Already used for auth; the same credentials send FCM. Never print them. |
+
+**IAM:** the API's service account needs **Firebase Cloud Messaging API Admin** (`roles/firebasecloudmessaging.admin`) in addition to its auth role, and the **Firebase Cloud Messaging API (V1)** must be enabled for the project. Without the role every send fails (logged `push: FCM send failed`, counted `mm_push_sends_total{outcome="failed"}`), tokens are NOT disabled, and the email path still runs.
+
+**Rule** (rule set unchanged in `services/job_notify.go`: AI job, > 120 s, signed-in owner, no status read in the last 60 s; once per job): `push_job_finished` on (default) and at least one active token accepted by FCM -> push only, no email. Otherwise (setting off, no tokens, every send failed, store error) -> the email service, which applies its own `email_ai_job_finished` opt-in (default off). One fan-out per job; one send per locale group of the user's tokens (token locale, else account locale, else en-us).
+
+**Tokens:** table `mm_push_tokens` (migration `20261101001_add_push_tokens`, run `go run ./internal/migrations up` BEFORE deploying; the settings column `mm_user_settings.push_job_finished` rides with it). At most 10 active tokens per user (older ones become `disabled_reason='superseded'`). FCM `unregistered` / `invalid` verdicts disable the token (`mm_push_tokens_disabled_total{reason}`). A token re-registered by another account moves to that account.
+
+**Verify with a test account:** 1) register a token from a preview build (MA24) or `curl -X POST /api/account/push-tokens -H "Authorization: Bearer <id token>" -d '{"token":"<fcm token>","platform":"android","appVersion":"dev","locale":"en"}'` (204); 2) run an AI job longer than 120 s and close the app; 3) expect the notification, no email, and `mm_push_sends_total{platform="android",outcome="sent"}` +1.
+
+**Disable a token by SQL:** `UPDATE mm_push_tokens SET disabled_at = now(), disabled_reason = 'manual' WHERE token = '...';` (a user's whole set: `WHERE user_id = '<uuid>'`). Inspect without exposing tokens: `SELECT platform, app_version, last_seen_at, disabled_at, disabled_reason FROM mm_push_tokens WHERE user_id = '<uuid>';`.
+
+**Metrics:** `mm_push_sends_total{platform,outcome=sent|failed|token_disabled}`, `mm_push_tokens_disabled_total{reason}`. **Analytics:** `server_push_sent` (lower bound: dropped when the job's creator sent no visitor/session ids; the counter and table are the record).
+
+**Rollback:** `PUSH_ENABLED=false` and restart (email-only). Tokens stay in the table; the down migration drops the table and the setting column.
+
 ---
 
 ## 5. HTTP API surface
@@ -1192,6 +1215,8 @@ All routes live under `/api/` except `/healthz`.
 | POST | `/api/voices/presets/:preset/speak` | MM77. Anonymous allowed. Same body; `:preset` from capabilities. `404 preset_not_found`. One `ai_ops`. | Yes |
 | POST | `/api/voices/convert` | MM77. Multipart `input` + `voiceId` (owner) or `preset`, optional `language`. 403 `voice_convert_not_in_plan` (anonymous), 413 `voice_input_too_long {limit,seconds}` over `voicesConvertMaxSeconds`. `202 {jobId, tool:"voice_convert"}`. One `ai_ops`. | Yes |
 | POST | `/api/voices/shift` | MM77. Multipart `input` + `semitones` (clamped ±12), `formant` (`preserved`\|`shifted`) or `preset` (`deeper`, `higher`, `child`, `elder`, `telephone`). Input up to the tier's `maxVideoSeconds`. `202 {jobId, tool:"voice_shift"}`. One `ops`. No GPU, no mm-voices, no watermark. | Yes |
+| POST | `/api/account/push-tokens` | MA23. Firebase auth. `{token (1..4096), platform: ios\|android, appVersion? (<=64), locale?}` -> `204`. 400 `invalid_token` / `invalid_platform` / `invalid_app_version` / `invalid_body`, 409 `account_not_synced`, 503 `push_unavailable`. Re-registering an existing token refreshes it, re-enables it and moves it to the caller. No quota charge. | Yes |
+| DELETE | `/api/account/push-tokens` | MA23. Firebase auth. `{token}` -> `204` whether or not a row was deleted (only the caller's own row can be removed; never reveals other users' tokens). | Yes |
 | GET | `/api/studio/capabilities` | MM79. Public, always 200, `Cache-Control: private, max-age=10`. `{voices: bool}` = `VOICES_ENABLED`, mm-voices answers `/health`, and Darkroom has its database + S3. The UI's MM backend reads it once per editor load; an API without the route (404) reads as `voices:false`. The CreaTV embed never calls it (`voices:false` hard-coded). | No |
 | POST | `/api/studio/projects/:id/voiceover` | MM79 Darkroom "Generate voiceover". JSON `{voiceId? \| preset?, text, language, exaggeration?}` (exactly one of `voiceId`/`preset`). Project owner only (`requireProjectAccess`: 404 for a stranger); a saved voice needs an account (401 `sign_in_required`, answered before the charge by `voicesPreCharge`), a preset works for a guest on their session's project. Same validation and codes as `/api/voices/:id/speak` (400 `voice_required` / `text_required` / `text_too_long {limit,length,maxSeconds,tier}` / `language_not_supported` / `exaggeration_invalid` / `invalid_body`, 404 `voice_not_found` / `preset_not_found`, 503 `voices_unavailable` / `voices_storage_unavailable` / `studio_unavailable`). `202 {jobId, tool:"voice_tts"}`; poll `/api/job/:id`. When the WAV exists the job uploads it to `studio/<date>/<session>/<uuid>.wav`, creates an audio asset ("Generated voiceover <UTC time>.wav"), builds the audio proxy + peaks (the derive tail, `ingestStudioAudio`) and ledgers the row; the completed job carries `assetId` (its `resultUrl` stays the MP3 download). An ingest failure fails the job ("Could not add the voiceover to the project…") and refunds. One `ai_ops` (quotaRoutes `IsStudioVoiceoverPath`). Server truth: `server_job_*` with tool `voice_tts`. | Yes |
 
@@ -1248,6 +1273,8 @@ After every mutating method (`UpdateJobStatus`, `UpdateJobProgress`,
 `SetTranscodeReport`, `SetResultMetadata`), `JobManager.notifySubscribers`
 snapshots the job and non-blocking-sends to every subscriber channel. The
 SSE handler at `/api/job/:jobId/events` is the only consumer today.
+
+**Finished-job fan-out (MA23):** on a long, unwatched AI job's terminal transition `maybeNotifyFinished` calls the single `JobFinishedNotifier` once with `models.JobFinished{UserID, JobID, Tool, Failed, VisitorID, SessionID}`. With `PUSH_ENABLED` that is `push.Notifier` (FCM first), which calls the wrapped email service only when no push was accepted; otherwise it is the email service directly (section 4.16).
 
 ---
 

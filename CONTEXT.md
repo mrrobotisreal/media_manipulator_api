@@ -79,6 +79,16 @@ _Avoid_: confusing it with `RESULT_OWNERSHIP_ENFORCE`, which guards downloads an
 The per-route hourly rate-limit bucket keyed on the hashed `mm_users.id` of a verified, synced caller (`limits.Limiter.UserSubject`), with the route's session limit and scope `user`; it replaces the IP and session buckets for that caller. Anonymous and unsynced callers keep IP + session.
 _Avoid_: per-account quota (the tier quota is a separate daily allowance).
 
+**Push token** (MA23):
+An FCM device registration token in `mm_push_tokens` (uuid `user_id`, unique `token`, platform ios|android, app version, locale, `disabled_at`/`disabled_reason`). A credential for one device's push channel: never logged, never exported, never in an event. At most 10 active per user. FCM `unregistered`/`invalid` disables it; a re-registration re-enables it and moves it to the registering account. Registered by `POST /api/account/push-tokens`, removed by `DELETE`.
+_Avoid_: device id, push id.
+
+**job_updates channel** (MA23):
+The Android notification channel id (`job_updates`) every job-finished push targets; MA24 creates the channel on the device. The push payload is `notification {title, body}` (tool display name only, never a file name) plus `data {jobId, tool, status: completed|failed, url: mediamanipulator://job/<jobId>}`.
+
+**Push notifier** (MA23):
+`push.Notifier`, the `services.JobFinishedNotifier` when `PUSH_ENABLED`. Wraps the email service: push first, email only when no device accepted the push.
+
 **GPU slot** (MM94):
 One grant from the shared VRAM-aware queue `services.GPUScheduler` (`SharedGPUScheduler()`, `acquireGPUForJob`, `withGPU`): a card index plus a release, held for exactly the time a GPU consumer runs. Every GPU consumer in the request path takes one: Whisper, restoration, document scan, voices, the upload AI tools (rembg, Real-ESRGAN, face privacy, redaction, LaMa, DeepFilterNet, Demucs, RIFE; `ForceIndex` = the tool's configured card) and every Ollama call (`Kind: ollama[<caller>]`, `ForceIndex` = the daemon's card from `OLLAMA_GPU_INDEX_BY_URL`, `keep_alive` 0 before release so the VRAM is really free). A batch (video-summary vision, caption translation, analysis frame batches) holds one slot for the whole batch. A queued wait is added to the job's `queueWaitMs` (MM33). With no `nvidia-smi` the slot is a no-op.
 _Avoid_: "lease" for this (a `gpu.Manager` lease is audit/metrics only and never blocks); a third scheduler.
