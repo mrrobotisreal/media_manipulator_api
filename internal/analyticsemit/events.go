@@ -108,6 +108,18 @@ const ServerPushSent = "server_push_sent"
 // media-manipulator-analytics MM49.
 const ServerVectorExportCounted = "server_vector_export_counted"
 
+// Aperture (MM101, design PHOTO_EDITOR.md §10). Emitted by POST
+// /api/photo/projects/:id/export, POST /api/photo/export and POST
+// /api/photo/batch once the job(s) are accepted (the 202): {format, tier,
+// megapixels_bucket, batch}. format is jpg|png|webp|avif|tiff; tier the
+// caller's tier; megapixels_bucket (<=2|<=8|<=16|<=32|>32) the OUTPUT size
+// after the tier clamp (the largest of a batch); batch true for /photo/batch,
+// where ONE event covers the whole run. Identity comes from the request
+// headers (the editor sends X-MM-Visitor-ID only with analytics consent), so
+// without it Emit drops the event and the job/ledger rows stay the ground
+// truth. Catalog entry: media-manipulator-analytics MM101.
+const ServerPhotoExportCounted = "server_photo_export_counted"
+
 // Voices (MM79, design docs/design/VOICES.md §4.5). Emitted by POST
 // /api/voices and POST /api/voices/design once the voice row and its audio
 // are stored (the 201): {kind: cloned|designed, languageHint, tier}. The
@@ -118,3 +130,19 @@ const ServerVectorExportCounted = "server_vector_export_counted"
 // lifecycle with tool voice_tts | voice_convert | voice_shift. Catalog entry:
 // media-manipulator-analytics MM79.
 const ServerVoiceCreated = "server_voice_created"
+
+// MegapixelBucket is the catalog's megapixels_bucket vocabulary
+// (<=2|<=8|<=16|<=32|>32), shared with the UI's photoMegapixelBucket.
+func MegapixelBucket(mp float64) string {
+	switch {
+	case mp <= 2:
+		return "<=2"
+	case mp <= 8:
+		return "<=8"
+	case mp <= 16:
+		return "<=16"
+	case mp <= 32:
+		return "<=32"
+	}
+	return ">32"
+}

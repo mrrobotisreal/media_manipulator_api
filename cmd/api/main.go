@@ -411,6 +411,7 @@ func main() {
 	photoHandler.SetPipeline(newPhotoPipeline(cfg, jobManager, cmdRunner))
 	photoHandler.SetDeletion(newUserDeleteSweeper(cfg, store, jobManager, s3Client, metricsReg, logging))
 	photoHandler.SetDeletionMetric(func(scope string) { metricsReg.DataDeleted(scope) })
+	photoHandler.SetAnalyticsEmitter(analyticsEmitter) // MM101 server_photo_export_counted
 
 	router := setupRouter(cfg, conversionHandler, studioHandler, vectorHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg, analyticsEmitter)
 

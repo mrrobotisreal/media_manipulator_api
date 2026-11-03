@@ -19,6 +19,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
@@ -532,6 +533,7 @@ func (h *PhotoHandler) ProjectExport(c *gin.Context) {
 		doc: doc, params: params, masksDir: filepath.Join(dir, "masks"),
 	}, middleware.QuotaChargeOf(c))
 	registerJobDirs(c, job.ID, false, true)
+	h.emitCounted(c, params.Format, h.outputMP(c, p.OriginalWidth, p.OriginalHeight, params.MaxMegapixels), false)
 	c.JSON(http.StatusAccepted, gin.H{"jobId": job.ID})
 }
 
@@ -629,6 +631,7 @@ func (h *PhotoHandler) Batch(c *gin.Context) {
 		}
 	}
 	jobs := make([]gin.H, 0, len(projects))
+	biggest := 0.0
 	for i, p := range projects {
 		// The template's heals/masks refer to the template photo's files: each
 		// project keeps its own source size and starts from its own base.
@@ -662,6 +665,12 @@ func (h *PhotoHandler) Batch(c *gin.Context) {
 		}, charge)
 		registerJobDirs(c, job.ID, false, true)
 		jobs = append(jobs, gin.H{"projectId": p.ID, "jobId": job.ID})
+		if mp := h.outputMPValue(c, p.OriginalWidth, p.OriginalHeight, params.MaxMegapixels); mp > biggest {
+			biggest = mp
+		}
+	}
+	if len(jobs) > 0 {
+		h.emitCounted(c, params.Format, analyticsemit.MegapixelBucket(biggest), true)
 	}
 	c.JSON(http.StatusAccepted, gin.H{"jobs": jobs})
 }
@@ -746,6 +755,7 @@ func (h *PhotoHandler) StatelessExport(c *gin.Context) {
 	}, middleware.QuotaChargeOf(c))
 	registerJobDirs(c, job.ID, true, true)
 	up.keep()
+	h.emitCounted(c, params.Format, h.outputMP(c, up.w, up.h, params.MaxMegapixels), false)
 	c.JSON(http.StatusAccepted, gin.H{"jobId": job.ID})
 }
 
@@ -1244,4 +1254,64 @@ func (h *PhotoHandler) StatelessHeal(c *gin.Context) {
 		_ = jm.UpdateJobStatus(job.ID, models.StatusCompleted)
 	})
 	c.JSON(http.StatusAccepted, gin.H{"jobId": job.ID})
+}
+
+// outputMPValue is the export's output size in megapixels: the source size
+// capped by the tier-clamped target (the same clamp startExport applies).
+func (h *PhotoHandler) outputMPValue(c *gin.Context, w, hgt, requested int) float64 {
+	mp := float64(w) * float64(hgt) / 1e6
+	if limit := float64(h.exportMegapixels(c, requested)); limit > 0 && mp > limit {
+		mp = limit
+	}
+	return mp
+}
+
+// outputMP is outputMPValue as the catalog bucket.
+func (h *PhotoHandler) outputMP(c *gin.Context, w, hgt, requested int) string {
+	return analyticsemit.MegapixelBucket(h.outputMPValue(c, w, hgt, requested))
+}
+
+// emitCounted sends server_photo_export_counted (MM101) once the export job(s)
+// are accepted. Fire-and-forget through the analytics emitter; tests replace
+// it through the `counted` seam. The ledger and job rows stay the ground truth:
+// the event needs the visitor and session ids the editor sends only with
+// analytics consent.
+func (h *PhotoHandler) emitCounted(c *gin.Context, format, mpBucket string, batch bool) {
+	if h == nil || h.counted == nil {
+		return
+	}
+	tier := "anonymous"
+	if res, ok := middleware.ResolveTier(c); ok {
+		tier = string(res.Tier)
+	}
+	h.counted(c, format, tier, mpBucket, batch)
+}
+
+// SetAnalyticsEmitter attaches the server-truth analytics feed (MM101). A nil
+// or disabled emitter sends nothing.
+func (h *PhotoHandler) SetAnalyticsEmitter(e *analyticsemit.Emitter) {
+	if h == nil || !e.Enabled() {
+		return
+	}
+	h.counted = func(c *gin.Context, format, tier, mpBucket string, batch bool) {
+		e.Emit(photoCountedEvent(c, format, tier, mpBucket, batch, time.Now().UTC()))
+	}
+}
+
+// photoCountedEvent builds the server_photo_export_counted event. Every
+// property is a closed vocabulary; the tier also travels in the context block.
+func photoCountedEvent(c *gin.Context, format, tier, mpBucket string, batch bool, at time.Time) analyticsemit.Event {
+	return analyticsemit.Event{
+		EventName: analyticsemit.ServerPhotoExportCounted,
+		EventTS:   at,
+		VisitorID: strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
+		SessionID: strings.TrimSpace(c.GetHeader("X-MM-Session-ID")),
+		Context:   analyticsemit.Context("", "", "", tier),
+		Properties: map[string]any{
+			"format":            format,
+			"tier":              tier,
+			"megapixels_bucket": mpBucket,
+			"batch":             batch,
+		},
+	}
 }

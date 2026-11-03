@@ -1172,6 +1172,16 @@ Aperture (code name `photo`, ADR-0017) is the photo editor. MM95 ships the serve
 
 Operator derives from Pro with `photoProjects` unlimited. `/api/tiers` serves `photoProjects`, `photoMaxMegapixels`, `photoBatch` for every tier. `MaxOutputHeight` does **not** apply to Aperture (a test pins that the photo handler never consults it). Project CRUD is not in `quotaRoutes` and spends no allowance. MM96 routes: export (project and stateless), batch (n units, charged inside the handler) and subject mask (project and stateless) spend `ops`; heal (project and stateless) spends `ai_ops`; every one is refunded on a 4xx/5xx and when its job fails (MM73).
 
+**Aperture analytics and gating (MM101).** Three more rows for this table's neighbours:
+
+| Variable / event | Default | Notes |
+|---|---|---|
+| `server_photo_export_counted {format, tier, megapixels_bucket, batch}` | on when `ANALYTICS_INGEST_URL` + `ANALYTICS_SERVER_KEY` are set | Emitted once per accepted `POST /api/photo/projects/:id/export`, `POST /api/photo/export` and `POST /api/photo/batch` (a batch is ONE event, `batch:true`, bucket of its largest output). Needs the caller's `X-MM-Visitor-ID` + `X-MM-Session-ID`; the editor sends the visitor id only with analytics consent, so consent-less exports are skipped by the emitter as `skipped_no_identity` (the job and ledger rows stay the ground truth). Deploy the analytics service (with its MM101 migrations) BEFORE this API, or the name is stored `is_unknown`. |
+| 403 `photo_batch_limit {limit, upgradePath}` | n/a | The batch is longer than the tier's `TIER_<T>_PHOTO_BATCH` (free 3, premium 10, pro 25). Nothing was charged or saved. `upgradePath` is the next rung that raises it. Anonymous gets 403 `sign_in_required` instead (`photoBatch` 0). The UI shows the upgrade CTA and sends `photo_export_gated {reason: batch}`. |
+| 403 `photo_projects_limit {limit, used, upgradePath}` | n/a | A new saved project would exceed `TIER_<T>_PHOTO_PROJECTS` (free 5, premium 50, pro unlimited). Delete projects (or raise the tier); existing ones are untouched. The UI sends `photo_export_gated {reason: projects}`. |
+
+The admin `/aperture` page (admin UI, behind the analytics `/v1/admin/photo/*` datasets) shows funnel, export health (client vs `server_photo_export_counted`), gating hits and top adjustments.
+
 #### Install (Mitch, once; MM96)
 
 ```bash
