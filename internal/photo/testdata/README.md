@@ -5,7 +5,7 @@ This directory is the **contract** between the Go sanitizer (`internal/photo`, M
 ## Files and copy rule
 
 - `docs/*.json` are **byte-identical copies** of the UI's `lib/photo/fixtures/docs/*.json` (and later `mobile-app/src/photo/fixtures/`). Authored here first (MM95, API commit recorded in `.scratch/mm95-mm97/fixtures-ready`); the UI copies them byte for byte. Never regenerate on one side only: any change lands in both repos in one change, or neither.
-- **Valid canonical fixtures** (13): `blank`, `defaults`, `clamped`, `rung1-all-layers`, `hsl-grey-except-red`, `curves-s`, `levels-channels`, `masks-all-kinds`, `geometry-rotate-crop`, `geometry-perspective`, `heal-two-bases`, `detail-all`, `unknown-fields`. `sanitize(file) == file` (one compact line + exactly one trailing `\n`), and sanitizing twice gives the same bytes.
+- **Valid canonical fixtures** (15; `heal-base-refs` and `masks-named` were added by MM96 for D2/D3): `blank`, `defaults`, `clamped`, `rung1-all-layers`, `hsl-grey-except-red`, `curves-s`, `levels-channels`, `masks-all-kinds`, `geometry-rotate-crop`, `geometry-perspective`, `heal-two-bases`, `heal-base-refs`, `masks-named`, `detail-all`, `unknown-fields`. `sanitize(file) == file` (one compact line + exactly one trailing `\n`), and sanitizing twice gives the same bytes.
 - **Invalid fixtures** (4, in `docs/`, pretty-printed, never canonical): `invalid-version` (version 2 -> `unsupported_version`), `invalid-layer-type` (`sparkle` -> `unknown_layer_type`), `invalid-curve-points` (duplicate x -> `invalid_curve_points`), `oversize-brush` (2000x2000 brush -> `brush_too_large`). The UI Zod schema must reject all four.
 - `inputs/*.json` are **non-canonical inputs** that must produce a canonical fixture: `minimal` -> `blank`, `defaults` -> `defaults` (one layer of each of the 27 types with only `id`+`type`: every default filled), `clamp` -> `clamped` (out-of-range numbers). The Zod side must produce the same canonical bytes for these (schema `clamp` + defaults; Zod refuses out-of-range in the *editor*, so for this parity test use a clamping parse).
 - `PHOTO_FIXTURES_UPDATE=1 go test ./internal/photo -run Generate` rewrites the canonical files from `inputs/` and `docs/` (maintainers only).
@@ -34,7 +34,8 @@ Errors: Go `*ValidationError{Code, Path, Message}` wrapping `photo.ErrInvalidDoc
 |---|---|---|
 | `version` | `1` | required, else `unsupported_version` |
 | `source` | `{width, height, orientation}` | `width`,`height` int 1..100000 **required**; `orientation` always 1 |
-| `heals` | `[{id, maskRef}]` | default `[]`; `maskRef` must match `^masks/[A-Za-z0-9_-]{1,40}\.png$` |
+| `heals` | `[{id, maskRef?, baseRef?}]` | default `[]`; at least one of the two per entry (else `invalid_doc`); `maskRef` matches `^masks/[A-Za-z0-9_-]{1,40}\.png$`; `baseRef` matches `^bases/[A-Za-z0-9_-]{1,64}\.png$` (server base) or `^local:[A-Za-z0-9_-]{1,64}$` (a guest's browser-local base); each **absent** when unset (MM96 D2) |
+| `masks` | `{<maskId>: Mask}` | optional, **absent when unset**; an empty `{}` canonicalises to absent; <= 64 entries; ids per the id regex (`bad_id`); a `layer.mask` of `{ref}` must name a key (else `invalid_doc`) (MM96 D3) |
 | `geometry` | object | below; default object |
 | `layers` | `[Layer]` | default `[]`, <= 64, applied in order |
 | `output` | `{format?, quality?, metadataMode?}` | default `{}`; `format` in `jpg\|png\|webp\|avif\|tiff`; `quality` int 1..100; `metadataMode` in `keep\|strip`; each **absent** when unset |
@@ -43,7 +44,7 @@ Errors: Go `*ValidationError{Code, Path, Message}` wrapping `photo.ErrInvalidDoc
 
 ## Layer
 
-`{id, type, name?, enabled, opacity, blend, params, mask}`: `id` required id; `type` one of the 27 below (else `unknown_layer_type`); `name?` string <= 80 (absent when unset; additive field decided by the coordinator); `enabled` true; `opacity` 0..1 (1); `blend` `normal | luminosity | color` (`normal`); `params` per type (all params default, so `params` may be omitted); `mask` `null` (default) or Mask.
+`{id, type, name?, enabled, opacity, blend, params, mask}`: `id` required id; `type` one of the 27 below (else `unknown_layer_type`); `name?` string <= 80 (absent when unset; additive field decided by the coordinator); `enabled` true; `opacity` 0..1 (1); `blend` `normal | luminosity | color` (`normal`); `params` per type (all params default, so `params` may be omitted); `mask` `null` (default), a Mask, or `{ref: "<maskId>"}` naming a key of `doc.masks` (D3).
 
 ### Layer types and params (min..max, default)
 
