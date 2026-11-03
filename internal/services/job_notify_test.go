@@ -11,11 +11,13 @@ import (
 type recNotifier struct {
 	mu    sync.Mutex
 	calls []string
+	last  models.JobFinished
 }
 
-func (n *recNotifier) AIJobFinished(userID, jobID string, failed bool) {
+func (n *recNotifier) AIJobFinished(j models.JobFinished) {
 	n.mu.Lock()
-	n.calls = append(n.calls, userID+"/"+jobID)
+	n.calls = append(n.calls, j.UserID+"/"+j.JobID)
+	n.last = j
 	n.mu.Unlock()
 }
 
@@ -110,4 +112,16 @@ func TestNotifyAIOptionsOnConvertJob(t *testing.T) {
 func TestNoNotifierIsInert(t *testing.T) {
 	jm := NewJobManager()
 	finishedJob(t, jm, 5*time.Minute, signedIn, "video_restore", true) // must not panic
+}
+
+// MA23: the notifier receives the tool id and the creator's correlation ids.
+func TestNotifyCarriesToolAndIdentity(t *testing.T) {
+	jm := NewJobManager()
+	n := &recNotifier{}
+	jm.SetJobFinishedNotifier(n)
+	owner := JobOwner{UserID: "user-1", Tier: "free", VisitorID: "v-1", SessionID: "s-1"}
+	id := finishedJob(t, jm, 3*time.Minute, owner, "ai_upscale", true)
+	if n.last.Tool != "ai_upscale" || n.last.JobID != id || n.last.VisitorID != "v-1" || n.last.SessionID != "s-1" || n.last.Failed {
+		t.Errorf("notified with %+v", n.last)
+	}
 }

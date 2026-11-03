@@ -131,7 +131,7 @@ func TestDisabledSenderIsAnInertNoop(t *testing.T) {
 	svc.Welcome(verified("u1"), "", "")
 	svc.PaymentFailed(verified("u1"))
 	svc.AccountDeleted(verified("u1"))
-	svc.AIJobFinished("u1", "job1", false)
+	svc.AIJobFinished(models.JobFinished{UserID: "u1", JobID: "job1", Failed: false})
 	n, err := svc.RunDigestOnce(context.Background())
 	svc.Wait()
 	if err != nil || n != 0 {
@@ -150,7 +150,7 @@ func TestNilServiceIsSafe(t *testing.T) {
 	s.Welcome(verified("u"), "", "")
 	s.PaymentFailed(verified("u"))
 	s.AccountDeleted(verified("u"))
-	s.AIJobFinished("u", "j", false)
+	s.AIJobFinished(models.JobFinished{UserID: "u", JobID: "j", Failed: false})
 	s.Wait()
 }
 
@@ -192,14 +192,17 @@ func TestConcurrentTriggersSendOnce(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
-		go func() { defer wg.Done(); svc.AIJobFinished("u1", "job-1", false) }()
+		go func() {
+			defer wg.Done()
+			svc.AIJobFinished(models.JobFinished{UserID: "u1", JobID: "job-1", Failed: false})
+		}()
 	}
 	wg.Wait()
 	svc.Wait()
 	if snd.count() != 1 {
 		t.Fatalf("same job sent %d times, want 1", snd.count())
 	}
-	svc.AIJobFinished("u1", "job-2", true)
+	svc.AIJobFinished(models.JobFinished{UserID: "u1", JobID: "job-2", Failed: true})
 	svc.Wait()
 	if snd.count() != 2 {
 		t.Errorf("a different job should send: %d", snd.count())
@@ -211,13 +214,13 @@ func TestAIJobFinishedRespectsOptIn(t *testing.T) {
 	st.users["u1"] = verified("u1")
 	snd := &fakeSender{}
 	svc, _ := newSvc(st, snd)
-	svc.AIJobFinished("u1", "job-1", false) // default off
+	svc.AIJobFinished(models.JobFinished{UserID: "u1", JobID: "job-1", Failed: false}) // default off
 	svc.Wait()
 	if snd.count() != 0 {
 		t.Fatal("sent without opt-in")
 	}
 	st.prefs["u1"] = [2]bool{true, true}
-	svc.AIJobFinished("u1", "job-1", false)
+	svc.AIJobFinished(models.JobFinished{UserID: "u1", JobID: "job-1", Failed: false})
 	svc.Wait()
 	if snd.count() != 1 {
 		t.Fatal("did not send after opt-in")

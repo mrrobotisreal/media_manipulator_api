@@ -2,8 +2,11 @@ package telemetry
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // MA23: mm_push_tokens persistence. The token is a bearer secret for the device's
@@ -123,6 +126,22 @@ func (s *Store) ActivePushTokens(ctx context.Context, userID string) ([]PushToke
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+// PushJobFinishedPref reads the push_job_finished preference; no settings row = the
+// default (on).
+func (s *Store) PushJobFinishedPref(ctx context.Context, userID string) (bool, error) {
+	if !s.Enabled() {
+		return false, ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	on := true
+	err := s.Pool.QueryRow(ctx, `SELECT push_job_finished FROM mm_user_settings WHERE user_id = $1::uuid`, userID).Scan(&on)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return true, nil
+	}
+	return on, err
 }
 
 // DisablePushToken marks a token unusable (FCM said unregistered/invalid).
