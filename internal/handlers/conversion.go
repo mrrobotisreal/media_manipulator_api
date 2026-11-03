@@ -1028,6 +1028,9 @@ func aiOperation(job *models.ConversionJob) (string, bool) {
 }
 
 func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string {
+	if name, ok := photoJobResultName(job); ok {
+		return name
+	}
 	name := strings.TrimSuffix(safeFilename(job.OriginalFile.Name), filepath.Ext(job.OriginalFile.Name))
 	if name == "" {
 		name = "converted"
@@ -1071,6 +1074,12 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 }
 
 func (h *ConversionHandler) outputPath(job *models.ConversionJob, outputDir string) string {
+	// MM96: Aperture jobs (photo_export, stateless photo_heal) write their
+	// result under the recorded ResultFileName ("<name> (retouched).<ext>",
+	// "healed.png"), not converted<ext>.
+	if name, ok := photoJobResultName(job); ok {
+		return filepath.Join(outputDir, name)
+	}
 	// MM74: a video summary's downloadable result is summary.md.
 	if isVideoSummaryJob(job) {
 		return filepath.Join(outputDir, services.SummaryMarkdownFile)
@@ -1234,4 +1243,22 @@ func hashFile(path string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// photoJobResultName returns the on-disk result name of an Aperture job
+// (MM96): the photo handler records it as ResultFileName before the worker
+// writes the file. Only a single safe path segment is honoured.
+func photoJobResultName(job *models.ConversionJob) (string, bool) {
+	if job == nil || job.Options == nil {
+		return "", false
+	}
+	tool, _ := job.Options["tool"].(string)
+	if tool != PhotoToolExport && tool != PhotoToolHeal {
+		return "", false
+	}
+	name := job.ResultFileName
+	if name == "" || name != filepath.Base(name) || name == "." || name == ".." || strings.ContainsAny(name, "/\\") {
+		return "", false
+	}
+	return name, true
 }
