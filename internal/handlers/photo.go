@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -45,8 +46,7 @@ import (
 // the browser (IndexedDB) and use MM96's stateless routes. Ownership is strict
 // and DB-backed (requirePhotoOwner): the owner, or an operator; a stranger gets
 // the same 404 a missing project gets. The MM96 routes (export, batch, heal,
-// subject mask, and their stateless twins) are registered here as 501 stubs so
-// clients can be written against the final route table.
+// subject mask, and their stateless twins) live in photo_render.go.
 
 // PhotoStore is the slice of *telemetry.Store the Aperture routes use.
 type PhotoStore interface {
@@ -58,6 +58,8 @@ type PhotoStore interface {
 	CompletePhotoIngest(ctx context.Context, id string, width, height int, hasAlpha bool, doc []byte) (*telemetry.PhotoProject, error)
 	SetPhotoProjectStatus(ctx context.Context, id, status, errMsg string) (*telemetry.PhotoProject, error)
 	DeletePhotoProject(ctx context.Context, id, ownerUID string) error
+	UpsertPhotoDerivative(ctx context.Context, d telemetry.PhotoDerivative) (*telemetry.PhotoDerivative, error)
+	FindPhotoDerivative(ctx context.Context, projectID, kind, hash string) (*telemetry.PhotoDerivative, error)
 }
 
 // PhotoHandler serves /api/photo/*.
@@ -68,6 +70,9 @@ type PhotoHandler struct {
 	expirer  Expirer
 	logger   *slog.Logger
 	onDelete func(scope string)
+	pipe     *PhotoPipeline
+	capsOnce sync.Once
+	caps     PhotoCaps
 }
 
 const (
@@ -93,7 +98,7 @@ var photoExtMime = map[string]string{
 
 // photoFileRe matches the only relpaths /files/*relpath serves: two safe
 // segments, masks/<id>.png or bases/<hash>.png.
-var photoFileRe = regexp.MustCompile(`^(masks/[A-Za-z0-9_-]{1,40}|bases/[A-Za-z0-9_-]{1,64})\.png$`)
+var photoFileRe = regexp.MustCompile(`^(masks/[A-Za-z0-9_-]{1,40}\.png|bases/[A-Za-z0-9_-]{1,64}\.png|bases/[A-Za-z0-9_-]{1,64}\.proxy\.(jpg|png))$`)
 
 // photoCapabilityFormats are the export formats the editor will offer (MM96).
 var photoCapabilityFormats = []string{"jpg", "png", "webp", "avif", "tiff"}
@@ -135,17 +140,15 @@ func RegisterPhotoRoutes(r gin.IRouter, h *PhotoHandler) {
 	p.GET("/projects/:id/thumb", h.ServeThumb)
 	p.GET("/projects/:id/files/*relpath", h.ServeFile)
 
-	// MM96 owns these; registered now so the route table is final.
-	notImpl := func(c *gin.Context) {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "not_implemented", "message": "This Aperture route ships with MM96"})
-	}
-	p.POST("/projects/:id/masks/subject", notImpl)
-	p.POST("/projects/:id/heal", notImpl)
-	p.POST("/projects/:id/export", notImpl)
-	p.POST("/batch", notImpl)
-	p.POST("/export", notImpl)
-	p.POST("/masks/subject", notImpl)
-	p.POST("/heal", notImpl)
+	// MM96: export, batch, subject mask, heal and their stateless twins
+	// (photo_render.go).
+	p.POST("/projects/:id/masks/subject", h.ProjectSubjectMask)
+	p.POST("/projects/:id/heal", h.ProjectHeal)
+	p.POST("/projects/:id/export", h.ProjectExport)
+	p.POST("/batch", h.Batch)
+	p.POST("/export", h.StatelessExport)
+	p.POST("/masks/subject", h.StatelessSubjectMask)
+	p.POST("/heal", h.StatelessHeal)
 }
 
 // --- helpers -------------------------------------------------------------
@@ -336,7 +339,8 @@ func (h *PhotoHandler) withSource(doc []byte, w, hgt int) ([]byte, error) {
 //
 //	200 {enabled, render, formats, maxMegapixels, photoProjects, photoBatch, aiMasks, heal, tier}
 //
-// render, aiMasks and heal are false until MM96 ships its renderer and binaries.
+// render, aiMasks and heal report whether the renderer venv, rembg and LaMa are
+// installed (checked once, cached; MM96).
 func (h *PhotoHandler) Capabilities(c *gin.Context) {
 	tier := tiers.TierAnonymous
 	limits := tiers.Limits{PhotoMaxMegapixels: 12}
@@ -344,15 +348,16 @@ func (h *PhotoHandler) Capabilities(c *gin.Context) {
 		tier, limits = res.Tier, res.Limits
 	}
 	enabled := h != nil && (h.cfg == nil || h.cfg.PhotoEnabled)
+	caps := h.capabilities()
 	c.JSON(http.StatusOK, gin.H{
 		"enabled":       enabled,
-		"render":        false,
+		"render":        caps.Render,
 		"formats":       photoCapabilityFormats,
 		"maxMegapixels": limits.PhotoMaxMegapixels,
 		"photoProjects": limits.PhotoProjects,
 		"photoBatch":    limits.PhotoBatch,
-		"aiMasks":       false,
-		"heal":          false,
+		"aiMasks":       caps.AIMasks,
+		"heal":          caps.Heal,
 		"tier":          string(tier),
 	})
 }

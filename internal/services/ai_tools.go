@@ -134,14 +134,25 @@ const defaultAIToolVRAMMiB = 4096
 // or argv — card itself, also when the scheduler is disabled — so the slot and
 // the subprocess can never disagree. The slot is held only while fn runs.
 func (a *AIService) withToolGPU(ctx context.Context, jobID, tool string, card int, fn func(card int) error) error {
+	return a.withToolGPUKind(ctx, jobID, tool, tool, card, a.jobManager.GPUPriorityOf(jobID), fn)
+}
+
+// withToolGPUKind is withToolGPU with its own scheduler label and queue priority
+// (MM96: Aperture uses kind "rembg[photo]" / "lama[photo]", and its stateless
+// routes have no job id to read the priority from). jobID "" means no job.
+func (a *AIService) withToolGPUKind(ctx context.Context, jobID, tool, kind string, card, priority int, fn func(card int) error) error {
 	force := card
 	req := GPURequest{
-		Kind:            tool,
+		Kind:            kind,
 		VRAMRequiredMiB: a.toolVRAM(tool),
 		ForceIndex:      &force,
-		Priority:        a.jobManager.GPUPriorityOf(jobID),
+		Priority:        priority,
 	}
-	return withGPUVia(ctx, a.acquire, a.jobManager, jobID, req, func(idx int) error {
+	jm := a.jobManager
+	if jobID == "" {
+		jm = nil
+	}
+	return withGPUVia(ctx, a.acquire, jm, jobID, req, func(idx int) error {
 		if idx >= 0 {
 			return fn(idx)
 		}

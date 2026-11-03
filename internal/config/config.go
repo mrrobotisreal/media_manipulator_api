@@ -179,11 +179,18 @@ type Config struct {
 	// /api/photo/projects); defaults equal the uploads numbers.
 	RateLimitPhotoProjectsPerSessionPerHour int
 	RateLimitPhotoProjectsPerIPPerHour      int
-	RateLimitTranscodesPerSessionPerHour    int
-	RateLimitTranscodesPerIPPerHour         int
-	RateLimitAnalysisPerSessionPerHour      int
-	RateLimitAnalysisPerIPPerHour           int
-	RateLimitAuditAllowed                   bool
+	// RateLimitPhotoExport* / RateLimitPhotoAI* (MM96): the photo_export bucket
+	// (export, batch, stateless export; defaults equal the uploads numbers) and
+	// the photo_ai bucket (subject masks and heal; 30 / 60 per hour).
+	RateLimitPhotoExportPerSessionPerHour int
+	RateLimitPhotoExportPerIPPerHour      int
+	RateLimitPhotoAIPerSessionPerHour     int
+	RateLimitPhotoAIPerIPPerHour          int
+	RateLimitTranscodesPerSessionPerHour  int
+	RateLimitTranscodesPerIPPerHour       int
+	RateLimitAnalysisPerSessionPerHour    int
+	RateLimitAnalysisPerIPPerHour         int
+	RateLimitAuditAllowed                 bool
 	// MM32: per-IP hourly cap on the public share routes (descriptor + file
 	// range requests). Keyed by IP only; the caller has no session.
 	RateLimitSharePerIPPerHour int
@@ -347,6 +354,17 @@ type Config struct {
 	PhotoMaxDocBytes                                                                                                 int
 	PhotoMaxMegapixels                                                                                               int
 	PhotoIngestTimeoutSeconds                                                                                        int
+	// MM96 render/AI (RUNBOOK §4.17): PhotoPython + PhotoRenderScript are the
+	// venv interpreter and the deployed photo_render.py; PhotoSubjectModel is the
+	// rembg model for subject masks; the timeouts bound render, subject mask and
+	// heal; PhotoRenderConcurrency caps simultaneous renders (CPU/RAM).
+	PhotoPython                string
+	PhotoRenderScript          string
+	PhotoRenderTimeoutSeconds  int
+	PhotoSubjectModel          string
+	PhotoSubjectTimeoutSeconds int
+	PhotoHealTimeoutSeconds    int
+	PhotoRenderConcurrency     int
 
 	// OperatorEmails is the allowlist behind the `operator` tier: the site's
 	// own people, who get no daily allowance, no saved-project cap and no
@@ -776,6 +794,10 @@ func Load() *Config {
 		RateLimitUploadsPerIPPerHour:            getEnvInt("RATE_LIMIT_UPLOADS_PER_IP_PER_HOUR", 60),
 		RateLimitPhotoProjectsPerSessionPerHour: getEnvInt("RATE_LIMIT_PHOTO_PROJECTS_PER_SESSION_PER_HOUR", getEnvInt("RATE_LIMIT_UPLOADS_PER_SESSION_PER_HOUR", 30)),
 		RateLimitPhotoProjectsPerIPPerHour:      getEnvInt("RATE_LIMIT_PHOTO_PROJECTS_PER_IP_PER_HOUR", getEnvInt("RATE_LIMIT_UPLOADS_PER_IP_PER_HOUR", 60)),
+		RateLimitPhotoExportPerSessionPerHour:   getEnvInt("RATE_LIMIT_PHOTO_EXPORT_PER_SESSION_PER_HOUR", getEnvInt("RATE_LIMIT_UPLOADS_PER_SESSION_PER_HOUR", 30)),
+		RateLimitPhotoExportPerIPPerHour:        getEnvInt("RATE_LIMIT_PHOTO_EXPORT_PER_IP_PER_HOUR", getEnvInt("RATE_LIMIT_UPLOADS_PER_IP_PER_HOUR", 60)),
+		RateLimitPhotoAIPerSessionPerHour:       getEnvInt("RATE_LIMIT_PHOTO_AI_PER_SESSION_PER_HOUR", 30),
+		RateLimitPhotoAIPerIPPerHour:            getEnvInt("RATE_LIMIT_PHOTO_AI_PER_IP_PER_HOUR", 60),
 		RateLimitTranscodesPerSessionPerHour:    getEnvInt("RATE_LIMIT_TRANSCODES_PER_SESSION_PER_HOUR", 10),
 		RateLimitTranscodesPerIPPerHour:         getEnvInt("RATE_LIMIT_TRANSCODES_PER_IP_PER_HOUR", 20),
 		RateLimitAnalysisPerSessionPerHour:      getEnvInt("RATE_LIMIT_ANALYSIS_PER_SESSION_PER_HOUR", 20),
@@ -888,6 +910,13 @@ func Load() *Config {
 		PhotoMaxDocBytes:              getEnvInt("PHOTO_MAX_DOC_BYTES", 8*1024*1024),
 		PhotoMaxMegapixels:            getEnvInt("PHOTO_MAX_MEGAPIXELS", 120),
 		PhotoIngestTimeoutSeconds:     getEnvInt("PHOTO_INGEST_TIMEOUT_SECONDS", 60),
+		PhotoPython:                   getEnv("PHOTO_PYTHON", "/opt/media-manipulator-ai/venvs/photo/bin/python"),
+		PhotoRenderScript:             getEnv("PHOTO_RENDER_SCRIPT", "/opt/media-manipulator-ai/scripts/photo_render.py"),
+		PhotoRenderTimeoutSeconds:     getEnvInt("PHOTO_RENDER_TIMEOUT_SECONDS", 300),
+		PhotoSubjectModel:             getEnv("PHOTO_SUBJECT_MODEL", "isnet-general-use"),
+		PhotoSubjectTimeoutSeconds:    getEnvInt("PHOTO_SUBJECT_TIMEOUT_SECONDS", 90),
+		PhotoHealTimeoutSeconds:       getEnvInt("PHOTO_HEAL_TIMEOUT_SECONDS", 300),
+		PhotoRenderConcurrency:        getEnvInt("PHOTO_RENDER_CONCURRENCY", 2),
 
 		// Operator allowlist — see the struct doc. Same loader as
 		// DR_ALLOWED_EMAILS so membership is a plain lowercase compare.

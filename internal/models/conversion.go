@@ -64,6 +64,19 @@ type ConversionJob struct {
 	// from the WAV header), for the client's voice_generated secondsBucket.
 	// 0, and so omitted, for every other job.
 	ResultSeconds float64 `json:"resultSeconds,omitempty"`
+	// PhotoHeal is the completion payload of a project `photo_heal` job (MM96):
+	// the cached base the client appends to doc.heals. Absent for every other job.
+	PhotoHeal *PhotoHealPayload `json:"healResult,omitempty"`
+}
+
+// PhotoHealPayload is GET /api/job/:id -> healResult for a finished project heal.
+type PhotoHealPayload struct {
+	BaseHash string `json:"baseHash"`
+	BaseRef  string `json:"baseRef"`  // bases/<hash>.png
+	ProxyRef string `json:"proxyRef"` // bases/<hash>.proxy.jpg
+	MaskRef  string `json:"maskRef"`  // masks/<id>.png (the stored stroke mask)
+	Width    int    `json:"width"`
+	Height   int    `json:"height"`
 }
 
 // MetadataAvailability reports which metadata documents can be requested.

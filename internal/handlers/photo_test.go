@@ -33,6 +33,7 @@ type fakePhotoStore struct {
 	projects map[string]*telemetry.PhotoProject
 	deleted  map[string]bool
 	failOn   map[string]error
+	derivs   map[string]telemetry.PhotoDerivative
 }
 
 func newFakePhotoStore() *fakePhotoStore {
@@ -136,6 +137,25 @@ func (f *fakePhotoStore) SavePhotoProject(_ context.Context, id, owner string, e
 	p.Revision++
 	cp := *p
 	return &cp, nil
+}
+
+func (f *fakePhotoStore) UpsertPhotoDerivative(_ context.Context, d telemetry.PhotoDerivative) (*telemetry.PhotoDerivative, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.derivs == nil {
+		f.derivs = map[string]telemetry.PhotoDerivative{}
+	}
+	f.derivs[d.ProjectID+"|"+d.Kind+"|"+d.ParamsHash] = d
+	return &d, nil
+}
+
+func (f *fakePhotoStore) FindPhotoDerivative(_ context.Context, projectID, kind, hash string) (*telemetry.PhotoDerivative, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if d, ok := f.derivs[projectID+"|"+kind+"|"+hash]; ok {
+		return &d, nil
+	}
+	return nil, nil
 }
 
 func (f *fakePhotoStore) CompletePhotoIngest(_ context.Context, id string, w, h int, alpha bool, doc []byte) (*telemetry.PhotoProject, error) {
@@ -721,19 +741,6 @@ func TestPhotoRoutesCapabilitiesPerTier(t *testing.T) {
 		fm, _ := got["formats"].([]any)
 		if len(fm) != 5 || fm[0] != "jpg" || fm[4] != "tiff" {
 			t.Errorf("formats = %v", got["formats"])
-		}
-	}
-}
-
-func TestPhotoRoutesMM96StubsAre501(t *testing.T) {
-	e := newPhotoEnv(t)
-	for _, p := range []string{
-		"/api/photo/projects/x/masks/subject", "/api/photo/projects/x/heal", "/api/photo/projects/x/export",
-		"/api/photo/batch", "/api/photo/export", "/api/photo/masks/subject", "/api/photo/heal",
-	} {
-		w := e.do("POST", p, "free", nil, nil)
-		if w.Code != http.StatusNotImplemented || decode(t, w)["error"] != "not_implemented" {
-			t.Errorf("%s = %d %s", p, w.Code, w.Body.String())
 		}
 	}
 }

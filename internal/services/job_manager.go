@@ -830,6 +830,21 @@ func (jm *JobManager) SetResultSeconds(jobID string, seconds float64) error {
 	return nil
 }
 
+// SetPhotoHeal records the completion payload of a project heal job (MM96).
+func (jm *JobManager) SetPhotoHeal(jobID string, payload models.PhotoHealPayload) error {
+	jm.mu.Lock()
+	job, ok := jm.jobs[jobID]
+	if !ok {
+		jm.mu.Unlock()
+		return fmt.Errorf("job not found")
+	}
+	p := payload
+	job.PhotoHeal = &p
+	jm.mu.Unlock()
+	jm.notifySubscribers(jobID)
+	return nil
+}
+
 // SetResultMime records the sniffed MIME type of the job's result file.
 func (jm *JobManager) SetResultMime(jobID, mime string) error {
 	jm.mu.Lock()

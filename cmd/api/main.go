@@ -408,6 +408,7 @@ func main() {
 
 	// MM95 Aperture: its deletes use the same user-delete sweeper as the others.
 	photoHandler = newPhotoHandler(cfg, store)
+	photoHandler.SetPipeline(newPhotoPipeline(cfg, jobManager, cmdRunner))
 	photoHandler.SetDeletion(newUserDeleteSweeper(cfg, store, jobManager, s3Client, metricsReg, logging))
 	photoHandler.SetDeletionMetric(func(scope string) { metricsReg.DataDeleted(scope) })
 
@@ -761,6 +762,16 @@ var quotaRoutes = []quotaRoute{
 		},
 	},
 
+	// Aperture (MM96): an export (project or stateless), a batch of n exports
+	// and a subject mask spend `ops`; a heal spends `ai_ops`. All refundable
+	// (MM73): a 4xx/5xx gives the unit back, a failed job does too. The batch
+	// charges n units inside the handler (DeferQuota).
+	{metric: models.MetricOps, matches: func(path string) bool {
+		return handlers.IsPhotoExportPath(path) || handlers.IsPhotoSubjectMaskPath(path)
+	}},
+	{metric: models.MetricAIOps, matches: handlers.IsPhotoHealPath},
+	{metric: quotaMetricByJob, path: "/api/photo/batch"},
+
 	// `export` — a Content Studio render. Its own daily allowance
 	// (TIER_*_EXPORTS_PER_DAY, defaulting to the ops numbers), counted
 	// separately from `ops`: an export does not consume ops.
@@ -925,6 +936,18 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 		// thumb): the photo_projects bucket, defaulting to the uploads numbers.
 		// Only POST /api/photo/projects; reads and saves are cheap.
 		{path: "/api/photo/projects", routeKey: "photo_projects", tool: "photo_projects", sessionLimit: cfg.RateLimitPhotoProjectsPerSessionPerHour, ipLimit: cfg.RateLimitPhotoProjectsPerIPPerHour},
+		// MM96: export (project, batch, stateless) shares the photo_export bucket
+		// (the uploads numbers); subject masks and heal are GPU work: photo_ai.
+		{
+			routeKey: "photo_export", tool: "photo_export",
+			sessionLimit: cfg.RateLimitPhotoExportPerSessionPerHour, ipLimit: cfg.RateLimitPhotoExportPerIPPerHour,
+			matches: func(path string) bool { return handlers.IsPhotoExportPath(path) || path == "/api/photo/batch" },
+		},
+		{
+			routeKey: "photo_ai", tool: "photo_ai",
+			sessionLimit: cfg.RateLimitPhotoAIPerSessionPerHour, ipLimit: cfg.RateLimitPhotoAIPerIPPerHour,
+			matches: func(path string) bool { return handlers.IsPhotoSubjectMaskPath(path) || handlers.IsPhotoHealPath(path) },
+		},
 		// Frame-as-PNG export (part 20): one synchronous ffmpeg frame render.
 		// Not a job and not an export allowance spend, so it shares the
 		// analysis bucket (like caption generation) rather than the transcode one.

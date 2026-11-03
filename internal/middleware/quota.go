@@ -275,6 +275,27 @@ func DeferQuota(cfg QuotaConfig) gin.HandlerFunc {
 	logger := cfg.logger()
 	return func(c *gin.Context) {
 		var spent bool
+		c.Set(CtxQuotaSpenderN, QuotaSpenderN(func(metric string, n int) ([]*QuotaCharge, bool) {
+			if spent {
+				return nil, true
+			}
+			spent = true
+			var charges []*QuotaCharge
+			for i := 0; i < n; i++ {
+				charge, proceed := cfg.spend(c, metric, logger)
+				if !proceed {
+					// The over-limit 429 is written; give back what was taken.
+					for _, ch := range charges {
+						ch.Refund("batch_over_limit")
+					}
+					return nil, false
+				}
+				if charge != nil {
+					charges = append(charges, charge)
+				}
+			}
+			return charges, true
+		}))
 		c.Set(CtxQuotaSpender, QuotaSpender(func(metric string) bool {
 			if spent {
 				// A second call would charge a second unit for one request.
@@ -292,6 +313,35 @@ func DeferQuota(cfg QuotaConfig) gin.HandlerFunc {
 // CtxQuotaSpender is the gin context key DeferQuota stores its spender under.
 // Read it through SpendDeferredQuota, never by key.
 const CtxQuotaSpender = "mm_quota_spender"
+
+// CtxQuotaSpenderN is the context key of the n-unit spender (MM96 batch).
+const CtxQuotaSpenderN = "mm_quota_spender_n"
+
+// QuotaSpenderN spends n units of one metric; it returns every charge (one per
+// counted unit) so each job can carry its own refund.
+type QuotaSpenderN func(metric string, n int) ([]*QuotaCharge, bool)
+
+// SpendDeferredQuotaN spends n units of `metric` on a DeferQuota route. False
+// means the over-limit 429 is written and every earlier unit was refunded.
+// Without a spender (quota off, test router) it is a no-op returning (nil, true).
+func SpendDeferredQuotaN(c *gin.Context, metric string, n int) ([]*QuotaCharge, bool) {
+	if c == nil || n <= 0 {
+		return nil, true
+	}
+	v, ok := c.Get(CtxQuotaSpenderN)
+	if !ok {
+		return nil, true
+	}
+	spend, _ := v.(QuotaSpenderN)
+	if spend == nil {
+		return nil, true
+	}
+	charges, proceed := spend(metric, n)
+	// cfg.spend left the LAST unit on the context; every unit now belongs to the
+	// caller (one per job), so clear it and nothing is refunded twice.
+	c.Set(CtxQuotaCharge, (*QuotaCharge)(nil))
+	return charges, proceed
+}
 
 // QuotaSpender spends one unit of the metric it is given. False means the
 // allowance is spent and the 429 has already been written.
