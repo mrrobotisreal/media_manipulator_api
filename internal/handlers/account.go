@@ -821,6 +821,10 @@ func RegisterAccountRoutes(rg *gin.RouterGroup, h *AccountHandler, cfg *config.C
 		authed.GET("/settings", settings.Get)
 		authed.PATCH("/settings", settings.Patch)
 		authed.GET("/settings/preview", settings.Preview)
+		// MA23: FCM device tokens. Not in quotaDispatcher (no charge).
+		push := NewPushTokenHandler(h.store, h.logger)
+		authed.POST("/push-tokens", push.Register)
+		authed.DELETE("/push-tokens", push.Unregister)
 		if h.data != nil {
 			h.data.Register(account, authed)
 		}
