@@ -326,7 +326,7 @@ func main() {
 		}
 		worker.Sweeper = retention.NewSweeper(store, retention.OSDisk{}, objStore, jobManager.ActiveJobIDs,
 			retention.NewMeter(metricsReg), logging, retention.SweepConfig{
-				UploadDir: cfg.UploadDir, OutputDir: cfg.OutputDir, Bucket: cfg.S3Bucket,
+				UploadDir: cfg.UploadDir, OutputDir: cfg.OutputDir, PhotoDir: cfg.PhotoDir, Bucket: cfg.S3Bucket,
 				AllowedPrefixes: retentionS3Prefixes(cfg),
 				Batch:           cfg.RetentionSweepBatch, Budget: cfg.RetentionSweepBudget,
 				MaxAttempts: cfg.RetentionMaxAttempts, DryRun: cfg.CleanupDryRun || cfg.RetentionSweepDryRun,
