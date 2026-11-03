@@ -250,7 +250,7 @@ func TestPortal(t *testing.T) {
 
 func TestStatusShapes(t *testing.T) {
 	// A future date relative to the real clock (tier resolution reads it).
-	end := time.Now().UTC().Truncate(24*time.Hour).Add(30 * 24 * time.Hour)
+	end := time.Now().UTC().Truncate(24 * time.Hour).Add(30 * 24 * time.Hour)
 	sub := bUser("u1", "fb1")
 	sub.Tier, sub.TierSource, sub.TierExpiresAt = "premium", "subscription", &end
 	sub.SubscriptionStatus, sub.BillingInterval, sub.CancelAtPeriodEnd, sub.StripeCustomerID = "active", "yearly", true, "cus_1"
