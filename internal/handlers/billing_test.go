@@ -249,7 +249,8 @@ func TestPortal(t *testing.T) {
 }
 
 func TestStatusShapes(t *testing.T) {
-	end := time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
+	// A future date relative to the real clock (tier resolution reads it).
+	end := time.Now().UTC().Truncate(24*time.Hour).Add(30 * 24 * time.Hour)
 	sub := bUser("u1", "fb1")
 	sub.Tier, sub.TierSource, sub.TierExpiresAt = "premium", "subscription", &end
 	sub.SubscriptionStatus, sub.BillingInterval, sub.CancelAtPeriodEnd, sub.StripeCustomerID = "active", "yearly", true, "cus_1"
@@ -259,7 +260,7 @@ func TestStatusShapes(t *testing.T) {
 	b := newBillingRig(t, billingCfg(true), sub, grant)
 	// Status is mounted by the same Register call.
 	m := jsonBody(t, b.do("GET", "/api/billing/status", "tok-u1", ""))
-	if m["purchasable"] != true || m["interval"] != "yearly" || m["status"] != "active" || m["renewsAt"] != "2026-11-20T00:00:00Z" ||
+	if m["purchasable"] != true || m["interval"] != "yearly" || m["status"] != "active" || m["renewsAt"] != end.Format(time.RFC3339) ||
 		m["cancelAtPeriodEnd"] != true || m["portalAvailable"] != true || m["manualGrant"] != nil {
 		t.Fatalf("subscriber: %v", m)
 	}
@@ -500,7 +501,11 @@ func TestStatusPeriodsPaid(t *testing.T) {
 // cancelled-but-active subscriber (u1) and a stranger (u2) with no subscription.
 func retainRig(t *testing.T, left time.Duration, cfgMut func(*config.Config)) (*billingRig, time.Time) {
 	t.Helper()
-	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	// The rig's clock is pinned for the handler and processor, but tier
+	// resolution (tiers.EffectiveTier) reads the real clock, so anchor "now" to
+	// today (whole hours keep timestamps stable within a run) rather than a
+	// literal date that turns into an expired subscription once it passes.
+	now := time.Now().UTC().Truncate(time.Hour)
 	end := now.Add(left)
 	u := bUser("u1", "fb1")
 	u.Tier, u.TierSource, u.TierExpiresAt = "premium", "subscription", &end

@@ -20,7 +20,9 @@ import (
 // at `end`; u2 is free. The handler and processor clocks are fixed.
 func planRig(t *testing.T, plan, interval string, cfgMut func(*config.Config)) (*billingRig, time.Time) {
 	t.Helper()
-	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	// Anchored to today, not a literal date: tiers.EffectiveTier uses the real
+	// clock, so a fixed `end` in the past would read as an expired plan.
+	now := time.Now().UTC().Truncate(time.Hour)
 	end := now.Add(20 * 24 * time.Hour)
 	cfg := billingCfg(true)
 	if cfgMut != nil {
