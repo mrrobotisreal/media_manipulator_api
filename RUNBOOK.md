@@ -34,6 +34,7 @@ debug commands.
    - [7.11 Result download](#711-result-download)
    - [7.12 Motion / vector (MM43)](#712-motion--vector-mm43)
    - [7.14 Video summary (MM74)](#714-video-summary-mm74)
+   - [7.15 Aperture projects (MM95)](#715-aperture-projects-mm95)
 8. [GPU scheduling](#8-gpu-scheduling)
 9. [External dependencies](#9-external-dependencies)
 10. [Common incidents and recovery](#10-common-incidents-and-recovery)
@@ -1144,6 +1145,26 @@ FCM push for "your job finished". Ships **dark**: nothing is sent until `PUSH_EN
 
 **Rollback:** `PUSH_ENABLED=false` and restart (email-only). Tokens stay in the table; the down migration drops the table and the setting column.
 
+### 4.17 Aperture (MM95/MM96)
+
+Aperture (code name `photo`, ADR-0017) is the photo editor. MM95 ships the server side of projects: the original photo and its proxy/thumbnail on disk, the saved `PhotoDoc`, ownership, revisions, tiers. Ships **on**: `PHOTO_ENABLED` defaults to true and there is nothing to configure. The renderer, AI mask and heal come with MM96 (their env, `PHOTO_PYTHON`, `PHOTO_RENDER_*`, `PHOTO_SUBJECT_MODEL`, `RATE_LIMIT_PHOTO_AI_*`, is not read yet). (Numbered 4.17 because 4.16 is taken by push notifications.)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PHOTO_ENABLED` | `true` | `false` turns the project routes off (503 `photo_disabled`) and `/api/photo/capabilities` reports `enabled:false`. |
+| `PHOTO_DIR` | `uploads/photo` | One directory per project: `<PHOTO_DIR>/<projectId>/{original.<ext>,proxy.jpg\|png,thumb.jpg\|png,masks/,bases/}`. The default sits **inside** `UPLOAD_DIR`; the cleanup worker knows it and never treats `PHOTO_DIR` itself as an orphan job. Point it at a roomier disk if you like. |
+| `PHOTO_MAX_DOC_BYTES` | `8388608` | Cap of one saved `PhotoDoc` (PUT 413 `photo_doc_too_large`, sanitizer `doc_too_large`). |
+| `PHOTO_MAX_MEGAPIXELS` | `120` | Deployment ceiling on an uploaded original, checked from the EXIF-oriented size **before** the proxy is made. 413 `photo_too_many_pixels {maxMegapixels}`. (The per-tier export cap is `TIER_*_PHOTO_MAX_MEGAPIXELS`.) |
+| `PHOTO_INGEST_TIMEOUT_SECONDS` | `60` | Budget of the synchronous ingest (size probe + proxy + thumbnail). On timeout/failure the row is `failed` with `error` and the call answers 502 `photo_ingest_failed`. |
+| `RATE_LIMIT_PHOTO_PROJECTS_PER_SESSION_PER_HOUR` / `_PER_IP_PER_HOUR` | the `RATE_LIMIT_UPLOADS_*` values (30 / 60) | Bucket `photo_projects`, applied to `POST /api/photo/projects` only. Operators are exempt. |
+| `TIER_<ANON\|FREE\|PREMIUM\|PRO>_PHOTO_PROJECTS` | `0` / `5` / `50` / `-1` | Server project cap (`-1` unlimited; anonymous 0: anonymous visitors have no server projects, only one browser-local project). |
+| `TIER_<T>_PHOTO_MAX_MEGAPIXELS` | `12` / `12` / `120` / `120` | Export cap in megapixels (the UI offers 12 / 24 / 64 / 120 under the cap). Enforced by MM96's export. |
+| `TIER_<T>_PHOTO_BATCH` | `0` / `3` / `10` / `25` | Photos per batch apply (MM99/MM96). |
+
+Operator derives from Pro with `photoProjects` unlimited. `/api/tiers` serves `photoProjects`, `photoMaxMegapixels`, `photoBatch` for every tier. `MaxOutputHeight` does **not** apply to Aperture (a test pins that the photo handler never consults it). Photo routes are not in `quotaRoutes`: project CRUD spends no allowance (MM96's export spends `ops`, heal `ai_ops`).
+
+**Database:** run `go run ./internal/migrations up` for `20261103001_photo_projects` BEFORE deploying this build.
+
 ---
 
 ## 5. HTTP API surface
@@ -1198,6 +1219,15 @@ All routes live under `/api/` except `/healthz`.
 | POST | `/api/vector/projects/:id/thumbnail` | MM43. Owner only. `{sizeBytes (1..524288), contentType?: "image/png"}` -> `201 {uploadUrl, thumbnailKey, contentType, maxBytes, expiresAt}`; presigned PUT (TTL `S3_PRESIGN_TTL_SECONDS`) pinned to that length and `image/png`; key `vector/<ownerUid>/<projectId>/thumb.png`. 413 over 512 KB. Ledgered as an `s3_object` of the project. | No |
 | POST | `/api/vector/exports` | MM43. Optional auth + `X-MM-Session-ID`. `{projectId?, format, durationMs, height, fps}` -> `200 {ok:true, format, tier, limit, remaining (-1 = unlimited), resetsAt}` plus the `X-MM-Quota-*` headers. 400 `vector_format_not_countable` (`svg_static`, unknown); 403 `vector_format_locked {format,tier,upgradePath}`; 422 `vector_cap_exceeded {cap: duration\|height\|fps, max, tier}`; 429 `vector_export_limit {tier,metric,limit,used,resetsAt,upgradePath}`; 503 when the counter cannot be written (fails closed). Call BEFORE running the browser exporter. MM49: every 200 emits `server_vector_export_counted {format, tier}` (needs `X-MM-Visitor-ID` + `X-MM-Session-ID`; the editor sends the visitor id only with analytics consent); Pro unlocks `png_sequence`/`mp4`/`webm` (403 `upgradePath: "pro"` below it). | No |
 | POST | `/api/vector/vectorize` | MM43. Optional auth. Multipart `file` (raster image, at most the tier's `MaxFileBytes`) + optional `threshold` (1-99), `turd`. Counted as `import_svg_vectorize` through the same checks BEFORE the job exists (403/429 as above, 400 for SVG/non-image input, which costs nothing), then the potrace converter job: `200 {jobId}`; fetch the SVG with `/api/job/:id` + `/api/download/:id`. Upload rate bucket. | Yes (goroutine) |
+| GET | `/api/photo/capabilities` | MM95 Aperture. Anyone. `{enabled, render, formats:[jpg,png,webp,avif,tiff], maxMegapixels, photoProjects, photoBatch, aiMasks, heal, tier}` for the caller's tier; `render`, `aiMasks`, `heal` are false until MM96. `enabled:false` when `PHOTO_ENABLED=false`. | No |
+| GET | `/api/photo/projects` | MM95. Account required (401 `sign_in_required`; anonymous projects are browser-only). `?limit=` (default 50, max 200) `&offset=`; newest first, no doc: `{projects:[{id,name,revision,status,width,height,hasAlpha,originalBytes,originalExt,originalUrl,proxyUrl,thumbUrl,createdAt,updatedAt}]}`. | No |
+| POST | `/api/photo/projects` | MM95. Account required. Bucket `photo_projects`. Multipart `file` (JPG, PNG, WebP, AVIF, TIFF, BMP, GIF first frame, HEIC, HEIF; at most the tier's `MaxFileBytes`) + optional `name`, `doc` (PhotoDoc v1, sanitized). Stores `original.<ext>`, ingests synchronously, `201 {project, doc}` with `status: ready` and `doc.source` = the oriented size. 403 `photo_projects_limit {limit,used,upgradePath}`, 413 `photo_too_many_pixels {maxMegapixels}` / `photo_file_too_large {maxBytes}`, 415 `photo_unsupported_source` (SVG, even renamed), 422 `photo_doc_invalid {code,path,message}`, 502 `photo_ingest_failed {projectId}` (row kept, `status: failed`). | No |
+| GET | `/api/photo/projects/:id` | MM95. Owner (or operator); a stranger, a malformed id or a soft-deleted project gets the same 404. `{project, doc}`. | No |
+| PUT | `/api/photo/projects/:id` | MM95. Owner. Header `If-Match: <revision>` (also `"n"` / `W/"n"`); missing 428 `if_match_required`, non-integer 400, stale 409 `{error:"revision_conflict", revision}`. Body `{name?, doc?}`; the doc is sanitized (422 `photo_doc_invalid`, 413 `photo_doc_too_large`). 200 `{project, doc}` with `revision + 1`. | No |
+| DELETE | `/api/photo/projects/:id` | MM95. Owner. Soft-deletes the row at once, expires the ledger row now and sweeps the directory inline. `200 {deleted:{objects,bytes}, pending}`. | No |
+| GET | `/api/photo/projects/:id/original` / `/proxy` / `/thumb` | MM95. Owner. Inline bytes with the real MIME, `Range`, `Cache-Control: private, max-age=3600`. | No |
+| GET | `/api/photo/projects/:id/files/*relpath` | MM95. Owner. Only `masks/<id>.png` and `bases/<hash>.png` (regex-validated, two safe segments); anything else 404. | No |
+| POST | `/api/photo/projects/:id/masks/subject`, `/heal`, `/export`; `/api/photo/batch`, `/export`, `/masks/subject`, `/heal` | MM96. Registered now as `501 {error:"not_implemented"}` so clients can code against the final route table. | No |
 | POST | `/api/billing/checkout` | Firebase auth. `{interval: monthly\|yearly, plan?: premium\|pro, currency?: usd\|eur, locale}` -> `{url}`. The session's currency is always set (absent body field = `usd`). 400 `invalid_interval` / `invalid_plan` / `invalid_currency`; 409 `already_subscribed` / `already_on_plan` / `manual_grant_active` / `currency_locked {currency}` (MM69: the Stripe Customer is billed in the other currency); 403 `operator_account`; 503 `billing_unavailable` (also Pro without Pro prices). | No |
 | POST | `/api/billing/change-plan` | MM39. Firebase auth, own live subscription only. `{target: premium\|pro}` -> upgrade `{plan:"pro", pendingPlan:null, timing:"immediate"}` or downgrade `{plan:"pro", pendingPlan:{to:"premium", at}, timing:"period_end"}` (repeat downgrade idempotent). 409 `not_subscription` / `same_plan` / `change_not_available` (cancelling, or a schedule this API did not create); 400 `invalid_plan`; 502 `billing_provider_error`; 503 `billing_unavailable`. | No |
 | DELETE | `/api/billing/change-plan` | MM39. Same guards. Releases the scheduled downgrade -> `{plan, pendingPlan:null}`; 200 no-op when nothing is scheduled. | No |
@@ -2046,6 +2076,19 @@ Design `docs/design/VIDEO_SUMMARY.md`, ADR-0014. Code: `internal/services/video_
 - **27B benchmark (gate for deep).** With :11434 and :11435 idle (`ollama ps` empty on both) and no Whisper job: `OLLAMA_HOST=127.0.0.1:11436 ollama run qwen3.8:27b --verbose "Summarise the following transcript in 150 words, then list 5 chapters with timestamps:" < sample-6k-tokens.txt`, then `OLLAMA_HOST=127.0.0.1:11436 ollama ps`. Pass: eval rate **>= 12 tokens/s** and `100% GPU` split over both cards. Then load `qwen3-vl:8b-instruct-q8_0` on :11434 and re-run to see the contended number. Only on a pass: `.env` `OLLAMA_SUMMARY_DEEP_MODEL=qwen3.8:27b`, `OLLAMA_SUMMARY_DEEP_URL=http://127.0.0.1:11436`, restart; capabilities then report `"deep":true`. Under 12 t/s leave both unset: `deep` stays off and runs as `standard`.
 - **Model swaps.** The VLM and the 9B share the GPU-1 daemon with `KEEP_ALIVE=0`, so a job pays two loads (the pipeline keeps the VLM loaded across its own batches with `keep_alive 2m` and releases it on the last batch). Record load times when measuring.
 
+### 7.15 Aperture projects (MM95)
+
+Design `docs/design/PHOTO_EDITOR.md` §6, ADR-0017. "Aperture" is the brand; every identifier is `photo`. Code: `internal/photo` (PhotoDoc sanitizer + fixtures), `internal/handlers/photo.go`, `internal/telemetry/photo_store.go`, `internal/services/photo_ingest.go` + `image_derivatives.go`, `internal/retention` (`photo_project`). Run migration `20261103001_photo_projects` before this build serves traffic (until then every create fails 503 and the `photo_project` ledger rows it cannot write are skipped).
+
+- **Tables.** `photo_projects` (sanitized `doc` jsonb up to `PHOTO_MAX_DOC_BYTES`, `revision`, the original's `original_ext/width/height/bytes`, `has_alpha`, `status ingesting|ready|failed`, `error`, `deleted_at`) and `photo_derivatives` (MM96's cached masks and heal bases, unique `(project_id, kind, params_hash)`, cascade). `owner_user_id` is the `mm_users` uuid with `ON DELETE CASCADE`.
+- **Ingest.** `POST /api/photo/projects` creates the row (`ingesting`), writes the ledger row, saves `original.<ext>` exactly as uploaded, then `PhotoIngest`: `identify -format "%w %h %[EXIF:Orientation]"` for the oriented size (orientations 5-8 swap), the megapixel ceiling, `convert ... -auto-orient -colorspace sRGB -resize 1920x1920> -strip` for `proxy` and 320 px for `thumb` (the same argument lists as Darkroom, `image_derivatives.go`; ImageMagick 6 `convert`/`identify` are used when `magick` is not on PATH). Alpha sources get PNG derivatives, others JPEG. A megapixel refusal discards the project completely (soft delete, ledger expire, directory removed); any other failure keeps the row as `failed` with the reason in `error`.
+- **Expected bytes per project.** `original` as uploaded (a 24 MP JPEG is 8-15 MB, a 120 MP TIFF can be 700 MB) + a proxy of 0.3-1.5 MB + a thumbnail of 10-30 KB, plus MM96's masks (one 8-bit PNG per AI mask) and heal bases (a PNG at base resolution, tens of MB at 120 MP). Plan disk for the Premium 50-project cap and Pro's unlimited; the ledger and retention setting bound it.
+- **Retention.** One ledger row per project, kind `photo_project`, locator = project id (the directory name), `project_id` = the id. The sweeper removes `<PHOTO_DIR>/<id>` (the locator must be exactly one safe segment; anything else fails the row, nothing is deleted), then the project row (derivatives cascade). `DELETE`, delete-all and account deletion go through the same path; `deleteUserPhotoProjects` is the backstop and the `mm_users` foreign key the last. The orphan walker reaps a `PHOTO_DIR/<id>` with no live `photo_project` row after the upload window (24 h); it skips the photo root entirely when the ledger is unavailable. Account export `projects.json` lists `kind: "photo"`.
+- **Failure rows.** `status = 'failed'` with `error` = a project whose ingest died (a corrupt file, a missing ImageMagick delegate for HEIC/AVIF, a timeout). The directory stays for inspection until retention sweeps it; the owner can delete it. `SELECT id, owner_user_id, error, created_at FROM photo_projects WHERE status = 'failed' ORDER BY created_at DESC LIMIT 20;`. A `ingesting` row older than ~2 min is a crashed ingest (the process died mid-request): delete it.
+- **Claim.** There is no anonymous-to-account claim in MM95: anonymous visitors have one browser-local project (IndexedDB) and MM96's stateless routes; on sign-in the client uploads the local photo with `POST /api/photo/projects` (a normal create, subject to the cap).
+- **Sanitizer refusals.** 422 `photo_doc_invalid` carries `code` and `path`. `internal/photo` mirrors the UI's Zod model; both are pinned by the fixtures in `internal/photo/testdata/` (byte-identical copies of `media-manipulator-ui/lib/photo/fixtures/`, README = the field-by-field spec). Out-of-range numbers are clamped, not refused; unknown `version`, layer `type`, mask `kind`, bad ids, bad curves and oversize brushes are refused.
+- **Smoke test.** See section 12.10.
+
 ### 7.x Retention ledger and user retention setting (MM22)
 
 Retention is chosen by the user, not by tier: every signed-in account sets 24 h to 2 years (default 4320 h = 6 months) in `mm_user_settings`; guests are fixed at 24 h. `TIER_*_RETENTION_HOURS` no longer caps anything. Every producer of durable data (job `uploads/<jobId>/` and `outputs/<jobId>/` directories, S3 objects, Darkroom projects/assets) writes an `mm_retained_objects` row (`expires_at = created_at + window`) through `internal/retention.Register`; a failed write is logged as `retention_register_failed` and counted in `mm_retention_register_failed_total` and never fails the request. Routes: `GET/PATCH /api/account/settings` (`?dryRun=1`) and `GET /api/account/settings/preview?retentionHours=N`; changing the window re-stamps the caller's live rows with a floor of `now + 1h`. The ledger-driven sweeper (MM23, section 4.2.1) acts on `expires_at`; it ships in dry-run mode (`RETENTION_SWEEP_DRY_RUN=true`) until you turn enforcement on. **Deploy:** run migration `20261023004_add_user_settings_and_retained_objects` on the server before this build serves traffic (until then ledger writes fail, are metered, and settings routes answer 500).
@@ -2221,6 +2264,8 @@ call; a daemon that ignores even that needs restarting with
       ├── bg-remove/       ← rembg
       ├── inpaint/         ← simple_lama_inpainting
       └── vision-privacy/  ← face_privacy + redact_text_pii Python deps
+<PHOTO_DIR>/                                           ← default uploads/photo (MM95)
+  └── <projectId>/{original.<ext>,proxy.jpg|png,thumb.jpg|png,masks/<id>.png,bases/<hash>.png}
 ```
 
 ---
@@ -2624,7 +2669,35 @@ curl -sS -X POST -H 'Content-Type: application/json' -H 'X-MM-Session-ID: smoket
   http://localhost:59997/api/contact
 ```
 
+### 12.10 Aperture projects smoke test (MM95)
+
+After `go run ./internal/migrations up` (`20261103001_photo_projects`) and the deploy. `$TOKEN` is a Firebase ID token of a **free test account**; `photo.jpg` any JPEG. Replace the host as needed.
+
+```bash
+H=http://localhost:59997/api/photo
+# 1. capabilities (anyone): enabled true, render/aiMasks/heal false until MM96
+curl -sS $H/capabilities | python3 -m json.tool
+# 2. anonymous create is refused: 401 sign_in_required
+curl -sS -o /dev/null -w '%{http_code}\n' -F file=@photo.jpg $H/projects
+# 3. signed-in create: 201, status ready, doc.source = the oriented pixel size
+curl -sS -H "Authorization: Bearer $TOKEN" -F file=@photo.jpg -F name=Smoke $H/projects | tee /tmp/photo.json | python3 -m json.tool | head -30
+ID=$(python3 -c 'import json;print(json.load(open("/tmp/photo.json"))["project"]["id"])')
+# 4. files: proxy and thumb come back as images with Range and a private cache header
+curl -sS -D- -o /dev/null -H "Authorization: Bearer $TOKEN" $H/projects/$ID/proxy | head -12
+curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' -H "Authorization: Bearer $TOKEN" $H/projects/$ID/thumb
+curl -sS -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" $H/projects/$ID/files/../original.jpg   # 404
+# 5. save: 428 without If-Match, 200 with it (revision 2), 409 when stale
+curl -sS -o /dev/null -w '%{http_code}\n' -X PUT -H "Authorization: Bearer $TOKEN" -d '{"name":"Renamed"}' $H/projects/$ID
+curl -sS -X PUT -H "Authorization: Bearer $TOKEN" -H 'If-Match: 1' -d '{"name":"Renamed"}' $H/projects/$ID | python3 -c 'import json,sys;print(json.load(sys.stdin)["project"]["revision"])'
+curl -sS -X PUT -H "Authorization: Bearer $TOKEN" -H 'If-Match: 1' -d '{"name":"Stale"}' $H/projects/$ID   # 409 revision_conflict
+# 6. list, then delete: the directory under PHOTO_DIR disappears, the row is gone
+curl -sS -H "Authorization: Bearer $TOKEN" $H/projects | python3 -m json.tool | head -20
+curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" $H/projects/$ID
+ls ${PHOTO_DIR:-uploads/photo}/$ID 2>&1 | head -2
+```
+
 ---
+
 
 ## 13. DR Tasks (kanban) rollout
 

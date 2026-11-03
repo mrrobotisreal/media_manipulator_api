@@ -35,6 +35,16 @@ _Avoid_: "downgrade pending" as a tier or a stored column; nothing about it is s
 "Motion" is the user-facing brand for the SVG + animation editor (ADR-0012, design `docs/design/MOTION_SVG_ANIMATOR.md` §1). Every backend identifier is `vector`: routes `/api/vector/*`, tables `vector_projects`/`vector_exports`, package `internal/vector`, handler `VectorHandler`, tier fields `Vector*` (`vectorExportsPerDay`, `vectorFormats`, `vectorProjects`, `vectorVideo` in `/api/tiers`), env `TIER_*_VECTOR_*` and `VECTOR_*`, metric `vector_export`, ledger kind `vector_project`. Mirrors the Darkroom/`studio` split; the brand is cosmetic and swappable. Not related to the `motion` npm package.
 _Avoid_: "motion" in route paths, table names or Go identifiers.
 
+**Naming: the Aperture editor**:
+"Aperture" is the user-facing brand for the photo editor (ADR-0017, design `docs/design/PHOTO_EDITOR.md` §2; brand decided by Mitch 2026-11-03). Every backend identifier is `photo`: routes `/api/photo/*`, tables `photo_projects`/`photo_derivatives`, package `internal/photo`, handler `PhotoHandler`, tier fields `photoProjects`/`photoMaxMegapixels`/`photoBatch` in `/api/tiers`, env `PHOTO_*` and `TIER_*_PHOTO_*`, ledger kind `photo_project`. Mirrors Darkroom/`studio` and Motion/`vector`; the brand is cosmetic and swappable. "Aperture" appears in this repo only in comments, docs and this entry, never in an identifier.
+_Avoid_: "aperture" in route paths, table names or Go identifiers.
+
+**PhotoDoc**:
+The persisted Aperture document (v1): `source` (the oriented pixel size of the original), `heals` (server-made pixel bases, in order), `geometry` (rotate/flip/perspective/crop/fill), an ordered `layers` stack of adjustment layers each with an optional `mask`, and `output` hints. Zod model in the UI (`lib/photo/photoTypes.ts`); `internal/photo.Sanitize` is the Go mirror: it clamps out-of-range numbers, fills every default, refuses an unknown version/layer type/mask kind and returns canonical JSON (compact, keys sorted, defaults filled; unknown fields round-trip). Additive-only. `internal/photo/testdata/` (fixtures + README, the field-by-field spec) is the contract with the UI; the canonical form differs from Motion's (sorted keys, not Zod shape order).
+
+**Photo project**:
+One saved Aperture project: a `photo_projects` row (the doc, `revision`, the original's facts, `status ingesting|ready|failed`) plus a directory `<PHOTO_DIR>/<id>/` holding the untouched `original.<ext>`, the 1920 px `proxy`, the 320 px `thumb`, and MM96's `masks/` and `bases/`. Signed-in only: anonymous visitors have one browser-local project and stateless routes (decided 2026-11-03). One ledger row of kind `photo_project` (locator = the id) covers the whole directory. Saves are compare-and-set on `revision` (`If-Match`, 428/409) exactly like Motion.
+
 **VectorDoc**:
 The persisted Motion document (v1): canvas, a layer tree, `defs` (gradients, masks, clipPaths, filters, symbols) and keyframe `animations` tracks. Zod model in the UI (`lib/vector/vectorTypes.ts`); `internal/vector.Sanitize` is the Go mirror that validates and canonicalises it before storage. Additive-only: unknown fields round-trip, an unknown `version` is refused. The shared fixtures in `internal/vector/testdata/` are the contract.
 
