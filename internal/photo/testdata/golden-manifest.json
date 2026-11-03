@@ -149,6 +149,21 @@
   "height": 256,
   "borderPx": 2
  },
+ "detail-all.photo": {
+  "width": 256,
+  "height": 192,
+  "borderPx": 0
+ },
+ "detail-all.chart": {
+  "width": 256,
+  "height": 256,
+  "borderPx": 0
+ },
+ "detail-all.alpha": {
+  "width": 256,
+  "height": 256,
+  "borderPx": 0
+ },
  "black-white-default.photo": {
   "width": 256,
   "height": 192,
@@ -224,6 +239,21 @@
   "height": 256,
   "borderPx": 0
  },
+ "clarity-texture-blur.photo": {
+  "width": 256,
+  "height": 192,
+  "borderPx": 0
+ },
+ "clarity-texture-blur.chart": {
+  "width": 256,
+  "height": 256,
+  "borderPx": 0
+ },
+ "clarity-texture-blur.alpha": {
+  "width": 256,
+  "height": 256,
+  "borderPx": 0
+ },
  "color-balance-teal-orange.photo": {
   "width": 256,
   "height": 192,
@@ -235,6 +265,21 @@
   "borderPx": 0
  },
  "color-balance-teal-orange.alpha": {
+  "width": 256,
+  "height": 256,
+  "borderPx": 0
+ },
+ "dehaze-negative.photo": {
+  "width": 256,
+  "height": 192,
+  "borderPx": 0
+ },
+ "dehaze-negative.chart": {
+  "width": 256,
+  "height": 256,
+  "borderPx": 0
+ },
+ "dehaze-negative.alpha": {
   "width": 256,
   "height": 256,
   "borderPx": 0
@@ -283,6 +328,21 @@
   "width": 274,
   "height": 274,
   "borderPx": 2
+ },
+ "grain-only.photo": {
+  "width": 256,
+  "height": 192,
+  "borderPx": 0
+ },
+ "grain-only.chart": {
+  "width": 256,
+  "height": 256,
+  "borderPx": 0
+ },
+ "grain-only.alpha": {
+  "width": 256,
+  "height": 256,
+  "borderPx": 0
  },
  "hsl-shift-blues.photo": {
   "width": 256,
@@ -464,6 +524,21 @@
   "height": 256,
   "borderPx": 0
  },
+ "sharpen-only.photo": {
+  "width": 256,
+  "height": 192,
+  "borderPx": 0
+ },
+ "sharpen-only.chart": {
+  "width": 256,
+  "height": 256,
+  "borderPx": 0
+ },
+ "sharpen-only.alpha": {
+  "width": 256,
+  "height": 256,
+  "borderPx": 0
+ },
  "split-tone-teal-orange.photo": {
   "width": 256,
   "height": 192,
@@ -520,6 +595,21 @@
   "borderPx": 0
  },
  "vibrance-saturation.alpha": {
+  "width": 256,
+  "height": 256,
+  "borderPx": 0
+ },
+ "vignette-grain.photo": {
+  "width": 256,
+  "height": 192,
+  "borderPx": 0
+ },
+ "vignette-grain.chart": {
+  "width": 256,
+  "height": 256,
+  "borderPx": 0
+ },
+ "vignette-grain.alpha": {
   "width": 256,
   "height": 256,
   "borderPx": 0

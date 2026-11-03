@@ -467,121 +467,175 @@ def ap_red_eye(c):  # 5.3 red-eye: r = min(r, (g+b)/2); the area comes from the 
 
 
 # --------------------------------------------------------------------------------------
-# Rung 4 detail (5.4). PROVISIONAL until MM99 pins the reference in colorMath.ts: the
-# choices marked "choice" are mine where the design table leaves room.
+# Rung 4 detail (5.4). Mirrors colorMath.ts "Detail (design 5.4, MM99)" stage for stage
+# (the UI reference is the math authority): every constant below has the same name there.
 # --------------------------------------------------------------------------------------
 
+CLARITY_RADIUS, CLARITY_GAIN = 0.02, 0.6
+TEXTURE_RADIUS, TEXTURE_MIN_RADIUS, TEXTURE_GAIN = 0.003, 1.5, 0.5
+BILATERAL_RADIUS = 4
+NR_CHROMA_SIGMA = 6
+DEHAZE_WINDOW_RADIUS = 7
+DEHAZE_OMEGA, DEHAZE_PERCENTILE, DEHAZE_MIN_A, DEHAZE_MIN_T, DEHAZE_HAZE_GAIN = 0.95, 99.5, 0.05, 0.1, 0.5
+GRAIN_GAIN = 0.2
+GRAIN_Y_OFFSET = 0x9E3779B9
+GRAIN_SALT = 0x85EBCA6B
+GRAIN_ROUGHNESS_MIX = 0.5
+
+
 def gauss(img, sigma):
-    if sigma <= 0:
+    """Separable Gaussian: taps k=-r..r, r=ceil(3 sigma), normalised, edges replicated (gaussBlurPlanes)."""
+    if sigma < 1e-3:
         return img
-    k = int(2 * math.ceil(3 * sigma) + 1)
-    return cv2.GaussianBlur(img, (k, k), sigmaX=sigma, sigmaY=sigma, borderType=cv2.BORDER_REFLECT_101)
+    r = int(math.ceil(3 * sigma))
+    k = np.exp(-(np.arange(-r, r + 1) ** 2) / (2 * sigma * sigma))
+    k = (k / k.sum()).astype(np.float64)
+    src = np.ascontiguousarray(img, dtype=np.float64)
+    out = cv2.sepFilter2D(src, -1, k, k, borderType=cv2.BORDER_REPLICATE)
+    return out.reshape(src.shape).astype(img.dtype, copy=False)
 
 
-def _unsharp_luma(c, sigma, gain, weight=None, thr=0.0):
+def _unsharp_luma(c, sigma, gain, mid_weight=False, thr=0.0):
     L = luma(c)
     d = L - gauss(L, sigma)
     if thr > 0:
         d = np.where(np.abs(d) > thr, d, 0.0)
     shift = gain * d
-    if weight is not None:
-        shift = shift * weight
-    return clamp01(c + shift[..., None])  # choice: luma shift added to all channels
+    if mid_weight:
+        shift = shift * (1 - np.abs(2 * L - 1))
+    return clamp01(c + shift[..., None])
 
 
 def ap_sharpen(c, p):  # 5.4 sharpen
-    return _unsharp_luma(c, p["radius"], p["amount"] / 100, None, p["threshold"] / 255)
+    return _unsharp_luma(c, p["radius"], p["amount"] / 100, False, p["threshold"] / 255)
 
 
-def ap_blur(c, p):  # 5.4 blur: sigma = radius / 2, kernel 3 sigma
-    return clamp01(gauss(np.ascontiguousarray(c), p["radius"] / 2))
+def ap_blur(c, p):  # 5.4 blur: sigma = radius / 2
+    return clamp01(gauss(c, p["radius"] / 2))
 
 
-def ap_clarity(c, p):  # 5.4 clarity: radius 2 % of long side, amount*0.6, W = 1-|2L-1|
+def ap_clarity(c, p):  # 5.4 clarity
     long_side = max(c.shape[0], c.shape[1])
-    L = luma(c)
-    return _unsharp_luma(c, 0.02 * long_side, p["amount"] / 100 * 0.6, 1 - np.abs(2 * L - 1))
+    return _unsharp_luma(c, CLARITY_RADIUS * long_side, p["amount"] / 100 * CLARITY_GAIN, True)
 
 
-def ap_texture(c, p):  # 5.4 texture: radius 0.3 % of long side (min 1.5 px), amount*0.5
+def ap_texture(c, p):  # 5.4 texture
     long_side = max(c.shape[0], c.shape[1])
-    return _unsharp_luma(c, max(1.5, 0.003 * long_side), p["amount"] / 100 * 0.5)
+    return _unsharp_luma(c, max(TEXTURE_MIN_RADIUS, TEXTURE_RADIUS * long_side), p["amount"] / 100 * TEXTURE_GAIN, False)
 
 
-def ap_noise_reduction(c, p):  # 5.4 noiseReduction (documented approximation: cv2.bilateralFilter)
+def lab_to_rgb(L, a, b):
+    fy = (L + 16) / 116
+    fx = fy + a / 500
+    fz = fy - b / 200
+
+    def finv(f):
+        return np.where(f > 6 / 29, f * f * f, (116 * f - 16) * 27 / 24389)
+
+    x, y, z = finv(fx) * 0.95047, finv(fy), finv(fz) * 1.08883
+    r = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z
+    g = -0.969266 * x + 1.8760108 * y + 0.041556 * z
+    bl = 0.0556434 * x - 0.2040259 * y + 1.0572252 * z
+    out = np.stack([r, g, bl], axis=-1)
+    return clamp01(linear_to_srgb(clamp01(out)))
+
+
+def bilateral9(plane, sigma_s, sigma_r):
+    """Fixed 9x9 bilateral, edges replicated (bilateral9 in colorMath.ts); 81 shifted multiply-adds."""
+    R = BILATERAL_RADIUS
+    h, w = plane.shape
+    pad = np.pad(plane, R, mode="edge")
+    acc = np.zeros_like(plane)
+    ws = np.zeros_like(plane)
+    inv2r = 1 / (2 * sigma_r * sigma_r)
+    for dy in range(-R, R + 1):
+        for dx in range(-R, R + 1):
+            q = pad[R + dy:R + dy + h, R + dx:R + dx + w]
+            wt = math.exp(-(dx * dx + dy * dy) / (2 * sigma_s * sigma_s)) * np.exp(-(q - plane) ** 2 * inv2r)
+            acc += wt * q
+            ws += wt
+    return acc / ws
+
+
+def ap_noise_reduction(c, p):  # 5.4 noiseReduction: 9x9 bilateral on Lab L, Gaussian on Lab a,b
     if p["luminance"] <= 0 and p["color"] <= 0:
         return c
-    dt = np.float32
-    lab = cv2.cvtColor(np.ascontiguousarray(c, dtype=dt), cv2.COLOR_RGB2Lab)
+    L, a, b = rgb_to_lab(c.astype(np.float64))
+    Lp = L / 100
     if p["luminance"] > 0:
         l = p["luminance"] / 100
-        sig_s = 2 + l * 6
-        L = np.ascontiguousarray(lab[..., 0] / 100, dtype=dt)
-        L = cv2.bilateralFilter(L, int(2 * math.ceil(sig_s) + 1), max(l * 0.2, 1e-3), sig_s)
-        lab[..., 0] = L * 100
+        Lp = bilateral9(np.ascontiguousarray(Lp), 2 + l * 6, max(l * 0.2, 1e-3))
     if p["color"] > 0:
-        s = p["color"] / 100 * 6
-        lab[..., 1] = gauss(np.ascontiguousarray(lab[..., 1]), s)
-        lab[..., 2] = gauss(np.ascontiguousarray(lab[..., 2]), s)
-    return clamp01(cv2.cvtColor(lab, cv2.COLOR_Lab2RGB).astype(c.dtype))
+        s = p["color"] / 100 * NR_CHROMA_SIGMA
+        a = gauss(np.ascontiguousarray(a), s)
+        b = gauss(np.ascontiguousarray(b), s)
+    return lab_to_rgb(Lp * 100, a, b).astype(c.dtype, copy=False)
 
 
 def ap_dehaze(c, p):  # 5.4 dehaze
     amt = p["amount"] / 100
     if amt == 0:
         return c
-    dark = np.ascontiguousarray(c.min(axis=-1), dtype=np.float32)
-    dark = cv2.erode(dark, np.ones((15, 15), np.uint8))
-    A = max(float(np.percentile(dark, 99.5)), 0.05)
+    dark = np.ascontiguousarray(c.min(axis=-1), dtype=np.float64)
+    r = DEHAZE_WINDOW_RADIUS
+    dark = cv2.erode(dark, np.ones((2 * r + 1, 2 * r + 1), np.uint8))  # clipped-window min
+    A = max(float(np.percentile(dark, DEHAZE_PERCENTILE)), DEHAZE_MIN_A)
     if amt > 0:
-        t = np.maximum(1 - 0.95 * dark / A, 0.1)[..., None].astype(c.dtype)
+        t = np.maximum(1 - DEHAZE_OMEGA * (dark / A), DEHAZE_MIN_T)[..., None].astype(c.dtype)
         out = clamp01((c - A) / t + A)
         return c + (out - c) * amt
-    k = -amt * 0.5  # choice: negative adds haze, toward the atmospheric light A
+    k = -amt * DEHAZE_HAZE_GAIN
     return clamp01(c * (1 - k) + A * k)
 
 
 def ap_vignette(c, p):  # 5.4 vignette
     h, w = c.shape[:2]
-    ys = (np.arange(h) + 0.5) / h * 2 - 1
-    xs = (np.arange(w) + 0.5) / w * 2 - 1
-    nx, ny = xs[None, :], ys[:, None]
-    d_rect = np.maximum(np.abs(nx), np.abs(ny))  # 1 at the corners
-    half_diag = math.hypot(w / 2, h / 2)
-    d_circ = np.sqrt((nx * w / 2) ** 2 + (ny * h / 2) ** 2) / half_diag  # 1 at the corners
-    r = (p["roundness"] + 100) / 200  # choice: -100 = rectangle, +100 = circle
+    ny = ((np.arange(h) + 0.5) / h * 2 - 1)[:, None]
+    nx = ((np.arange(w) + 0.5) / w * 2 - 1)[None, :]
+    d_rect = np.maximum(np.abs(nx), np.abs(ny))
+    d_circ = np.sqrt((nx * w / 2) ** 2 + (ny * h / 2) ** 2) / math.hypot(w / 2, h / 2)
+    r = (p["roundness"] + 100) / 200
     d = d_rect * (1 - r) + d_circ * r
     mid = p["midpoint"] / 100
     v = smoothstep(mid, mid + p["feather"] / 100, d)
     amt = p["amount"] / 100
-    prot = 1 - p["highlights"] / 100 * luma(c)  # choice: highlights protection weight
-    k = 1 + amt * v * np.where(amt < 0, prot, 1.0)
+    prot = 1 - p["highlights"] / 100 * luma(c) if amt < 0 else 1.0
+    k = 1 + amt * v * prot
     return clamp01(c * k[..., None])
 
 
 def _pcg(v):
-    v = (v.astype(np.uint64) * np.uint64(747796405) + np.uint64(2891336453)) & np.uint64(0xFFFFFFFF)
-    sh = ((v >> np.uint64(28)) + np.uint64(4)).astype(np.uint64)
-    w = (((v >> sh) ^ v) * np.uint64(277803737)) & np.uint64(0xFFFFFFFF)
-    return ((w >> np.uint64(22)) ^ w) & np.uint64(0xFFFFFFFF)
+    """PCG output hash of uint32 words held in uint64 arrays (pcgHash in colorMath.ts)."""
+    M = np.uint64(0xFFFFFFFF)
+    s = (v.astype(np.uint64) * np.uint64(747796405) + np.uint64(2891336453)) & M
+    sh = (s >> np.uint64(28)) + np.uint64(4)
+    word = (((s >> sh) ^ s) * np.uint64(277803737)) & M
+    return ((word >> np.uint64(22)) ^ word) & M
 
 
-def grain_noise(h, w, size, seed, salt=0):
-    """PCG-style 32-bit hash of (floor(x/size), floor(y/size), seed) -> [0,1)."""
-    xs = (np.arange(w, dtype=np.uint64) // np.uint64(size))[None, :]
-    ys = (np.arange(h, dtype=np.uint64) // np.uint64(size))[:, None]
-    v = _pcg(xs ^ np.uint64(seed & 0xFFFFFFFF) ^ np.uint64(salt))
-    v = _pcg(v ^ (ys + np.uint64(0x9E3779B9)))
-    return v.astype(np.float64) / 4294967296.0
+def grain_hash(x, y, seed):
+    """grainHash: pcg(pcg(x ^ seed) ^ (y + 0x9E3779B9)), uint32 arrays (x row vector, y column vector)."""
+    M = np.uint64(0xFFFFFFFF)
+    h = _pcg(x.astype(np.uint64) ^ np.uint64(seed & 0xFFFFFFFF))
+    return _pcg(h ^ ((y.astype(np.uint64) + np.uint64(GRAIN_Y_OFFSET)) & M))
+
+
+def grain_noise(h, w, size, seed, roughness):
+    xs = np.arange(w, dtype=np.uint64)[None, :]
+    ys = np.arange(h, dtype=np.uint64)[:, None]
+    sz = np.uint64(max(1, int(size)))
+    n1 = grain_hash(xs // sz, ys // sz, int(seed)).astype(np.float64) / 4294967296.0
+    q = roughness / 100 * GRAIN_ROUGHNESS_MIX
+    if q <= 0:
+        return n1
+    n2 = grain_hash(xs, ys, (int(seed) ^ GRAIN_SALT) & 0xFFFFFFFF).astype(np.float64) / 4294967296.0
+    return n1 * (1 - q) + n2 * q
 
 
 def ap_grain(c, p):  # 5.4 grain
     h, w = c.shape[:2]
-    n = grain_noise(h, w, int(p["size"]), int(p["seed"]))
-    q = p["roughness"] / 100 * 0.5  # choice: roughness mixes a pixel-level second octave
-    if q > 0:
-        n = n * (1 - q) + grain_noise(h, w, 1, int(p["seed"]), 0x85EBCA6B) * q
-    return clamp01(c + (p["amount"] / 100 * 0.2 * (n - 0.5))[..., None].astype(c.dtype))
+    n = grain_noise(h, w, p["size"], p["seed"], p["roughness"])
+    return clamp01(c + (p["amount"] / 100 * GRAIN_GAIN * (n - 0.5))[..., None].astype(c.dtype))
 
 
 # --------------------------------------------------------------------------------------
