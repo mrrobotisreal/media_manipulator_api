@@ -1,0 +1,1 @@
+{"geometry":{"crop":null,"fill":"transparent","flipH":false,"flipV":false,"perspective":null,"rotate":0},"heals":[],"layers":[{"blend":"normal","enabled":true,"id":"l1","mask":null,"opacity":1,"params":{"amount":60,"roughness":80,"seed":4000000000,"size":2},"type":"grain"}],"output":{},"source":{"height":192,"orientation":1,"width":256},"version":1}

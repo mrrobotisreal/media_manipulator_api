@@ -15,7 +15,7 @@ import (
 // (canonical bytes plus one trailing newline).
 var canonicalDocs = []string{
 	"blank", "clamped", "curves-s", "defaults", "detail-all", "geometry-perspective",
-	"geometry-rotate-crop", "heal-base-refs", "heal-two-bases", "hsl-grey-except-red", "levels-channels",
+	"geometry-rotate-crop", "heal-base-refs", "heal-two-bases", "hsl-grey-except-red", "layer-groups", "levels-channels",
 	"masks-all-kinds", "masks-named", "rung1-all-layers", "unknown-fields",
 }
 
@@ -179,6 +179,7 @@ func TestPhotoSanitizeRefusals(t *testing.T) {
 		{"lut size 66", l(`{"id":"a","type":"lut","params":{"cube":"LUT_3D_SIZE 66\n"}}`), CodeLutTooLarge, Limits{}},
 		{"lut bytes", l(`{"id":"a","type":"lut","params":{"cube":"LUT_3D_SIZE 2\n"}}`), CodeLutTooLarge, Limits{MaxLutBytes: 5}},
 		{"too large", `{"version":1}`, CodeTooLarge, Limits{MaxDocBytes: 5}},
+		{"layer group too long", l(`{"id":"a","type":"invert","group":"` + strings.Repeat("g", 81) + `"}`), CodeInvalidDoc, Limits{}},
 		{"layer name too long", l(`{"id":"a","type":"invert","name":"` + strings.Repeat("n", 81) + `"}`), CodeInvalidDoc, Limits{}},
 	}
 	for _, c := range cases {
@@ -272,4 +273,17 @@ func TestPhotoNamedMasksAndHealRefs(t *testing.T) {
 	if m["masks"].(map[string]any)["a"].(map[string]any)["opacity"].(float64) != 1 {
 		t.Fatal("named mask defaults not filled")
 	}
+}
+
+func TestPhotoLayerGroup(t *testing.T) {
+	src := `"version":1,"source":{"width":10,"height":10}`
+	m := sanitize(t, `{`+src+`,"layers":[{"id":"a","type":"invert","group":"Preset: Vivid"},{"id":"b","type":"invert"}]}`)
+	ls := m["layers"].([]any)
+	if ls[0].(map[string]any)["group"] != "Preset: Vivid" {
+		t.Fatal("group not kept")
+	}
+	if _, has := ls[1].(map[string]any)["group"]; has {
+		t.Fatal("group must be absent when unset")
+	}
+	wantCode(t, `{`+src+`,"layers":[{"id":"a","type":"invert","group":null}]}`, Limits{}, CodeInvalidDoc)
 }

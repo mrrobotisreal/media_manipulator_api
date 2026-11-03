@@ -246,6 +246,7 @@ func (layerNode) clean(v any, _ bool, path string, c *ctx) (any, bool, *Validati
 		f("id", idNode{}),
 		f("type", enumNode{vals: []string{t}, def: t}),
 		f("name", optNode{strNode{max: maxNameLen}}),
+		f("group", optNode{strNode{max: maxNameLen}}), // MM99: preset group header; absent when unset
 		f("enabled", boolNode{def: true}),
 		f("opacity", num(0, 1, 1)),
 		f("blend", blendEnum),
