@@ -922,7 +922,7 @@ func (r *run) paused(hits []Hit) {
 		r.content = true
 		r.save("complete", storedContent{Text: answer}, nil)
 		r.send(UsageEvent{Type: "usage"})
-		done := DoneEvent{Type: "done"}
+		done := DoneEvent{Type: "done", Outcome: "static"}
 		if r.msgID != "" {
 			id := r.msgID
 			done.MessageID = &id
@@ -943,7 +943,7 @@ func (r *run) outOfScope() {
 	r.content = true
 	r.save("complete", storedContent{Text: answer}, nil)
 	r.send(UsageEvent{Type: "usage"})
-	done := DoneEvent{Type: "done"}
+	done := DoneEvent{Type: "done", Outcome: "out_of_scope"}
 	if r.msgID != "" {
 		id := r.msgID
 		done.MessageID = &id

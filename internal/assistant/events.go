@@ -83,11 +83,14 @@ type LimitEvent struct {
 
 // DoneEvent ends a successful stream. Awaiting "edit_result" means an edits
 // event was sent and the client must answer with editResult. MessageID is the
-// stored assistant message (signed-in only; the feedback target).
+// stored assistant message (signed-in only; the feedback target). Outcome
+// (MM107) marks the two answers that called no model: "static" (the spend-cap
+// answer) and "out_of_scope" (the guide's scope gate); absent otherwise.
 type DoneEvent struct {
 	Type      string  `json:"type"` // "done"
 	Awaiting  string  `json:"awaiting,omitempty"`
 	MessageID *string `json:"messageId,omitempty"`
+	Outcome   string  `json:"outcome,omitempty"`
 }
 
 // ErrorEvent ends a failed stream. Codes: upstream, assistant_paused,

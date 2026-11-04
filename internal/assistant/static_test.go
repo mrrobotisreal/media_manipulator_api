@@ -56,3 +56,19 @@ func TestEngineReportCarriesIdentity(t *testing.T) {
 		t.Errorf("report = %+v", r)
 	}
 }
+
+// MM107: the two model-free answers say so on done, so the client can label
+// them (and report outcome static | out_of_scope); a model answer carries none.
+func TestEngineDoneOutcome(t *testing.T) {
+	v := newEnv(t)
+	v.st.spend = 10
+	v.run(v.turn(guideMsg("pricing?"), ""), nil)
+	if l := v.em.last(); l["type"] != "done" || l["outcome"] != "static" {
+		t.Errorf("static done = %v", l)
+	}
+	v = newEnv(t, round{deltas: []string{"Hi."}})
+	v.run(v.turn(guideMsg("compress a video"), ""), nil)
+	if l := v.em.last(); l["type"] != "done" || l["outcome"] != nil {
+		t.Errorf("model done = %v", l)
+	}
+}
