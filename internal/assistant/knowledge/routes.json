@@ -1,0 +1,1280 @@
+[
+ {
+  "route": "/",
+  "kind": "page"
+ },
+ {
+  "route": "/about",
+  "kind": "page"
+ },
+ {
+  "route": "/account",
+  "kind": "page"
+ },
+ {
+  "route": "/account?tab=billing",
+  "kind": "page"
+ },
+ {
+  "route": "/account?tab=history",
+  "kind": "page"
+ },
+ {
+  "route": "/account?tab=privacy",
+  "kind": "page"
+ },
+ {
+  "route": "/account?tab=profile",
+  "kind": "page"
+ },
+ {
+  "route": "/account?tab=projects",
+  "kind": "page"
+ },
+ {
+  "route": "/account?tab=voices",
+  "kind": "page"
+ },
+ {
+  "route": "/blog",
+  "kind": "page"
+ },
+ {
+  "route": "/blog/audio/audio-quality-guide",
+  "kind": "page"
+ },
+ {
+  "route": "/blog/image/image-optimization-guide",
+  "kind": "page"
+ },
+ {
+  "route": "/blog/video/video-compression-guide",
+  "kind": "page"
+ },
+ {
+  "route": "/changelog",
+  "kind": "page"
+ },
+ {
+  "route": "/contact",
+  "kind": "page"
+ },
+ {
+  "route": "/delete-account",
+  "kind": "page"
+ },
+ {
+  "route": "/how-it-works",
+  "kind": "page"
+ },
+ {
+  "route": "/licenses",
+  "kind": "page"
+ },
+ {
+  "route": "/motion/new",
+  "kind": "editor",
+  "slug": "motion"
+ },
+ {
+  "route": "/photo/new",
+  "kind": "editor",
+  "slug": "aperture"
+ },
+ {
+  "route": "/pricing",
+  "kind": "page"
+ },
+ {
+  "route": "/privacy-policy",
+  "kind": "page"
+ },
+ {
+  "route": "/status",
+  "kind": "page"
+ },
+ {
+  "route": "/terms-of-service",
+  "kind": "page"
+ },
+ {
+  "route": "/tools",
+  "kind": "page"
+ },
+ {
+  "route": "/tools/add-reverb-to-audio",
+  "kind": "tool",
+  "slug": "add-reverb-to-audio"
+ },
+ {
+  "route": "/tools/add-text-to-image",
+  "kind": "tool",
+  "slug": "add-text-to-image"
+ },
+ {
+  "route": "/tools/add-vignette",
+  "kind": "tool",
+  "slug": "add-vignette",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/adjust-audio-volume",
+  "kind": "tool",
+  "slug": "adjust-audio-volume"
+ },
+ {
+  "route": "/tools/adjust-image-contrast",
+  "kind": "tool",
+  "slug": "adjust-image-contrast",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/adjust-image-hue",
+  "kind": "tool",
+  "slug": "adjust-image-hue",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/adjust-video-color",
+  "kind": "tool",
+  "slug": "adjust-video-color"
+ },
+ {
+  "route": "/tools/ai-document-scan",
+  "kind": "tool",
+  "slug": "ai-document-scan"
+ },
+ {
+  "route": "/tools/ai-frame-interpolation",
+  "kind": "tool",
+  "slug": "ai-frame-interpolation"
+ },
+ {
+  "route": "/tools/ai-image-restoration",
+  "kind": "tool",
+  "slug": "ai-image-restoration"
+ },
+ {
+  "route": "/tools/ai-image-upscaler",
+  "kind": "tool",
+  "slug": "ai-image-upscaler"
+ },
+ {
+  "route": "/tools/ai-video-restoration",
+  "kind": "tool",
+  "slug": "ai-video-restoration"
+ },
+ {
+  "route": "/tools/aperture",
+  "kind": "tool",
+  "slug": "aperture",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/apply-lut-to-photo",
+  "kind": "tool",
+  "slug": "apply-lut-to-photo",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/audio-converter",
+  "kind": "tool",
+  "slug": "audio-converter"
+ },
+ {
+  "route": "/tools/audio-equalizer",
+  "kind": "tool",
+  "slug": "audio-equalizer"
+ },
+ {
+  "route": "/tools/audio-waveform-generator",
+  "kind": "tool",
+  "slug": "audio-waveform-generator"
+ },
+ {
+  "route": "/tools/black-and-white-photo",
+  "kind": "tool",
+  "slug": "black-and-white-photo",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/blur-faces-in-photo",
+  "kind": "tool",
+  "slug": "blur-faces-in-photo"
+ },
+ {
+  "route": "/tools/blur-image",
+  "kind": "tool",
+  "slug": "blur-image"
+ },
+ {
+  "route": "/tools/brighten-image",
+  "kind": "tool",
+  "slug": "brighten-image",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/caption-translator",
+  "kind": "tool",
+  "slug": "caption-translator"
+ },
+ {
+  "route": "/tools/change-audio-pitch",
+  "kind": "tool",
+  "slug": "change-audio-pitch"
+ },
+ {
+  "route": "/tools/change-audio-speed",
+  "kind": "tool",
+  "slug": "change-audio-speed"
+ },
+ {
+  "route": "/tools/change-image-color",
+  "kind": "tool",
+  "slug": "change-image-color",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/change-video-frame-rate",
+  "kind": "tool",
+  "slug": "change-video-frame-rate"
+ },
+ {
+  "route": "/tools/change-video-speed",
+  "kind": "tool",
+  "slug": "change-video-speed"
+ },
+ {
+  "route": "/tools/clean-voice-audio",
+  "kind": "tool",
+  "slug": "clean-voice-audio"
+ },
+ {
+  "route": "/tools/color-balance-photo",
+  "kind": "tool",
+  "slug": "color-balance-photo",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/color-pop",
+  "kind": "tool",
+  "slug": "color-pop",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/compress-image",
+  "kind": "tool",
+  "slug": "compress-image"
+ },
+ {
+  "route": "/tools/compress-video",
+  "kind": "tool",
+  "slug": "compress-video"
+ },
+ {
+  "route": "/tools/content-studio",
+  "kind": "tool",
+  "slug": "content-studio"
+ },
+ {
+  "route": "/tools/convert-audio-to-flac",
+  "kind": "tool",
+  "slug": "convert-audio-to-flac"
+ },
+ {
+  "route": "/tools/convert-audio-to-m4a",
+  "kind": "tool",
+  "slug": "convert-audio-to-m4a"
+ },
+ {
+  "route": "/tools/convert-audio-to-ogg",
+  "kind": "tool",
+  "slug": "convert-audio-to-ogg"
+ },
+ {
+  "route": "/tools/convert-audio-to-opus",
+  "kind": "tool",
+  "slug": "convert-audio-to-opus"
+ },
+ {
+  "route": "/tools/convert-audio-to-wav",
+  "kind": "tool",
+  "slug": "convert-audio-to-wav"
+ },
+ {
+  "route": "/tools/convert-avi-to-mp4",
+  "kind": "tool",
+  "slug": "convert-avi-to-mp4"
+ },
+ {
+  "route": "/tools/convert-avif-to-jpg",
+  "kind": "tool",
+  "slug": "convert-avif-to-jpg"
+ },
+ {
+  "route": "/tools/convert-avif-to-png",
+  "kind": "tool",
+  "slug": "convert-avif-to-png"
+ },
+ {
+  "route": "/tools/convert-heic-to-jpg",
+  "kind": "tool",
+  "slug": "convert-heic-to-jpg"
+ },
+ {
+  "route": "/tools/convert-jpg-to-pdf",
+  "kind": "tool",
+  "slug": "convert-jpg-to-pdf"
+ },
+ {
+  "route": "/tools/convert-jpg-to-png",
+  "kind": "tool",
+  "slug": "convert-jpg-to-png"
+ },
+ {
+  "route": "/tools/convert-jpg-to-webp",
+  "kind": "tool",
+  "slug": "convert-jpg-to-webp"
+ },
+ {
+  "route": "/tools/convert-mkv-to-mp4",
+  "kind": "tool",
+  "slug": "convert-mkv-to-mp4"
+ },
+ {
+  "route": "/tools/convert-mov-to-mp4",
+  "kind": "tool",
+  "slug": "convert-mov-to-mp4"
+ },
+ {
+  "route": "/tools/convert-mp3-to-wav",
+  "kind": "tool",
+  "slug": "convert-mp3-to-wav"
+ },
+ {
+  "route": "/tools/convert-mp4-to-webm",
+  "kind": "tool",
+  "slug": "convert-mp4-to-webm"
+ },
+ {
+  "route": "/tools/convert-png-to-jpg",
+  "kind": "tool",
+  "slug": "convert-png-to-jpg"
+ },
+ {
+  "route": "/tools/convert-png-to-pdf",
+  "kind": "tool",
+  "slug": "convert-png-to-pdf"
+ },
+ {
+  "route": "/tools/convert-png-to-svg",
+  "kind": "tool",
+  "slug": "convert-png-to-svg"
+ },
+ {
+  "route": "/tools/convert-png-to-webp",
+  "kind": "tool",
+  "slug": "convert-png-to-webp"
+ },
+ {
+  "route": "/tools/convert-svg-to-png",
+  "kind": "tool",
+  "slug": "convert-svg-to-png"
+ },
+ {
+  "route": "/tools/convert-video-to-animated-gif",
+  "kind": "tool",
+  "slug": "convert-video-to-animated-gif"
+ },
+ {
+  "route": "/tools/convert-video-to-hevc",
+  "kind": "tool",
+  "slug": "convert-video-to-hevc"
+ },
+ {
+  "route": "/tools/convert-wav-to-mp3",
+  "kind": "tool",
+  "slug": "convert-wav-to-mp3"
+ },
+ {
+  "route": "/tools/convert-webm-to-mp4",
+  "kind": "tool",
+  "slug": "convert-webm-to-mp4"
+ },
+ {
+  "route": "/tools/convert-webp-to-jpg",
+  "kind": "tool",
+  "slug": "convert-webp-to-jpg"
+ },
+ {
+  "route": "/tools/convert-webp-to-png",
+  "kind": "tool",
+  "slug": "convert-webp-to-png"
+ },
+ {
+  "route": "/tools/crop-image",
+  "kind": "tool",
+  "slug": "crop-image"
+ },
+ {
+  "route": "/tools/crop-video",
+  "kind": "tool",
+  "slug": "crop-video"
+ },
+ {
+  "route": "/tools/edit-image-metadata",
+  "kind": "tool",
+  "slug": "edit-image-metadata"
+ },
+ {
+  "route": "/tools/extract-audio-from-video",
+  "kind": "tool",
+  "slug": "extract-audio-from-video"
+ },
+ {
+  "route": "/tools/extract-frames-from-video",
+  "kind": "tool",
+  "slug": "extract-frames-from-video"
+ },
+ {
+  "route": "/tools/extract-video-only-from-video",
+  "kind": "tool",
+  "slug": "extract-video-only-from-video"
+ },
+ {
+  "route": "/tools/fix-perspective-photo",
+  "kind": "tool",
+  "slug": "fix-perspective-photo",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/fix-photo-exposure",
+  "kind": "tool",
+  "slug": "fix-photo-exposure",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/flip-video",
+  "kind": "tool",
+  "slug": "flip-video"
+ },
+ {
+  "route": "/tools/generate-vtt-captions",
+  "kind": "tool",
+  "slug": "generate-vtt-captions"
+ },
+ {
+  "route": "/tools/grayscale-image",
+  "kind": "tool",
+  "slug": "grayscale-image"
+ },
+ {
+  "route": "/tools/image-converter",
+  "kind": "tool",
+  "slug": "image-converter"
+ },
+ {
+  "route": "/tools/image-filters",
+  "kind": "tool",
+  "slug": "image-filters"
+ },
+ {
+  "route": "/tools/image-resizer",
+  "kind": "tool",
+  "slug": "image-resizer"
+ },
+ {
+  "route": "/tools/image-saturation",
+  "kind": "tool",
+  "slug": "image-saturation",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/image-to-pdf",
+  "kind": "tool",
+  "slug": "image-to-pdf"
+ },
+ {
+  "route": "/tools/inspect-metadata",
+  "kind": "tool",
+  "slug": "inspect-metadata"
+ },
+ {
+  "route": "/tools/invert-image-colors",
+  "kind": "tool",
+  "slug": "invert-image-colors",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/isolate-vocals-from-song",
+  "kind": "tool",
+  "slug": "isolate-vocals-from-song"
+ },
+ {
+  "route": "/tools/motion",
+  "kind": "tool",
+  "slug": "motion"
+ },
+ {
+  "route": "/tools/normalize-audio",
+  "kind": "tool",
+  "slug": "normalize-audio"
+ },
+ {
+  "route": "/tools/pdf-converter",
+  "kind": "tool",
+  "slug": "pdf-converter"
+ },
+ {
+  "route": "/tools/pdf-to-jpg",
+  "kind": "tool",
+  "slug": "pdf-to-jpg"
+ },
+ {
+  "route": "/tools/pdf-to-png",
+  "kind": "tool",
+  "slug": "pdf-to-png"
+ },
+ {
+  "route": "/tools/photo-curves",
+  "kind": "tool",
+  "slug": "photo-curves",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/photo-levels",
+  "kind": "tool",
+  "slug": "photo-levels",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/png-to-ico",
+  "kind": "tool",
+  "slug": "png-to-ico"
+ },
+ {
+  "route": "/tools/posterize-image",
+  "kind": "tool",
+  "slug": "posterize-image",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/redact-text-in-image",
+  "kind": "tool",
+  "slug": "redact-text-in-image"
+ },
+ {
+  "route": "/tools/reduce-image-noise",
+  "kind": "tool",
+  "slug": "reduce-image-noise",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/remove-audio-from-video",
+  "kind": "tool",
+  "slug": "remove-audio-from-video"
+ },
+ {
+  "route": "/tools/remove-background-from-image",
+  "kind": "tool",
+  "slug": "remove-background-from-image"
+ },
+ {
+  "route": "/tools/remove-background-noise",
+  "kind": "tool",
+  "slug": "remove-background-noise"
+ },
+ {
+  "route": "/tools/remove-blemishes",
+  "kind": "tool",
+  "slug": "remove-blemishes",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/remove-exif-metadata",
+  "kind": "tool",
+  "slug": "remove-exif-metadata"
+ },
+ {
+  "route": "/tools/remove-object-from-photo",
+  "kind": "tool",
+  "slug": "remove-object-from-photo"
+ },
+ {
+  "route": "/tools/remove-vocals-from-song",
+  "kind": "tool",
+  "slug": "remove-vocals-from-song"
+ },
+ {
+  "route": "/tools/resize-video",
+  "kind": "tool",
+  "slug": "resize-video"
+ },
+ {
+  "route": "/tools/reverse-video",
+  "kind": "tool",
+  "slug": "reverse-video"
+ },
+ {
+  "route": "/tools/rotate-image",
+  "kind": "tool",
+  "slug": "rotate-image"
+ },
+ {
+  "route": "/tools/rotate-video",
+  "kind": "tool",
+  "slug": "rotate-video"
+ },
+ {
+  "route": "/tools/select-by-color",
+  "kind": "tool",
+  "slug": "select-by-color",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/sharpen-image",
+  "kind": "tool",
+  "slug": "sharpen-image"
+ },
+ {
+  "route": "/tools/sharpen-photo-online",
+  "kind": "tool",
+  "slug": "sharpen-photo-online",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/split-toning",
+  "kind": "tool",
+  "slug": "split-toning",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/srt-generator",
+  "kind": "tool",
+  "slug": "srt-generator"
+ },
+ {
+  "route": "/tools/stabilize-video",
+  "kind": "tool",
+  "slug": "stabilize-video"
+ },
+ {
+  "route": "/tools/stitch-audio-to-video",
+  "kind": "tool",
+  "slug": "stitch-audio-to-video"
+ },
+ {
+  "route": "/tools/straighten-photo",
+  "kind": "tool",
+  "slug": "straighten-photo",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/summarize-audio",
+  "kind": "tool",
+  "slug": "summarize-audio"
+ },
+ {
+  "route": "/tools/summarize-video",
+  "kind": "tool",
+  "slug": "summarize-video"
+ },
+ {
+  "route": "/tools/tint-photo",
+  "kind": "tool",
+  "slug": "tint-photo",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tools/transcode-to-dash",
+  "kind": "tool",
+  "slug": "transcode-to-dash"
+ },
+ {
+  "route": "/tools/transcode-to-hls",
+  "kind": "tool",
+  "slug": "transcode-to-hls"
+ },
+ {
+  "route": "/tools/transcribe-audio",
+  "kind": "tool",
+  "slug": "transcribe-audio"
+ },
+ {
+  "route": "/tools/transcribe-video",
+  "kind": "tool",
+  "slug": "transcribe-video"
+ },
+ {
+  "route": "/tools/trim-audio",
+  "kind": "tool",
+  "slug": "trim-audio"
+ },
+ {
+  "route": "/tools/video-converter",
+  "kind": "tool",
+  "slug": "video-converter"
+ },
+ {
+  "route": "/tools/video-trimmer",
+  "kind": "tool",
+  "slug": "video-trimmer"
+ },
+ {
+  "route": "/tools/voice-changer",
+  "kind": "tool",
+  "slug": "voice-changer"
+ },
+ {
+  "route": "/tools/voice-cloning",
+  "kind": "tool",
+  "slug": "voice-cloning"
+ },
+ {
+  "route": "/tools/voice-designer",
+  "kind": "tool",
+  "slug": "voice-designer"
+ },
+ {
+  "route": "/tools/white-balance-photo",
+  "kind": "tool",
+  "slug": "white-balance-photo",
+  "presets": [
+   "color-pop-red",
+   "color-pop-yellow",
+   "color-pop-green",
+   "color-pop-cyan",
+   "color-pop-blue",
+   "color-pop-magenta",
+   "bw-film",
+   "bw-high-contrast",
+   "warm",
+   "cool",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "cross-process",
+   "vintage",
+   "portrait-soften",
+   "landscape",
+   "auto"
+  ]
+ },
+ {
+  "route": "/tutorials",
+  "kind": "page"
+ },
+ {
+  "route": "/tutorials/ai-frame-interpolation",
+  "kind": "page"
+ },
+ {
+  "route": "/tutorials/aperture",
+  "kind": "page"
+ },
+ {
+  "route": "/tutorials/audio/getting-started",
+  "kind": "page"
+ },
+ {
+  "route": "/tutorials/content-studio",
+  "kind": "page"
+ },
+ {
+  "route": "/tutorials/image/getting-started",
+  "kind": "page"
+ },
+ {
+  "route": "/tutorials/motion",
+  "kind": "page"
+ },
+ {
+  "route": "/tutorials/video/getting-started",
+  "kind": "page"
+ },
+ {
+  "route": "/voices",
+  "kind": "page"
+ }
+]

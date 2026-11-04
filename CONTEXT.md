@@ -130,6 +130,16 @@ One user message and everything the server streams for it, identified by a `turn
 **Op** (MM104, vocabularies MM108–MM110):
 One entry of an `apply_edits` call: a closed, per-editor vocabulary defined in the UI's Zod schemas and byte-copied as JSON Schema into `internal/assistant/ops/schema/<surface>.json`. The server validates every call before streaming it (one retry with a tool error, then `invalid_ops`); the client applies all ops or none as one undo step. The model never writes a document.
 
+**Knowledge corpus** (MM105):
+Medi's generated docs in `internal/assistant/knowledge/` (`tools/`, `pages/`, `editors/<surface>/`, `routes.json`, `names/<locale>.json`, `index.json`), exported by `npm run export:medi` in the UI from the site's registries and embedded with `go:embed`. Ranked with BM25 (`bm25.go`, aliases, title ×3, keywords/names ×2) and filtered by surface: the guide sees tools and pages, a copilot its editor's docs, tools and recipes.
+_Avoid_: hand-editing it; "the prompt" for what is retrieved per message.
+
+**Capsule** (MM105):
+The byte-stable, per-surface text appended to the persona in cached system block 1: the guide's site map + plan overview, or an editor's full parameter vocabulary (+ its top recipes from MM106). No numbers, ids or dates, so the provider's prompt cache keeps hitting.
+
+**Scope gate** (MM105):
+The guide's cheap pre-model check (`InScope`): a message passes when it names a doc keyword, an alias, a media-craft or site term (in any of the 18 languages), small talk, or the current page; otherwise the localized out-of-scope line is returned with no model call. Copilots are never gated.
+
 **Spend cap** (MM104):
 `ASSISTANT_DAILY_SPEND_CAP_USD` (default 10): today's UTC sum of `assistant_usage_events.cost_usd` plus in-flight worst-case reservations. At the cap the copilot answers `503 assistant_paused` (no charge) and the guide answers from retrieval only, without a model call. The OpenRouter key's own credit limit is the hard backstop.
 _Avoid_: confusing it with the per-user `assistant_turns` allowance.

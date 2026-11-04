@@ -1,0 +1,598 @@
+{
+ "pages/about": {
+  "name": "소개",
+  "path": "/ko/about"
+ },
+ "pages/account": {
+  "name": "내 계정",
+  "path": "/ko/account"
+ },
+ "pages/blog": {
+  "name": "블로그",
+  "path": "/ko/blog"
+ },
+ "pages/blog/audio/audio-quality-guide": {
+  "name": "Audio Quality Guide: Bitrate, Formats, Compression & Cleanup",
+  "path": "/ko/blog/audio/audio-quality-guide"
+ },
+ "pages/blog/image/image-optimization-guide": {
+  "name": "웹 제다이를 위한 이미지 최적화: JPG vs PNG vs WebP",
+  "path": "/ko/blog/image/image-optimization-guide"
+ },
+ "pages/blog/video/video-compression-guide": {
+  "name": "동영상 압축을 위한 은하수 여행자 안내서: MP4 vs WebM vs AVI vs MOV",
+  "path": "/ko/blog/video/video-compression-guide"
+ },
+ "pages/changelog": {
+  "name": "변경 내역",
+  "path": "/ko/changelog"
+ },
+ "pages/contact": {
+  "name": "문의하기",
+  "path": "/ko/contact"
+ },
+ "pages/delete-account": {
+  "name": "계정 삭제",
+  "path": "/ko/delete-account"
+ },
+ "pages/home": {
+  "name": "홈",
+  "path": "/ko"
+ },
+ "pages/how-it-works": {
+  "name": "작동 방식",
+  "path": "/ko/how-it-works"
+ },
+ "pages/licenses": {
+  "name": "오픈소스 라이선스",
+  "path": "/ko/licenses"
+ },
+ "pages/pricing": {
+  "name": "요금제",
+  "path": "/ko/pricing"
+ },
+ "pages/privacy-policy": {
+  "name": "개인정보 처리방침",
+  "path": "/ko/privacy-policy"
+ },
+ "pages/status": {
+  "name": "서비스 상태",
+  "path": "/ko/status"
+ },
+ "pages/terms-of-service": {
+  "name": "서비스 이용약관",
+  "path": "/ko/terms-of-service"
+ },
+ "pages/tools": {
+  "name": "도구",
+  "path": "/ko/tools"
+ },
+ "pages/tutorials": {
+  "name": "튜토리얼",
+  "path": "/ko/tutorials"
+ },
+ "pages/tutorials/ai-frame-interpolation": {
+  "name": "AI 프레임 보간이란?",
+  "path": "/ko/tutorials/ai-frame-interpolation"
+ },
+ "pages/tutorials/aperture": {
+  "name": "Aperture으로 온라인에서 사진 편집하기",
+  "path": "/ko/tutorials/aperture"
+ },
+ "pages/tutorials/audio/getting-started": {
+  "name": "시작하기: 오디오 파일 변환",
+  "path": "/ko/tutorials/audio/getting-started"
+ },
+ "pages/tutorials/content-studio": {
+  "name": "Darkroom 사용법: 브라우저에서 멀티트랙 동영상 편집",
+  "path": "/ko/tutorials/content-studio"
+ },
+ "pages/tutorials/image/getting-started": {
+  "name": "시작하기: 이미지 파일 변환",
+  "path": "/ko/tutorials/image/getting-started"
+ },
+ "pages/tutorials/motion": {
+  "name": "Motion으로 SVG 애니메이션 만들기",
+  "path": "/ko/tutorials/motion"
+ },
+ "pages/tutorials/video/getting-started": {
+  "name": "시작하기: 동영상 파일 변환",
+  "path": "/ko/tutorials/video/getting-started"
+ },
+ "pages/voices": {
+  "name": "음성",
+  "path": "/ko/voices"
+ },
+ "tools/add-reverb-to-audio": {
+  "name": "오디오에 리버브 추가",
+  "path": "/ko/tools/add-reverb-to-audio"
+ },
+ "tools/add-text-to-image": {
+  "name": "이미지에 텍스트 추가",
+  "path": "/ko/tools/add-text-to-image"
+ },
+ "tools/add-vignette": {
+  "name": "비네팅 추가",
+  "path": "/ko/tools/add-vignette"
+ },
+ "tools/adjust-audio-volume": {
+  "name": "오디오 볼륨 조절",
+  "path": "/ko/tools/adjust-audio-volume"
+ },
+ "tools/adjust-image-contrast": {
+  "name": "대비 조정",
+  "path": "/ko/tools/adjust-image-contrast"
+ },
+ "tools/adjust-image-hue": {
+  "name": "이미지 색조 조정",
+  "path": "/ko/tools/adjust-image-hue"
+ },
+ "tools/adjust-video-color": {
+  "name": "동영상 밝기 및 색상 조정",
+  "path": "/ko/tools/adjust-video-color"
+ },
+ "tools/ai-document-scan": {
+  "name": "AI 문서 스캔",
+  "path": "/ko/tools/ai-document-scan"
+ },
+ "tools/ai-frame-interpolation": {
+  "name": "AI 프레임 보간",
+  "path": "/ko/tools/ai-frame-interpolation"
+ },
+ "tools/ai-image-restoration": {
+  "name": "AI 이미지 복원 및 업스케일링",
+  "path": "/ko/tools/ai-image-restoration"
+ },
+ "tools/ai-image-upscaler": {
+  "name": "AI 이미지 업스케일러",
+  "path": "/ko/tools/ai-image-upscaler"
+ },
+ "tools/ai-video-restoration": {
+  "name": "AI 동영상 복원",
+  "path": "/ko/tools/ai-video-restoration"
+ },
+ "tools/aperture": {
+  "name": "Aperture",
+  "path": "/ko/tools/aperture"
+ },
+ "tools/apply-lut-to-photo": {
+  "name": "LUT 적용",
+  "path": "/ko/tools/apply-lut-to-photo"
+ },
+ "tools/audio-converter": {
+  "name": "오디오 변환기",
+  "path": "/ko/tools/audio-converter"
+ },
+ "tools/audio-equalizer": {
+  "name": "오디오 이퀄라이저",
+  "path": "/ko/tools/audio-equalizer"
+ },
+ "tools/audio-waveform-generator": {
+  "name": "오디오 파형 생성기",
+  "path": "/ko/tools/audio-waveform-generator"
+ },
+ "tools/black-and-white-photo": {
+  "name": "흑백 사진",
+  "path": "/ko/tools/black-and-white-photo"
+ },
+ "tools/blur-faces-in-photo": {
+  "name": "사진 속 얼굴 흐리게 처리",
+  "path": "/ko/tools/blur-faces-in-photo"
+ },
+ "tools/blur-image": {
+  "name": "이미지 흐리게",
+  "path": "/ko/tools/blur-image"
+ },
+ "tools/brighten-image": {
+  "name": "이미지 밝게 하기",
+  "path": "/ko/tools/brighten-image"
+ },
+ "tools/caption-translator": {
+  "name": "자막 번역기",
+  "path": "/ko/tools/caption-translator"
+ },
+ "tools/change-audio-pitch": {
+  "name": "오디오 음높이 변경",
+  "path": "/ko/tools/change-audio-pitch"
+ },
+ "tools/change-audio-speed": {
+  "name": "오디오 속도 변경",
+  "path": "/ko/tools/change-audio-speed"
+ },
+ "tools/change-image-color": {
+  "name": "사물 색상 바꾸기",
+  "path": "/ko/tools/change-image-color"
+ },
+ "tools/change-video-frame-rate": {
+  "name": "동영상 프레임 레이트 변경",
+  "path": "/ko/tools/change-video-frame-rate"
+ },
+ "tools/change-video-speed": {
+  "name": "동영상 속도 변경",
+  "path": "/ko/tools/change-video-speed"
+ },
+ "tools/clean-voice-audio": {
+  "name": "음성 오디오 정리",
+  "path": "/ko/tools/clean-voice-audio"
+ },
+ "tools/color-balance-photo": {
+  "name": "색상 균형",
+  "path": "/ko/tools/color-balance-photo"
+ },
+ "tools/color-pop": {
+  "name": "컬러 팝",
+  "path": "/ko/tools/color-pop"
+ },
+ "tools/compress-image": {
+  "name": "이미지 압축",
+  "path": "/ko/tools/compress-image"
+ },
+ "tools/compress-video": {
+  "name": "동영상 압축",
+  "path": "/ko/tools/compress-video"
+ },
+ "tools/content-studio": {
+  "name": "Darkroom",
+  "path": "/ko/tools/content-studio"
+ },
+ "tools/convert-audio-to-flac": {
+  "name": "오디오를 FLAC로 변환",
+  "path": "/ko/tools/convert-audio-to-flac"
+ },
+ "tools/convert-audio-to-m4a": {
+  "name": "오디오를 M4A / AAC로 변환",
+  "path": "/ko/tools/convert-audio-to-m4a"
+ },
+ "tools/convert-audio-to-ogg": {
+  "name": "오디오를 OGG로 변환",
+  "path": "/ko/tools/convert-audio-to-ogg"
+ },
+ "tools/convert-audio-to-opus": {
+  "name": "오디오를 Opus로 변환",
+  "path": "/ko/tools/convert-audio-to-opus"
+ },
+ "tools/convert-audio-to-wav": {
+  "name": "오디오를 WAV로 변환",
+  "path": "/ko/tools/convert-audio-to-wav"
+ },
+ "tools/convert-avi-to-mp4": {
+  "name": "AVI를 MP4로 변환",
+  "path": "/ko/tools/convert-avi-to-mp4"
+ },
+ "tools/convert-avif-to-jpg": {
+  "name": "AVIF를 JPG로 변환",
+  "path": "/ko/tools/convert-avif-to-jpg"
+ },
+ "tools/convert-avif-to-png": {
+  "name": "AVIF를 PNG로 변환",
+  "path": "/ko/tools/convert-avif-to-png"
+ },
+ "tools/convert-heic-to-jpg": {
+  "name": "HEIC를 JPG로 변환",
+  "path": "/ko/tools/convert-heic-to-jpg"
+ },
+ "tools/convert-jpg-to-pdf": {
+  "name": "JPG를 PDF로 변환",
+  "path": "/ko/tools/convert-jpg-to-pdf"
+ },
+ "tools/convert-jpg-to-png": {
+  "name": "JPG를 PNG로 변환",
+  "path": "/ko/tools/convert-jpg-to-png"
+ },
+ "tools/convert-jpg-to-webp": {
+  "name": "JPG를 WebP로 변환",
+  "path": "/ko/tools/convert-jpg-to-webp"
+ },
+ "tools/convert-mkv-to-mp4": {
+  "name": "MKV를 MP4로 변환",
+  "path": "/ko/tools/convert-mkv-to-mp4"
+ },
+ "tools/convert-mov-to-mp4": {
+  "name": "MOV를 MP4로 변환",
+  "path": "/ko/tools/convert-mov-to-mp4"
+ },
+ "tools/convert-mp3-to-wav": {
+  "name": "MP3를 WAV로 변환",
+  "path": "/ko/tools/convert-mp3-to-wav"
+ },
+ "tools/convert-mp4-to-webm": {
+  "name": "MP4를 WebM으로 변환",
+  "path": "/ko/tools/convert-mp4-to-webm"
+ },
+ "tools/convert-png-to-jpg": {
+  "name": "PNG를 JPG로 변환",
+  "path": "/ko/tools/convert-png-to-jpg"
+ },
+ "tools/convert-png-to-pdf": {
+  "name": "PNG를 PDF로 변환",
+  "path": "/ko/tools/convert-png-to-pdf"
+ },
+ "tools/convert-png-to-svg": {
+  "name": "PNG를 SVG로 변환",
+  "path": "/ko/tools/convert-png-to-svg"
+ },
+ "tools/convert-png-to-webp": {
+  "name": "PNG를 WebP로 변환",
+  "path": "/ko/tools/convert-png-to-webp"
+ },
+ "tools/convert-svg-to-png": {
+  "name": "SVG를 PNG로 변환",
+  "path": "/ko/tools/convert-svg-to-png"
+ },
+ "tools/convert-video-to-animated-gif": {
+  "name": "동영상을 움직이는 GIF로 변환",
+  "path": "/ko/tools/convert-video-to-animated-gif"
+ },
+ "tools/convert-video-to-hevc": {
+  "name": "동영상을 HEVC(H.265)로 변환",
+  "path": "/ko/tools/convert-video-to-hevc"
+ },
+ "tools/convert-wav-to-mp3": {
+  "name": "WAV를 MP3로 변환",
+  "path": "/ko/tools/convert-wav-to-mp3"
+ },
+ "tools/convert-webm-to-mp4": {
+  "name": "WebM을 MP4로 변환",
+  "path": "/ko/tools/convert-webm-to-mp4"
+ },
+ "tools/convert-webp-to-jpg": {
+  "name": "WebP를 JPG로 변환",
+  "path": "/ko/tools/convert-webp-to-jpg"
+ },
+ "tools/convert-webp-to-png": {
+  "name": "WebP를 PNG로 변환",
+  "path": "/ko/tools/convert-webp-to-png"
+ },
+ "tools/crop-image": {
+  "name": "이미지 자르기",
+  "path": "/ko/tools/crop-image"
+ },
+ "tools/crop-video": {
+  "name": "동영상 화면 자르기",
+  "path": "/ko/tools/crop-video"
+ },
+ "tools/edit-image-metadata": {
+  "name": "이미지 메타데이터 편집",
+  "path": "/ko/tools/edit-image-metadata"
+ },
+ "tools/extract-audio-from-video": {
+  "name": "동영상에서 오디오 추출",
+  "path": "/ko/tools/extract-audio-from-video"
+ },
+ "tools/extract-frames-from-video": {
+  "name": "동영상에서 프레임 추출",
+  "path": "/ko/tools/extract-frames-from-video"
+ },
+ "tools/extract-video-only-from-video": {
+  "name": "오디오 없이 동영상만 추출",
+  "path": "/ko/tools/extract-video-only-from-video"
+ },
+ "tools/fix-perspective-photo": {
+  "name": "원근 보정",
+  "path": "/ko/tools/fix-perspective-photo"
+ },
+ "tools/fix-photo-exposure": {
+  "name": "노출 보정",
+  "path": "/ko/tools/fix-photo-exposure"
+ },
+ "tools/flip-video": {
+  "name": "동영상 뒤집기 & 좌우 반전",
+  "path": "/ko/tools/flip-video"
+ },
+ "tools/generate-vtt-captions": {
+  "name": "VTT 자막 생성기",
+  "path": "/ko/tools/generate-vtt-captions"
+ },
+ "tools/grayscale-image": {
+  "name": "이미지를 흑백으로 변환",
+  "path": "/ko/tools/grayscale-image"
+ },
+ "tools/image-converter": {
+  "name": "이미지 변환기",
+  "path": "/ko/tools/image-converter"
+ },
+ "tools/image-filters": {
+  "name": "이미지 필터 & 효과",
+  "path": "/ko/tools/image-filters"
+ },
+ "tools/image-resizer": {
+  "name": "이미지 크기 조절",
+  "path": "/ko/tools/image-resizer"
+ },
+ "tools/image-saturation": {
+  "name": "이미지 채도",
+  "path": "/ko/tools/image-saturation"
+ },
+ "tools/image-to-pdf": {
+  "name": "이미지를 PDF로",
+  "path": "/ko/tools/image-to-pdf"
+ },
+ "tools/inspect-metadata": {
+  "name": "메타데이터 검사기",
+  "path": "/ko/tools/inspect-metadata"
+ },
+ "tools/invert-image-colors": {
+  "name": "색상 반전",
+  "path": "/ko/tools/invert-image-colors"
+ },
+ "tools/isolate-vocals-from-song": {
+  "name": "노래에서 보컬 분리",
+  "path": "/ko/tools/isolate-vocals-from-song"
+ },
+ "tools/motion": {
+  "name": "Motion",
+  "path": "/ko/tools/motion"
+ },
+ "tools/normalize-audio": {
+  "name": "오디오 노멀라이즈",
+  "path": "/ko/tools/normalize-audio"
+ },
+ "tools/pdf-converter": {
+  "name": "PDF 변환기",
+  "path": "/ko/tools/pdf-converter"
+ },
+ "tools/pdf-to-jpg": {
+  "name": "PDF를 JPG로",
+  "path": "/ko/tools/pdf-to-jpg"
+ },
+ "tools/pdf-to-png": {
+  "name": "PDF를 PNG로",
+  "path": "/ko/tools/pdf-to-png"
+ },
+ "tools/photo-curves": {
+  "name": "커브",
+  "path": "/ko/tools/photo-curves"
+ },
+ "tools/photo-levels": {
+  "name": "레벨",
+  "path": "/ko/tools/photo-levels"
+ },
+ "tools/png-to-ico": {
+  "name": "PNG를 ICO로",
+  "path": "/ko/tools/png-to-ico"
+ },
+ "tools/posterize-image": {
+  "name": "포스터라이즈",
+  "path": "/ko/tools/posterize-image"
+ },
+ "tools/redact-text-in-image": {
+  "name": "이미지 속 텍스트 가리기",
+  "path": "/ko/tools/redact-text-in-image"
+ },
+ "tools/reduce-image-noise": {
+  "name": "이미지 노이즈 줄이기",
+  "path": "/ko/tools/reduce-image-noise"
+ },
+ "tools/remove-audio-from-video": {
+  "name": "동영상에서 오디오 제거",
+  "path": "/ko/tools/remove-audio-from-video"
+ },
+ "tools/remove-background-from-image": {
+  "name": "이미지 배경 제거",
+  "path": "/ko/tools/remove-background-from-image"
+ },
+ "tools/remove-background-noise": {
+  "name": "배경 소음 제거",
+  "path": "/ko/tools/remove-background-noise"
+ },
+ "tools/remove-blemishes": {
+  "name": "잡티 제거",
+  "path": "/ko/tools/remove-blemishes"
+ },
+ "tools/remove-exif-metadata": {
+  "name": "이미지에서 EXIF 메타데이터 삭제",
+  "path": "/ko/tools/remove-exif-metadata"
+ },
+ "tools/remove-object-from-photo": {
+  "name": "사진에서 개체 제거",
+  "path": "/ko/tools/remove-object-from-photo"
+ },
+ "tools/remove-vocals-from-song": {
+  "name": "노래에서 보컬 제거",
+  "path": "/ko/tools/remove-vocals-from-song"
+ },
+ "tools/resize-video": {
+  "name": "동영상 크기 조정",
+  "path": "/ko/tools/resize-video"
+ },
+ "tools/reverse-video": {
+  "name": "동영상 거꾸로 재생",
+  "path": "/ko/tools/reverse-video"
+ },
+ "tools/rotate-image": {
+  "name": "이미지 회전",
+  "path": "/ko/tools/rotate-image"
+ },
+ "tools/rotate-video": {
+  "name": "동영상 회전",
+  "path": "/ko/tools/rotate-video"
+ },
+ "tools/select-by-color": {
+  "name": "색상으로 선택",
+  "path": "/ko/tools/select-by-color"
+ },
+ "tools/sharpen-image": {
+  "name": "이미지 선명하게",
+  "path": "/ko/tools/sharpen-image"
+ },
+ "tools/sharpen-photo-online": {
+  "name": "사진 선명하게",
+  "path": "/ko/tools/sharpen-photo-online"
+ },
+ "tools/split-toning": {
+  "name": "스플릿 토닝",
+  "path": "/ko/tools/split-toning"
+ },
+ "tools/srt-generator": {
+  "name": "SRT 자막 생성기",
+  "path": "/ko/tools/srt-generator"
+ },
+ "tools/stabilize-video": {
+  "name": "동영상 흔들림 보정",
+  "path": "/ko/tools/stabilize-video"
+ },
+ "tools/stitch-audio-to-video": {
+  "name": "동영상에 오디오 추가",
+  "path": "/ko/tools/stitch-audio-to-video"
+ },
+ "tools/straighten-photo": {
+  "name": "사진 수평 맞추기",
+  "path": "/ko/tools/straighten-photo"
+ },
+ "tools/summarize-audio": {
+  "name": "오디오 요약",
+  "path": "/ko/tools/summarize-audio"
+ },
+ "tools/summarize-video": {
+  "name": "동영상 요약",
+  "path": "/ko/tools/summarize-video"
+ },
+ "tools/tint-photo": {
+  "name": "사진에 색조 입히기",
+  "path": "/ko/tools/tint-photo"
+ },
+ "tools/transcode-to-dash": {
+  "name": "동영상을 DASH(AV1 / VP9)로 변환",
+  "path": "/ko/tools/transcode-to-dash"
+ },
+ "tools/transcode-to-hls": {
+  "name": "동영상을 HLS로 트랜스코딩",
+  "path": "/ko/tools/transcode-to-hls"
+ },
+ "tools/transcribe-audio": {
+  "name": "오디오 받아쓰기",
+  "path": "/ko/tools/transcribe-audio"
+ },
+ "tools/transcribe-video": {
+  "name": "동영상 텍스트 변환",
+  "path": "/ko/tools/transcribe-video"
+ },
+ "tools/trim-audio": {
+  "name": "오디오 자르기",
+  "path": "/ko/tools/trim-audio"
+ },
+ "tools/video-converter": {
+  "name": "동영상 변환기",
+  "path": "/ko/tools/video-converter"
+ },
+ "tools/video-trimmer": {
+  "name": "동영상 자르기",
+  "path": "/ko/tools/video-trimmer"
+ },
+ "tools/voice-changer": {
+  "name": "음성 변경기",
+  "path": "/ko/tools/voice-changer"
+ },
+ "tools/voice-cloning": {
+  "name": "음성 클론",
+  "path": "/ko/tools/voice-cloning"
+ },
+ "tools/voice-designer": {
+  "name": "음성 디자이너",
+  "path": "/ko/tools/voice-designer"
+ },
+ "tools/white-balance-photo": {
+  "name": "화이트 밸런스",
+  "path": "/ko/tools/white-balance-photo"
+ }
+}

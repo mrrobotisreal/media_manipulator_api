@@ -1,0 +1,598 @@
+{
+ "pages/about": {
+  "name": "关于",
+  "path": "/zh-cn/about"
+ },
+ "pages/account": {
+  "name": "你的账号",
+  "path": "/zh-cn/account"
+ },
+ "pages/blog": {
+  "name": "博客",
+  "path": "/zh-cn/blog"
+ },
+ "pages/blog/audio/audio-quality-guide": {
+  "name": "Audio Quality Guide: Bitrate, Formats, Compression & Cleanup",
+  "path": "/zh-cn/blog/audio/audio-quality-guide"
+ },
+ "pages/blog/image/image-optimization-guide": {
+  "name": "网页绝地武士的图片优化：JPG、PNG与WebP的对比",
+  "path": "/zh-cn/blog/image/image-optimization-guide"
+ },
+ "pages/blog/video/video-compression-guide": {
+  "name": "视频压缩漫游指南：MP4、WebM、AVI与MOV的对比",
+  "path": "/zh-cn/blog/video/video-compression-guide"
+ },
+ "pages/changelog": {
+  "name": "更新日志",
+  "path": "/zh-cn/changelog"
+ },
+ "pages/contact": {
+  "name": "联系我们",
+  "path": "/zh-cn/contact"
+ },
+ "pages/delete-account": {
+  "name": "删除账户",
+  "path": "/zh-cn/delete-account"
+ },
+ "pages/home": {
+  "name": "首页",
+  "path": "/zh-cn"
+ },
+ "pages/how-it-works": {
+  "name": "工作原理",
+  "path": "/zh-cn/how-it-works"
+ },
+ "pages/licenses": {
+  "name": "开源许可证",
+  "path": "/zh-cn/licenses"
+ },
+ "pages/pricing": {
+  "name": "价格",
+  "path": "/zh-cn/pricing"
+ },
+ "pages/privacy-policy": {
+  "name": "隐私政策",
+  "path": "/zh-cn/privacy-policy"
+ },
+ "pages/status": {
+  "name": "服务状态",
+  "path": "/zh-cn/status"
+ },
+ "pages/terms-of-service": {
+  "name": "服务条款",
+  "path": "/zh-cn/terms-of-service"
+ },
+ "pages/tools": {
+  "name": "工具",
+  "path": "/zh-cn/tools"
+ },
+ "pages/tutorials": {
+  "name": "教程",
+  "path": "/zh-cn/tutorials"
+ },
+ "pages/tutorials/ai-frame-interpolation": {
+  "name": "什么是AI帧插值？",
+  "path": "/zh-cn/tutorials/ai-frame-interpolation"
+ },
+ "pages/tutorials/aperture": {
+  "name": "如何使用Aperture在线编辑照片",
+  "path": "/zh-cn/tutorials/aperture"
+ },
+ "pages/tutorials/audio/getting-started": {
+  "name": "入门：转换音频文件",
+  "path": "/zh-cn/tutorials/audio/getting-started"
+ },
+ "pages/tutorials/content-studio": {
+  "name": "如何使用Darkroom：在浏览器中进行多轨视频编辑",
+  "path": "/zh-cn/tutorials/content-studio"
+ },
+ "pages/tutorials/image/getting-started": {
+  "name": "入门：转换图片文件",
+  "path": "/zh-cn/tutorials/image/getting-started"
+ },
+ "pages/tutorials/motion": {
+  "name": "如何使用Motion为SVG制作动画",
+  "path": "/zh-cn/tutorials/motion"
+ },
+ "pages/tutorials/video/getting-started": {
+  "name": "入门：转换视频文件",
+  "path": "/zh-cn/tutorials/video/getting-started"
+ },
+ "pages/voices": {
+  "name": "用户之声",
+  "path": "/zh-cn/voices"
+ },
+ "tools/add-reverb-to-audio": {
+  "name": "为音频添加混响",
+  "path": "/zh-cn/tools/add-reverb-to-audio"
+ },
+ "tools/add-text-to-image": {
+  "name": "为图片添加文字",
+  "path": "/zh-cn/tools/add-text-to-image"
+ },
+ "tools/add-vignette": {
+  "name": "添加晕影",
+  "path": "/zh-cn/tools/add-vignette"
+ },
+ "tools/adjust-audio-volume": {
+  "name": "调整音频音量",
+  "path": "/zh-cn/tools/adjust-audio-volume"
+ },
+ "tools/adjust-image-contrast": {
+  "name": "调整对比度",
+  "path": "/zh-cn/tools/adjust-image-contrast"
+ },
+ "tools/adjust-image-hue": {
+  "name": "调整图片色相",
+  "path": "/zh-cn/tools/adjust-image-hue"
+ },
+ "tools/adjust-video-color": {
+  "name": "调整视频亮度与色彩",
+  "path": "/zh-cn/tools/adjust-video-color"
+ },
+ "tools/ai-document-scan": {
+  "name": "AI文档扫描",
+  "path": "/zh-cn/tools/ai-document-scan"
+ },
+ "tools/ai-frame-interpolation": {
+  "name": "AI插帧",
+  "path": "/zh-cn/tools/ai-frame-interpolation"
+ },
+ "tools/ai-image-restoration": {
+  "name": "AI图片修复与放大",
+  "path": "/zh-cn/tools/ai-image-restoration"
+ },
+ "tools/ai-image-upscaler": {
+  "name": "AI图片放大器",
+  "path": "/zh-cn/tools/ai-image-upscaler"
+ },
+ "tools/ai-video-restoration": {
+  "name": "AI视频修复",
+  "path": "/zh-cn/tools/ai-video-restoration"
+ },
+ "tools/aperture": {
+  "name": "Aperture",
+  "path": "/zh-cn/tools/aperture"
+ },
+ "tools/apply-lut-to-photo": {
+  "name": "应用LUT",
+  "path": "/zh-cn/tools/apply-lut-to-photo"
+ },
+ "tools/audio-converter": {
+  "name": "音频转换器",
+  "path": "/zh-cn/tools/audio-converter"
+ },
+ "tools/audio-equalizer": {
+  "name": "音频均衡器",
+  "path": "/zh-cn/tools/audio-equalizer"
+ },
+ "tools/audio-waveform-generator": {
+  "name": "音频波形生成器",
+  "path": "/zh-cn/tools/audio-waveform-generator"
+ },
+ "tools/black-and-white-photo": {
+  "name": "黑白照片",
+  "path": "/zh-cn/tools/black-and-white-photo"
+ },
+ "tools/blur-faces-in-photo": {
+  "name": "模糊照片中的人脸",
+  "path": "/zh-cn/tools/blur-faces-in-photo"
+ },
+ "tools/blur-image": {
+  "name": "模糊图片",
+  "path": "/zh-cn/tools/blur-image"
+ },
+ "tools/brighten-image": {
+  "name": "提亮图片",
+  "path": "/zh-cn/tools/brighten-image"
+ },
+ "tools/caption-translator": {
+  "name": "字幕翻译器",
+  "path": "/zh-cn/tools/caption-translator"
+ },
+ "tools/change-audio-pitch": {
+  "name": "更改音频音高",
+  "path": "/zh-cn/tools/change-audio-pitch"
+ },
+ "tools/change-audio-speed": {
+  "name": "更改音频速度",
+  "path": "/zh-cn/tools/change-audio-speed"
+ },
+ "tools/change-image-color": {
+  "name": "更改物体颜色",
+  "path": "/zh-cn/tools/change-image-color"
+ },
+ "tools/change-video-frame-rate": {
+  "name": "更改视频帧率",
+  "path": "/zh-cn/tools/change-video-frame-rate"
+ },
+ "tools/change-video-speed": {
+  "name": "更改视频速度",
+  "path": "/zh-cn/tools/change-video-speed"
+ },
+ "tools/clean-voice-audio": {
+  "name": "人声音频降噪",
+  "path": "/zh-cn/tools/clean-voice-audio"
+ },
+ "tools/color-balance-photo": {
+  "name": "色彩平衡",
+  "path": "/zh-cn/tools/color-balance-photo"
+ },
+ "tools/color-pop": {
+  "name": "色彩突出",
+  "path": "/zh-cn/tools/color-pop"
+ },
+ "tools/compress-image": {
+  "name": "压缩图片",
+  "path": "/zh-cn/tools/compress-image"
+ },
+ "tools/compress-video": {
+  "name": "压缩视频",
+  "path": "/zh-cn/tools/compress-video"
+ },
+ "tools/content-studio": {
+  "name": "Darkroom",
+  "path": "/zh-cn/tools/content-studio"
+ },
+ "tools/convert-audio-to-flac": {
+  "name": "将音频转换为FLAC",
+  "path": "/zh-cn/tools/convert-audio-to-flac"
+ },
+ "tools/convert-audio-to-m4a": {
+  "name": "将音频转换为M4A / AAC",
+  "path": "/zh-cn/tools/convert-audio-to-m4a"
+ },
+ "tools/convert-audio-to-ogg": {
+  "name": "将音频转换为OGG",
+  "path": "/zh-cn/tools/convert-audio-to-ogg"
+ },
+ "tools/convert-audio-to-opus": {
+  "name": "将音频转换为Opus",
+  "path": "/zh-cn/tools/convert-audio-to-opus"
+ },
+ "tools/convert-audio-to-wav": {
+  "name": "将音频转换为WAV",
+  "path": "/zh-cn/tools/convert-audio-to-wav"
+ },
+ "tools/convert-avi-to-mp4": {
+  "name": "将AVI转换为MP4",
+  "path": "/zh-cn/tools/convert-avi-to-mp4"
+ },
+ "tools/convert-avif-to-jpg": {
+  "name": "将AVIF转换为JPG",
+  "path": "/zh-cn/tools/convert-avif-to-jpg"
+ },
+ "tools/convert-avif-to-png": {
+  "name": "将AVIF转换为PNG",
+  "path": "/zh-cn/tools/convert-avif-to-png"
+ },
+ "tools/convert-heic-to-jpg": {
+  "name": "将HEIC转换为JPG",
+  "path": "/zh-cn/tools/convert-heic-to-jpg"
+ },
+ "tools/convert-jpg-to-pdf": {
+  "name": "将JPG转换为PDF",
+  "path": "/zh-cn/tools/convert-jpg-to-pdf"
+ },
+ "tools/convert-jpg-to-png": {
+  "name": "将JPG转换为PNG",
+  "path": "/zh-cn/tools/convert-jpg-to-png"
+ },
+ "tools/convert-jpg-to-webp": {
+  "name": "将JPG转换为WebP",
+  "path": "/zh-cn/tools/convert-jpg-to-webp"
+ },
+ "tools/convert-mkv-to-mp4": {
+  "name": "将MKV转换为MP4",
+  "path": "/zh-cn/tools/convert-mkv-to-mp4"
+ },
+ "tools/convert-mov-to-mp4": {
+  "name": "将MOV转换为MP4",
+  "path": "/zh-cn/tools/convert-mov-to-mp4"
+ },
+ "tools/convert-mp3-to-wav": {
+  "name": "将MP3转换为WAV",
+  "path": "/zh-cn/tools/convert-mp3-to-wav"
+ },
+ "tools/convert-mp4-to-webm": {
+  "name": "将MP4转换为WebM",
+  "path": "/zh-cn/tools/convert-mp4-to-webm"
+ },
+ "tools/convert-png-to-jpg": {
+  "name": "将PNG转换为JPG",
+  "path": "/zh-cn/tools/convert-png-to-jpg"
+ },
+ "tools/convert-png-to-pdf": {
+  "name": "将PNG转换为PDF",
+  "path": "/zh-cn/tools/convert-png-to-pdf"
+ },
+ "tools/convert-png-to-svg": {
+  "name": "将PNG转换为SVG",
+  "path": "/zh-cn/tools/convert-png-to-svg"
+ },
+ "tools/convert-png-to-webp": {
+  "name": "将PNG转换为WebP",
+  "path": "/zh-cn/tools/convert-png-to-webp"
+ },
+ "tools/convert-svg-to-png": {
+  "name": "将SVG转换为PNG",
+  "path": "/zh-cn/tools/convert-svg-to-png"
+ },
+ "tools/convert-video-to-animated-gif": {
+  "name": "将视频转换为动态GIF",
+  "path": "/zh-cn/tools/convert-video-to-animated-gif"
+ },
+ "tools/convert-video-to-hevc": {
+  "name": "将视频转换为HEVC（H.265）",
+  "path": "/zh-cn/tools/convert-video-to-hevc"
+ },
+ "tools/convert-wav-to-mp3": {
+  "name": "将WAV转换为MP3",
+  "path": "/zh-cn/tools/convert-wav-to-mp3"
+ },
+ "tools/convert-webm-to-mp4": {
+  "name": "将WebM转换为MP4",
+  "path": "/zh-cn/tools/convert-webm-to-mp4"
+ },
+ "tools/convert-webp-to-jpg": {
+  "name": "将WebP转换为JPG",
+  "path": "/zh-cn/tools/convert-webp-to-jpg"
+ },
+ "tools/convert-webp-to-png": {
+  "name": "将WebP转换为PNG",
+  "path": "/zh-cn/tools/convert-webp-to-png"
+ },
+ "tools/crop-image": {
+  "name": "裁剪图片",
+  "path": "/zh-cn/tools/crop-image"
+ },
+ "tools/crop-video": {
+  "name": "裁剪视频",
+  "path": "/zh-cn/tools/crop-video"
+ },
+ "tools/edit-image-metadata": {
+  "name": "编辑图片元数据",
+  "path": "/zh-cn/tools/edit-image-metadata"
+ },
+ "tools/extract-audio-from-video": {
+  "name": "从视频中提取音频",
+  "path": "/zh-cn/tools/extract-audio-from-video"
+ },
+ "tools/extract-frames-from-video": {
+  "name": "从视频中提取帧",
+  "path": "/zh-cn/tools/extract-frames-from-video"
+ },
+ "tools/extract-video-only-from-video": {
+  "name": "提取无音频视频",
+  "path": "/zh-cn/tools/extract-video-only-from-video"
+ },
+ "tools/fix-perspective-photo": {
+  "name": "修正透视",
+  "path": "/zh-cn/tools/fix-perspective-photo"
+ },
+ "tools/fix-photo-exposure": {
+  "name": "修正曝光",
+  "path": "/zh-cn/tools/fix-photo-exposure"
+ },
+ "tools/flip-video": {
+  "name": "翻转与镜像视频",
+  "path": "/zh-cn/tools/flip-video"
+ },
+ "tools/generate-vtt-captions": {
+  "name": "VTT字幕生成器",
+  "path": "/zh-cn/tools/generate-vtt-captions"
+ },
+ "tools/grayscale-image": {
+  "name": "将图片转换为黑白",
+  "path": "/zh-cn/tools/grayscale-image"
+ },
+ "tools/image-converter": {
+  "name": "图片转换器",
+  "path": "/zh-cn/tools/image-converter"
+ },
+ "tools/image-filters": {
+  "name": "图片滤镜与特效",
+  "path": "/zh-cn/tools/image-filters"
+ },
+ "tools/image-resizer": {
+  "name": "图片尺寸调整",
+  "path": "/zh-cn/tools/image-resizer"
+ },
+ "tools/image-saturation": {
+  "name": "图片饱和度",
+  "path": "/zh-cn/tools/image-saturation"
+ },
+ "tools/image-to-pdf": {
+  "name": "图片转PDF",
+  "path": "/zh-cn/tools/image-to-pdf"
+ },
+ "tools/inspect-metadata": {
+  "name": "元数据检查器",
+  "path": "/zh-cn/tools/inspect-metadata"
+ },
+ "tools/invert-image-colors": {
+  "name": "反相颜色",
+  "path": "/zh-cn/tools/invert-image-colors"
+ },
+ "tools/isolate-vocals-from-song": {
+  "name": "提取歌曲人声",
+  "path": "/zh-cn/tools/isolate-vocals-from-song"
+ },
+ "tools/motion": {
+  "name": "Motion",
+  "path": "/zh-cn/tools/motion"
+ },
+ "tools/normalize-audio": {
+  "name": "音频标准化",
+  "path": "/zh-cn/tools/normalize-audio"
+ },
+ "tools/pdf-converter": {
+  "name": "PDF转换器",
+  "path": "/zh-cn/tools/pdf-converter"
+ },
+ "tools/pdf-to-jpg": {
+  "name": "PDF转JPG",
+  "path": "/zh-cn/tools/pdf-to-jpg"
+ },
+ "tools/pdf-to-png": {
+  "name": "PDF转PNG",
+  "path": "/zh-cn/tools/pdf-to-png"
+ },
+ "tools/photo-curves": {
+  "name": "曲线",
+  "path": "/zh-cn/tools/photo-curves"
+ },
+ "tools/photo-levels": {
+  "name": "色阶",
+  "path": "/zh-cn/tools/photo-levels"
+ },
+ "tools/png-to-ico": {
+  "name": "PNG转ICO",
+  "path": "/zh-cn/tools/png-to-ico"
+ },
+ "tools/posterize-image": {
+  "name": "色调分离",
+  "path": "/zh-cn/tools/posterize-image"
+ },
+ "tools/redact-text-in-image": {
+  "name": "遮盖图片中的文字",
+  "path": "/zh-cn/tools/redact-text-in-image"
+ },
+ "tools/reduce-image-noise": {
+  "name": "降低图片噪点",
+  "path": "/zh-cn/tools/reduce-image-noise"
+ },
+ "tools/remove-audio-from-video": {
+  "name": "移除视频中的音频",
+  "path": "/zh-cn/tools/remove-audio-from-video"
+ },
+ "tools/remove-background-from-image": {
+  "name": "移除图片背景",
+  "path": "/zh-cn/tools/remove-background-from-image"
+ },
+ "tools/remove-background-noise": {
+  "name": "去除背景噪音",
+  "path": "/zh-cn/tools/remove-background-noise"
+ },
+ "tools/remove-blemishes": {
+  "name": "去除瑕疵",
+  "path": "/zh-cn/tools/remove-blemishes"
+ },
+ "tools/remove-exif-metadata": {
+  "name": "移除图片中的EXIF元数据",
+  "path": "/zh-cn/tools/remove-exif-metadata"
+ },
+ "tools/remove-object-from-photo": {
+  "name": "移除照片中的物体",
+  "path": "/zh-cn/tools/remove-object-from-photo"
+ },
+ "tools/remove-vocals-from-song": {
+  "name": "去除歌曲人声",
+  "path": "/zh-cn/tools/remove-vocals-from-song"
+ },
+ "tools/resize-video": {
+  "name": "调整视频尺寸",
+  "path": "/zh-cn/tools/resize-video"
+ },
+ "tools/reverse-video": {
+  "name": "视频倒放",
+  "path": "/zh-cn/tools/reverse-video"
+ },
+ "tools/rotate-image": {
+  "name": "旋转图片",
+  "path": "/zh-cn/tools/rotate-image"
+ },
+ "tools/rotate-video": {
+  "name": "旋转视频",
+  "path": "/zh-cn/tools/rotate-video"
+ },
+ "tools/select-by-color": {
+  "name": "按颜色选择",
+  "path": "/zh-cn/tools/select-by-color"
+ },
+ "tools/sharpen-image": {
+  "name": "锐化图片",
+  "path": "/zh-cn/tools/sharpen-image"
+ },
+ "tools/sharpen-photo-online": {
+  "name": "锐化照片",
+  "path": "/zh-cn/tools/sharpen-photo-online"
+ },
+ "tools/split-toning": {
+  "name": "分离色调",
+  "path": "/zh-cn/tools/split-toning"
+ },
+ "tools/srt-generator": {
+  "name": "SRT字幕生成器",
+  "path": "/zh-cn/tools/srt-generator"
+ },
+ "tools/stabilize-video": {
+  "name": "视频防抖",
+  "path": "/zh-cn/tools/stabilize-video"
+ },
+ "tools/stitch-audio-to-video": {
+  "name": "为视频添加音频",
+  "path": "/zh-cn/tools/stitch-audio-to-video"
+ },
+ "tools/straighten-photo": {
+  "name": "拉直照片",
+  "path": "/zh-cn/tools/straighten-photo"
+ },
+ "tools/summarize-audio": {
+  "name": "音频摘要",
+  "path": "/zh-cn/tools/summarize-audio"
+ },
+ "tools/summarize-video": {
+  "name": "视频摘要",
+  "path": "/zh-cn/tools/summarize-video"
+ },
+ "tools/tint-photo": {
+  "name": "为照片着色",
+  "path": "/zh-cn/tools/tint-photo"
+ },
+ "tools/transcode-to-dash": {
+  "name": "将视频转码为DASH（AV1 / VP9）",
+  "path": "/zh-cn/tools/transcode-to-dash"
+ },
+ "tools/transcode-to-hls": {
+  "name": "将视频转码为HLS",
+  "path": "/zh-cn/tools/transcode-to-hls"
+ },
+ "tools/transcribe-audio": {
+  "name": "音频转文字",
+  "path": "/zh-cn/tools/transcribe-audio"
+ },
+ "tools/transcribe-video": {
+  "name": "视频转录",
+  "path": "/zh-cn/tools/transcribe-video"
+ },
+ "tools/trim-audio": {
+  "name": "裁剪音频",
+  "path": "/zh-cn/tools/trim-audio"
+ },
+ "tools/video-converter": {
+  "name": "视频转换器",
+  "path": "/zh-cn/tools/video-converter"
+ },
+ "tools/video-trimmer": {
+  "name": "视频剪辑",
+  "path": "/zh-cn/tools/video-trimmer"
+ },
+ "tools/voice-changer": {
+  "name": "变声器",
+  "path": "/zh-cn/tools/voice-changer"
+ },
+ "tools/voice-cloning": {
+  "name": "声音克隆",
+  "path": "/zh-cn/tools/voice-cloning"
+ },
+ "tools/voice-designer": {
+  "name": "声音设计器",
+  "path": "/zh-cn/tools/voice-designer"
+ },
+ "tools/white-balance-photo": {
+  "name": "白平衡",
+  "path": "/zh-cn/tools/white-balance-photo"
+ }
+}

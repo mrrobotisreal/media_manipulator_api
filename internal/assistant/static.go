@@ -53,3 +53,24 @@ func StaticAnswer(locale string, hits []Hit) string {
 	}
 	return intro + "\n\n" + strings.Join(links, "\n")
 }
+
+// outOfScopeLines is the guide's reply to a clearly off-topic message (MM105
+// decision 7), keyed like staticFrames. English here; MM107 adds the other
+// 17 locales with the static-answer table.
+var outOfScopeLines = map[string]string{
+	"en": "I'm Medi, the Media Manipulator guide, so I stick to the site, its tools and media editing (video, photos, audio, animation, formats). Ask me which tool to use or how to edit something and I'll help.",
+}
+
+// OutOfScopeLine returns the out-of-scope reply for a locale (English fallback).
+func OutOfScopeLine(locale string) string {
+	l := strings.ToLower(strings.TrimSpace(locale))
+	if s, ok := outOfScopeLines[l]; ok {
+		return s
+	}
+	if i := strings.IndexAny(l, "-_"); i > 0 {
+		if s, ok := outOfScopeLines[l[:i]]; ok {
+			return s
+		}
+	}
+	return outOfScopeLines["en"]
+}

@@ -1,0 +1,598 @@
+{
+ "pages/about": {
+  "name": "हमारे बारे में",
+  "path": "/hi/about"
+ },
+ "pages/account": {
+  "name": "आपका अकाउंट",
+  "path": "/hi/account"
+ },
+ "pages/blog": {
+  "name": "ब्लॉग",
+  "path": "/hi/blog"
+ },
+ "pages/blog/audio/audio-quality-guide": {
+  "name": "Audio Quality Guide: Bitrate, Formats, Compression & Cleanup",
+  "path": "/hi/blog/audio/audio-quality-guide"
+ },
+ "pages/blog/image/image-optimization-guide": {
+  "name": "वेब जेडाई के लिए इमेज ऑप्टिमाइज़ेशन: JPG बनाम PNG बनाम WebP",
+  "path": "/hi/blog/image/image-optimization-guide"
+ },
+ "pages/blog/video/video-compression-guide": {
+  "name": "वीडियो कंप्रेशन की हिचहाइकर गाइड: MP4 बनाम WebM बनाम AVI बनाम MOV",
+  "path": "/hi/blog/video/video-compression-guide"
+ },
+ "pages/changelog": {
+  "name": "चेंजलॉग",
+  "path": "/hi/changelog"
+ },
+ "pages/contact": {
+  "name": "संपर्क करें",
+  "path": "/hi/contact"
+ },
+ "pages/delete-account": {
+  "name": "अकाउंट हटाएँ",
+  "path": "/hi/delete-account"
+ },
+ "pages/home": {
+  "name": "होम",
+  "path": "/hi"
+ },
+ "pages/how-it-works": {
+  "name": "यह कैसे काम करता है",
+  "path": "/hi/how-it-works"
+ },
+ "pages/licenses": {
+  "name": "ओपन-सोर्स लाइसेंस",
+  "path": "/hi/licenses"
+ },
+ "pages/pricing": {
+  "name": "प्राइसिंग",
+  "path": "/hi/pricing"
+ },
+ "pages/privacy-policy": {
+  "name": "प्राइवेसी पॉलिसी",
+  "path": "/hi/privacy-policy"
+ },
+ "pages/status": {
+  "name": "स्टेटस",
+  "path": "/hi/status"
+ },
+ "pages/terms-of-service": {
+  "name": "सेवा की शर्तें",
+  "path": "/hi/terms-of-service"
+ },
+ "pages/tools": {
+  "name": "टूल्स",
+  "path": "/hi/tools"
+ },
+ "pages/tutorials": {
+  "name": "ट्यूटोरियल",
+  "path": "/hi/tutorials"
+ },
+ "pages/tutorials/ai-frame-interpolation": {
+  "name": "AI फ़्रेम इंटरपोलेशन क्या है?",
+  "path": "/hi/tutorials/ai-frame-interpolation"
+ },
+ "pages/tutorials/aperture": {
+  "name": "Aperture से ऑनलाइन फ़ोटो एडिट कैसे करें",
+  "path": "/hi/tutorials/aperture"
+ },
+ "pages/tutorials/audio/getting-started": {
+  "name": "शुरुआत: ऑडियो फ़ाइलें कन्वर्ट करना",
+  "path": "/hi/tutorials/audio/getting-started"
+ },
+ "pages/tutorials/content-studio": {
+  "name": "Darkroom का उपयोग कैसे करें: आपके ब्राउज़र में मल्टी-ट्रैक वीडियो एडिटिंग",
+  "path": "/hi/tutorials/content-studio"
+ },
+ "pages/tutorials/image/getting-started": {
+  "name": "शुरुआत: इमेज फ़ाइलें कन्वर्ट करना",
+  "path": "/hi/tutorials/image/getting-started"
+ },
+ "pages/tutorials/motion": {
+  "name": "Motion से SVG को एनिमेट कैसे करें",
+  "path": "/hi/tutorials/motion"
+ },
+ "pages/tutorials/video/getting-started": {
+  "name": "शुरुआत: वीडियो फ़ाइलें कन्वर्ट करना",
+  "path": "/hi/tutorials/video/getting-started"
+ },
+ "pages/voices": {
+  "name": "आवाज़ें",
+  "path": "/hi/voices"
+ },
+ "tools/add-reverb-to-audio": {
+  "name": "ऑडियो में रीवर्ब जोड़ें",
+  "path": "/hi/tools/add-reverb-to-audio"
+ },
+ "tools/add-text-to-image": {
+  "name": "इमेज में टेक्स्ट जोड़ें",
+  "path": "/hi/tools/add-text-to-image"
+ },
+ "tools/add-vignette": {
+  "name": "विनेट जोड़ें",
+  "path": "/hi/tools/add-vignette"
+ },
+ "tools/adjust-audio-volume": {
+  "name": "ऑडियो वॉल्यूम समायोजित करें",
+  "path": "/hi/tools/adjust-audio-volume"
+ },
+ "tools/adjust-image-contrast": {
+  "name": "कॉन्ट्रास्ट बदलें",
+  "path": "/hi/tools/adjust-image-contrast"
+ },
+ "tools/adjust-image-hue": {
+  "name": "इमेज का ह्यू बदलें",
+  "path": "/hi/tools/adjust-image-hue"
+ },
+ "tools/adjust-video-color": {
+  "name": "वीडियो की ब्राइटनेस और रंग समायोजित करें",
+  "path": "/hi/tools/adjust-video-color"
+ },
+ "tools/ai-document-scan": {
+  "name": "AI डॉक्यूमेंट स्कैन",
+  "path": "/hi/tools/ai-document-scan"
+ },
+ "tools/ai-frame-interpolation": {
+  "name": "AI फ़्रेम इंटरपोलेशन",
+  "path": "/hi/tools/ai-frame-interpolation"
+ },
+ "tools/ai-image-restoration": {
+  "name": "AI इमेज रेस्टोरेशन और अपस्केलिंग",
+  "path": "/hi/tools/ai-image-restoration"
+ },
+ "tools/ai-image-upscaler": {
+  "name": "AI इमेज अपस्केलर",
+  "path": "/hi/tools/ai-image-upscaler"
+ },
+ "tools/ai-video-restoration": {
+  "name": "AI वीडियो रेस्टोरेशन",
+  "path": "/hi/tools/ai-video-restoration"
+ },
+ "tools/aperture": {
+  "name": "Aperture",
+  "path": "/hi/tools/aperture"
+ },
+ "tools/apply-lut-to-photo": {
+  "name": "LUT लगाएँ",
+  "path": "/hi/tools/apply-lut-to-photo"
+ },
+ "tools/audio-converter": {
+  "name": "ऑडियो कन्वर्टर",
+  "path": "/hi/tools/audio-converter"
+ },
+ "tools/audio-equalizer": {
+  "name": "ऑडियो इक्वलाइज़र",
+  "path": "/hi/tools/audio-equalizer"
+ },
+ "tools/audio-waveform-generator": {
+  "name": "ऑडियो वेवफ़ॉर्म जनरेटर",
+  "path": "/hi/tools/audio-waveform-generator"
+ },
+ "tools/black-and-white-photo": {
+  "name": "ब्लैक एंड व्हाइट फ़ोटो",
+  "path": "/hi/tools/black-and-white-photo"
+ },
+ "tools/blur-faces-in-photo": {
+  "name": "फ़ोटो में चेहरे ब्लर करें",
+  "path": "/hi/tools/blur-faces-in-photo"
+ },
+ "tools/blur-image": {
+  "name": "इमेज ब्लर करें",
+  "path": "/hi/tools/blur-image"
+ },
+ "tools/brighten-image": {
+  "name": "इमेज को उजला करें",
+  "path": "/hi/tools/brighten-image"
+ },
+ "tools/caption-translator": {
+  "name": "कैप्शन अनुवादक",
+  "path": "/hi/tools/caption-translator"
+ },
+ "tools/change-audio-pitch": {
+  "name": "ऑडियो की पिच बदलें",
+  "path": "/hi/tools/change-audio-pitch"
+ },
+ "tools/change-audio-speed": {
+  "name": "ऑडियो की स्पीड बदलें",
+  "path": "/hi/tools/change-audio-speed"
+ },
+ "tools/change-image-color": {
+  "name": "वस्तु का रंग बदलें",
+  "path": "/hi/tools/change-image-color"
+ },
+ "tools/change-video-frame-rate": {
+  "name": "वीडियो फ़्रेम रेट बदलें",
+  "path": "/hi/tools/change-video-frame-rate"
+ },
+ "tools/change-video-speed": {
+  "name": "वीडियो की स्पीड बदलें",
+  "path": "/hi/tools/change-video-speed"
+ },
+ "tools/clean-voice-audio": {
+  "name": "वॉइस ऑडियो साफ़ करें",
+  "path": "/hi/tools/clean-voice-audio"
+ },
+ "tools/color-balance-photo": {
+  "name": "कलर बैलेंस",
+  "path": "/hi/tools/color-balance-photo"
+ },
+ "tools/color-pop": {
+  "name": "कलर पॉप",
+  "path": "/hi/tools/color-pop"
+ },
+ "tools/compress-image": {
+  "name": "इमेज कंप्रेस करें",
+  "path": "/hi/tools/compress-image"
+ },
+ "tools/compress-video": {
+  "name": "वीडियो कंप्रेस करें",
+  "path": "/hi/tools/compress-video"
+ },
+ "tools/content-studio": {
+  "name": "Darkroom",
+  "path": "/hi/tools/content-studio"
+ },
+ "tools/convert-audio-to-flac": {
+  "name": "ऑडियो को FLAC में बदलें",
+  "path": "/hi/tools/convert-audio-to-flac"
+ },
+ "tools/convert-audio-to-m4a": {
+  "name": "ऑडियो को M4A / AAC में बदलें",
+  "path": "/hi/tools/convert-audio-to-m4a"
+ },
+ "tools/convert-audio-to-ogg": {
+  "name": "ऑडियो को OGG में बदलें",
+  "path": "/hi/tools/convert-audio-to-ogg"
+ },
+ "tools/convert-audio-to-opus": {
+  "name": "ऑडियो को Opus में बदलें",
+  "path": "/hi/tools/convert-audio-to-opus"
+ },
+ "tools/convert-audio-to-wav": {
+  "name": "ऑडियो को WAV में बदलें",
+  "path": "/hi/tools/convert-audio-to-wav"
+ },
+ "tools/convert-avi-to-mp4": {
+  "name": "AVI को MP4 में बदलें",
+  "path": "/hi/tools/convert-avi-to-mp4"
+ },
+ "tools/convert-avif-to-jpg": {
+  "name": "AVIF को JPG में बदलें",
+  "path": "/hi/tools/convert-avif-to-jpg"
+ },
+ "tools/convert-avif-to-png": {
+  "name": "AVIF को PNG में बदलें",
+  "path": "/hi/tools/convert-avif-to-png"
+ },
+ "tools/convert-heic-to-jpg": {
+  "name": "HEIC को JPG में बदलें",
+  "path": "/hi/tools/convert-heic-to-jpg"
+ },
+ "tools/convert-jpg-to-pdf": {
+  "name": "JPG को PDF में बदलें",
+  "path": "/hi/tools/convert-jpg-to-pdf"
+ },
+ "tools/convert-jpg-to-png": {
+  "name": "JPG को PNG में बदलें",
+  "path": "/hi/tools/convert-jpg-to-png"
+ },
+ "tools/convert-jpg-to-webp": {
+  "name": "JPG को WebP में बदलें",
+  "path": "/hi/tools/convert-jpg-to-webp"
+ },
+ "tools/convert-mkv-to-mp4": {
+  "name": "MKV को MP4 में बदलें",
+  "path": "/hi/tools/convert-mkv-to-mp4"
+ },
+ "tools/convert-mov-to-mp4": {
+  "name": "MOV को MP4 में बदलें",
+  "path": "/hi/tools/convert-mov-to-mp4"
+ },
+ "tools/convert-mp3-to-wav": {
+  "name": "MP3 को WAV में बदलें",
+  "path": "/hi/tools/convert-mp3-to-wav"
+ },
+ "tools/convert-mp4-to-webm": {
+  "name": "MP4 को WebM में बदलें",
+  "path": "/hi/tools/convert-mp4-to-webm"
+ },
+ "tools/convert-png-to-jpg": {
+  "name": "PNG को JPG में बदलें",
+  "path": "/hi/tools/convert-png-to-jpg"
+ },
+ "tools/convert-png-to-pdf": {
+  "name": "PNG को PDF में बदलें",
+  "path": "/hi/tools/convert-png-to-pdf"
+ },
+ "tools/convert-png-to-svg": {
+  "name": "PNG को SVG में बदलें",
+  "path": "/hi/tools/convert-png-to-svg"
+ },
+ "tools/convert-png-to-webp": {
+  "name": "PNG को WebP में बदलें",
+  "path": "/hi/tools/convert-png-to-webp"
+ },
+ "tools/convert-svg-to-png": {
+  "name": "SVG को PNG में बदलें",
+  "path": "/hi/tools/convert-svg-to-png"
+ },
+ "tools/convert-video-to-animated-gif": {
+  "name": "वीडियो को एनिमेटेड GIF में बदलें",
+  "path": "/hi/tools/convert-video-to-animated-gif"
+ },
+ "tools/convert-video-to-hevc": {
+  "name": "वीडियो को HEVC (H.265) में बदलें",
+  "path": "/hi/tools/convert-video-to-hevc"
+ },
+ "tools/convert-wav-to-mp3": {
+  "name": "WAV को MP3 में बदलें",
+  "path": "/hi/tools/convert-wav-to-mp3"
+ },
+ "tools/convert-webm-to-mp4": {
+  "name": "WebM को MP4 में बदलें",
+  "path": "/hi/tools/convert-webm-to-mp4"
+ },
+ "tools/convert-webp-to-jpg": {
+  "name": "WebP को JPG में बदलें",
+  "path": "/hi/tools/convert-webp-to-jpg"
+ },
+ "tools/convert-webp-to-png": {
+  "name": "WebP को PNG में बदलें",
+  "path": "/hi/tools/convert-webp-to-png"
+ },
+ "tools/crop-image": {
+  "name": "इमेज क्रॉप करें",
+  "path": "/hi/tools/crop-image"
+ },
+ "tools/crop-video": {
+  "name": "वीडियो क्रॉप करें",
+  "path": "/hi/tools/crop-video"
+ },
+ "tools/edit-image-metadata": {
+  "name": "इमेज मेटाडेटा एडिट करें",
+  "path": "/hi/tools/edit-image-metadata"
+ },
+ "tools/extract-audio-from-video": {
+  "name": "वीडियो से ऑडियो निकालें",
+  "path": "/hi/tools/extract-audio-from-video"
+ },
+ "tools/extract-frames-from-video": {
+  "name": "वीडियो से फ़्रेम निकालें",
+  "path": "/hi/tools/extract-frames-from-video"
+ },
+ "tools/extract-video-only-from-video": {
+  "name": "बिना ऑडियो का वीडियो निकालें",
+  "path": "/hi/tools/extract-video-only-from-video"
+ },
+ "tools/fix-perspective-photo": {
+  "name": "परिप्रेक्ष्य ठीक करें",
+  "path": "/hi/tools/fix-perspective-photo"
+ },
+ "tools/fix-photo-exposure": {
+  "name": "एक्सपोज़र ठीक करें",
+  "path": "/hi/tools/fix-photo-exposure"
+ },
+ "tools/flip-video": {
+  "name": "वीडियो फ़्लिप और मिरर करें",
+  "path": "/hi/tools/flip-video"
+ },
+ "tools/generate-vtt-captions": {
+  "name": "VTT कैप्शन जनरेटर",
+  "path": "/hi/tools/generate-vtt-captions"
+ },
+ "tools/grayscale-image": {
+  "name": "इमेज को ब्लैक एंड व्हाइट में बदलें",
+  "path": "/hi/tools/grayscale-image"
+ },
+ "tools/image-converter": {
+  "name": "इमेज कन्वर्टर",
+  "path": "/hi/tools/image-converter"
+ },
+ "tools/image-filters": {
+  "name": "इमेज फ़िल्टर और इफ़ेक्ट",
+  "path": "/hi/tools/image-filters"
+ },
+ "tools/image-resizer": {
+  "name": "इमेज रीसाइज़र",
+  "path": "/hi/tools/image-resizer"
+ },
+ "tools/image-saturation": {
+  "name": "इमेज की सैचुरेशन",
+  "path": "/hi/tools/image-saturation"
+ },
+ "tools/image-to-pdf": {
+  "name": "इमेज से PDF",
+  "path": "/hi/tools/image-to-pdf"
+ },
+ "tools/inspect-metadata": {
+  "name": "मेटाडेटा इंस्पेक्टर",
+  "path": "/hi/tools/inspect-metadata"
+ },
+ "tools/invert-image-colors": {
+  "name": "इमेज के रंग उलटें",
+  "path": "/hi/tools/invert-image-colors"
+ },
+ "tools/isolate-vocals-from-song": {
+  "name": "गाने से वोकल अलग करें",
+  "path": "/hi/tools/isolate-vocals-from-song"
+ },
+ "tools/motion": {
+  "name": "Motion",
+  "path": "/hi/tools/motion"
+ },
+ "tools/normalize-audio": {
+  "name": "ऑडियो नॉर्मलाइज़ करें",
+  "path": "/hi/tools/normalize-audio"
+ },
+ "tools/pdf-converter": {
+  "name": "PDF कन्वर्टर",
+  "path": "/hi/tools/pdf-converter"
+ },
+ "tools/pdf-to-jpg": {
+  "name": "PDF से JPG",
+  "path": "/hi/tools/pdf-to-jpg"
+ },
+ "tools/pdf-to-png": {
+  "name": "PDF को PNG में बदलें",
+  "path": "/hi/tools/pdf-to-png"
+ },
+ "tools/photo-curves": {
+  "name": "कर्व्स",
+  "path": "/hi/tools/photo-curves"
+ },
+ "tools/photo-levels": {
+  "name": "लेवल्स",
+  "path": "/hi/tools/photo-levels"
+ },
+ "tools/png-to-ico": {
+  "name": "PNG को ICO में बदलें",
+  "path": "/hi/tools/png-to-ico"
+ },
+ "tools/posterize-image": {
+  "name": "पोस्टराइज़",
+  "path": "/hi/tools/posterize-image"
+ },
+ "tools/redact-text-in-image": {
+  "name": "इमेज में टेक्स्ट छिपाएँ",
+  "path": "/hi/tools/redact-text-in-image"
+ },
+ "tools/reduce-image-noise": {
+  "name": "इमेज का नॉइज़ घटाएँ",
+  "path": "/hi/tools/reduce-image-noise"
+ },
+ "tools/remove-audio-from-video": {
+  "name": "वीडियो से ऑडियो हटाएँ",
+  "path": "/hi/tools/remove-audio-from-video"
+ },
+ "tools/remove-background-from-image": {
+  "name": "इमेज का बैकग्राउंड हटाएँ",
+  "path": "/hi/tools/remove-background-from-image"
+ },
+ "tools/remove-background-noise": {
+  "name": "बैकग्राउंड नॉइज़ हटाएँ",
+  "path": "/hi/tools/remove-background-noise"
+ },
+ "tools/remove-blemishes": {
+  "name": "दाग़ हटाएँ",
+  "path": "/hi/tools/remove-blemishes"
+ },
+ "tools/remove-exif-metadata": {
+  "name": "इमेज से EXIF मेटाडेटा हटाएँ",
+  "path": "/hi/tools/remove-exif-metadata"
+ },
+ "tools/remove-object-from-photo": {
+  "name": "फ़ोटो से ऑब्जेक्ट हटाएँ",
+  "path": "/hi/tools/remove-object-from-photo"
+ },
+ "tools/remove-vocals-from-song": {
+  "name": "गाने से वोकल्स हटाएँ",
+  "path": "/hi/tools/remove-vocals-from-song"
+ },
+ "tools/resize-video": {
+  "name": "वीडियो रीसाइज़ करें",
+  "path": "/hi/tools/resize-video"
+ },
+ "tools/reverse-video": {
+  "name": "वीडियो रिवर्स करें",
+  "path": "/hi/tools/reverse-video"
+ },
+ "tools/rotate-image": {
+  "name": "इमेज रोटेट करें",
+  "path": "/hi/tools/rotate-image"
+ },
+ "tools/rotate-video": {
+  "name": "वीडियो रोटेट करें",
+  "path": "/hi/tools/rotate-video"
+ },
+ "tools/select-by-color": {
+  "name": "रंग से चुनें",
+  "path": "/hi/tools/select-by-color"
+ },
+ "tools/sharpen-image": {
+  "name": "इमेज शार्पन करें",
+  "path": "/hi/tools/sharpen-image"
+ },
+ "tools/sharpen-photo-online": {
+  "name": "फ़ोटो शार्प करें",
+  "path": "/hi/tools/sharpen-photo-online"
+ },
+ "tools/split-toning": {
+  "name": "स्प्लिट टोनिंग",
+  "path": "/hi/tools/split-toning"
+ },
+ "tools/srt-generator": {
+  "name": "SRT जनरेटर",
+  "path": "/hi/tools/srt-generator"
+ },
+ "tools/stabilize-video": {
+  "name": "वीडियो स्टेबलाइज़ करें",
+  "path": "/hi/tools/stabilize-video"
+ },
+ "tools/stitch-audio-to-video": {
+  "name": "वीडियो में ऑडियो जोड़ें",
+  "path": "/hi/tools/stitch-audio-to-video"
+ },
+ "tools/straighten-photo": {
+  "name": "फ़ोटो सीधी करें",
+  "path": "/hi/tools/straighten-photo"
+ },
+ "tools/summarize-audio": {
+  "name": "ऑडियो सारांश",
+  "path": "/hi/tools/summarize-audio"
+ },
+ "tools/summarize-video": {
+  "name": "वीडियो सारांश",
+  "path": "/hi/tools/summarize-video"
+ },
+ "tools/tint-photo": {
+  "name": "फ़ोटो पर टिंट लगाएँ",
+  "path": "/hi/tools/tint-photo"
+ },
+ "tools/transcode-to-dash": {
+  "name": "वीडियो को DASH (AV1 / VP9) में ट्रांसकोड करें",
+  "path": "/hi/tools/transcode-to-dash"
+ },
+ "tools/transcode-to-hls": {
+  "name": "वीडियो को HLS में ट्रांसकोड करें",
+  "path": "/hi/tools/transcode-to-hls"
+ },
+ "tools/transcribe-audio": {
+  "name": "ऑडियो ट्रांसक्राइब करें",
+  "path": "/hi/tools/transcribe-audio"
+ },
+ "tools/transcribe-video": {
+  "name": "वीडियो ट्रांसक्राइब करें",
+  "path": "/hi/tools/transcribe-video"
+ },
+ "tools/trim-audio": {
+  "name": "ऑडियो ट्रिम करें",
+  "path": "/hi/tools/trim-audio"
+ },
+ "tools/video-converter": {
+  "name": "वीडियो कन्वर्टर",
+  "path": "/hi/tools/video-converter"
+ },
+ "tools/video-trimmer": {
+  "name": "वीडियो ट्रिमर",
+  "path": "/hi/tools/video-trimmer"
+ },
+ "tools/voice-changer": {
+  "name": "वॉइस चेंजर",
+  "path": "/hi/tools/voice-changer"
+ },
+ "tools/voice-cloning": {
+  "name": "वॉइस क्लोनिंग",
+  "path": "/hi/tools/voice-cloning"
+ },
+ "tools/voice-designer": {
+  "name": "वॉइस डिज़ाइनर",
+  "path": "/hi/tools/voice-designer"
+ },
+ "tools/white-balance-photo": {
+  "name": "व्हाइट बैलेंस",
+  "path": "/hi/tools/white-balance-photo"
+ }
+}

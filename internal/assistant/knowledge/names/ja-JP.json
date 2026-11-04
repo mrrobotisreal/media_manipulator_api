@@ -1,0 +1,598 @@
+{
+ "pages/about": {
+  "name": "概要",
+  "path": "/ja/about"
+ },
+ "pages/account": {
+  "name": "アカウント",
+  "path": "/ja/account"
+ },
+ "pages/blog": {
+  "name": "ブログ",
+  "path": "/ja/blog"
+ },
+ "pages/blog/audio/audio-quality-guide": {
+  "name": "Audio Quality Guide: Bitrate, Formats, Compression & Cleanup",
+  "path": "/ja/blog/audio/audio-quality-guide"
+ },
+ "pages/blog/image/image-optimization-guide": {
+  "name": "ウェブ・ジェダイのための画像最適化：JPG vs PNG vs WebP",
+  "path": "/ja/blog/image/image-optimization-guide"
+ },
+ "pages/blog/video/video-compression-guide": {
+  "name": "動画圧縮ヒッチハイク・ガイド：MP4 vs WebM vs AVI vs MOV",
+  "path": "/ja/blog/video/video-compression-guide"
+ },
+ "pages/changelog": {
+  "name": "更新履歴",
+  "path": "/ja/changelog"
+ },
+ "pages/contact": {
+  "name": "お問い合わせ",
+  "path": "/ja/contact"
+ },
+ "pages/delete-account": {
+  "name": "アカウントを削除",
+  "path": "/ja/delete-account"
+ },
+ "pages/home": {
+  "name": "ホーム",
+  "path": "/ja"
+ },
+ "pages/how-it-works": {
+  "name": "仕組み",
+  "path": "/ja/how-it-works"
+ },
+ "pages/licenses": {
+  "name": "オープンソースライセンス",
+  "path": "/ja/licenses"
+ },
+ "pages/pricing": {
+  "name": "料金",
+  "path": "/ja/pricing"
+ },
+ "pages/privacy-policy": {
+  "name": "プライバシーポリシー",
+  "path": "/ja/privacy-policy"
+ },
+ "pages/status": {
+  "name": "稼働状況",
+  "path": "/ja/status"
+ },
+ "pages/terms-of-service": {
+  "name": "利用規約",
+  "path": "/ja/terms-of-service"
+ },
+ "pages/tools": {
+  "name": "ツール",
+  "path": "/ja/tools"
+ },
+ "pages/tutorials": {
+  "name": "チュートリアル",
+  "path": "/ja/tutorials"
+ },
+ "pages/tutorials/ai-frame-interpolation": {
+  "name": "AIフレーム補間とは？",
+  "path": "/ja/tutorials/ai-frame-interpolation"
+ },
+ "pages/tutorials/aperture": {
+  "name": "Apertureでオンラインで写真を編集する方法",
+  "path": "/ja/tutorials/aperture"
+ },
+ "pages/tutorials/audio/getting-started": {
+  "name": "はじめに：音声ファイルの変換",
+  "path": "/ja/tutorials/audio/getting-started"
+ },
+ "pages/tutorials/content-studio": {
+  "name": "Darkroomの使い方：ブラウザでのマルチトラック動画編集",
+  "path": "/ja/tutorials/content-studio"
+ },
+ "pages/tutorials/image/getting-started": {
+  "name": "はじめに：画像ファイルの変換",
+  "path": "/ja/tutorials/image/getting-started"
+ },
+ "pages/tutorials/motion": {
+  "name": "MotionでSVGをアニメーション化する方法",
+  "path": "/ja/tutorials/motion"
+ },
+ "pages/tutorials/video/getting-started": {
+  "name": "はじめに：動画ファイルの変換",
+  "path": "/ja/tutorials/video/getting-started"
+ },
+ "pages/voices": {
+  "name": "ボイス",
+  "path": "/ja/voices"
+ },
+ "tools/add-reverb-to-audio": {
+  "name": "音声にリバーブを追加",
+  "path": "/ja/tools/add-reverb-to-audio"
+ },
+ "tools/add-text-to-image": {
+  "name": "画像にテキストを追加",
+  "path": "/ja/tools/add-text-to-image"
+ },
+ "tools/add-vignette": {
+  "name": "周辺光量補正を追加",
+  "path": "/ja/tools/add-vignette"
+ },
+ "tools/adjust-audio-volume": {
+  "name": "音声の音量を調整",
+  "path": "/ja/tools/adjust-audio-volume"
+ },
+ "tools/adjust-image-contrast": {
+  "name": "コントラストを調整",
+  "path": "/ja/tools/adjust-image-contrast"
+ },
+ "tools/adjust-image-hue": {
+  "name": "画像の色相を調整",
+  "path": "/ja/tools/adjust-image-hue"
+ },
+ "tools/adjust-video-color": {
+  "name": "動画の明るさと色を調整",
+  "path": "/ja/tools/adjust-video-color"
+ },
+ "tools/ai-document-scan": {
+  "name": "AI書類スキャン",
+  "path": "/ja/tools/ai-document-scan"
+ },
+ "tools/ai-frame-interpolation": {
+  "name": "AIフレーム補間",
+  "path": "/ja/tools/ai-frame-interpolation"
+ },
+ "tools/ai-image-restoration": {
+  "name": "AI画像修復・アップスケール",
+  "path": "/ja/tools/ai-image-restoration"
+ },
+ "tools/ai-image-upscaler": {
+  "name": "AI画像アップスケーラー",
+  "path": "/ja/tools/ai-image-upscaler"
+ },
+ "tools/ai-video-restoration": {
+  "name": "AI動画修復",
+  "path": "/ja/tools/ai-video-restoration"
+ },
+ "tools/aperture": {
+  "name": "Aperture",
+  "path": "/ja/tools/aperture"
+ },
+ "tools/apply-lut-to-photo": {
+  "name": "LUTを適用",
+  "path": "/ja/tools/apply-lut-to-photo"
+ },
+ "tools/audio-converter": {
+  "name": "音声コンバーター",
+  "path": "/ja/tools/audio-converter"
+ },
+ "tools/audio-equalizer": {
+  "name": "オーディオイコライザー",
+  "path": "/ja/tools/audio-equalizer"
+ },
+ "tools/audio-waveform-generator": {
+  "name": "音声波形ジェネレーター",
+  "path": "/ja/tools/audio-waveform-generator"
+ },
+ "tools/black-and-white-photo": {
+  "name": "白黒写真",
+  "path": "/ja/tools/black-and-white-photo"
+ },
+ "tools/blur-faces-in-photo": {
+  "name": "写真の顔にぼかしを入れる",
+  "path": "/ja/tools/blur-faces-in-photo"
+ },
+ "tools/blur-image": {
+  "name": "画像をぼかす",
+  "path": "/ja/tools/blur-image"
+ },
+ "tools/brighten-image": {
+  "name": "画像を明るくする",
+  "path": "/ja/tools/brighten-image"
+ },
+ "tools/caption-translator": {
+  "name": "字幕翻訳",
+  "path": "/ja/tools/caption-translator"
+ },
+ "tools/change-audio-pitch": {
+  "name": "音声のピッチを変更",
+  "path": "/ja/tools/change-audio-pitch"
+ },
+ "tools/change-audio-speed": {
+  "name": "音声の速度を変更",
+  "path": "/ja/tools/change-audio-speed"
+ },
+ "tools/change-image-color": {
+  "name": "オブジェクトの色を変更",
+  "path": "/ja/tools/change-image-color"
+ },
+ "tools/change-video-frame-rate": {
+  "name": "動画のフレームレートを変更",
+  "path": "/ja/tools/change-video-frame-rate"
+ },
+ "tools/change-video-speed": {
+  "name": "動画の速度を変更",
+  "path": "/ja/tools/change-video-speed"
+ },
+ "tools/clean-voice-audio": {
+  "name": "音声をクリーンにする",
+  "path": "/ja/tools/clean-voice-audio"
+ },
+ "tools/color-balance-photo": {
+  "name": "カラーバランス",
+  "path": "/ja/tools/color-balance-photo"
+ },
+ "tools/color-pop": {
+  "name": "カラーポップ",
+  "path": "/ja/tools/color-pop"
+ },
+ "tools/compress-image": {
+  "name": "画像を圧縮",
+  "path": "/ja/tools/compress-image"
+ },
+ "tools/compress-video": {
+  "name": "動画を圧縮",
+  "path": "/ja/tools/compress-video"
+ },
+ "tools/content-studio": {
+  "name": "Darkroom",
+  "path": "/ja/tools/content-studio"
+ },
+ "tools/convert-audio-to-flac": {
+  "name": "音声をFLACに変換",
+  "path": "/ja/tools/convert-audio-to-flac"
+ },
+ "tools/convert-audio-to-m4a": {
+  "name": "音声をM4A / AACに変換",
+  "path": "/ja/tools/convert-audio-to-m4a"
+ },
+ "tools/convert-audio-to-ogg": {
+  "name": "音声をOGGに変換",
+  "path": "/ja/tools/convert-audio-to-ogg"
+ },
+ "tools/convert-audio-to-opus": {
+  "name": "音声をOpusに変換",
+  "path": "/ja/tools/convert-audio-to-opus"
+ },
+ "tools/convert-audio-to-wav": {
+  "name": "音声をWAVに変換",
+  "path": "/ja/tools/convert-audio-to-wav"
+ },
+ "tools/convert-avi-to-mp4": {
+  "name": "AVIをMP4に変換",
+  "path": "/ja/tools/convert-avi-to-mp4"
+ },
+ "tools/convert-avif-to-jpg": {
+  "name": "AVIFをJPGに変換",
+  "path": "/ja/tools/convert-avif-to-jpg"
+ },
+ "tools/convert-avif-to-png": {
+  "name": "AVIFをPNGに変換",
+  "path": "/ja/tools/convert-avif-to-png"
+ },
+ "tools/convert-heic-to-jpg": {
+  "name": "HEICをJPGに変換",
+  "path": "/ja/tools/convert-heic-to-jpg"
+ },
+ "tools/convert-jpg-to-pdf": {
+  "name": "JPGをPDFに変換",
+  "path": "/ja/tools/convert-jpg-to-pdf"
+ },
+ "tools/convert-jpg-to-png": {
+  "name": "JPGをPNGに変換",
+  "path": "/ja/tools/convert-jpg-to-png"
+ },
+ "tools/convert-jpg-to-webp": {
+  "name": "JPGをWebPに変換",
+  "path": "/ja/tools/convert-jpg-to-webp"
+ },
+ "tools/convert-mkv-to-mp4": {
+  "name": "MKVをMP4に変換",
+  "path": "/ja/tools/convert-mkv-to-mp4"
+ },
+ "tools/convert-mov-to-mp4": {
+  "name": "MOVをMP4に変換",
+  "path": "/ja/tools/convert-mov-to-mp4"
+ },
+ "tools/convert-mp3-to-wav": {
+  "name": "MP3をWAVに変換",
+  "path": "/ja/tools/convert-mp3-to-wav"
+ },
+ "tools/convert-mp4-to-webm": {
+  "name": "MP4をWebMに変換",
+  "path": "/ja/tools/convert-mp4-to-webm"
+ },
+ "tools/convert-png-to-jpg": {
+  "name": "PNGをJPGに変換",
+  "path": "/ja/tools/convert-png-to-jpg"
+ },
+ "tools/convert-png-to-pdf": {
+  "name": "PNGをPDFに変換",
+  "path": "/ja/tools/convert-png-to-pdf"
+ },
+ "tools/convert-png-to-svg": {
+  "name": "PNGをSVGに変換",
+  "path": "/ja/tools/convert-png-to-svg"
+ },
+ "tools/convert-png-to-webp": {
+  "name": "PNGをWebPに変換",
+  "path": "/ja/tools/convert-png-to-webp"
+ },
+ "tools/convert-svg-to-png": {
+  "name": "SVGをPNGに変換",
+  "path": "/ja/tools/convert-svg-to-png"
+ },
+ "tools/convert-video-to-animated-gif": {
+  "name": "動画をアニメーションGIFに変換",
+  "path": "/ja/tools/convert-video-to-animated-gif"
+ },
+ "tools/convert-video-to-hevc": {
+  "name": "動画をHEVC（H.265）に変換",
+  "path": "/ja/tools/convert-video-to-hevc"
+ },
+ "tools/convert-wav-to-mp3": {
+  "name": "WAVをMP3に変換",
+  "path": "/ja/tools/convert-wav-to-mp3"
+ },
+ "tools/convert-webm-to-mp4": {
+  "name": "WebMをMP4に変換",
+  "path": "/ja/tools/convert-webm-to-mp4"
+ },
+ "tools/convert-webp-to-jpg": {
+  "name": "WebPをJPGに変換",
+  "path": "/ja/tools/convert-webp-to-jpg"
+ },
+ "tools/convert-webp-to-png": {
+  "name": "WebPをPNGに変換",
+  "path": "/ja/tools/convert-webp-to-png"
+ },
+ "tools/crop-image": {
+  "name": "画像をトリミング",
+  "path": "/ja/tools/crop-image"
+ },
+ "tools/crop-video": {
+  "name": "動画をクロップ",
+  "path": "/ja/tools/crop-video"
+ },
+ "tools/edit-image-metadata": {
+  "name": "画像メタデータを編集",
+  "path": "/ja/tools/edit-image-metadata"
+ },
+ "tools/extract-audio-from-video": {
+  "name": "動画から音声を抽出",
+  "path": "/ja/tools/extract-audio-from-video"
+ },
+ "tools/extract-frames-from-video": {
+  "name": "動画からフレームを抽出",
+  "path": "/ja/tools/extract-frames-from-video"
+ },
+ "tools/extract-video-only-from-video": {
+  "name": "音声なしで動画を抽出",
+  "path": "/ja/tools/extract-video-only-from-video"
+ },
+ "tools/fix-perspective-photo": {
+  "name": "パースを補正",
+  "path": "/ja/tools/fix-perspective-photo"
+ },
+ "tools/fix-photo-exposure": {
+  "name": "露出を補正",
+  "path": "/ja/tools/fix-photo-exposure"
+ },
+ "tools/flip-video": {
+  "name": "動画の反転・ミラー",
+  "path": "/ja/tools/flip-video"
+ },
+ "tools/generate-vtt-captions": {
+  "name": "VTT字幕ジェネレーター",
+  "path": "/ja/tools/generate-vtt-captions"
+ },
+ "tools/grayscale-image": {
+  "name": "画像を白黒に変換",
+  "path": "/ja/tools/grayscale-image"
+ },
+ "tools/image-converter": {
+  "name": "画像コンバーター",
+  "path": "/ja/tools/image-converter"
+ },
+ "tools/image-filters": {
+  "name": "画像フィルターとエフェクト",
+  "path": "/ja/tools/image-filters"
+ },
+ "tools/image-resizer": {
+  "name": "画像リサイズ",
+  "path": "/ja/tools/image-resizer"
+ },
+ "tools/image-saturation": {
+  "name": "画像の彩度",
+  "path": "/ja/tools/image-saturation"
+ },
+ "tools/image-to-pdf": {
+  "name": "画像をPDFに変換",
+  "path": "/ja/tools/image-to-pdf"
+ },
+ "tools/inspect-metadata": {
+  "name": "メタデータインスペクター",
+  "path": "/ja/tools/inspect-metadata"
+ },
+ "tools/invert-image-colors": {
+  "name": "色を反転",
+  "path": "/ja/tools/invert-image-colors"
+ },
+ "tools/isolate-vocals-from-song": {
+  "name": "曲からボーカルを抽出",
+  "path": "/ja/tools/isolate-vocals-from-song"
+ },
+ "tools/motion": {
+  "name": "Motion",
+  "path": "/ja/tools/motion"
+ },
+ "tools/normalize-audio": {
+  "name": "音声を正規化",
+  "path": "/ja/tools/normalize-audio"
+ },
+ "tools/pdf-converter": {
+  "name": "PDFコンバーター",
+  "path": "/ja/tools/pdf-converter"
+ },
+ "tools/pdf-to-jpg": {
+  "name": "PDFをJPGに変換",
+  "path": "/ja/tools/pdf-to-jpg"
+ },
+ "tools/pdf-to-png": {
+  "name": "PDFをPNGに変換",
+  "path": "/ja/tools/pdf-to-png"
+ },
+ "tools/photo-curves": {
+  "name": "トーンカーブ",
+  "path": "/ja/tools/photo-curves"
+ },
+ "tools/photo-levels": {
+  "name": "レベル補正",
+  "path": "/ja/tools/photo-levels"
+ },
+ "tools/png-to-ico": {
+  "name": "PNGをICOに変換",
+  "path": "/ja/tools/png-to-ico"
+ },
+ "tools/posterize-image": {
+  "name": "ポスタリゼーション",
+  "path": "/ja/tools/posterize-image"
+ },
+ "tools/redact-text-in-image": {
+  "name": "画像内のテキストを伏せる",
+  "path": "/ja/tools/redact-text-in-image"
+ },
+ "tools/reduce-image-noise": {
+  "name": "画像のノイズを軽減",
+  "path": "/ja/tools/reduce-image-noise"
+ },
+ "tools/remove-audio-from-video": {
+  "name": "動画から音声を削除",
+  "path": "/ja/tools/remove-audio-from-video"
+ },
+ "tools/remove-background-from-image": {
+  "name": "画像の背景を削除",
+  "path": "/ja/tools/remove-background-from-image"
+ },
+ "tools/remove-background-noise": {
+  "name": "背景ノイズを除去",
+  "path": "/ja/tools/remove-background-noise"
+ },
+ "tools/remove-blemishes": {
+  "name": "傷や汚れを除去",
+  "path": "/ja/tools/remove-blemishes"
+ },
+ "tools/remove-exif-metadata": {
+  "name": "画像からEXIFメタデータを削除",
+  "path": "/ja/tools/remove-exif-metadata"
+ },
+ "tools/remove-object-from-photo": {
+  "name": "写真から不要な物を消す",
+  "path": "/ja/tools/remove-object-from-photo"
+ },
+ "tools/remove-vocals-from-song": {
+  "name": "曲からボーカルを除去",
+  "path": "/ja/tools/remove-vocals-from-song"
+ },
+ "tools/resize-video": {
+  "name": "動画をリサイズ",
+  "path": "/ja/tools/resize-video"
+ },
+ "tools/reverse-video": {
+  "name": "動画を逆再生",
+  "path": "/ja/tools/reverse-video"
+ },
+ "tools/rotate-image": {
+  "name": "画像を回転",
+  "path": "/ja/tools/rotate-image"
+ },
+ "tools/rotate-video": {
+  "name": "動画を回転",
+  "path": "/ja/tools/rotate-video"
+ },
+ "tools/select-by-color": {
+  "name": "色で選択",
+  "path": "/ja/tools/select-by-color"
+ },
+ "tools/sharpen-image": {
+  "name": "画像をシャープに",
+  "path": "/ja/tools/sharpen-image"
+ },
+ "tools/sharpen-photo-online": {
+  "name": "写真をシャープにする",
+  "path": "/ja/tools/sharpen-photo-online"
+ },
+ "tools/split-toning": {
+  "name": "スプリットトーン",
+  "path": "/ja/tools/split-toning"
+ },
+ "tools/srt-generator": {
+  "name": "SRTジェネレーター",
+  "path": "/ja/tools/srt-generator"
+ },
+ "tools/stabilize-video": {
+  "name": "動画を手ぶれ補正",
+  "path": "/ja/tools/stabilize-video"
+ },
+ "tools/stitch-audio-to-video": {
+  "name": "動画に音声を追加",
+  "path": "/ja/tools/stitch-audio-to-video"
+ },
+ "tools/straighten-photo": {
+  "name": "写真の傾きを補正",
+  "path": "/ja/tools/straighten-photo"
+ },
+ "tools/summarize-audio": {
+  "name": "音声を要約",
+  "path": "/ja/tools/summarize-audio"
+ },
+ "tools/summarize-video": {
+  "name": "動画を要約",
+  "path": "/ja/tools/summarize-video"
+ },
+ "tools/tint-photo": {
+  "name": "写真に色味を付ける",
+  "path": "/ja/tools/tint-photo"
+ },
+ "tools/transcode-to-dash": {
+  "name": "動画をDASH（AV1 / VP9）にトランスコード",
+  "path": "/ja/tools/transcode-to-dash"
+ },
+ "tools/transcode-to-hls": {
+  "name": "動画をHLSにトランスコード",
+  "path": "/ja/tools/transcode-to-hls"
+ },
+ "tools/transcribe-audio": {
+  "name": "音声を文字起こし",
+  "path": "/ja/tools/transcribe-audio"
+ },
+ "tools/transcribe-video": {
+  "name": "動画を文字起こし",
+  "path": "/ja/tools/transcribe-video"
+ },
+ "tools/trim-audio": {
+  "name": "音声をトリミング",
+  "path": "/ja/tools/trim-audio"
+ },
+ "tools/video-converter": {
+  "name": "動画コンバーター",
+  "path": "/ja/tools/video-converter"
+ },
+ "tools/video-trimmer": {
+  "name": "動画トリミング",
+  "path": "/ja/tools/video-trimmer"
+ },
+ "tools/voice-changer": {
+  "name": "ボイスチェンジャー",
+  "path": "/ja/tools/voice-changer"
+ },
+ "tools/voice-cloning": {
+  "name": "ボイスクローン",
+  "path": "/ja/tools/voice-cloning"
+ },
+ "tools/voice-designer": {
+  "name": "ボイスデザイナー",
+  "path": "/ja/tools/voice-designer"
+ },
+ "tools/white-balance-photo": {
+  "name": "ホワイトバランス",
+  "path": "/ja/tools/white-balance-photo"
+ }
+}

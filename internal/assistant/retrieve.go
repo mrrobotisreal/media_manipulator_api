@@ -124,7 +124,7 @@ func (r *Routes) Tool(slug string) (RouteEntry, bool) {
 }
 
 // knowledgeFS is the generated corpus (MM105 writes it with `npm run
-// export:medi`; never hand-edited). MM104 ships only the README.
+// export:medi`; never hand-edited).
 //
 //go:embed knowledge
 var knowledgeFS embed.FS

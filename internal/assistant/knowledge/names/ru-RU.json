@@ -1,0 +1,598 @@
+{
+ "pages/about": {
+  "name": "О нас",
+  "path": "/ru/about"
+ },
+ "pages/account": {
+  "name": "Ваш аккаунт",
+  "path": "/ru/account"
+ },
+ "pages/blog": {
+  "name": "Блог",
+  "path": "/ru/blog"
+ },
+ "pages/blog/audio/audio-quality-guide": {
+  "name": "Audio Quality Guide: Bitrate, Formats, Compression & Cleanup",
+  "path": "/ru/blog/audio/audio-quality-guide"
+ },
+ "pages/blog/image/image-optimization-guide": {
+  "name": "Оптимизация изображений для веб-джедаев: JPG против PNG против WebP",
+  "path": "/ru/blog/image/image-optimization-guide"
+ },
+ "pages/blog/video/video-compression-guide": {
+  "name": "Автостопом по видеокомпрессии: MP4 против WebM против AVI против MOV",
+  "path": "/ru/blog/video/video-compression-guide"
+ },
+ "pages/changelog": {
+  "name": "Список изменений",
+  "path": "/ru/changelog"
+ },
+ "pages/contact": {
+  "name": "Контакты",
+  "path": "/ru/contact"
+ },
+ "pages/delete-account": {
+  "name": "Удалить аккаунт",
+  "path": "/ru/delete-account"
+ },
+ "pages/home": {
+  "name": "Главная",
+  "path": "/ru"
+ },
+ "pages/how-it-works": {
+  "name": "Как это работает",
+  "path": "/ru/how-it-works"
+ },
+ "pages/licenses": {
+  "name": "Лицензии открытого ПО",
+  "path": "/ru/licenses"
+ },
+ "pages/pricing": {
+  "name": "Тарифы",
+  "path": "/ru/pricing"
+ },
+ "pages/privacy-policy": {
+  "name": "Политика конфиденциальности",
+  "path": "/ru/privacy-policy"
+ },
+ "pages/status": {
+  "name": "Статус",
+  "path": "/ru/status"
+ },
+ "pages/terms-of-service": {
+  "name": "Условия использования",
+  "path": "/ru/terms-of-service"
+ },
+ "pages/tools": {
+  "name": "Инструменты",
+  "path": "/ru/tools"
+ },
+ "pages/tutorials": {
+  "name": "Руководства",
+  "path": "/ru/tutorials"
+ },
+ "pages/tutorials/ai-frame-interpolation": {
+  "name": "Что такое AI-интерполяция кадров?",
+  "path": "/ru/tutorials/ai-frame-interpolation"
+ },
+ "pages/tutorials/aperture": {
+  "name": "Как отредактировать фото онлайн в Aperture",
+  "path": "/ru/tutorials/aperture"
+ },
+ "pages/tutorials/audio/getting-started": {
+  "name": "Начало работы: конвертация аудиофайлов",
+  "path": "/ru/tutorials/audio/getting-started"
+ },
+ "pages/tutorials/content-studio": {
+  "name": "Как использовать Darkroom: многодорожечный видеомонтаж в браузере",
+  "path": "/ru/tutorials/content-studio"
+ },
+ "pages/tutorials/image/getting-started": {
+  "name": "Начало работы: конвертация файлов изображений",
+  "path": "/ru/tutorials/image/getting-started"
+ },
+ "pages/tutorials/motion": {
+  "name": "Как анимировать SVG в Motion",
+  "path": "/ru/tutorials/motion"
+ },
+ "pages/tutorials/video/getting-started": {
+  "name": "Начало работы: конвертация видеофайлов",
+  "path": "/ru/tutorials/video/getting-started"
+ },
+ "pages/voices": {
+  "name": "Голоса",
+  "path": "/ru/voices"
+ },
+ "tools/add-reverb-to-audio": {
+  "name": "Добавление реверберации к аудио",
+  "path": "/ru/tools/add-reverb-to-audio"
+ },
+ "tools/add-text-to-image": {
+  "name": "Добавление текста на изображение",
+  "path": "/ru/tools/add-text-to-image"
+ },
+ "tools/add-vignette": {
+  "name": "Добавить виньетирование",
+  "path": "/ru/tools/add-vignette"
+ },
+ "tools/adjust-audio-volume": {
+  "name": "Изменение громкости аудио",
+  "path": "/ru/tools/adjust-audio-volume"
+ },
+ "tools/adjust-image-contrast": {
+  "name": "Настроить контраст",
+  "path": "/ru/tools/adjust-image-contrast"
+ },
+ "tools/adjust-image-hue": {
+  "name": "Изменить цветовой тон",
+  "path": "/ru/tools/adjust-image-hue"
+ },
+ "tools/adjust-video-color": {
+  "name": "Яркость и цвет видео",
+  "path": "/ru/tools/adjust-video-color"
+ },
+ "tools/ai-document-scan": {
+  "name": "ИИ-сканирование документов",
+  "path": "/ru/tools/ai-document-scan"
+ },
+ "tools/ai-frame-interpolation": {
+  "name": "ИИ-интерполяция кадров",
+  "path": "/ru/tools/ai-frame-interpolation"
+ },
+ "tools/ai-image-restoration": {
+  "name": "ИИ-реставрация и увеличение изображений",
+  "path": "/ru/tools/ai-image-restoration"
+ },
+ "tools/ai-image-upscaler": {
+  "name": "ИИ-увеличение изображений",
+  "path": "/ru/tools/ai-image-upscaler"
+ },
+ "tools/ai-video-restoration": {
+  "name": "ИИ-реставрация видео",
+  "path": "/ru/tools/ai-video-restoration"
+ },
+ "tools/aperture": {
+  "name": "Aperture",
+  "path": "/ru/tools/aperture"
+ },
+ "tools/apply-lut-to-photo": {
+  "name": "Применить LUT",
+  "path": "/ru/tools/apply-lut-to-photo"
+ },
+ "tools/audio-converter": {
+  "name": "Конвертер аудио",
+  "path": "/ru/tools/audio-converter"
+ },
+ "tools/audio-equalizer": {
+  "name": "Аудиоэквалайзер",
+  "path": "/ru/tools/audio-equalizer"
+ },
+ "tools/audio-waveform-generator": {
+  "name": "Генератор аудиоволны",
+  "path": "/ru/tools/audio-waveform-generator"
+ },
+ "tools/black-and-white-photo": {
+  "name": "Черно-белое фото",
+  "path": "/ru/tools/black-and-white-photo"
+ },
+ "tools/blur-faces-in-photo": {
+  "name": "Размытие лиц на фото",
+  "path": "/ru/tools/blur-faces-in-photo"
+ },
+ "tools/blur-image": {
+  "name": "Размытие изображения",
+  "path": "/ru/tools/blur-image"
+ },
+ "tools/brighten-image": {
+  "name": "Осветлить изображение",
+  "path": "/ru/tools/brighten-image"
+ },
+ "tools/caption-translator": {
+  "name": "Перевод субтитров",
+  "path": "/ru/tools/caption-translator"
+ },
+ "tools/change-audio-pitch": {
+  "name": "Изменение тональности аудио",
+  "path": "/ru/tools/change-audio-pitch"
+ },
+ "tools/change-audio-speed": {
+  "name": "Изменение скорости аудио",
+  "path": "/ru/tools/change-audio-speed"
+ },
+ "tools/change-image-color": {
+  "name": "Изменить цвет объекта",
+  "path": "/ru/tools/change-image-color"
+ },
+ "tools/change-video-frame-rate": {
+  "name": "Изменение частоты кадров видео",
+  "path": "/ru/tools/change-video-frame-rate"
+ },
+ "tools/change-video-speed": {
+  "name": "Изменение скорости видео",
+  "path": "/ru/tools/change-video-speed"
+ },
+ "tools/clean-voice-audio": {
+  "name": "Очистка голоса",
+  "path": "/ru/tools/clean-voice-audio"
+ },
+ "tools/color-balance-photo": {
+  "name": "Цветовой баланс",
+  "path": "/ru/tools/color-balance-photo"
+ },
+ "tools/color-pop": {
+  "name": "Цветовой акцент",
+  "path": "/ru/tools/color-pop"
+ },
+ "tools/compress-image": {
+  "name": "Сжатие изображения",
+  "path": "/ru/tools/compress-image"
+ },
+ "tools/compress-video": {
+  "name": "Сжатие видео",
+  "path": "/ru/tools/compress-video"
+ },
+ "tools/content-studio": {
+  "name": "Darkroom",
+  "path": "/ru/tools/content-studio"
+ },
+ "tools/convert-audio-to-flac": {
+  "name": "Конвертация аудио в FLAC",
+  "path": "/ru/tools/convert-audio-to-flac"
+ },
+ "tools/convert-audio-to-m4a": {
+  "name": "Конвертация аудио в M4A / AAC",
+  "path": "/ru/tools/convert-audio-to-m4a"
+ },
+ "tools/convert-audio-to-ogg": {
+  "name": "Конвертация аудио в OGG",
+  "path": "/ru/tools/convert-audio-to-ogg"
+ },
+ "tools/convert-audio-to-opus": {
+  "name": "Конвертация аудио в Opus",
+  "path": "/ru/tools/convert-audio-to-opus"
+ },
+ "tools/convert-audio-to-wav": {
+  "name": "Конвертация аудио в WAV",
+  "path": "/ru/tools/convert-audio-to-wav"
+ },
+ "tools/convert-avi-to-mp4": {
+  "name": "Конвертация AVI в MP4",
+  "path": "/ru/tools/convert-avi-to-mp4"
+ },
+ "tools/convert-avif-to-jpg": {
+  "name": "Конвертация AVIF в JPG",
+  "path": "/ru/tools/convert-avif-to-jpg"
+ },
+ "tools/convert-avif-to-png": {
+  "name": "Конвертация AVIF в PNG",
+  "path": "/ru/tools/convert-avif-to-png"
+ },
+ "tools/convert-heic-to-jpg": {
+  "name": "Конвертация HEIC в JPG",
+  "path": "/ru/tools/convert-heic-to-jpg"
+ },
+ "tools/convert-jpg-to-pdf": {
+  "name": "Конвертация JPG в PDF",
+  "path": "/ru/tools/convert-jpg-to-pdf"
+ },
+ "tools/convert-jpg-to-png": {
+  "name": "Конвертация JPG в PNG",
+  "path": "/ru/tools/convert-jpg-to-png"
+ },
+ "tools/convert-jpg-to-webp": {
+  "name": "Конвертация JPG в WebP",
+  "path": "/ru/tools/convert-jpg-to-webp"
+ },
+ "tools/convert-mkv-to-mp4": {
+  "name": "Конвертация MKV в MP4",
+  "path": "/ru/tools/convert-mkv-to-mp4"
+ },
+ "tools/convert-mov-to-mp4": {
+  "name": "Конвертация MOV в MP4",
+  "path": "/ru/tools/convert-mov-to-mp4"
+ },
+ "tools/convert-mp3-to-wav": {
+  "name": "Конвертация MP3 в WAV",
+  "path": "/ru/tools/convert-mp3-to-wav"
+ },
+ "tools/convert-mp4-to-webm": {
+  "name": "Конвертация MP4 в WebM",
+  "path": "/ru/tools/convert-mp4-to-webm"
+ },
+ "tools/convert-png-to-jpg": {
+  "name": "Конвертация PNG в JPG",
+  "path": "/ru/tools/convert-png-to-jpg"
+ },
+ "tools/convert-png-to-pdf": {
+  "name": "Конвертация PNG в PDF",
+  "path": "/ru/tools/convert-png-to-pdf"
+ },
+ "tools/convert-png-to-svg": {
+  "name": "Конвертация PNG в SVG",
+  "path": "/ru/tools/convert-png-to-svg"
+ },
+ "tools/convert-png-to-webp": {
+  "name": "Конвертация PNG в WebP",
+  "path": "/ru/tools/convert-png-to-webp"
+ },
+ "tools/convert-svg-to-png": {
+  "name": "Конвертация SVG в PNG",
+  "path": "/ru/tools/convert-svg-to-png"
+ },
+ "tools/convert-video-to-animated-gif": {
+  "name": "Конвертация видео в анимированный GIF",
+  "path": "/ru/tools/convert-video-to-animated-gif"
+ },
+ "tools/convert-video-to-hevc": {
+  "name": "Конвертация видео в HEVC (H.265)",
+  "path": "/ru/tools/convert-video-to-hevc"
+ },
+ "tools/convert-wav-to-mp3": {
+  "name": "Конвертация WAV в MP3",
+  "path": "/ru/tools/convert-wav-to-mp3"
+ },
+ "tools/convert-webm-to-mp4": {
+  "name": "Конвертация WebM в MP4",
+  "path": "/ru/tools/convert-webm-to-mp4"
+ },
+ "tools/convert-webp-to-jpg": {
+  "name": "Конвертация WebP в JPG",
+  "path": "/ru/tools/convert-webp-to-jpg"
+ },
+ "tools/convert-webp-to-png": {
+  "name": "Конвертация WebP в PNG",
+  "path": "/ru/tools/convert-webp-to-png"
+ },
+ "tools/crop-image": {
+  "name": "Обрезка изображения",
+  "path": "/ru/tools/crop-image"
+ },
+ "tools/crop-video": {
+  "name": "Кадрирование видео",
+  "path": "/ru/tools/crop-video"
+ },
+ "tools/edit-image-metadata": {
+  "name": "Редактирование метаданных изображения",
+  "path": "/ru/tools/edit-image-metadata"
+ },
+ "tools/extract-audio-from-video": {
+  "name": "Извлечение аудио из видео",
+  "path": "/ru/tools/extract-audio-from-video"
+ },
+ "tools/extract-frames-from-video": {
+  "name": "Извлечение кадров из видео",
+  "path": "/ru/tools/extract-frames-from-video"
+ },
+ "tools/extract-video-only-from-video": {
+  "name": "Видео без звука",
+  "path": "/ru/tools/extract-video-only-from-video"
+ },
+ "tools/fix-perspective-photo": {
+  "name": "Исправить перспективу",
+  "path": "/ru/tools/fix-perspective-photo"
+ },
+ "tools/fix-photo-exposure": {
+  "name": "Исправить экспозицию",
+  "path": "/ru/tools/fix-photo-exposure"
+ },
+ "tools/flip-video": {
+  "name": "Отражение и переворот видео",
+  "path": "/ru/tools/flip-video"
+ },
+ "tools/generate-vtt-captions": {
+  "name": "Генератор субтитров VTT",
+  "path": "/ru/tools/generate-vtt-captions"
+ },
+ "tools/grayscale-image": {
+  "name": "Черно-белое изображение",
+  "path": "/ru/tools/grayscale-image"
+ },
+ "tools/image-converter": {
+  "name": "Конвертер изображений",
+  "path": "/ru/tools/image-converter"
+ },
+ "tools/image-filters": {
+  "name": "Фильтры и эффекты для изображений",
+  "path": "/ru/tools/image-filters"
+ },
+ "tools/image-resizer": {
+  "name": "Изменение размера изображения",
+  "path": "/ru/tools/image-resizer"
+ },
+ "tools/image-saturation": {
+  "name": "Насыщенность изображения",
+  "path": "/ru/tools/image-saturation"
+ },
+ "tools/image-to-pdf": {
+  "name": "Изображение в PDF",
+  "path": "/ru/tools/image-to-pdf"
+ },
+ "tools/inspect-metadata": {
+  "name": "Просмотр метаданных",
+  "path": "/ru/tools/inspect-metadata"
+ },
+ "tools/invert-image-colors": {
+  "name": "Инвертировать цвета",
+  "path": "/ru/tools/invert-image-colors"
+ },
+ "tools/isolate-vocals-from-song": {
+  "name": "Выделение вокала из песни",
+  "path": "/ru/tools/isolate-vocals-from-song"
+ },
+ "tools/motion": {
+  "name": "Motion",
+  "path": "/ru/tools/motion"
+ },
+ "tools/normalize-audio": {
+  "name": "Нормализация аудио",
+  "path": "/ru/tools/normalize-audio"
+ },
+ "tools/pdf-converter": {
+  "name": "Конвертер PDF",
+  "path": "/ru/tools/pdf-converter"
+ },
+ "tools/pdf-to-jpg": {
+  "name": "PDF в JPG",
+  "path": "/ru/tools/pdf-to-jpg"
+ },
+ "tools/pdf-to-png": {
+  "name": "PDF в PNG",
+  "path": "/ru/tools/pdf-to-png"
+ },
+ "tools/photo-curves": {
+  "name": "Кривые",
+  "path": "/ru/tools/photo-curves"
+ },
+ "tools/photo-levels": {
+  "name": "Уровни",
+  "path": "/ru/tools/photo-levels"
+ },
+ "tools/png-to-ico": {
+  "name": "PNG в ICO",
+  "path": "/ru/tools/png-to-ico"
+ },
+ "tools/posterize-image": {
+  "name": "Постеризация",
+  "path": "/ru/tools/posterize-image"
+ },
+ "tools/redact-text-in-image": {
+  "name": "Скрытие текста на изображении",
+  "path": "/ru/tools/redact-text-in-image"
+ },
+ "tools/reduce-image-noise": {
+  "name": "Уменьшить шум",
+  "path": "/ru/tools/reduce-image-noise"
+ },
+ "tools/remove-audio-from-video": {
+  "name": "Удаление аудио из видео",
+  "path": "/ru/tools/remove-audio-from-video"
+ },
+ "tools/remove-background-from-image": {
+  "name": "Удаление фона с изображения",
+  "path": "/ru/tools/remove-background-from-image"
+ },
+ "tools/remove-background-noise": {
+  "name": "Удаление фонового шума",
+  "path": "/ru/tools/remove-background-noise"
+ },
+ "tools/remove-blemishes": {
+  "name": "Убрать дефекты",
+  "path": "/ru/tools/remove-blemishes"
+ },
+ "tools/remove-exif-metadata": {
+  "name": "Удаление EXIF-метаданных из изображений",
+  "path": "/ru/tools/remove-exif-metadata"
+ },
+ "tools/remove-object-from-photo": {
+  "name": "Удаление объекта с фото",
+  "path": "/ru/tools/remove-object-from-photo"
+ },
+ "tools/remove-vocals-from-song": {
+  "name": "Удаление вокала из песни",
+  "path": "/ru/tools/remove-vocals-from-song"
+ },
+ "tools/resize-video": {
+  "name": "Изменение размера видео",
+  "path": "/ru/tools/resize-video"
+ },
+ "tools/reverse-video": {
+  "name": "Реверс видео",
+  "path": "/ru/tools/reverse-video"
+ },
+ "tools/rotate-image": {
+  "name": "Поворот изображения",
+  "path": "/ru/tools/rotate-image"
+ },
+ "tools/rotate-video": {
+  "name": "Поворот видео",
+  "path": "/ru/tools/rotate-video"
+ },
+ "tools/select-by-color": {
+  "name": "Выделить по цвету",
+  "path": "/ru/tools/select-by-color"
+ },
+ "tools/sharpen-image": {
+  "name": "Повышение резкости изображения",
+  "path": "/ru/tools/sharpen-image"
+ },
+ "tools/sharpen-photo-online": {
+  "name": "Повысить резкость фото",
+  "path": "/ru/tools/sharpen-photo-online"
+ },
+ "tools/split-toning": {
+  "name": "Раздельное тонирование",
+  "path": "/ru/tools/split-toning"
+ },
+ "tools/srt-generator": {
+  "name": "Генератор субтитров SRT",
+  "path": "/ru/tools/srt-generator"
+ },
+ "tools/stabilize-video": {
+  "name": "Стабилизация видео",
+  "path": "/ru/tools/stabilize-video"
+ },
+ "tools/stitch-audio-to-video": {
+  "name": "Добавление аудио к видео",
+  "path": "/ru/tools/stitch-audio-to-video"
+ },
+ "tools/straighten-photo": {
+  "name": "Выровнять фото",
+  "path": "/ru/tools/straighten-photo"
+ },
+ "tools/summarize-audio": {
+  "name": "Сводка по аудио",
+  "path": "/ru/tools/summarize-audio"
+ },
+ "tools/summarize-video": {
+  "name": "Сводка по видео",
+  "path": "/ru/tools/summarize-video"
+ },
+ "tools/tint-photo": {
+  "name": "Тонировать фото",
+  "path": "/ru/tools/tint-photo"
+ },
+ "tools/transcode-to-dash": {
+  "name": "Транскодирование видео в DASH (AV1 / VP9)",
+  "path": "/ru/tools/transcode-to-dash"
+ },
+ "tools/transcode-to-hls": {
+  "name": "Транскодирование видео в HLS",
+  "path": "/ru/tools/transcode-to-hls"
+ },
+ "tools/transcribe-audio": {
+  "name": "Расшифровка аудио",
+  "path": "/ru/tools/transcribe-audio"
+ },
+ "tools/transcribe-video": {
+  "name": "Транскрибация видео",
+  "path": "/ru/tools/transcribe-video"
+ },
+ "tools/trim-audio": {
+  "name": "Обрезка аудио",
+  "path": "/ru/tools/trim-audio"
+ },
+ "tools/video-converter": {
+  "name": "Конвертер видео",
+  "path": "/ru/tools/video-converter"
+ },
+ "tools/video-trimmer": {
+  "name": "Обрезка видео",
+  "path": "/ru/tools/video-trimmer"
+ },
+ "tools/voice-changer": {
+  "name": "Изменение голоса",
+  "path": "/ru/tools/voice-changer"
+ },
+ "tools/voice-cloning": {
+  "name": "Клонирование голоса",
+  "path": "/ru/tools/voice-cloning"
+ },
+ "tools/voice-designer": {
+  "name": "Конструктор голоса",
+  "path": "/ru/tools/voice-designer"
+ },
+ "tools/white-balance-photo": {
+  "name": "Баланс белого",
+  "path": "/ru/tools/white-balance-photo"
+ }
+}

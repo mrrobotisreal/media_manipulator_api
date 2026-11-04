@@ -249,7 +249,10 @@ func TestRoutes(t *testing.T) {
 	if !none.HasRoute("/anything") {
 		t.Error("without routes.json only the shape is checked")
 	}
-	if EmbeddedRoutes() != nil {
-		t.Error("routes.json lands in MM105")
+	// MM105: routes.json is embedded (the generated export).
+	if er := EmbeddedRoutes(); er == nil || !er.HasRoute("/pricing") || !er.HasRoute("/ru/pricing") {
+		t.Error("embedded routes.json lists /pricing")
+	} else if e, ok := er.Tool("compress-video"); !ok || e.Route != "/tools/compress-video" {
+		t.Errorf("embedded tool route = %+v", e)
 	}
 }

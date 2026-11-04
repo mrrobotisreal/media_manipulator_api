@@ -67,7 +67,7 @@ type Turn struct {
 type TurnReport struct {
 	Surface      string
 	ModelTier    string // guide | copilot | plan
-	Outcome      string // text | edits | action | ask | error | interrupted | static
+	Outcome      string // text | edits | action | ask | error | interrupted | static | out_of_scope
 	ToolRounds   int
 	CostUSD      float64
 	InputTokens  int
@@ -496,6 +496,15 @@ func (r *run) exec(prep *Prepared) {
 			k = 4
 		}
 		live.Hits = e.Knowledge.Search(b.Message.Text, b.Surface, k)
+		live.LocalNames = localNames(e.Knowledge, live.Hits, b.Locale)
+	}
+
+	// The guide's scope gate (MM105 decision 7): clearly off-topic messages get
+	// the localized out-of-scope line without a model call (not charged; the
+	// guide never is). Edit-result continuations never reach here as messages.
+	if b.Surface == SurfaceGuide && b.Message != nil && !e.Knowledge.InScope(b.Message.Text) {
+		r.outOfScope()
+		return
 	}
 
 	// At the cap before any call: guide answers from retrieval, copilot pauses.
@@ -913,6 +922,43 @@ func (r *run) paused(hits []Hit) {
 		return
 	}
 	r.fail(CodePaused, "Medi has reached today's limit and is paused until 00:00 UTC.")
+}
+
+// outOfScope answers an off-topic guide message with the localized line (no
+// model call). It is stored like any reply so the conversation reads naturally.
+func (r *run) outOfScope() {
+	answer := OutOfScopeLine(r.t.Body.Locale)
+	r.text.WriteString(answer)
+	r.send(DeltaEvent{Type: "delta", Text: answer})
+	r.content = true
+	r.save("complete", storedContent{Text: answer}, nil)
+	r.send(UsageEvent{Type: "usage"})
+	done := DoneEvent{Type: "done"}
+	if r.msgID != "" {
+		id := r.msgID
+		done.MessageID = &id
+	}
+	r.send(done)
+	r.report("out_of_scope")
+}
+
+// localNames maps retrieved docs to their name + path in the user's locale
+// (decision 8); nil for English or a Knowledge without names.
+func localNames(k Knowledge, hits []Hit, locale string) map[string]LocalName {
+	ln, ok := k.(LocalNamer)
+	if !ok || len(hits) == 0 || strings.HasPrefix(strings.ToLower(locale), "en") {
+		return nil
+	}
+	out := map[string]LocalName{}
+	for _, h := range hits {
+		if n, ok := ln.LocalName(h.Doc.ID, locale); ok {
+			out[h.Doc.ID] = n
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (r *run) report(outcome string) {

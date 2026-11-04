@@ -1,0 +1,598 @@
+{
+ "pages/about": {
+  "name": "אודות",
+  "path": "/he/about"
+ },
+ "pages/account": {
+  "name": "החשבון שלכם",
+  "path": "/he/account"
+ },
+ "pages/blog": {
+  "name": "בלוג",
+  "path": "/he/blog"
+ },
+ "pages/blog/audio/audio-quality-guide": {
+  "name": "Audio Quality Guide: Bitrate, Formats, Compression & Cleanup",
+  "path": "/he/blog/audio/audio-quality-guide"
+ },
+ "pages/blog/image/image-optimization-guide": {
+  "name": "אופטימיזציית תמונות לג׳דאים של הרשת: JPG מול PNG מול WebP",
+  "path": "/he/blog/image/image-optimization-guide"
+ },
+ "pages/blog/video/video-compression-guide": {
+  "name": "מדריך הטרמפיסט לדחיסת וידאו: MP4 מול WebM מול AVI מול MOV",
+  "path": "/he/blog/video/video-compression-guide"
+ },
+ "pages/changelog": {
+  "name": "יומן שינויים",
+  "path": "/he/changelog"
+ },
+ "pages/contact": {
+  "name": "צור קשר",
+  "path": "/he/contact"
+ },
+ "pages/delete-account": {
+  "name": "מחיקת החשבון",
+  "path": "/he/delete-account"
+ },
+ "pages/home": {
+  "name": "בית",
+  "path": "/he"
+ },
+ "pages/how-it-works": {
+  "name": "איך זה עובד",
+  "path": "/he/how-it-works"
+ },
+ "pages/licenses": {
+  "name": "רישיונות קוד פתוח",
+  "path": "/he/licenses"
+ },
+ "pages/pricing": {
+  "name": "תמחור",
+  "path": "/he/pricing"
+ },
+ "pages/privacy-policy": {
+  "name": "מדיניות הפרטיות",
+  "path": "/he/privacy-policy"
+ },
+ "pages/status": {
+  "name": "סטטוס",
+  "path": "/he/status"
+ },
+ "pages/terms-of-service": {
+  "name": "תנאי השימוש",
+  "path": "/he/terms-of-service"
+ },
+ "pages/tools": {
+  "name": "כלים",
+  "path": "/he/tools"
+ },
+ "pages/tutorials": {
+  "name": "מדריכים",
+  "path": "/he/tutorials"
+ },
+ "pages/tutorials/ai-frame-interpolation": {
+  "name": "מהי אינטרפולציית פריימים בבינה מלאכותית?",
+  "path": "/he/tutorials/ai-frame-interpolation"
+ },
+ "pages/tutorials/aperture": {
+  "name": "איך לערוך תמונה אונליין עם Aperture",
+  "path": "/he/tutorials/aperture"
+ },
+ "pages/tutorials/audio/getting-started": {
+  "name": "צעדים ראשונים: המרת קובצי אודיו",
+  "path": "/he/tutorials/audio/getting-started"
+ },
+ "pages/tutorials/content-studio": {
+  "name": "איך להשתמש ב־Darkroom: עריכת וידאו רב־ערוצית בדפדפן",
+  "path": "/he/tutorials/content-studio"
+ },
+ "pages/tutorials/image/getting-started": {
+  "name": "צעדים ראשונים: המרת קובצי תמונה",
+  "path": "/he/tutorials/image/getting-started"
+ },
+ "pages/tutorials/motion": {
+  "name": "איך להנפיש SVG עם Motion",
+  "path": "/he/tutorials/motion"
+ },
+ "pages/tutorials/video/getting-started": {
+  "name": "צעדים ראשונים: המרת קובצי וידאו",
+  "path": "/he/tutorials/video/getting-started"
+ },
+ "pages/voices": {
+  "name": "קולות",
+  "path": "/he/voices"
+ },
+ "tools/add-reverb-to-audio": {
+  "name": "הוספת הד לאודיו",
+  "path": "/he/tools/add-reverb-to-audio"
+ },
+ "tools/add-text-to-image": {
+  "name": "הוספת טקסט לתמונה",
+  "path": "/he/tools/add-text-to-image"
+ },
+ "tools/add-vignette": {
+  "name": "הוספת וינייטה",
+  "path": "/he/tools/add-vignette"
+ },
+ "tools/adjust-audio-volume": {
+  "name": "התאמת עוצמת אודיו",
+  "path": "/he/tools/adjust-audio-volume"
+ },
+ "tools/adjust-image-contrast": {
+  "name": "כוונון ניגודיות",
+  "path": "/he/tools/adjust-image-contrast"
+ },
+ "tools/adjust-image-hue": {
+  "name": "כוונון גוון התמונה",
+  "path": "/he/tools/adjust-image-hue"
+ },
+ "tools/adjust-video-color": {
+  "name": "התאמת בהירות וצבע בווידאו",
+  "path": "/he/tools/adjust-video-color"
+ },
+ "tools/ai-document-scan": {
+  "name": "סריקת מסמכים בבינה מלאכותית",
+  "path": "/he/tools/ai-document-scan"
+ },
+ "tools/ai-frame-interpolation": {
+  "name": "אינטרפולציית פריימים בבינה מלאכותית",
+  "path": "/he/tools/ai-frame-interpolation"
+ },
+ "tools/ai-image-restoration": {
+  "name": "שחזור והגדלת תמונות בבינה מלאכותית",
+  "path": "/he/tools/ai-image-restoration"
+ },
+ "tools/ai-image-upscaler": {
+  "name": "הגדלת תמונות באמצעות AI",
+  "path": "/he/tools/ai-image-upscaler"
+ },
+ "tools/ai-video-restoration": {
+  "name": "שחזור וידאו בבינה מלאכותית",
+  "path": "/he/tools/ai-video-restoration"
+ },
+ "tools/aperture": {
+  "name": "Aperture",
+  "path": "/he/tools/aperture"
+ },
+ "tools/apply-lut-to-photo": {
+  "name": "החלת LUT",
+  "path": "/he/tools/apply-lut-to-photo"
+ },
+ "tools/audio-converter": {
+  "name": "ממיר אודיו",
+  "path": "/he/tools/audio-converter"
+ },
+ "tools/audio-equalizer": {
+  "name": "אקולייזר אודיו",
+  "path": "/he/tools/audio-equalizer"
+ },
+ "tools/audio-waveform-generator": {
+  "name": "יוצר צורת גל לאודיו",
+  "path": "/he/tools/audio-waveform-generator"
+ },
+ "tools/black-and-white-photo": {
+  "name": "תמונה בשחור לבן",
+  "path": "/he/tools/black-and-white-photo"
+ },
+ "tools/blur-faces-in-photo": {
+  "name": "טשטוש פנים בתמונה",
+  "path": "/he/tools/blur-faces-in-photo"
+ },
+ "tools/blur-image": {
+  "name": "טשטוש תמונה",
+  "path": "/he/tools/blur-image"
+ },
+ "tools/brighten-image": {
+  "name": "הבהרת תמונה",
+  "path": "/he/tools/brighten-image"
+ },
+ "tools/caption-translator": {
+  "name": "תרגום כתוביות",
+  "path": "/he/tools/caption-translator"
+ },
+ "tools/change-audio-pitch": {
+  "name": "שינוי גובה צליל באודיו",
+  "path": "/he/tools/change-audio-pitch"
+ },
+ "tools/change-audio-speed": {
+  "name": "שינוי מהירות אודיו",
+  "path": "/he/tools/change-audio-speed"
+ },
+ "tools/change-image-color": {
+  "name": "שינוי צבע של עצם",
+  "path": "/he/tools/change-image-color"
+ },
+ "tools/change-video-frame-rate": {
+  "name": "שינוי קצב פריימים בווידאו",
+  "path": "/he/tools/change-video-frame-rate"
+ },
+ "tools/change-video-speed": {
+  "name": "שינוי מהירות וידאו",
+  "path": "/he/tools/change-video-speed"
+ },
+ "tools/clean-voice-audio": {
+  "name": "ניקוי קול באודיו",
+  "path": "/he/tools/clean-voice-audio"
+ },
+ "tools/color-balance-photo": {
+  "name": "איזון צבעים",
+  "path": "/he/tools/color-balance-photo"
+ },
+ "tools/color-pop": {
+  "name": "הדגשת צבע",
+  "path": "/he/tools/color-pop"
+ },
+ "tools/compress-image": {
+  "name": "דחיסת תמונה",
+  "path": "/he/tools/compress-image"
+ },
+ "tools/compress-video": {
+  "name": "דחיסת וידאו",
+  "path": "/he/tools/compress-video"
+ },
+ "tools/content-studio": {
+  "name": "Darkroom",
+  "path": "/he/tools/content-studio"
+ },
+ "tools/convert-audio-to-flac": {
+  "name": "המרת אודיו ל-FLAC",
+  "path": "/he/tools/convert-audio-to-flac"
+ },
+ "tools/convert-audio-to-m4a": {
+  "name": "המרת אודיו ל-M4A / AAC",
+  "path": "/he/tools/convert-audio-to-m4a"
+ },
+ "tools/convert-audio-to-ogg": {
+  "name": "המרת אודיו ל-OGG",
+  "path": "/he/tools/convert-audio-to-ogg"
+ },
+ "tools/convert-audio-to-opus": {
+  "name": "המרת אודיו ל-Opus",
+  "path": "/he/tools/convert-audio-to-opus"
+ },
+ "tools/convert-audio-to-wav": {
+  "name": "המרת אודיו ל-WAV",
+  "path": "/he/tools/convert-audio-to-wav"
+ },
+ "tools/convert-avi-to-mp4": {
+  "name": "המרת AVI ל-MP4",
+  "path": "/he/tools/convert-avi-to-mp4"
+ },
+ "tools/convert-avif-to-jpg": {
+  "name": "המרת AVIF ל-JPG",
+  "path": "/he/tools/convert-avif-to-jpg"
+ },
+ "tools/convert-avif-to-png": {
+  "name": "המרת AVIF ל-PNG",
+  "path": "/he/tools/convert-avif-to-png"
+ },
+ "tools/convert-heic-to-jpg": {
+  "name": "המרת HEIC ל-JPG",
+  "path": "/he/tools/convert-heic-to-jpg"
+ },
+ "tools/convert-jpg-to-pdf": {
+  "name": "המרת JPG ל-PDF",
+  "path": "/he/tools/convert-jpg-to-pdf"
+ },
+ "tools/convert-jpg-to-png": {
+  "name": "המרת JPG ל-PNG",
+  "path": "/he/tools/convert-jpg-to-png"
+ },
+ "tools/convert-jpg-to-webp": {
+  "name": "המרת JPG ל-WebP",
+  "path": "/he/tools/convert-jpg-to-webp"
+ },
+ "tools/convert-mkv-to-mp4": {
+  "name": "המרת MKV ל-MP4",
+  "path": "/he/tools/convert-mkv-to-mp4"
+ },
+ "tools/convert-mov-to-mp4": {
+  "name": "המרת MOV ל-MP4",
+  "path": "/he/tools/convert-mov-to-mp4"
+ },
+ "tools/convert-mp3-to-wav": {
+  "name": "המרת MP3 ל-WAV",
+  "path": "/he/tools/convert-mp3-to-wav"
+ },
+ "tools/convert-mp4-to-webm": {
+  "name": "המרת MP4 ל-WebM",
+  "path": "/he/tools/convert-mp4-to-webm"
+ },
+ "tools/convert-png-to-jpg": {
+  "name": "המרת PNG ל-JPG",
+  "path": "/he/tools/convert-png-to-jpg"
+ },
+ "tools/convert-png-to-pdf": {
+  "name": "המרת PNG ל-PDF",
+  "path": "/he/tools/convert-png-to-pdf"
+ },
+ "tools/convert-png-to-svg": {
+  "name": "המרת PNG ל-SVG",
+  "path": "/he/tools/convert-png-to-svg"
+ },
+ "tools/convert-png-to-webp": {
+  "name": "המרת PNG ל-WebP",
+  "path": "/he/tools/convert-png-to-webp"
+ },
+ "tools/convert-svg-to-png": {
+  "name": "המרת SVG ל-PNG",
+  "path": "/he/tools/convert-svg-to-png"
+ },
+ "tools/convert-video-to-animated-gif": {
+  "name": "וידאו ל־GIF מונפש",
+  "path": "/he/tools/convert-video-to-animated-gif"
+ },
+ "tools/convert-video-to-hevc": {
+  "name": "המרת וידאו ל-HEVC‏ (H.265)",
+  "path": "/he/tools/convert-video-to-hevc"
+ },
+ "tools/convert-wav-to-mp3": {
+  "name": "המרת WAV ל-MP3",
+  "path": "/he/tools/convert-wav-to-mp3"
+ },
+ "tools/convert-webm-to-mp4": {
+  "name": "המרת WebM ל-MP4",
+  "path": "/he/tools/convert-webm-to-mp4"
+ },
+ "tools/convert-webp-to-jpg": {
+  "name": "המרת WebP ל-JPG",
+  "path": "/he/tools/convert-webp-to-jpg"
+ },
+ "tools/convert-webp-to-png": {
+  "name": "המרת WebP ל-PNG",
+  "path": "/he/tools/convert-webp-to-png"
+ },
+ "tools/crop-image": {
+  "name": "חיתוך תמונה",
+  "path": "/he/tools/crop-image"
+ },
+ "tools/crop-video": {
+  "name": "קיצוץ וידאו",
+  "path": "/he/tools/crop-video"
+ },
+ "tools/edit-image-metadata": {
+  "name": "עריכת מטא־נתוני תמונה",
+  "path": "/he/tools/edit-image-metadata"
+ },
+ "tools/extract-audio-from-video": {
+  "name": "חילוץ אודיו מווידאו",
+  "path": "/he/tools/extract-audio-from-video"
+ },
+ "tools/extract-frames-from-video": {
+  "name": "חילוץ פריימים מווידאו",
+  "path": "/he/tools/extract-frames-from-video"
+ },
+ "tools/extract-video-only-from-video": {
+  "name": "וידאו ללא אודיו",
+  "path": "/he/tools/extract-video-only-from-video"
+ },
+ "tools/fix-perspective-photo": {
+  "name": "תיקון פרספקטיבה",
+  "path": "/he/tools/fix-perspective-photo"
+ },
+ "tools/fix-photo-exposure": {
+  "name": "תיקון חשיפה",
+  "path": "/he/tools/fix-photo-exposure"
+ },
+ "tools/flip-video": {
+  "name": "היפוך ושיקוף וידאו",
+  "path": "/he/tools/flip-video"
+ },
+ "tools/generate-vtt-captions": {
+  "name": "יוצר כתוביות VTT",
+  "path": "/he/tools/generate-vtt-captions"
+ },
+ "tools/grayscale-image": {
+  "name": "המרת תמונה לשחור־לבן",
+  "path": "/he/tools/grayscale-image"
+ },
+ "tools/image-converter": {
+  "name": "ממיר תמונות",
+  "path": "/he/tools/image-converter"
+ },
+ "tools/image-filters": {
+  "name": "מסננים ואפקטים לתמונות",
+  "path": "/he/tools/image-filters"
+ },
+ "tools/image-resizer": {
+  "name": "שינוי גודל תמונה",
+  "path": "/he/tools/image-resizer"
+ },
+ "tools/image-saturation": {
+  "name": "רוויית תמונה",
+  "path": "/he/tools/image-saturation"
+ },
+ "tools/image-to-pdf": {
+  "name": "תמונות ל־PDF",
+  "path": "/he/tools/image-to-pdf"
+ },
+ "tools/inspect-metadata": {
+  "name": "בודק מטא־נתונים",
+  "path": "/he/tools/inspect-metadata"
+ },
+ "tools/invert-image-colors": {
+  "name": "היפוך צבעי התמונה",
+  "path": "/he/tools/invert-image-colors"
+ },
+ "tools/isolate-vocals-from-song": {
+  "name": "בידוד שירה משיר",
+  "path": "/he/tools/isolate-vocals-from-song"
+ },
+ "tools/motion": {
+  "name": "Motion",
+  "path": "/he/tools/motion"
+ },
+ "tools/normalize-audio": {
+  "name": "נרמול אודיו",
+  "path": "/he/tools/normalize-audio"
+ },
+ "tools/pdf-converter": {
+  "name": "ממיר PDF",
+  "path": "/he/tools/pdf-converter"
+ },
+ "tools/pdf-to-jpg": {
+  "name": "PDF ל־JPG",
+  "path": "/he/tools/pdf-to-jpg"
+ },
+ "tools/pdf-to-png": {
+  "name": "PDF ל-PNG",
+  "path": "/he/tools/pdf-to-png"
+ },
+ "tools/photo-curves": {
+  "name": "עקומות",
+  "path": "/he/tools/photo-curves"
+ },
+ "tools/photo-levels": {
+  "name": "רמות",
+  "path": "/he/tools/photo-levels"
+ },
+ "tools/png-to-ico": {
+  "name": "PNG ל-ICO",
+  "path": "/he/tools/png-to-ico"
+ },
+ "tools/posterize-image": {
+  "name": "פוסטריזציה",
+  "path": "/he/tools/posterize-image"
+ },
+ "tools/redact-text-in-image": {
+  "name": "הסתרת טקסט בתמונה",
+  "path": "/he/tools/redact-text-in-image"
+ },
+ "tools/reduce-image-noise": {
+  "name": "הפחתת רעש בתמונה",
+  "path": "/he/tools/reduce-image-noise"
+ },
+ "tools/remove-audio-from-video": {
+  "name": "הסרת אודיו מווידאו",
+  "path": "/he/tools/remove-audio-from-video"
+ },
+ "tools/remove-background-from-image": {
+  "name": "הסרת רקע מתמונה",
+  "path": "/he/tools/remove-background-from-image"
+ },
+ "tools/remove-background-noise": {
+  "name": "הסרת רעש רקע",
+  "path": "/he/tools/remove-background-noise"
+ },
+ "tools/remove-blemishes": {
+  "name": "הסרת כתמים",
+  "path": "/he/tools/remove-blemishes"
+ },
+ "tools/remove-exif-metadata": {
+  "name": "הסרת מטא־נתוני EXIF מתמונות",
+  "path": "/he/tools/remove-exif-metadata"
+ },
+ "tools/remove-object-from-photo": {
+  "name": "הסרת אובייקט מתמונה",
+  "path": "/he/tools/remove-object-from-photo"
+ },
+ "tools/remove-vocals-from-song": {
+  "name": "הסרת שירה משיר",
+  "path": "/he/tools/remove-vocals-from-song"
+ },
+ "tools/resize-video": {
+  "name": "שינוי גודל וידאו",
+  "path": "/he/tools/resize-video"
+ },
+ "tools/reverse-video": {
+  "name": "היפוך וידאו",
+  "path": "/he/tools/reverse-video"
+ },
+ "tools/rotate-image": {
+  "name": "סיבוב תמונה",
+  "path": "/he/tools/rotate-image"
+ },
+ "tools/rotate-video": {
+  "name": "סיבוב וידאו",
+  "path": "/he/tools/rotate-video"
+ },
+ "tools/select-by-color": {
+  "name": "בחירה לפי צבע",
+  "path": "/he/tools/select-by-color"
+ },
+ "tools/sharpen-image": {
+  "name": "חידוד תמונה",
+  "path": "/he/tools/sharpen-image"
+ },
+ "tools/sharpen-photo-online": {
+  "name": "חידוד תמונה",
+  "path": "/he/tools/sharpen-photo-online"
+ },
+ "tools/split-toning": {
+  "name": "פיצול גוונים",
+  "path": "/he/tools/split-toning"
+ },
+ "tools/srt-generator": {
+  "name": "יוצר כתוביות SRT",
+  "path": "/he/tools/srt-generator"
+ },
+ "tools/stabilize-video": {
+  "name": "ייצוב וידאו",
+  "path": "/he/tools/stabilize-video"
+ },
+ "tools/stitch-audio-to-video": {
+  "name": "הוספת אודיו לווידאו",
+  "path": "/he/tools/stitch-audio-to-video"
+ },
+ "tools/straighten-photo": {
+  "name": "יישור תמונה",
+  "path": "/he/tools/straighten-photo"
+ },
+ "tools/summarize-audio": {
+  "name": "סיכום אודיו",
+  "path": "/he/tools/summarize-audio"
+ },
+ "tools/summarize-video": {
+  "name": "סיכום וידאו",
+  "path": "/he/tools/summarize-video"
+ },
+ "tools/tint-photo": {
+  "name": "הוספת גוון לתמונה",
+  "path": "/he/tools/tint-photo"
+ },
+ "tools/transcode-to-dash": {
+  "name": "המרת וידאו ל-DASH (AV1 / VP9)",
+  "path": "/he/tools/transcode-to-dash"
+ },
+ "tools/transcode-to-hls": {
+  "name": "המרת וידאו ל־HLS",
+  "path": "/he/tools/transcode-to-hls"
+ },
+ "tools/transcribe-audio": {
+  "name": "תמלול אודיו",
+  "path": "/he/tools/transcribe-audio"
+ },
+ "tools/transcribe-video": {
+  "name": "תמלול וידאו",
+  "path": "/he/tools/transcribe-video"
+ },
+ "tools/trim-audio": {
+  "name": "חיתוך אודיו",
+  "path": "/he/tools/trim-audio"
+ },
+ "tools/video-converter": {
+  "name": "ממיר וידאו",
+  "path": "/he/tools/video-converter"
+ },
+ "tools/video-trimmer": {
+  "name": "חיתוך וידאו",
+  "path": "/he/tools/video-trimmer"
+ },
+ "tools/voice-changer": {
+  "name": "משנה קול",
+  "path": "/he/tools/voice-changer"
+ },
+ "tools/voice-cloning": {
+  "name": "שיבוט קול",
+  "path": "/he/tools/voice-cloning"
+ },
+ "tools/voice-designer": {
+  "name": "מעצב קולות",
+  "path": "/he/tools/voice-designer"
+ },
+ "tools/white-balance-photo": {
+  "name": "איזון לבן",
+  "path": "/he/tools/white-balance-photo"
+ }
+}

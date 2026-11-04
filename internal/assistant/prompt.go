@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -26,6 +27,9 @@ type LiveContext struct {
 	TierSummary string
 	Plan        bool
 	Hits        []Hit
+	// LocalNames are the retrieved docs' names and locale-prefixed paths in
+	// the user's language (doc id → name), from knowledge/names/<locale>.json.
+	LocalNames map[string]LocalName
 	// Digest is the editor's document digest (user data, wrapped).
 	Digest string
 	// HasFrame says a preview image is attached to the user message.
@@ -105,6 +109,18 @@ func VolatileBlock(lc LiveContext) Block {
 			}
 			used += len(text)
 			fmt.Fprintf(&b, "\n<help id=%q>\n%s\n</help>\n", h.Doc.ID, text)
+		}
+	}
+	if len(lc.LocalNames) > 0 {
+		ids := make([]string, 0, len(lc.LocalNames))
+		for id := range lc.LocalNames {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		b.WriteString("\nNames in the user's language (use these names and paths when you mention or link these pages):\n")
+		for _, id := range ids {
+			n := lc.LocalNames[id]
+			fmt.Fprintf(&b, "- %s: %q at %s\n", id, n.Name, n.Path)
 		}
 	}
 	if lc.Digest != "" {

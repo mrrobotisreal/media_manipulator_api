@@ -22,9 +22,9 @@ import (
 var assistantHandler *handlers.AssistantHandler
 
 // newAssistantHandler wires Medi: the OpenRouter provider over Medi's own key
-// (ASSISTANT_OPENROUTER_API_KEY; unset = off), the MM104 stub knowledge (MM105
-// replaces it), the embedded op schemas, the daily spend cap over
-// assistant_usage_events, and the user-delete sweeper for conversation deletes.
+// (ASSISTANT_OPENROUTER_API_KEY; unset = off), the MM105 embedded knowledge,
+// the embedded op schemas, the daily spend cap over assistant_usage_events,
+// and the user-delete sweeper for conversation deletes.
 // Nothing here touches the GPU scheduler or Ollama.
 func newAssistantHandler(appCtx context.Context, cfg *config.Config, store *telemetry.Store, registry *tiers.Registry,
 	deleter handlers.Expirer, logger *slog.Logger) *handlers.AssistantHandler {
@@ -34,9 +34,18 @@ func newAssistantHandler(appCtx context.Context, cfg *config.Config, store *tele
 	if store.Enabled() {
 		st, spendSrc = store, store
 	}
+	// MM105: the generated corpus (knowledge/, `npm run export:medi`). A
+	// malformed export logs and falls back to the stub (no docs, all in scope).
+	var knowledge assistant.Knowledge = assistant.NewStubKnowledge()
+	if k, err := assistant.NewEmbeddedKnowledge(); err != nil {
+		logger.Error("assistant: knowledge corpus failed to load; Medi answers without docs", "error", err.Error())
+	} else {
+		knowledge = k
+		logger.Info("assistant: knowledge loaded", "docs", len(k.Corpus().Docs))
+	}
 	engine := &assistant.Engine{
 		Provider:  assistant.NewOpenRouterProvider(ac.BaseURL, ac.APIKey, ac.AttributionURL, ac.ProviderOrder),
-		Knowledge: assistant.NewStubKnowledge(),
+		Knowledge: knowledge,
 		Ops:       assistant.NewOpsValidator(),
 		Store:     st,
 		Spend:     assistant.NewSpendCap(ac.DailySpendCapUSD, spendSrc, nil),
