@@ -25,6 +25,7 @@ What data Media Manipulator collects, why, how long it is kept, who processes it
   - 1.10 Voice Samples and Designed Voices
   - 1.11 Messages You Send Us
   - 1.12 Aperture Projects and Exports
+  - 1.13 Medi, the AI Assistant
 - 2. How We Use Information: We use the information we collect to:
 - 3. File Storage, Retention and Deletion: How long we keep your files depends on whether you have an account. This section covers uploaded files, generated outputs (results), Darkroom media, Darkroom projects, Motion projects, Aperture projects and saved voices in your account, stored on our servers and in Amazon S3 (us-west-2). Records about your conversions and settings (such as job history, retention choices and account details) are kept in a PostgreSQL database, and AI processing runs on our own self-hosted GPU server.
   - 3.1 How long we keep your files
