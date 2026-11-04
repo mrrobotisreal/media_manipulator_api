@@ -14,7 +14,9 @@ import (
 
 // App-attribution headers (per the OpenRouter app-attribution docs):
 // HTTP-Referer identifies the app's URL, X-OpenRouter-Title its display name.
-const attributionTitle = "Double Raven Chat Lab"
+// defaultAttributionTitle is the DR chat lab's; other callers (Medi, MM104)
+// pass WithTitle.
+const defaultAttributionTitle = "Double Raven Chat Lab"
 
 // Client talks to the OpenRouter API. Two http.Clients on purpose: streaming
 // completions must NOT carry a global timeout (a long generation is normal —
@@ -24,21 +26,40 @@ type Client struct {
 	baseURL    string
 	apiKey     string
 	referer    string
+	title      string
 	streamHTTP *http.Client
 	shortHTTP  *http.Client
+}
+
+// Option customises a Client (MM104).
+type Option func(*Client)
+
+// WithTitle sets the X-OpenRouter-Title attribution header (the app's display
+// name on OpenRouter). Without it the client keeps the DR chat lab's title.
+func WithTitle(title string) Option {
+	return func(c *Client) {
+		if t := strings.TrimSpace(title); t != "" {
+			c.title = t
+		}
+	}
 }
 
 // New builds a Client. baseURL is the API root (default
 // https://openrouter.ai/api/v1); attributionURL is sent as the HTTP-Referer
 // app-attribution header.
-func New(baseURL, apiKey, attributionURL string) *Client {
-	return &Client{
+func New(baseURL, apiKey, attributionURL string, opts ...Option) *Client {
+	c := &Client{
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		apiKey:     apiKey,
 		referer:    attributionURL,
+		title:      defaultAttributionTitle,
 		streamHTTP: &http.Client{}, // no timeout: bounded by the request context
 		shortHTTP:  &http.Client{Timeout: 30 * time.Second},
 	}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
 }
 
 func (c *Client) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
@@ -53,7 +74,7 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 	if c.referer != "" {
 		req.Header.Set("HTTP-Referer", c.referer)
 	}
-	req.Header.Set("X-OpenRouter-Title", attributionTitle)
+	req.Header.Set("X-OpenRouter-Title", c.title)
 	return req, nil
 }
 

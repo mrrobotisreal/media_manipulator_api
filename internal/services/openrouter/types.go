@@ -37,6 +37,32 @@ type ContentPart struct {
 	ImageURL   *ImageURL   `json:"image_url,omitempty"`
 	InputAudio *InputAudio `json:"input_audio,omitempty"`
 	File       *FilePart   `json:"file,omitempty"`
+	// CacheControl marks an explicit prompt-cache breakpoint after this part
+	// (MM104; Anthropic models, at most four per request, per
+	// https://openrouter.ai/docs/guides/best-practices/prompt-caching).
+	CacheControl *CacheControl `json:"cache_control,omitempty"`
+}
+
+// CacheControl is the per-part cache breakpoint: Type "ephemeral" (5-minute
+// TTL by default; TTL "1h" for the longer write).
+type CacheControl struct {
+	Type string `json:"type"`
+	TTL  string `json:"ttl,omitempty"`
+}
+
+// EphemeralCache is the default 5-minute breakpoint.
+func EphemeralCache() *CacheControl { return &CacheControl{Type: "ephemeral"} }
+
+// ProviderPrefs is the request's provider-routing object (MM104), per
+// https://openrouter.ai/docs/guides/routing/provider-selection: Order is the
+// provider slugs tried in order, AllowFallbacks=false forbids any other
+// provider, DataCollection "deny" limits routing to providers that do not
+// collect user data. AllowFallbacks is a pointer because the API default is
+// true and false must be sent explicitly.
+type ProviderPrefs struct {
+	Order          []string `json:"order,omitempty"`
+	AllowFallbacks *bool    `json:"allow_fallbacks,omitempty"`
+	DataCollection string   `json:"data_collection,omitempty"` // "allow" | "deny"
 }
 
 // InputAudio carries audio as RAW base64 (per the audio docs: base64 only,
@@ -82,7 +108,7 @@ type Reasoning struct {
 // ChatRequest is the POST /chat/completions body. Usage accounting needs no
 // opt-in: per the current usage-accounting docs, `usage: {include: true}` is
 // deprecated and full usage details are always included (in the final SSE chunk
-// when streaming).
+// when streaming). Re-confirmed 2026-11-04 (MM104), so Medi does not send it.
 type ChatRequest struct {
 	Model     string     `json:"model"`
 	Messages  []Message  `json:"messages"`
@@ -91,6 +117,9 @@ type ChatRequest struct {
 	Reasoning *Reasoning `json:"reasoning,omitempty"`
 	Plugins   []Plugin   `json:"plugins,omitempty"`
 	Tools     []Tool     `json:"tools,omitempty"`
+	// Provider is the routing object (MM104); nil = OpenRouter's defaults,
+	// which is what the DR chat lab sends.
+	Provider *ProviderPrefs `json:"provider,omitempty"`
 }
 
 // Tool is one entry of the request's tools array (OpenAI function format).
@@ -237,6 +266,23 @@ type Usage struct {
 	TotalTokens             int                      `json:"total_tokens"`
 	Cost                    float64                  `json:"cost"`
 	CompletionTokensDetails *CompletionTokensDetails `json:"completion_tokens_details"`
+	// PromptTokensDetails carries the prompt-cache accounting (MM104):
+	// cached_tokens read from the cache, cache_write_tokens written to it.
+	PromptTokensDetails *PromptTokensDetails `json:"prompt_tokens_details"`
+}
+
+// PromptTokensDetails is usage.prompt_tokens_details (usage-accounting docs).
+type PromptTokensDetails struct {
+	CachedTokens     int `json:"cached_tokens"`
+	CacheWriteTokens int `json:"cache_write_tokens"`
+}
+
+// CachedTokens is a nil-safe accessor for prompt tokens read from the cache.
+func (u *Usage) CachedTokens() int {
+	if u == nil || u.PromptTokensDetails == nil {
+		return 0
+	}
+	return u.PromptTokensDetails.CachedTokens
 }
 
 type CompletionTokensDetails struct {
