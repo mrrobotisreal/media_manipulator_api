@@ -895,6 +895,1169 @@
   ],
   "tokens": 290
  },
+ "recipes/photo/airy-bright": {
+  "title": "Light and airy",
+  "kind": "recipe",
+  "keywords": [
+   "Light and airy",
+   "bright and airy",
+   "light and clean",
+   "soft pastel look",
+   "make it feel fresh",
+   "wedding style bright"
+  ],
+  "tokens": 493
+ },
+ "recipes/photo/auto-fix": {
+  "title": "One-click fix, then refine",
+  "kind": "recipe",
+  "keywords": [
+   "One-click fix",
+   "then refine",
+   "fix this photo",
+   "make it look better",
+   "auto enhance",
+   "quick fix",
+   "improve the photo"
+  ],
+  "tokens": 407
+ },
+ "recipes/photo/backlit-portrait": {
+  "title": "Fix a backlit portrait (dark face, bright sky)",
+  "kind": "recipe",
+  "keywords": [
+   "Fix a backlit portrait (dark face",
+   "bright sky)",
+   "it's backlit",
+   "the face is too dark",
+   "person in front of a window",
+   "sun behind them",
+   "subject is a silhouette"
+  ],
+  "tokens": 514
+ },
+ "recipes/photo/bw-classic": {
+  "title": "Classic black and white",
+  "kind": "recipe",
+  "keywords": [
+   "Classic black and white",
+   "black and white",
+   "convert to monochrome",
+   "make it grayscale",
+   "classic bw photo",
+   "timeless black and white"
+  ],
+  "tokens": 376
+ },
+ "recipes/photo/bw-dramatic-sky": {
+  "title": "Dramatic black and white with a dark sky",
+  "kind": "recipe",
+  "keywords": [
+   "Dramatic black and white with a dark sky",
+   "dramatic black and white",
+   "dark sky black and white",
+   "moody monochrome landscape",
+   "ansel adams look",
+   "high contrast bw"
+  ],
+  "tokens": 402
+ },
+ "recipes/photo/color-balance-grade": {
+  "title": "Subtle colour grade with Colour Balance",
+  "kind": "recipe",
+  "keywords": [
+   "Subtle colour grade with Colour Balance",
+   "cool shadows warm highlights",
+   "colour grade subtly",
+   "colour balance",
+   "add a slight tint to shadows",
+   "film colour feel"
+  ],
+  "tokens": 362
+ },
+ "recipes/photo/curves-s-contrast": {
+  "title": "Add contrast with an S-curve",
+  "kind": "recipe",
+  "keywords": [
+   "Add contrast with an S-curve",
+   "more contrast",
+   "add punch",
+   "it looks flat",
+   "s curve",
+   "deeper blacks and brighter whites"
+  ],
+  "tokens": 366
+ },
+ "recipes/photo/dehaze-haze": {
+  "title": "Cut haze and fog",
+  "kind": "recipe",
+  "keywords": [
+   "Cut haze and fog",
+   "it looks hazy",
+   "remove the fog",
+   "clear up the haze",
+   "the view is milky",
+   "foggy landscape fix"
+  ],
+  "tokens": 344
+ },
+ "recipes/photo/exposure-rescue": {
+  "title": "Rescue an underexposed photo",
+  "kind": "recipe",
+  "keywords": [
+   "Rescue an underexposed photo",
+   "my photo is too dark",
+   "brighten this photo",
+   "fix the exposure",
+   "it came out underexposed",
+   "lift the shadows"
+  ],
+  "tokens": 459
+ },
+ "recipes/photo/film-looks": {
+  "title": "Film looks: vintage, faded, matte, cross-processed",
+  "kind": "recipe",
+  "keywords": [
+   "Film looks: vintage",
+   "faded",
+   "matte",
+   "cross-processed",
+   "vintage film look",
+   "make it look like old film",
+   "retro photo",
+   "faded film",
+   "analog look"
+  ],
+  "tokens": 472
+ },
+ "recipes/photo/fix-perspective": {
+  "title": "Fix converging lines (buildings leaning back)",
+  "kind": "recipe",
+  "keywords": [
+   "Fix converging lines (buildings leaning back)",
+   "the building is leaning",
+   "fix the perspective",
+   "vertical lines are tilted",
+   "keystone correction",
+   "make walls straight"
+  ],
+  "tokens": 384
+ },
+ "recipes/photo/golden-hour": {
+  "title": "Golden-hour warmth",
+  "kind": "recipe",
+  "keywords": [
+   "Golden-hour warmth",
+   "golden hour look",
+   "make it warm like sunset",
+   "warm sunlight",
+   "sunny glow",
+   "evening light"
+  ],
+  "tokens": 525
+ },
+ "recipes/photo/grey-except-red": {
+  "title": "Everything grey except the reds",
+  "kind": "recipe",
+  "keywords": [
+   "Everything grey except the reds",
+   "make everything grey except the red",
+   "black and white except the red jacket",
+   "keep only the red",
+   "colour splash red",
+   "selective colour red"
+  ],
+  "tokens": 475
+ },
+ "recipes/photo/hue-shift-object": {
+  "title": "Change the colour of one thing (hue shift)",
+  "kind": "recipe",
+  "keywords": [
+   "Change the colour of one thing (hue shift)",
+   "change the colour of the shirt",
+   "make the green car blue",
+   "shift the hue",
+   "recolour an object",
+   "different colour for the dress"
+  ],
+  "tokens": 396
+ },
+ "recipes/photo/keep-one-colour": {
+  "title": "Keep one exact colour (custom hue)",
+  "kind": "recipe",
+  "keywords": [
+   "Keep one exact colour (custom hue)",
+   "keep only the teal",
+   "black and white except this colour",
+   "keep the turquoise sign",
+   "grey except one colour",
+   "selective colour custom"
+  ],
+  "tokens": 388
+ },
+ "recipes/photo/landscape-punch": {
+  "title": "Landscape punch: depth, clarity and colour",
+  "kind": "recipe",
+  "keywords": [
+   "Landscape punch: depth",
+   "clarity and colour",
+   "make the landscape pop",
+   "more vivid scenery",
+   "punchy nature photo",
+   "clearer mountains",
+   "enhance a travel photo"
+  ],
+  "tokens": 372
+ },
+ "recipes/photo/levels-black-white": {
+  "title": "Set black and white points with Levels",
+  "kind": "recipe",
+  "keywords": [
+   "Set black and white points with Levels",
+   "use levels",
+   "the image has no true black",
+   "set the white point",
+   "foggy photo fix",
+   "stretch the histogram"
+  ],
+  "tokens": 365
+ },
+ "recipes/photo/low-light-noise": {
+  "title": "Clean up a noisy low-light photo",
+  "kind": "recipe",
+  "keywords": [
+   "Clean up a noisy low-light photo",
+   "it is grainy",
+   "reduce the noise",
+   "night photo is noisy",
+   "clean up the speckles",
+   "phone photo in the dark"
+  ],
+  "tokens": 398
+ },
+ "recipes/photo/lut-intensity": {
+  "title": "Tame a LUT that is too strong",
+  "kind": "recipe",
+  "keywords": [
+   "Tame a LUT that is too strong",
+   "the lut is too strong",
+   "reduce the lut",
+   "blend the lut",
+   "lut intensity",
+   "soften the colour look"
+  ],
+  "tokens": 350
+ },
+ "recipes/photo/moody-dark": {
+  "title": "Moody, dark and desaturated",
+  "kind": "recipe",
+  "keywords": [
+   "Moody",
+   "dark and desaturated",
+   "make it moody",
+   "dark and atmospheric",
+   "dramatic look",
+   "muted colours",
+   "cinematic and dark"
+  ],
+  "tokens": 500
+ },
+ "recipes/photo/overexposed-recovery": {
+  "title": "Recover a bright, washed-out photo",
+  "kind": "recipe",
+  "keywords": [
+   "Recover a bright",
+   "washed-out photo",
+   "too bright",
+   "washed out",
+   "overexposed",
+   "the sky is blown out",
+   "tone it down"
+  ],
+  "tokens": 380
+ },
+ "recipes/photo/posterize-invert": {
+  "title": "Graphic effects: posterize and invert",
+  "kind": "recipe",
+  "keywords": [
+   "Graphic effects: posterize and invert",
+   "posterize",
+   "pop art look",
+   "invert the colours",
+   "negative effect",
+   "poster style"
+  ],
+  "tokens": 374
+ },
+ "recipes/photo/product-white-background": {
+  "title": "Clean white background for product photos",
+  "kind": "recipe",
+  "keywords": [
+   "Clean white background for product photos",
+   "make the background pure white",
+   "product photo for a shop",
+   "clean white backdrop",
+   "ecommerce photo",
+   "studio white background"
+  ],
+  "tokens": 447
+ },
+ "recipes/photo/red-eye-fix": {
+  "title": "Fix red eyes",
+  "kind": "recipe",
+  "keywords": [
+   "Fix red eyes",
+   "red eyes",
+   "fix red eye",
+   "flash made the eyes red",
+   "remove red pupils",
+   "eyes glow red"
+  ],
+  "tokens": 379
+ },
+ "recipes/photo/remove-blemishes": {
+  "title": "Remove blemishes, spots and small objects",
+  "kind": "recipe",
+  "keywords": [
+   "Remove blemishes",
+   "spots and small objects",
+   "remove this spot",
+   "get rid of the pimple",
+   "remove dust spots",
+   "clean up the blemish",
+   "erase a small object"
+  ],
+  "tokens": 391
+ },
+ "recipes/photo/sharpen-for-web": {
+  "title": "Sharpen for screens and social",
+  "kind": "recipe",
+  "keywords": [
+   "Sharpen for screens and social",
+   "make it sharper",
+   "it looks soft",
+   "sharpen for instagram",
+   "crisper details",
+   "a bit blurry"
+  ],
+  "tokens": 376
+ },
+ "recipes/photo/skin-soften": {
+  "title": "Soften skin naturally",
+  "kind": "recipe",
+  "keywords": [
+   "Soften skin naturally",
+   "soften the skin",
+   "smooth skin",
+   "portrait retouch",
+   "reduce wrinkles a little",
+   "beauty retouch"
+  ],
+  "tokens": 516
+ },
+ "recipes/photo/sky-darken-gradient": {
+  "title": "Darken a bright sky with a graduated filter",
+  "kind": "recipe",
+  "keywords": [
+   "Darken a bright sky with a graduated filter",
+   "the sky is too bright",
+   "darken the sky",
+   "bring back the clouds",
+   "graduated filter",
+   "balance sky and ground"
+  ],
+  "tokens": 484
+ },
+ "recipes/photo/split-tone-classic": {
+  "title": "Split toning",
+  "kind": "recipe",
+  "keywords": [
+   "Split toning",
+   "split tone",
+   "tint the shadows and highlights",
+   "two tone colour",
+   "duotone look",
+   "warm highlights cool shadows"
+  ],
+  "tokens": 334
+ },
+ "recipes/photo/straighten-and-crop": {
+  "title": "Straighten and crop for the destination",
+  "kind": "recipe",
+  "keywords": [
+   "Straighten and crop for the destination",
+   "straighten the horizon",
+   "it is crooked",
+   "crop for instagram",
+   "make it square",
+   "crop to 4:5"
+  ],
+  "tokens": 347
+ },
+ "recipes/photo/subject-pop": {
+  "title": "Make the subject pop",
+  "kind": "recipe",
+  "keywords": [
+   "Make the subject pop",
+   "make the subject stand out",
+   "pop the subject",
+   "draw attention to the person",
+   "separate subject from background",
+   "focus on the main thing"
+  ],
+  "tokens": 469
+ },
+ "recipes/photo/teal-orange": {
+  "title": "Teal and orange (blockbuster look)",
+  "kind": "recipe",
+  "keywords": [
+   "Teal and orange (blockbuster look)",
+   "teal and orange",
+   "hollywood look",
+   "blockbuster colour",
+   "movie poster colours",
+   "cinematic colour grade"
+  ],
+  "tokens": 481
+ },
+ "recipes/photo/tint-photo-filter": {
+  "title": "Tint a photo with a colour filter",
+  "kind": "recipe",
+  "keywords": [
+   "Tint a photo with a colour filter",
+   "tint the photo blue",
+   "add a colour filter",
+   "make it sepia",
+   "colour wash",
+   "warming filter"
+  ],
+  "tokens": 322
+ },
+ "recipes/photo/vignette-classic": {
+  "title": "A subtle vignette",
+  "kind": "recipe",
+  "keywords": [
+   "A subtle vignette",
+   "add a vignette",
+   "darken the corners",
+   "frame the subject",
+   "soft dark edges",
+   "old lens look"
+  ],
+  "tokens": 332
+ },
+ "recipes/photo/white-balance-fix": {
+  "title": "Fix a colour cast (too yellow, too blue)",
+  "kind": "recipe",
+  "keywords": [
+   "Fix a colour cast (too yellow",
+   "too blue)",
+   "it looks too yellow",
+   "too blue",
+   "fix the colour cast",
+   "white balance",
+   "the whites look orange"
+  ],
+  "tokens": 400
+ },
+ "recipes/studio/audio-volume-balance": {
+  "title": "Balance clip loudness",
+  "kind": "recipe",
+  "keywords": [
+   "Balance clip loudness",
+   "this clip is too quiet",
+   "one part is louder",
+   "balance the volume",
+   "make the voice louder",
+   "volume is uneven"
+  ],
+  "tokens": 321
+ },
+ "recipes/studio/cinematic-grade": {
+  "title": "Cinematic grade",
+  "kind": "recipe",
+  "keywords": [
+   "Cinematic grade",
+   "make it cinematic",
+   "movie look",
+   "film look for my video",
+   "cinematic colour grade",
+   "make it look like a film"
+  ],
+  "tokens": 440
+ },
+ "recipes/studio/end-card": {
+  "title": "End card with a call to action",
+  "kind": "recipe",
+  "keywords": [
+   "End card with a call to action",
+   "add an end screen",
+   "subscribe at the end",
+   "end card",
+   "thanks for watching screen",
+   "outro text"
+  ],
+  "tokens": 376
+ },
+ "recipes/studio/fade-from-black": {
+  "title": "Fade in from black and out to black",
+  "kind": "recipe",
+  "keywords": [
+   "Fade in from black and out to black",
+   "fade in from black",
+   "fade out at the end",
+   "start with black",
+   "end on black",
+   "cinema style start"
+  ],
+  "tokens": 337
+ },
+ "recipes/studio/freeze-frame": {
+  "title": "Freeze frame",
+  "kind": "recipe",
+  "keywords": [
+   "Freeze frame",
+   "freeze the frame",
+   "pause on this moment",
+   "hold the picture",
+   "freeze here and add text",
+   "still frame in the video"
+  ],
+  "tokens": 287
+ },
+ "recipes/studio/green-screen": {
+  "title": "Remove a green screen",
+  "kind": "recipe",
+  "keywords": [
+   "Remove a green screen",
+   "remove the green screen",
+   "chroma key",
+   "replace the background",
+   "key out the green",
+   "transparent background video"
+  ],
+  "tokens": 348
+ },
+ "recipes/studio/jl-cut": {
+  "title": "J-cut and L-cut (audio leads or trails the picture)",
+  "kind": "recipe",
+  "keywords": [
+   "J-cut and L-cut (audio leads or trails the picture)",
+   "j cut",
+   "l cut",
+   "let the audio start before the cut",
+   "smoother cut between interview shots",
+   "audio overlap between clips"
+  ],
+  "tokens": 444
+ },
+ "recipes/studio/ken-burns-still": {
+  "title": "Ken Burns move on a still photo",
+  "kind": "recipe",
+  "keywords": [
+   "Ken Burns move on a still photo",
+   "animate this photo",
+   "slow zoom on the picture",
+   "ken burns effect",
+   "pan across the image",
+   "make the still image move"
+  ],
+  "tokens": 453
+ },
+ "recipes/studio/looks-catalog": {
+  "title": "Choosing a look (bleach bypass, warm film, cool night, vintage, high-key, noir, pastel, punchy, golden hour)",
+  "kind": "recipe",
+  "keywords": [
+   "Choosing a look (bleach bypass",
+   "warm film",
+   "cool night",
+   "vintage",
+   "high-key",
+   "noir",
+   "pastel",
+   "punchy",
+   "golden hour)",
+   "give it a look",
+   "vintage video look",
+   "black and white video",
+   "bright pastel video",
+   "punchy social video colours"
+  ],
+  "tokens": 764
+ },
+ "recipes/studio/lower-third": {
+  "title": "Lower-third name title",
+  "kind": "recipe",
+  "keywords": [
+   "Lower-third name title",
+   "add a lower third",
+   "name and title on screen",
+   "show who is speaking",
+   "add a name caption",
+   "interview name tag"
+  ],
+  "tokens": 462
+ },
+ "recipes/studio/lut-intensity-video": {
+  "title": "Use a LUT without overdoing it",
+  "kind": "recipe",
+  "keywords": [
+   "Use a LUT without overdoing it",
+   "my lut is too strong",
+   "apply a lut",
+   "use a .cube file",
+   "blend the lut",
+   "lut looks harsh"
+  ],
+  "tokens": 372
+ },
+ "recipes/studio/manual-cinematic-grade": {
+  "title": "Hand-built cinematic grade with Lumetri",
+  "kind": "recipe",
+  "keywords": [
+   "Hand-built cinematic grade with Lumetri",
+   "grade it like a movie by hand",
+   "lower saturation and add contrast",
+   "film grade without a lut",
+   "subtle cinematic colour",
+   "warm cinematic tone"
+  ],
+  "tokens": 432
+ },
+ "recipes/studio/match-two-clips": {
+  "title": "Match two clips that look different",
+  "kind": "recipe",
+  "keywords": [
+   "Match two clips that look different",
+   "these clips do not match",
+   "one shot is warmer",
+   "match the colours",
+   "make the shots consistent",
+   "two cameras look different"
+  ],
+  "tokens": 422
+ },
+ "recipes/studio/music-ducking": {
+  "title": "Duck music under speech",
+  "kind": "recipe",
+  "keywords": [
+   "Duck music under speech",
+   "music is too loud when they talk",
+   "lower the music under voice",
+   "duck the music",
+   "background music balance",
+   "voice over music mix"
+  ],
+  "tokens": 374
+ },
+ "recipes/studio/picture-in-picture": {
+  "title": "Picture in picture (webcam over screen)",
+  "kind": "recipe",
+  "keywords": [
+   "Picture in picture (webcam over screen)",
+   "picture in picture",
+   "put the webcam in the corner",
+   "small video over the main one",
+   "reaction video layout",
+   "facecam"
+  ],
+  "tokens": 356
+ },
+ "recipes/studio/podcast-voice-chain": {
+  "title": "Podcast voice: clear and even",
+  "kind": "recipe",
+  "keywords": [
+   "Podcast voice: clear and even",
+   "make the voice clearer",
+   "podcast sound",
+   "voice sounds muddy",
+   "even out the volume",
+   "radio voice"
+  ],
+  "tokens": 437
+ },
+ "recipes/studio/shorts-captions": {
+  "title": "Caption styling for Shorts, Reels and TikTok",
+  "kind": "recipe",
+  "keywords": [
+   "Caption styling for Shorts",
+   "Reels and TikTok",
+   "style captions for tiktok",
+   "big captions",
+   "subtitles for shorts",
+   "captions in the middle",
+   "readable subtitles"
+  ],
+  "tokens": 450
+ },
+ "recipes/studio/speed-ramp": {
+  "title": "Speed ramp and slow motion",
+  "kind": "recipe",
+  "keywords": [
+   "Speed ramp and slow motion",
+   "slow motion",
+   "speed it up",
+   "time lapse feel",
+   "speed ramp",
+   "make this part slower"
+  ],
+  "tokens": 440
+ },
+ "recipes/studio/split-and-delete": {
+  "title": "Cut out a section",
+  "kind": "recipe",
+  "keywords": [
+   "Cut out a section",
+   "cut out this part",
+   "remove the middle section",
+   "delete from here to there",
+   "trim the boring part",
+   "remove a mistake"
+  ],
+  "tokens": 348
+ },
+ "recipes/studio/teal-orange-video": {
+  "title": "Teal and orange for video",
+  "kind": "recipe",
+  "keywords": [
+   "Teal and orange for video",
+   "teal and orange video",
+   "blockbuster colours",
+   "orange skin teal background",
+   "action movie look",
+   "hollywood grade"
+  ],
+  "tokens": 334
+ },
+ "recipes/studio/tighten-pauses": {
+  "title": "Tighten pauses with markers",
+  "kind": "recipe",
+  "keywords": [
+   "Tighten pauses with markers",
+   "remove the pauses",
+   "tighten the edit",
+   "cut out silences",
+   "make it faster paced",
+   "jump cuts"
+  ],
+  "tokens": 414
+ },
+ "recipes/studio/title-card": {
+  "title": "Opening title card",
+  "kind": "recipe",
+  "keywords": [
+   "Opening title card",
+   "add a title at the start",
+   "opening title",
+   "big title over the video",
+   "intro text",
+   "video title screen"
+  ],
+  "tokens": 373
+ },
+ "recipes/studio/transitions-by-pace": {
+  "title": "Pick transitions by pace",
+  "kind": "recipe",
+  "keywords": [
+   "Pick transitions by pace",
+   "add transitions",
+   "smooth the cuts",
+   "what transition should I use",
+   "fade between clips",
+   "make cuts less abrupt"
+  ],
+  "tokens": 394
+ },
+ "recipes/studio/vertical-reframe": {
+  "title": "Reframe a horizontal video for vertical",
+  "kind": "recipe",
+  "keywords": [
+   "Reframe a horizontal video for vertical",
+   "make it vertical",
+   "convert to 9:16",
+   "reframe for tiktok",
+   "shorts from a landscape video",
+   "portrait version"
+  ],
+  "tokens": 406
+ },
+ "recipes/studio/volume-fades": {
+  "title": "Fade audio in and out",
+  "kind": "recipe",
+  "keywords": [
+   "Fade audio in and out",
+   "fade the music out",
+   "fade in at the start",
+   "music ends abruptly",
+   "smooth audio ending",
+   "volume fade"
+  ],
+  "tokens": 352
+ },
+ "recipes/studio/zoom-punch-in": {
+  "title": "Punch-in zoom for emphasis",
+  "kind": "recipe",
+  "keywords": [
+   "Punch-in zoom for emphasis",
+   "zoom in on my face",
+   "punch in",
+   "add a zoom for emphasis",
+   "zoom on the punchline",
+   "quick zoom"
+  ],
+  "tokens": 342
+ },
+ "recipes/vector/badge-bounce": {
+  "title": "Bouncing badge or sticker",
+  "kind": "recipe",
+  "keywords": [
+   "Bouncing badge or sticker",
+   "bouncing badge",
+   "sale sticker animation",
+   "attention badge",
+   "bounce in",
+   "wobbly sticker"
+  ],
+  "tokens": 333
+ },
+ "recipes/vector/blur-in": {
+  "title": "Blur-in entrance",
+  "kind": "recipe",
+  "keywords": [
+   "Blur-in entrance",
+   "blur in",
+   "text comes into focus",
+   "soft focus entrance",
+   "dreamy text reveal",
+   "fade in with blur"
+  ],
+  "tokens": 355
+ },
+ "recipes/vector/bullet-reveal": {
+  "title": "Bullet points that reveal one by one",
+  "kind": "recipe",
+  "keywords": [
+   "Bullet points that reveal one by one",
+   "reveal bullet points one by one",
+   "animate a list",
+   "staggered text",
+   "points appear one after another",
+   "list animation"
+  ],
+  "tokens": 384
+ },
+ "recipes/vector/counter": {
+  "title": "Number counter",
+  "kind": "recipe",
+  "keywords": [
+   "Number counter",
+   "animated number counter",
+   "count up to 10000",
+   "stats animation",
+   "number goes up",
+   "counting animation"
+  ],
+  "tokens": 360
+ },
+ "recipes/vector/export-by-destination": {
+  "title": "Choose the export for the destination",
+  "kind": "recipe",
+  "keywords": [
+   "Choose the export for the destination",
+   "how should I export this",
+   "export for my website",
+   "lottie or gif",
+   "export for a react app",
+   "export a video of my animation"
+  ],
+  "tokens": 412
+ },
+ "recipes/vector/fade-slide-entrance": {
+  "title": "Fade and slide entrance (UI style)",
+  "kind": "recipe",
+  "keywords": [
+   "Fade and slide entrance (UI style)",
+   "fade in and slide up",
+   "gentle entrance",
+   "animate in from below",
+   "subtle ui animation",
+   "slide in from the left"
+  ],
+  "tokens": 406
+ },
+ "recipes/vector/gradient-shimmer": {
+  "title": "Gradient shimmer",
+  "kind": "recipe",
+  "keywords": [
+   "Gradient shimmer",
+   "shimmer effect",
+   "animated gradient",
+   "shine across the text",
+   "gradient moves",
+   "glossy sweep"
+  ],
+  "tokens": 369
+ },
+ "recipes/vector/logo-draw-on": {
+  "title": "Logo reveal by drawing the outline",
+  "kind": "recipe",
+  "keywords": [
+   "Logo reveal by drawing the outline",
+   "logo reveal",
+   "draw my logo",
+   "animate the logo outline",
+   "signature animation",
+   "line drawing reveal"
+  ],
+  "tokens": 428
+ },
+ "recipes/vector/logo-reveal-template": {
+  "title": "Logo reveal template",
+  "kind": "recipe",
+  "keywords": [
+   "Logo reveal template",
+   "quick logo animation",
+   "intro for my logo",
+   "logo sting",
+   "animate a logo for youtube",
+   "brand reveal"
+  ],
+  "tokens": 356
+ },
+ "recipes/vector/lower-third-slide-in": {
+  "title": "Lower-third that slides in",
+  "kind": "recipe",
+  "keywords": [
+   "Lower-third that slides in",
+   "lower third that slides in",
+   "animated name title",
+   "sliding name tag",
+   "broadcast lower third",
+   "animated caption bar"
+  ],
+  "tokens": 446
+ },
+ "recipes/vector/mask-wipe-reveal": {
+  "title": "Mask wipe reveal",
+  "kind": "recipe",
+  "keywords": [
+   "Mask wipe reveal",
+   "wipe reveal",
+   "reveal text from left to right",
+   "mask reveal",
+   "text appears behind a wipe",
+   "slide reveal"
+  ],
+  "tokens": 408
+ },
+ "recipes/vector/motion-path-follow": {
+  "title": "Move along a path",
+  "kind": "recipe",
+  "keywords": [
+   "Move along a path",
+   "move along a path",
+   "follow a curve",
+   "plane flying along a route",
+   "animate on a path",
+   "motion path"
+  ],
+  "tokens": 348
+ },
+ "recipes/vector/shape-morph": {
+  "title": "Morph one shape into another",
+  "kind": "recipe",
+  "keywords": [
+   "Morph one shape into another",
+   "morph this shape",
+   "turn the circle into a star",
+   "shape transformation",
+   "morph icons",
+   "path morph"
+  ],
+  "tokens": 350
+ },
+ "recipes/vector/spin-loader": {
+  "title": "Looping spinner or rotating icon",
+  "kind": "recipe",
+  "keywords": [
+   "Looping spinner or rotating icon",
+   "make a loading spinner",
+   "rotate forever",
+   "spinning icon",
+   "loop rotation",
+   "loader animation"
+  ],
+  "tokens": 360
+ },
+ "recipes/vector/text-pop": {
+  "title": "Title that pops in",
+  "kind": "recipe",
+  "keywords": [
+   "Title that pops in",
+   "make the text pop in",
+   "bouncy title",
+   "animate this text in",
+   "title pop",
+   "punchy text animation"
+  ],
+  "tokens": 497
+ },
+ "recipes/vector/title-pop-template": {
+  "title": "Title pop template",
+  "kind": "recipe",
+  "keywords": [
+   "Title pop template",
+   "quick animated headline",
+   "pop text template",
+   "animated title card",
+   "headline animation",
+   "word pops on screen"
+  ],
+  "tokens": 330
+ },
+ "recipes/workflow/animated-logo-intro": {
+  "title": "Animated logo intro for videos",
+  "kind": "recipe",
+  "keywords": [
+   "Animated logo intro for videos",
+   "make an intro for my videos",
+   "animated logo for youtube",
+   "channel intro",
+   "logo animation for my video",
+   "brand intro"
+  ],
+  "tokens": 358
+ },
+ "recipes/workflow/bulk-product-photos": {
+  "title": "Clean product photos in bulk",
+  "kind": "recipe",
+  "keywords": [
+   "Clean product photos in bulk",
+   "edit many product photos",
+   "batch edit for my shop",
+   "same look on all product images",
+   "prepare photos for amazon",
+   "bulk product photo editing"
+  ],
+  "tokens": 398
+ },
+ "recipes/workflow/clean-noisy-recording": {
+  "title": "Clean up a noisy voice recording",
+  "kind": "recipe",
+  "keywords": [
+   "Clean up a noisy voice recording",
+   "my recording is noisy",
+   "remove background noise from voice",
+   "echoey recording",
+   "hum in the audio",
+   "clean up a voice memo"
+  ],
+  "tokens": 393
+ },
+ "recipes/workflow/instagram-carousel": {
+  "title": "Prepare photos for an Instagram post or carousel",
+  "kind": "recipe",
+  "keywords": [
+   "Prepare photos for an Instagram post or carousel",
+   "prepare photos for instagram",
+   "instagram carousel",
+   "what size for instagram",
+   "crop for instagram feed",
+   "post photos to instagram"
+  ],
+  "tokens": 342
+ },
+ "recipes/workflow/interview-edit": {
+  "title": "Edit an interview",
+  "kind": "recipe",
+  "keywords": [
+   "Edit an interview",
+   "edit an interview",
+   "cut my interview video",
+   "two camera interview",
+   "make an interview look professional",
+   "interview editing steps"
+  ],
+  "tokens": 374
+ },
+ "recipes/workflow/podcast-clip": {
+  "title": "Podcast clip with captions",
+  "kind": "recipe",
+  "keywords": [
+   "Podcast clip with captions",
+   "podcast clip for social",
+   "audiogram",
+   "share a podcast moment",
+   "podcast to video",
+   "audio clip with captions"
+  ],
+  "tokens": 362
+ },
+ "recipes/workflow/restore-old-photo": {
+  "title": "Restore and colour-correct an old photo",
+  "kind": "recipe",
+  "keywords": [
+   "Restore and colour-correct an old photo",
+   "restore an old photo",
+   "fix a scanned photo",
+   "old family picture repair",
+   "damaged photo",
+   "faded old print"
+  ],
+  "tokens": 414
+ },
+ "recipes/workflow/slideshow-from-photos": {
+  "title": "Photo slideshow video",
+  "kind": "recipe",
+  "keywords": [
+   "Photo slideshow video",
+   "make a slideshow from photos",
+   "photos to video",
+   "memorial slideshow",
+   "birthday photo video",
+   "photo montage with music"
+  ],
+  "tokens": 349
+ },
+ "recipes/workflow/travel-montage": {
+  "title": "Travel montage to music",
+  "kind": "recipe",
+  "keywords": [
+   "Travel montage to music",
+   "make a travel video",
+   "montage with music",
+   "holiday video edit",
+   "cut clips to the beat",
+   "vacation highlight reel"
+  ],
+  "tokens": 365
+ },
+ "recipes/workflow/video-for-web": {
+  "title": "Prepare a video for a website or email",
+  "kind": "recipe",
+  "keywords": [
+   "Prepare a video for a website or email",
+   "make my video smaller for the website",
+   "video for email",
+   "compress for the web",
+   "background video for a website",
+   "embed video on my site"
+  ],
+  "tokens": 424
+ },
+ "recipes/workflow/youtube-short-from-long": {
+  "title": "Make a YouTube Short from a long video",
+  "kind": "recipe",
+  "keywords": [
+   "Make a YouTube Short from a long video",
+   "make a short from my video",
+   "turn a long video into a reel",
+   "clip for tiktok from youtube video",
+   "vertical clip from a podcast",
+   "repurpose a long video"
+  ],
+  "tokens": 477
+ },
  "tools/add-reverb-to-audio": {
   "title": "Add Reverb to Audio",
   "kind": "tool",

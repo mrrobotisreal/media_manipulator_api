@@ -9,6 +9,7 @@ the UI test `lib/assistant/knowledgeExport.test.ts` fails when this copy is stal
 - `tools/<slug>.md`: one per primary tool page (aliases are keywords of their target)
 - `pages/<route>.md`: every other public route
 - `editors/{studio,vector,photo}/*.md`: what each editor can do, from its registries
+- `recipes/{photo,studio,vector,workflow}/*.md`: professional techniques with op examples (from `content/medi/recipes/`)
 - `routes.json`: the closed list of navigable targets
 - `names/<locale>.json`: localized tool/page names and locale-prefixed paths
 - `index.json`: doc id → title, kind, keywords, token estimate

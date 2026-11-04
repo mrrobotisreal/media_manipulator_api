@@ -1,0 +1,1 @@
+{"version":1,"source":{"width":3000,"height":2000,"orientation":1},"geometry":{"rotate":0,"flipH":false,"flipV":false,"perspective":null,"crop":null,"fill":"transparent"},"heals":[],"layers":[{"id":"exp1","type":"exposure","enabled":true,"opacity":1,"blend":"normal","mask":null,"params":{"ev":0.3,"offset":0,"gamma":1}}],"output":{}}

@@ -16,6 +16,7 @@
 //	request.go              the POST /api/assistant/chat body and its limits
 //	engine.go               one request: prompt, upstream loop, client tools, persistence
 //	static.go               the retrieval-only guide answer at the spend cap
+//	evals/                  the code-graded eval harness and case set (MM106; cmd/assistant-eval runs it)
 //
 // Nothing in this package touches a GPU or a local model daemon (a test greps for it).
 package assistant
