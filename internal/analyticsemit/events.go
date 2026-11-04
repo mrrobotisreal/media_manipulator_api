@@ -146,3 +146,14 @@ func MegapixelBucket(mp float64) string {
 	}
 	return ">32"
 }
+
+// Medi (MM107, design docs/design/MEDI_ASSISTANT.md §14). Emitted once per
+// finished POST /api/assistant/chat turn, whatever the outcome (an edit_result
+// continuation is its own turn): {surface: guide|studio|vector|photo,
+// model_tier: guide|copilot|plan, outcome: text|edits|action|ask|static|
+// out_of_scope|error|interrupted, cost_usd_micros, cost_bucket,
+// cached_ratio_bucket}. Never message text, a digest or a frame. Identity comes
+// from the request headers (X-MM-Visitor-ID is sent only with analytics
+// consent), so without it Emit drops the event and assistant_usage_events
+// stays the spend record. Catalog entry: media-manipulator-analytics MM107.
+const ServerAssistantTurnCounted = "server_assistant_turn_counted"
