@@ -35,6 +35,11 @@ func (r *recorder) Send(ev any) error {
 		r.out.CostUSD += e.CostUSD
 	case assistant.ErrorEvent:
 		r.out.Error = e.Code
+	case assistant.DoneEvent:
+		// MM107: "static" / "out_of_scope" = answered without a model call.
+		if e.Outcome != "" {
+			r.out.Model = ""
+		}
 	}
 	return nil
 }
@@ -45,22 +50,6 @@ type Runner struct {
 	Engine *assistant.Engine
 	// Timeout per case (default 120 s).
 	Timeout time.Duration
-}
-
-// metaModelStatic marks the scope gate / static answer: the engine still
-// sends meta with the surface's model, so the runner tells them apart by the
-// answer itself.
-func isStaticAnswer(c Case, out Output) bool {
-	if out.CostUSD != 0 || len(out.Edits)+len(out.Actions)+len(out.Asks) > 0 {
-		return false
-	}
-	t := strings.TrimSpace(out.Text)
-	return t == strings.TrimSpace(assistant.OutOfScopeLine(c.Locale)) || strings.HasPrefix(t, staticIntro(c.Locale))
-}
-
-func staticIntro(locale string) string {
-	intro, _ := assistant.StaticFrame(locale)
-	return strings.TrimSpace(intro)
 }
 
 // Run executes one case and returns its output.
@@ -95,9 +84,6 @@ func (r *Runner) Run(ctx context.Context, c Case) (Output, error) {
 	turn := &assistant.Turn{Body: body, FrameURL: frameURL, VisitorHash: "eval",
 		Live: assistant.LiveContext{Tier: "operator", TurnsLimit: -1, TurnsRemaining: -1}}
 	r.Engine.Run(ctx, turn, rec, nil)
-	if isStaticAnswer(c, rec.out) {
-		rec.out.Model = ""
-	}
 	return rec.out, nil
 }
 
