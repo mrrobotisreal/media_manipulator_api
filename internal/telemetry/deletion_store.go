@@ -342,7 +342,14 @@ func (s *Store) DeleteUserProjects(ctx context.Context, userID string) (int64, e
 	// account-wide sweep already removed them; this catches any row the ledger
 	// never knew. The mm_users FK cascade is the last backstop.
 	v, err := s.DeleteUserVoices(ctx, userID)
-	return n + m + v, err
+	if err != nil {
+		return n + m + v, err
+	}
+	n += v
+	// MM104: Medi conversations go with the account (messages and feedback
+	// cascade; the ledger rows were swept just before).
+	a, err := s.deleteUserAssistantConversations(ctx, userID)
+	return n + m + a, err
 }
 
 // DeleteUserSettingsAndGrants removes mm_user_settings and mm_tier_grants rows

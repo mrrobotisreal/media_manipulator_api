@@ -19,6 +19,8 @@ const (
 	PurgeCleanupRuns    = "cleanup_runs"
 	PurgeLedgerDeleted  = "ledger_deleted"
 	PurgeAccountDeletes = "account_deletions"
+	// PurgeAssistantUsage (MM104): content-free Medi usage rows, kept 13 months.
+	PurgeAssistantUsage = "assistant_usage"
 )
 
 type purgeRule struct {
@@ -45,11 +47,13 @@ var purgeRules = map[string]purgeRule{
 	PurgeLedgerDeleted: {table: "mm_retained_objects", where: "deleted_at IS NOT NULL AND deleted_at < $1"},
 	// cutoff = now - 30 d: MM24 account-deletion tombstones.
 	PurgeAccountDeletes: {table: "mm_account_deletions", where: "deleted_at < $1"},
+	// cutoff = now - 13 months (MM104): Medi usage/cost rows hold no content.
+	PurgeAssistantUsage: {table: "assistant_usage_events", where: "created_at < $1"},
 }
 
 // PurgeRuleNames lists the rules in the order the purger runs them.
 func PurgeRuleNames() []string {
-	return []string{PurgeUsageCounters, PurgeSafetyIncident, PurgeAPIRequestIPs, PurgeRateLimitIPs, PurgeCleanupRuns, PurgeLedgerDeleted, PurgeAccountDeletes}
+	return []string{PurgeUsageCounters, PurgeSafetyIncident, PurgeAPIRequestIPs, PurgeRateLimitIPs, PurgeCleanupRuns, PurgeLedgerDeleted, PurgeAccountDeletes, PurgeAssistantUsage}
 }
 
 func purgeSQL(r purgeRule) string {

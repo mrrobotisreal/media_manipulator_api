@@ -627,6 +627,9 @@ type Config struct {
 	// VideoSummary is the MM74 video summary configuration (video_summary.go).
 	VideoSummary VideoSummaryConfig
 
+	// Assistant is Medi's configuration (MM104, assistant.go).
+	Assistant AssistantConfig
+
 	// DR AI Chat Test Lab (/dr/demos/chat-lab) — a ChatGPT-style chat backed by
 	// OpenRouter, called from THIS API (never from the Next.js layer) so the key
 	// stays on the home server and every request passes RequireDoubleRavenAuth.
@@ -1104,6 +1107,9 @@ func Load() *Config {
 
 		// Video summary (MM74).
 		VideoSummary: loadVideoSummaryConfig(),
+
+		// Medi (MM104).
+		Assistant: loadAssistantConfig(),
 
 		// DR AI Chat Test Lab (see struct doc). The key is the one true secret
 		// here — never log or echo it.

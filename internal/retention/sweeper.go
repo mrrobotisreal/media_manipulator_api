@@ -71,6 +71,7 @@ type SweepStore interface {
 	DeleteVectorProjectRows(ctx context.Context, projectID string) ([]string, error)
 	DeletePhotoProjectRows(ctx context.Context, projectID string) error
 	DeletePhotoPresetRow(ctx context.Context, presetID string) error
+	DeleteAssistantConversationRow(ctx context.Context, conversationID string) error
 	DeleteVoiceRow(ctx context.Context, voiceID string) ([]string, error)
 	AnonymizeJob(ctx context.Context, jobID string) error
 	JobHasLiveRows(ctx context.Context, jobID string) (bool, error)
@@ -338,6 +339,8 @@ func (s *Sweeper) processBatch(ctx context.Context, rows []telemetry.LedgerRow, 
 			s.finish(ctx, row, res, s.deletePhotoProject(ctx, row))
 		case KindPhotoPreset:
 			s.finish(ctx, row, res, s.deletePhotoPreset(ctx, row))
+		case KindAssistantConversation:
+			s.finish(ctx, row, res, s.deleteAssistantConversation(ctx, row))
 		case KindVoice:
 			s.finish(ctx, row, res, s.deleteVoice(ctx, row))
 		case KindJobRow:
@@ -858,6 +861,16 @@ func (s *Sweeper) deletePhotoPreset(ctx context.Context, row telemetry.LedgerRow
 		return fail(fmt.Errorf("delete photo preset row: %w", err))
 	}
 	return outcome{done: true, bytes: size, files: 1}
+}
+
+// deleteAssistantConversation removes a Medi conversation (MM104): one row,
+// messages and feedback cascade. No file or object exists for it (frames are
+// never stored). Idempotent.
+func (s *Sweeper) deleteAssistantConversation(ctx context.Context, row telemetry.LedgerRow) outcome {
+	if err := s.store.DeleteAssistantConversationRow(ctx, row.Locator); err != nil {
+		return fail(fmt.Errorf("delete assistant conversation row: %w", err))
+	}
+	return outcome{done: true}
 }
 
 // deleteVoice removes a saved voice (MM77): the mm_voices row first, then its

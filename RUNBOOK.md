@@ -6,7 +6,7 @@ briefly so you can compare against them, but the meat is failure modes and
 debug commands.
 
 > **Owner:** CreaTV Ltd. — single-host deployment on a Linux server with two
-> NVIDIA GPUs (RTX 5060 Ti at index 0, RTX 5080 at index 1) and a local
+> NVIDIA GPUs (two RTX 5080 16 GB, index 0 and 1; `nvidia-smi -L` on 2026-11-04) and a local
 > Ollama install. Repo:
 > `Website/Frontend/media_manipulator/media_manipulator_api/`.
 
@@ -35,6 +35,7 @@ debug commands.
    - [7.12 Motion / vector (MM43)](#712-motion--vector-mm43)
    - [7.14 Video summary (MM74)](#714-video-summary-mm74)
    - [7.15 Aperture projects (MM95)](#715-aperture-projects-mm95)
+   - [7.16 Medi assistant (MM104)](#716-medi-assistant-mm104)
 8. [GPU scheduling](#8-gpu-scheduling)
 9. [External dependencies](#9-external-dependencies)
 10. [Common incidents and recovery](#10-common-incidents-and-recovery)
@@ -1203,6 +1204,43 @@ The pins above are the versions the script was verified with on the MacBook (Pyt
 
 ---
 
+### 4.18 Medi assistant (MM104)
+
+Medi (code name `assistant`, ADR-0018, design `docs/design/MEDI_ASSISTANT.md`) is the site guide and editing copilot, on hosted Claude models through OpenRouter. It ships **dark**: with `ASSISTANT_ENABLED` unset every `/api/assistant/*` route answers 404 except `GET /api/assistant/capabilities`, which answers `{"enabled":false}`. It never uses a GPU or Ollama.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `ASSISTANT_ENABLED` | `false` | The kill switch. `false`: 404 everywhere but capabilities. |
+| `ASSISTANT_OPENROUTER_API_KEY` | (unset) | Medi's own OpenRouter key. Unset = Medi off whatever `ASSISTANT_ENABLED` says (a boot warning says so). Never falls back to `OPENROUTER_API_KEY` (the DR chat lab's). Never log or paste it. |
+| `ASSISTANT_OPERATOR_ONLY` | `false` | `true`: only the operator tier sees `enabled:true` (MM106 evals before launch). |
+| `ASSISTANT_GUIDE_ENABLED` | `true` | `false`: guide messages 404. |
+| `ASSISTANT_COPILOT_SURFACES` | `photo,studio,vector` | Copilot surfaces that answer. `apply_edits` is offered on a surface only once its op schema (`internal/assistant/ops/schema/<surface>.json`, MM108–MM110) is in the build. |
+| `ASSISTANT_MODEL_GUIDE` / `_COPILOT` / `_PLAN` / `_TITLE` | `anthropic/claude-haiku-5.5` / `anthropic/claude-sonnet-5.5` / `anthropic/claude-opus-5.5` / `anthropic/claude-haiku-5.5` | OpenRouter slugs, confirmed against the live catalog 2026-11-04. Effort low / medium / high; `temperature`/`top_p` are never sent. |
+| `ASSISTANT_MAX_TOKENS_GUIDE` / `_COPILOT` / `_PLAN` | `2048` / `8192` / `32768` | Output cap per call. Above the design's 1024/4096/8192 because OpenRouter turns `reasoning.effort` into a thinking budget that is a share of `max_tokens` (low 20 %, medium 50 %, high 80 %, floor 1024). |
+| `ASSISTANT_PROVIDER_ORDER` | `anthropic` | `provider.order`, sent with `allow_fallbacks:false` and `data_collection:"deny"`, so text and frames go to OpenRouter and Anthropic only. |
+| `ASSISTANT_ATTRIBUTION_URL` | `https://media-manipulator.com` | `HTTP-Referer`; the `X-OpenRouter-Title` is "Media Manipulator" (the DR chat lab keeps "Double Raven Chat Lab"). |
+| `ASSISTANT_DAILY_SPEND_CAP_USD` | `10` | Today's UTC sum of `assistant_usage_events.cost_usd` (re-read every 30 s) plus in-flight reservations. At the cap: copilot `503 assistant_paused`, guide answers from retrieval only. Resets 00:00 UTC. |
+| `ASSISTANT_TOOL_MAX_ROUNDS` | `4` | Upstream rounds per request (server tools `search_help`/`get_recipe`/`get_tool_page`). Past it: `error {code:"tool_limit"}`. |
+| `ASSISTANT_MAX_EDIT_ROUNDS` | `2` | `apply_edits` calls per turn (the verify loop). |
+| `ASSISTANT_PLAN_TURN_COST` | `3` | `assistant_turns` units a "Plan my edit" turn spends. |
+| `ASSISTANT_MAX_FRAME_BYTES` | `307200` | Preview JPEG cap (magic-byte checked). Frames go upstream only and are never stored or logged. |
+| `TIER_<FREE\|PREMIUM\|PRO>_ASSISTANT_TURNS_PER_DAY` | `5` / `50` / `150` | Copilot turns per day (metric `assistant_turns`, `/api/tiers` field `assistantTurns`). **Proposed numbers** (design §11 Q3). Anonymous is always 0 (copilot needs an account); operator uncounted. |
+| `RATE_LIMIT_ASSISTANT_GUIDE_PER_SESSION_PER_HOUR` / `_PER_IP_PER_HOUR` / `_PER_USER_PER_HOUR` | `20` / `40` / `60` | Bucket `assistant_guide`: anonymous per session + IP, signed in per account. |
+| `RATE_LIMIT_ASSISTANT_COPILOT_PER_USER_PER_HOUR` | `60` | Bucket `assistant_copilot` (a burst guard; the daily metric is the real limit). Operators are exempt from both buckets. |
+
+**Charging.** `POST /api/assistant/chat` is a `DeferQuota` route. Guide messages, `editResult` continuations and the operator spend nothing; an anonymous copilot message is `401 sign_in_required` before any charge; a copilot message spends one `assistant_turns`, a plan three (refused with `429 quota_exceeded {needed}` before counting when it does not fit). Every unit is refunded when the upstream fails before anything reached the user.
+
+**Database:** run `go run ./internal/migrations up` for `20261104001_assistant` (tables `assistant_conversations`, `assistant_messages`, `assistant_message_feedback`, `assistant_usage_events`; metric `assistant_turns`; ledger kind `assistant_conversation`) BEFORE deploying this build. Usage rows are purged after 13 months (purge rule `assistant_usage`).
+
+#### OpenRouter key (Mitch, once)
+
+1. openrouter.ai → **Settings → Keys** → **Create key**, name "Media Manipulator Medi".
+2. Set a **credit limit** on the key (the hard backstop behind the $10/day cap; for example $300 a month, or a daily limit of $10–15).
+3. Put it in the API's server env as `ASSISTANT_OPENROUTER_API_KEY=...` (never paste it into a chat, a ticket or a commit) and restart the API.
+4. Leave `ASSISTANT_ENABLED` unset until MM107's legal copy is live; for the MM106 evals set `ASSISTANT_ENABLED=true` + `ASSISTANT_OPERATOR_ONLY=true`.
+
+---
+
 ## 5. HTTP API surface
 
 All routes live under `/api/` except `/healthz`.
@@ -2142,6 +2180,20 @@ Design `docs/design/PHOTO_EDITOR.md` §6, ADR-0017. "Aperture" is the brand; eve
 - **Retention.** One ledger row per preset, kind `photo_preset`, locator = `project_id` = the preset id, written with `keep_with_account` (`expires_at` = the 9999 sentinel): presets are settings and never expire by time; they are excluded from window re-stamps and the shrink preview. The sweeper removes `<PHOTO_DIR>/presets/<ownerUserId>/<id>.png` (both segments must be safe) then the row. `DELETE`, account delete (`DeleteUserProjects` → `deleteUserPhotoPresets`, the `mm_users` cascade as backstop) and the account export (`presets.json`, with layers, no thumbnails) all use the same rows. The orphan walker skips `PHOTO_DIR/presets`.
 - **Playbook.** Cap questions: count with `SELECT owner_user_id, count(*) FROM photo_presets WHERE deleted_at IS NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 20;` and change `TIER_<T>_PHOTO_PRESETS`; lowering a cap never deletes presets, it only blocks new ones. A thumbnail that is missing on disk is a 404 on the GET and nothing else. To drop everything of one user by hand, delete the user's presets rows and `rm -r <PHOTO_DIR>/presets/<userId>`.
 - **Smoke curls** (signed in, `$T` = Firebase ID token): `curl -s -H "Authorization: Bearer $T" $API/api/photo/presets`; `curl -s -X POST -H "Authorization: Bearer $T" -H 'Content-Type: application/json' -d '{"name":"Smoke","layers":[{"id":"a","type":"exposure","params":{"ev":0.5}}]}' $API/api/photo/presets` (201, note `id`); `curl -s -X PUT -H "Authorization: Bearer $T" -H 'If-Match: 1' -d '{"name":"Smoke 2"}' $API/api/photo/presets/$ID` (200, revision 2); `curl -s -X DELETE -H "Authorization: Bearer $T" $API/api/photo/presets/$ID`; anonymous `curl -s -o /dev/null -w '%{http_code}' $API/api/photo/presets` must print 401.
+
+### 7.16 Medi assistant (MM104)
+
+Wire format (SSE over POST, `data: {json}\n\n`, `: ping` every 15 s): `meta {conversationId|null, turnId, model}` → `delta {text}` / `tool {name, status}` → `edits {callId, summary, ops}` / `action {callId, kind, label, params}` / `ask {callId, question, choices}` → `usage {inputTokens, outputTokens, cachedTokens, costUsd}` → `done {awaiting?:"edit_result", messageId?}`; any failure after `meta` ends with `error {code, message}`.
+
+| Symptom | Check | Fix |
+|---|---|---|
+| Capabilities say `enabled:false` | `journalctl -u media-manipulator-api.service \| grep assistant` for "ASSISTANT_OPENROUTER_API_KEY is not" | Set `ASSISTANT_ENABLED=true` **and** the key; with `ASSISTANT_OPERATOR_ONLY=true` only the operator sees it. |
+| Every chat is `error {code:"upstream"}` | Log line `assistant: upstream failed` (the HTTP status and OpenRouter's message are there; never shown to users) | 401: key wrong/revoked. 402: the key's credit limit is spent. 404 "No endpoints found": `provider.order` + `data_collection:"deny"` left no provider for the model; check the model on openrouter.ai and `ASSISTANT_PROVIDER_ORDER`. Units were refunded. |
+| Copilot `503 assistant_paused`, guide gives "short break" answers | `SELECT sum(cost_usd) FROM assistant_usage_events WHERE created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';` | Expected at the cap (default $10/day); resets 00:00 UTC. Raise `ASSISTANT_DAILY_SPEND_CAP_USD` only deliberately. |
+| `error {code:"invalid_ops"}` | The model's ops failed the surface's op schema twice | A prompt/recipe gap (MM106 evals); nothing reached the document, the unit was refunded. |
+| `error {code:"tool_limit"}` | The model kept calling `search_help` | Usually a knowledge gap (MM105); `ASSISTANT_TOOL_MAX_ROUNDS` bounds it. |
+| Low cache hit (`cached_tokens` ≈ 0) | `SELECT surface, sum(cached_tokens)::float / nullif(sum(input_tokens),0) FROM assistant_usage_events WHERE created_at > now() - interval '1 day' GROUP BY 1;` | Block 1 (persona + capsule) must stay byte-stable; it is only cached above Anthropic's minimum prompt length, so the guide's small MM104 prompt is not cached until MM105's capsules land. |
+| `409 stale_edit_result` | The client sent an `editResult` for an old or answered call | Client bug (MM107/MM108); the turn is already closed. |
 
 ### 7.x Retention ledger and user retention setting (MM22)
 

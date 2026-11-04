@@ -116,3 +116,20 @@ _Avoid_: "lease" for this (a `gpu.Manager` lease is audit/metrics only and never
 **Background priority** (MM94):
 `GPUPriorityBackground` (-10), below `GPUPriorityStandard` (0) and `GPUPriorityPremium` (10): work no user waits on, today only the upload's product-intelligence **analysis**. A background waiter stands aside for every queued user job on one of its cards, never ages, and gives up after `ANALYSIS_GPU_MAX_WAIT_SECONDS` (default 120; the analysis is then dropped, not retried). A plain conversion's analysis is enqueued at upload; an AI-tool job's only after the job completed.
 _Avoid_: using it for anything a user is waiting on.
+
+**Medi** (MM104, ADR-0018):
+The user-facing brand of the Media Manipulator assistant; the code identifier is **`assistant`** everywhere (`internal/assistant`, `/api/assistant/*`, `assistant_*` tables, metric `assistant_turns`), the same split as Darkroom/`studio`, Motion/`vector`, Aperture/`photo`. Hosted Claude models through OpenRouter on Medi's own key (`ASSISTANT_OPENROUTER_API_KEY`); no GPU, no Ollama.
+_Avoid_: "medi" in Go identifiers, routes or tables; "chatbot".
+
+**Guide / copilot** (MM104):
+The two Medi surfaces. The **guide** (`surface: guide`) answers on public pages, is free for everyone (rate-limited) and can only show buttons (`navigate`, `open_tool`). A **copilot** (`surface: studio | vector | photo`) runs inside an editor, needs an account, spends `assistant_turns`, and can edit (`apply_edits`) or offer a button (`suggest_action`).
+
+**Turn** (MM104):
+One user message and everything the server streams for it, identified by a `turnId`. An **editResult continuation** (the client reporting an applied edit, optionally with an after-frame) continues the same turn and is never charged; at most `ASSISTANT_MAX_EDIT_ROUNDS` edits per turn. "Plan my edit" is a turn on the plan model that costs `ASSISTANT_PLAN_TURN_COST` units.
+
+**Op** (MM104, vocabularies MM108–MM110):
+One entry of an `apply_edits` call: a closed, per-editor vocabulary defined in the UI's Zod schemas and byte-copied as JSON Schema into `internal/assistant/ops/schema/<surface>.json`. The server validates every call before streaming it (one retry with a tool error, then `invalid_ops`); the client applies all ops or none as one undo step. The model never writes a document.
+
+**Spend cap** (MM104):
+`ASSISTANT_DAILY_SPEND_CAP_USD` (default 10): today's UTC sum of `assistant_usage_events.cost_usd` plus in-flight worst-case reservations. At the cap the copilot answers `503 assistant_paused` (no charge) and the guide answers from retrieval only, without a model call. The OpenRouter key's own credit limit is the hard backstop.
+_Avoid_: confusing it with the per-user `assistant_turns` allowance.

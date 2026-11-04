@@ -24,7 +24,7 @@ import (
 //	200 application/zip  attachment "mm-data-export-<YYYY-MM-DD>.zip"
 //	429 {"error":"export_rate_limited","retryAfterSeconds":N}   > 3 per hour per user
 //
-// Members: history.json, projects.json, files.json, account.json, README.txt, and
+// Members: history.json, projects.json, files.json, assistant.json, account.json, README.txt, and
 // metadata-reports/<jobId>.json for each job whose cached metadata still exists.
 // The zip is written straight to the response (archive/zip over a streaming
 // writer, no temp file); only metadata is exported: never media bytes, storage
@@ -57,6 +57,12 @@ type VoiceExportStore interface {
 // Optional: a store that does not implement it exports an empty presets.json.
 type PresetExportStore interface {
 	ExportPhotoPresets(ctx context.Context, userID string) ([]telemetry.PhotoPreset, error)
+}
+
+// AssistantExportStore lists Medi conversations for the export (MM104).
+// Optional: a store that does not implement it exports an empty assistant.json.
+type AssistantExportStore interface {
+	ExportAssistantConversations(ctx context.Context, userID string) ([]telemetry.AssistantExportConversation, error)
 }
 
 // PushExportStore lists push-token metadata for the export (MA23). Optional.
@@ -199,6 +205,12 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 							presets, serr = ps.ExportPhotoPresets(ctx, u.ID)
 						}
 					}
+					var convs []telemetry.AssistantExportConversation
+					if serr == nil {
+						if as, ok := d.Store.(AssistantExportStore); ok {
+							convs, serr = as.ExportAssistantConversations(ctx, u.ID)
+						}
+					}
 					var pushMeta []telemetry.PushTokenMeta
 					if serr == nil {
 						if ps, ok := d.Store.(PushExportStore); ok {
@@ -208,7 +220,7 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 					if serr != nil {
 						err = serr
 					} else {
-						h.writeExport(c, u, settings, jobs, projects, files, metaJobs, voices, presets, pushMeta, now)
+						h.writeExport(c, u, settings, jobs, projects, files, metaJobs, voices, presets, convs, pushMeta, now)
 						return
 					}
 				}
@@ -221,7 +233,8 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 
 func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *telemetry.UserSettings,
 	jobs []telemetry.ExportJob, projects []telemetry.ExportProject, files []telemetry.ExportFile, metaJobs []string,
-	voices []telemetry.ExportVoice, presets []telemetry.PhotoPreset, pushMeta []telemetry.PushTokenMeta, now time.Time) {
+	voices []telemetry.ExportVoice, presets []telemetry.PhotoPreset, convs []telemetry.AssistantExportConversation,
+	pushMeta []telemetry.PushTokenMeta, now time.Time) {
 	d := h.export
 
 	history := make([]map[string]any, 0, len(jobs))
@@ -283,6 +296,23 @@ func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *tel
 		}
 		presetList = append(presetList, entry)
 	}
+	// MM104: Medi conversations with their messages (text, tool calls, op
+	// summaries). Frames were never stored, so none can be exported.
+	convList := make([]map[string]any, 0, len(convs))
+	for _, cv := range convs {
+		msgs := make([]map[string]any, 0, len(cv.Messages))
+		for _, m := range cv.Messages {
+			entry := map[string]any{"seq": m.Seq, "role": m.Role, "status": m.Status, "model": nilIfEmpty(m.Model), "createdAt": rfc(m.CreatedAt)}
+			if len(m.Content) > 0 && json.Valid(m.Content) {
+				entry["content"] = json.RawMessage(m.Content)
+			}
+			msgs = append(msgs, entry)
+		}
+		convList = append(convList, map[string]any{
+			"id": cv.ID, "surface": cv.Surface, "projectKind": nilIfEmpty(cv.ProjectKind), "projectId": nilIfEmpty(cv.ProjectID),
+			"title": cv.Title, "createdAt": rfc(cv.CreatedAt), "updatedAt": rfc(cv.UpdatedAt), "messages": msgs,
+		})
+	}
 	// MA23: push registrations, metadata only. The token is a credential for the
 	// device's push channel and is never exported.
 	pushList := make([]map[string]any, 0, len(pushMeta))
@@ -339,6 +369,9 @@ func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *tel
 	}}, {"presets.json", map[string]any{
 		"note":    "Your saved Aperture presets: name, category, dates and the adjustment layers each one applies. Thumbnails are not included.",
 		"presets": presetList,
+	}}, {"assistant.json", map[string]any{
+		"note":          "Your Medi conversations: every message you sent and every answer, with the edits Medi made. Preview images sent to Medi are never stored, so none are included.",
+		"conversations": convList,
 	}}, {"account.json", account}} {
 		if err := put(m.name, m.v); err != nil {
 			fail(err)
@@ -424,6 +457,8 @@ voices.json      Your saved voices: name, kind (cloned | designed), language, th
                  gave and when. No audio is included.
 presets.json     Your saved Aperture presets: name, category, dates and the adjustments each
                  one applies. Thumbnails are not included.
+assistant.json   Your Medi conversations: messages, answers and the edits Medi made. Preview
+                 images sent to Medi are never stored, so none are included.
 metadata-reports Metadata reports we keep for you (one document per job), if you keep them.
 account.json     Your profile, plan, retention settings and the phones registered for push
                  notifications (platform, app version, dates; never the push token itself).

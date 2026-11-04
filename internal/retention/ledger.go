@@ -40,6 +40,10 @@ const (
 	// sweeper removes the thumbnail <PhotoDir>/presets/<owner>/<id>.png, then the
 	// photo_presets row.
 	KindPhotoPreset = telemetry.RetainedPhotoPreset
+	// KindAssistantConversation is a signed-in Medi conversation (MM104):
+	// locator = project_id = the conversation id, under the owner's retention
+	// window. The sweeper hard-deletes the row (messages and feedback cascade).
+	KindAssistantConversation = telemetry.RetainedAssistantConversation
 )
 
 // Store is the slice of *telemetry.Store the ledger needs. Tests pass a fake.
