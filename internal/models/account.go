@@ -55,6 +55,10 @@ const (
 	// POST /api/vector/exports and /api/vector/vectorize inside the same
 	// transaction that writes the vector_exports row.
 	MetricVectorExport = "vector_export"
+	// MetricAssistantTurns is the Medi copilot allowance (MM104): one unit per
+	// accepted copilot message (ASSISTANT_PLAN_TURN_COST for "Plan my edit").
+	// Guide messages and editResult continuations are never charged.
+	MetricAssistantTurns = "assistant_turns"
 )
 
 // UsageCounter is one (subject, metric, day) row of the quota ledger.

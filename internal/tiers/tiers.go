@@ -118,6 +118,11 @@ type Limits struct {
 	// no quota is charged.
 	PhotoPresets int `json:"photoPresets"`
 
+	// AssistantTurns (MM104) is the daily Medi copilot allowance, metric
+	// assistant_turns (TIER_<T>_ASSISTANT_TURNS_PER_DAY; anonymous 0 = sign-in
+	// required, -1 unlimited). The guide is free and never counted.
+	AssistantTurns int `json:"assistantTurns"`
+
 	// Voices (MM77, design VOICES.md §4.3). Generations draw from AIOpsPerDay
 	// and the shifter from OpsPerDay; these only cap size and saved voices.
 	// VoicesSaved is the saved-voice cap (-1 unlimited; anonymous 0).
@@ -308,6 +313,18 @@ func New(cfg *config.Config) *Registry {
 		r.limits[t] = l
 	}
 
+	// Medi (MM104): copilot turns per day. Anonymous is always 0 (sign-in).
+	for t, n := range map[Tier]int{
+		TierAnonymous: 0,
+		TierFree:      cfg.Assistant.TierFreeTurns,
+		TierPremium:   cfg.Assistant.TierPremiumTurns,
+		TierPro:       cfg.Assistant.TierProTurns,
+	} {
+		l := r.limits[t]
+		l.AssistantTurns = n
+		r.limits[t] = l
+	}
+
 	// Voices (MM77): one block for all four public rows. Anonymous can never
 	// save a voice (no owner for the consent record), whatever the env says.
 	vt := cfg.VoicesTiers
@@ -340,6 +357,8 @@ func New(cfg *config.Config) *Registry {
 	// Aperture (MM95): derived from Pro, no cap on saved projects.
 	operator.PhotoProjects = Unlimited
 	operator.PhotoPresets = Unlimited
+	// Medi (MM104): the operator is never counted.
+	operator.AssistantTurns = Unlimited
 	operator.VectorMaxDurationMs = 0
 	operator.VectorVideo = VectorVideo{
 		MaxHeight: DeploymentMaxOutputHeight, MaxFps: DeploymentMaxVectorFps, MaxSeconds: cfg.MaxVideoDurationSeconds,

@@ -191,6 +191,9 @@ func limitFor(l tiers.Limits, metric string) int64 {
 		return int64(l.ExportsPerDay)
 	case models.MetricAIOps:
 		return int64(l.AIOpsPerDay)
+	case models.MetricAssistantTurns:
+		// Medi copilot turns (MM104), charged through quotaRoutes.
+		return int64(l.AssistantTurns)
 	case models.MetricVectorExport:
 		// Motion's own allowance (TIER_*_VECTOR_EXPORTS_PER_DAY). Counted by the
 		// vector handler itself, transactionally with the vector_exports row,

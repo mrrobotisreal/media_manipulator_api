@@ -413,6 +413,11 @@ func main() {
 	photoHandler.SetDeletionMetric(func(scope string) { metricsReg.DataDeleted(scope) })
 	photoHandler.SetAnalyticsEmitter(analyticsEmitter) // MM101 server_photo_export_counted
 
+	// MM104 Medi: ships dark (ASSISTANT_ENABLED=false; no key = off). Its
+	// conversation deletes use the same user-delete sweeper as the others.
+	assistantHandler = newAssistantHandler(ctx, cfg, store, tierRegistry,
+		newUserDeleteSweeper(cfg, store, jobManager, s3Client, metricsReg, logging), logging)
+
 	router := setupRouter(cfg, conversionHandler, studioHandler, vectorHandler, videoRestoreHandler, imageRestoreHandler, documentScanHandler, accountHandler, tierRegistry, restoreAuthVerifier, firebaseVerifier, drVerifier, drDocsHandler, drCommentsHandler, drFeedbackHandler, drChatLabHandler, drTasksHandler, drDesktopHandler, store, enricher, limiter, metricsReg, analyticsEmitter)
 
 	server := &http.Server{
@@ -654,6 +659,11 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// Video summary (MM74): /summarize/capabilities, /summarize/start (ai_ops,
 		// sign-in), /summarize/:jobId/result. Nil (tests) mounts nothing.
 		handlers.RegisterVideoSummaryRoutes(api, conversionHandler.VideoSummary())
+		// Medi (MM104): /assistant/capabilities (always), chat (SSE over POST),
+		// conversations, feedback. The chat route is a DeferQuota route: the
+		// handler spends assistant_turns on copilot messages only. nil (tests)
+		// mounts nothing.
+		handlers.RegisterAssistantRoutes(api, assistantHandler)
 
 		// Double Raven partner portal document API. ALWAYS Firebase-gated and
 		// fail-closed via RequireDoubleRavenAuth (nil verifier -> 503; bad/missing
@@ -794,6 +804,13 @@ var quotaRoutes = []quotaRoute{
 	// MM79: Darkroom "Generate voiceover" is one voice_tts render = one ai_ops,
 	// refunded on refusal / job failure like every voices route.
 	{metric: models.MetricAIOps, matches: handlers.IsStudioVoiceoverPath},
+
+	// Medi (MM104): the handler decides after parsing the body. A guide message,
+	// an editResult continuation and the operator spend nothing; a copilot
+	// message spends one assistant_turns unit, "Plan my edit"
+	// ASSISTANT_PLAN_TURN_COST units (SpendDeferredQuotaN); refunded when the
+	// upstream fails before any content was streamed.
+	{metric: quotaMetricByJob, path: handlers.AssistantChatPath},
 }
 
 // isResultMP3Path matches POST /api/download/:jobId/mp3 (MM81).
@@ -1068,6 +1085,8 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 	// downloads' abuse surface: per IP, no session bucket (the viewer has none),
 	// and never charged to a quota.
 	shareGuard := guard("share_public", "share", 0, cfg.RateLimitSharePerIPPerHour)
+	// MM104: Medi's two buckets depend on the body's surface.
+	assistantGuard := assistantBuckets(cfg, guard)
 	return func(c *gin.Context) {
 		if c.Request.Method == http.MethodGet && strings.HasPrefix(c.Request.URL.Path, "/api/share/") {
 			shareGuard(c)
@@ -1078,6 +1097,10 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 			return
 		}
 		path := c.Request.URL.Path
+		if path == handlers.AssistantChatPath {
+			assistantGuard(c)
+			return
+		}
 		for _, r := range rules {
 			matched := r.path != "" && path == r.path
 			if r.matches != nil {
