@@ -1230,6 +1230,8 @@ Medi (code name `assistant`, ADR-0018, design `docs/design/MEDI_ASSISTANT.md`) i
 
 **Charging.** `POST /api/assistant/chat` is a `DeferQuota` route. Guide messages, `editResult` continuations and the operator spend nothing; an anonymous copilot message is `401 sign_in_required` before any charge; a copilot message spends one `assistant_turns`, a plan three (refused with `429 quota_exceeded {needed}` before counting when it does not fit). Every unit is refunded when the upstream fails before anything reached the user.
 
+**Analytics (MM107).** Every finished chat turn emits `server_assistant_turn_counted {surface, model_tier, outcome, cost_usd_micros, cost_bucket, cached_ratio_bucket}` (tier in the context) through `ANALYTICS_*`. It needs the caller's `X-MM-Visitor-ID`/`X-MM-Session-ID` (consent-gated), so it is a lower bound; `assistant_usage_events` stays the spend record. Deploy the analytics catalog (MM107) before this build. The spend-cap answer and the guide's out-of-scope line are localized for all 18 site locales (`internal/assistant/static.go`).
+
 **Database:** run `go run ./internal/migrations up` for `20261104001_assistant` (tables `assistant_conversations`, `assistant_messages`, `assistant_message_feedback`, `assistant_usage_events`; metric `assistant_turns`; ledger kind `assistant_conversation`) BEFORE deploying this build. Usage rows are purged after 13 months (purge rule `assistant_usage`).
 
 #### OpenRouter key (Mitch, once)
