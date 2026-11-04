@@ -137,6 +137,13 @@ _Avoid_: hand-editing it; "the prompt" for what is retrieved per message.
 **Capsule** (MM105):
 The byte-stable, per-surface text appended to the persona in cached system block 1: the guide's site map + plan overview, or an editor's full parameter vocabulary (+ its top recipes from MM106). No numbers, ids or dates, so the provider's prompt cache keeps hitting.
 
+**Recipe** (MM106):
+A hand-written professional technique for one editor (or a cross-tool workflow): when to use it, what a pro does and why, a worked `apply_edits` op list in the editor's vocabulary, and how to adjust it ("too much", "warmer"). Written in the UI (`content/medi/recipes/`), exported to `knowledge/recipes/<editor>/<id>.md` (kind `recipe`), retrieved on its editor's copilot (workflows everywhere), the ten best-covering ones listed in each copilot capsule; `get_recipe` returns the full text.
+_Avoid_: "preset" (an Aperture look applied by `apply_preset` is a preset; a recipe may use one).
+
+**Eval case** (MM106):
+One YAML entry in `internal/assistant/evals/cases/`: a surface, locale, message, optional fixture document and preview frame, and code-graded expectations (action buttons, required/forbidden text, language, off-topic, ask-before-edit, and op checks like `has_op(grey_except)` or `title_in_region(lower30)`). Run by `cmd/assistant-eval` against the real models; never graded by a model.
+
 **Scope gate** (MM105):
 The guide's cheap pre-model check (`InScope`): a message passes when it names a doc keyword, an alias, a media-craft or site term (in any of the 18 languages), small talk, or the current page; otherwise the localized out-of-scope line is returned with no model call. Copilots are never gated.
 

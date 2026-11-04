@@ -1,0 +1,109 @@
+# Motion copilot cases. `requires: vector` until MM110 lands the vector op schema.
+- id: vector-lower-third
+  surface: vector
+  requires: vector
+  fixture_doc: vector/blank.json
+  message: "Make a lower-third that slides in with the name Jo Park"
+  expect:
+    ops: ["title_in_region(lower30)", "keyframe_within(transform.x, 1000) || has_op(template)"]
+- id: vector-text-pop
+  surface: vector
+  requires: vector
+  fixture_doc: vector/text.json
+  message: "Make the headline pop in"
+  expect:
+    ops: ["keyframe_within(transform.scaleX, 800) || keyframe_within(opacity, 800) || has_op(template)"]
+- id: vector-logo-draw
+  surface: vector
+  requires: vector
+  fixture_doc: vector/text.json
+  message: "Draw the logo outline on"
+  expect:
+    ops: ["field(apply_animator, span.end) > 0 || has_op(template)"]
+- id: vector-fade-in
+  surface: vector
+  requires: vector
+  fixture_doc: vector/text.json
+  message: "Fade the headline in over half a second"
+  expect:
+    ops: ["keyframe_within(opacity, 700)"]
+- id: vector-spin
+  surface: vector
+  requires: vector
+  fixture_doc: vector/text.json
+  message: "Spin the logo forever"
+  expect:
+    ops: ["has_op(animate)", "has_op(set_loop) || has_op(animate)"]
+- id: vector-bullets
+  surface: vector
+  requires: vector
+  fixture_doc: vector/blank.json
+  message: "Reveal three bullet points one by one: Fast, Simple, Free"
+  expect:
+    ops: ["has_op(template) || has_op(add_text)"]
+- id: vector-counter
+  surface: vector
+  requires: vector
+  fixture_doc: vector/blank.json
+  message: "Animate a counter up to 5000"
+  expect:
+    ops: ["has_op(template)"]
+- id: vector-badge
+  surface: vector
+  requires: vector
+  fixture_doc: vector/blank.json
+  message: "Add a bouncing SALE badge"
+  expect:
+    ops: ["has_op(template) || has_op(animate)"]
+- id: vector-slide-left
+  surface: vector
+  requires: vector
+  fixture_doc: vector/text.json
+  message: "Slide the headline in from the left"
+  expect:
+    ops: ["keyframe_within(transform.x, 1000)"]
+- id: vector-duration
+  surface: vector
+  requires: vector
+  fixture_doc: vector/text.json
+  message: "Make the whole animation 6 seconds long"
+  expect:
+    ops: ["field(set_duration, ms) ≈ 6000"]
+- id: vector-color
+  surface: vector
+  requires: vector
+  fixture_doc: vector/text.json
+  message: "Make the headline orange"
+  expect:
+    ops: ["has_op(update_layer)"]
+- id: vector-shimmer
+  surface: vector
+  requires: vector
+  fixture_doc: vector/text.json
+  message: "Add a shimmer to the headline"
+  expect:
+    any_of: ["gradient", "shimmer"]
+- id: vector-export-advice
+  surface: vector
+  requires: vector
+  fixture_doc: vector/text.json
+  message: "How should I export this for my React app?"
+  expect:
+    any_of: ["React", "Lottie"]
+    no_edits: true
+- id: vector-blur-in
+  surface: vector
+  requires: vector
+  fixture_doc: vector/text.json
+  message: "Blur the headline in"
+  expect:
+    ops: ["field(apply_animator, span.end) > 0 || keyframe_within(filter.blur, 1500)"]
+- id: vector-es-fade
+  surface: vector
+  requires: vector
+  locale: es-ES
+  fixture_doc: vector/text.json
+  message: "Haz que el título aparezca poco a poco"
+  expect:
+    language: es
+    ops: ["keyframe_within(opacity, 2000) || has_op(template)"]
