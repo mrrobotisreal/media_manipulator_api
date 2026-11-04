@@ -31,6 +31,7 @@ type fakeLedgerDB struct {
 	vectors      map[string]string   // vector project id -> thumbnail key ("" = none)
 	photoRows    map[string]bool     // photo project id -> row still present
 	presetRows   map[string]bool     // photo preset id -> row still present (MM103)
+	convRows     map[string]bool     // assistant conversation id -> row still present (MM104)
 	voices       map[string][]string // voice id -> its row's S3 keys (MM77)
 	anonymized   []string
 	parked       []string // locators of parked metadata_report rows
@@ -47,7 +48,7 @@ type fakeRow struct {
 
 func newFakeDB() *fakeLedgerDB {
 	return &fakeLedgerDB{rows: map[string]*fakeRow{}, keepMeta: map[string]bool{}, assets: map[string][]string{},
-		assetProject: map[string]string{}, projects: map[string]bool{}, vectors: map[string]string{}, photoRows: map[string]bool{}, presetRows: map[string]bool{}, voices: map[string][]string{}, failOn: map[string]error{}}
+		assetProject: map[string]string{}, projects: map[string]bool{}, vectors: map[string]string{}, photoRows: map[string]bool{}, presetRows: map[string]bool{}, convRows: map[string]bool{}, voices: map[string][]string{}, failOn: map[string]error{}}
 }
 
 var idSeq int
@@ -343,6 +344,16 @@ func (f *fakeLedgerDB) DeletePhotoPresetRow(_ context.Context, id string) error 
 		return err
 	}
 	delete(f.presetRows, id)
+	return nil
+}
+
+func (f *fakeLedgerDB) DeleteAssistantConversationRow(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.failOn["assistant-row"]; err != nil {
+		return err
+	}
+	delete(f.convRows, id)
 	return nil
 }
 
