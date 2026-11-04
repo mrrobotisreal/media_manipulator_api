@@ -61,21 +61,24 @@ func TestRetrievalAcceptance(t *testing.T) {
 	cases := []struct {
 		surface, q, want string
 		top              int // the doc must be within the first `top` hits
+		// alt is an equally right answer (MM106: a recipe for the ask may
+		// outrank the capability doc it builds on).
+		alt string
 	}{
-		{SurfaceGuide, "how do I make a gif from a video", "tools/convert-video-to-animated-gif", 3},
-		{SurfaceGuide, "remove background", "tools/remove-background-from-image", 3},
-		{SurfacePhoto, "grey except red", "editors/photo/color", 1},
-		{SurfaceStudio, "lower third", "editors/studio/titles", 1},
-		{SurfaceVector, "draw on", "editors/vector/animators", 1},
-		{SurfaceGuide, "сжать видео", "tools/compress-video", 1},
-		{SurfaceGuide, "動画を圧縮したい", "tools/compress-video", 1},
-		{SurfaceGuide, "Hintergrund entfernen", "tools/remove-background-from-image", 1},
-		{SurfaceGuide, "how do I cancel my subscription", "pages/pricing", 3},
-		{SurfaceGuide, "what does premium include", "pages/pricing", 3},
-		{SurfacePhoto, "it's backlit, make it brighter", "editors/photo/light", 3},
-		{SurfaceStudio, "cinematic grade", "editors/studio/effects", 1},
-		{SurfaceVector, "export to lottie", "editors/vector/export", 3},
-		{SurfacePhoto, "vintage film look", "editors/photo/presets", 1},
+		{SurfaceGuide, "how do I make a gif from a video", "tools/convert-video-to-animated-gif", 3, ""},
+		{SurfaceGuide, "remove background", "tools/remove-background-from-image", 3, ""},
+		{SurfacePhoto, "grey except red", "editors/photo/color", 1, "recipes/photo/grey-except-red"},
+		{SurfaceStudio, "lower third", "editors/studio/titles", 1, ""},
+		{SurfaceVector, "draw on", "editors/vector/animators", 1, ""},
+		{SurfaceGuide, "сжать видео", "tools/compress-video", 1, ""},
+		{SurfaceGuide, "動画を圧縮したい", "tools/compress-video", 1, ""},
+		{SurfaceGuide, "Hintergrund entfernen", "tools/remove-background-from-image", 1, ""},
+		{SurfaceGuide, "how do I cancel my subscription", "pages/pricing", 3, ""},
+		{SurfaceGuide, "what does premium include", "pages/pricing", 3, ""},
+		{SurfacePhoto, "it's backlit, make it brighter", "editors/photo/light", 3, ""},
+		{SurfaceStudio, "cinematic grade", "editors/studio/effects", 1, "recipes/studio/manual-cinematic-grade"},
+		{SurfaceVector, "export to lottie", "editors/vector/export", 3, ""},
+		{SurfacePhoto, "vintage film look", "editors/photo/presets", 1, "recipes/photo/film-looks"},
 	}
 	for _, c := range cases {
 		hs := k.Search(c.q, c.surface, 3)
@@ -83,12 +86,12 @@ func TestRetrievalAcceptance(t *testing.T) {
 		t.Logf("%-6s %-38q → %s", c.surface, c.q, strings.Join(got, ", "))
 		found := false
 		for i, id := range got {
-			if id == c.want && i < c.top {
+			if (id == c.want || (c.alt != "" && id == c.alt)) && i < c.top {
 				found = true
 			}
 		}
 		if !found {
-			t.Errorf("%s %q: want %s in top %d, got %v", c.surface, c.q, c.want, c.top, got)
+			t.Errorf("%s %q: want %s (or %q) in top %d, got %v", c.surface, c.q, c.want, c.alt, c.top, got)
 		}
 		for _, h := range hs {
 			if h.Snippet == "" || len([]rune(h.Snippet)) > snippetChars {
@@ -353,5 +356,56 @@ func TestKnowledgeDirIsGenerated(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// MM106: the recipe library is embedded, retrieved on the right surfaces and
+// summarised in each copilot capsule.
+func TestRecipesEmbeddedAndRetrieved(t *testing.T) {
+	k := embedded(t)
+	n := map[string]int{}
+	for _, d := range k.Corpus().Docs {
+		if d.Kind == "recipe" {
+			n[d.Category]++
+		}
+	}
+	t.Logf("recipes: %v", n)
+	if n["photo"] < 25 || n["studio"] < 25 || n["vector"] < 15 || n["workflow"] < 10 {
+		t.Fatalf("recipe counts = %v (want ≥ 25/25/15/10)", n)
+	}
+	cases := []struct{ surface, q, want string }{
+		{SurfacePhoto, "make everything black and white except the red jacket", "recipes/photo/grey-except-red"},
+		{SurfacePhoto, "make it moody", "recipes/photo/moody-dark"},
+		{SurfaceStudio, "duck the music under the voice", "recipes/studio/music-ducking"},
+		{SurfaceStudio, "make it vertical for tiktok", "recipes/studio/vertical-reframe"},
+		{SurfaceVector, "logo reveal", "recipes/vector/logo-draw-on"},
+		{SurfaceGuide, "turn my long video into a short", "recipes/workflow/youtube-short-from-long"},
+	}
+	for _, c := range cases {
+		got := ids(k.Search(c.q, c.surface, 3))
+		t.Logf("%-6s %-55q → %s", c.surface, c.q, strings.Join(got, ", "))
+		if !contains(got, c.want) {
+			t.Errorf("%s %q: want %s in top 3, got %v", c.surface, c.q, c.want, got)
+		}
+	}
+	// Editor recipes stay on their surface; workflows are visible everywhere.
+	for _, h := range k.Search("cinematic grade lower third logo reveal grey except red", SurfaceGuide, 30) {
+		if strings.HasPrefix(h.Doc.ID, "recipes/") && !strings.HasPrefix(h.Doc.ID, "recipes/workflow/") {
+			t.Errorf("guide surfaced an editor recipe %s", h.Doc.ID)
+		}
+	}
+	for _, h := range k.Search("lower third slides in", SurfacePhoto, 30) {
+		if strings.HasPrefix(h.Doc.ID, "recipes/studio/") || strings.HasPrefix(h.Doc.ID, "recipes/vector/") {
+			t.Errorf("photo copilot surfaced %s", h.Doc.ID)
+		}
+	}
+	for _, s := range []string{SurfacePhoto, SurfaceStudio, SurfaceVector} {
+		c := k.Capsule(s)
+		if strings.Count(c, "[recipes/"+s+"/") != 10 {
+			t.Errorf("%s capsule lists %d recipes, want 10", s, strings.Count(c, "[recipes/"+s+"/"))
+		}
+	}
+	if d, ok := k.Get("recipes/photo/grey-except-red"); !ok || !strings.Contains(d.Body, `"op": "grey_except"`) {
+		t.Error("get_recipe returns the full recipe with its op list")
 	}
 }

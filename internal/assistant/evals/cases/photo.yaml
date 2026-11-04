@@ -1,0 +1,113 @@
+# Aperture copilot cases. `requires: photo` until MM108 lands the photo op schema.
+- id: photo-grey-except-red
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  frame: photo/red-jacket.jpg
+  message: "Make everything grey except the red jacket"
+  expect:
+    ops: ["has_op(grey_except) || param(hsl, ranges.0.saturation) <= -50", "mentions_range(red) || has_layer(hsl)"]
+- id: photo-backlit
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  frame: photo/backlit.jpg
+  message: "It's backlit, the person is too dark"
+  expect:
+    ops: ["param(tone, shadows) > 0 || param(exposure, ev) > 0", "op_count <= 6"]
+- id: photo-moody
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  frame: photo/flat-dull.jpg
+  message: "Make it moody"
+  expect:
+    ops: ["param(vibranceSaturation, saturation) < 0 || has_layer(splitTone) || has_layer(vignette)"]
+- id: photo-brighter
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  frame: photo/flat-dull.jpg
+  message: "Brighten it a bit"
+  expect:
+    ops: ["param(exposure, ev) > 0 || param(brightnessContrast, brightness) > 0 || param(tone, shadows) > 0", "op_count <= 3"]
+- id: photo-vintage
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "Give it a vintage film look"
+  expect:
+    ops: ["field(apply_preset, intensity) >= 0 || has_op(apply_preset) || has_layer(grain)"]
+- id: photo-bw
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "Black and white please"
+  expect:
+    ops: ["has_layer(blackWhite) || has_op(apply_preset)"]
+- id: photo-warmer
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "Make it warmer"
+  expect:
+    ops: ["param(whiteBalance, temperature) > 0 || has_layer(photoFilter) || has_op(apply_preset)"]
+- id: photo-cooler-fix-cast
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "Everything looks too yellow"
+  expect:
+    ops: ["param(whiteBalance, temperature) < 0"]
+- id: photo-vignette
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "Add a subtle vignette"
+  expect:
+    ops: ["param(vignette, amount) < 0", "param(vignette, amount) > -60"]
+- id: photo-sharpen
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "It looks a little soft, sharpen it"
+  expect:
+    ops: ["has_layer(sharpen)", "param(sharpen, radius) <= 2"]
+- id: photo-square-crop
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "Crop it square for Instagram"
+  expect:
+    ops: ["has_op(set_geometry)"]
+- id: photo-update-existing
+  surface: photo
+  requires: photo
+  fixture_doc: photo/portrait.json
+  message: "That exposure is too much, tone it down"
+  expect:
+    ops: ["has_op(update_layer)", "no_op(remove_layer) || has_op(update_layer)"]
+- id: photo-heal-suggest
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "Remove the pimple on her chin"
+  expect:
+    actions: [suggest:heal]
+    no_edits: true
+- id: photo-subject-mask-suggest
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "Select just the person exactly and blur the background"
+  expect:
+    any_of: ["subject", "mask"]
+- id: photo-ru-moody
+  surface: photo
+  requires: photo
+  locale: ru-RU
+  fixture_doc: photo/blank.json
+  message: "Сделай фото более тёплым"
+  expect:
+    language: ru
+    ops: ["param(whiteBalance, temperature) > 0 || has_layer(photoFilter) || has_op(apply_preset)"]
