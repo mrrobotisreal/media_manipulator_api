@@ -15,6 +15,9 @@
 --                             ops summaries, digest (<= 2 KB, debugging only)}.
 --                             Frames (preview JPEGs) are NEVER stored here; a
 --                             unit test pins that the handler strips them.
+--                             provider_state holds the opaque upstream
+--                             reasoning_details of a tool-call round, needed to
+--                             continue that turn; never exported or returned.
 --   assistant_message_feedback one up/down per message (upsert).
 --   assistant_usage_events    one row per upstream call (chat, title, summary):
 --                             tokens and cost, NO content. user_id is NULL for
@@ -55,6 +58,7 @@ CREATE TABLE IF NOT EXISTS assistant_messages (
     model           text,
     status          text NOT NULL DEFAULT 'complete' CHECK (status IN ('complete', 'interrupted', 'error')),
     usage           jsonb,
+    provider_state  jsonb,
     created_at      timestamptz NOT NULL DEFAULT now(),
     UNIQUE (conversation_id, seq)
 );

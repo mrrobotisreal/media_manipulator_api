@@ -60,7 +60,10 @@ type AssistantMessage struct {
 	Model          string
 	Status         string
 	Usage          json.RawMessage
-	CreatedAt      time.Time
+	// ProviderState is the opaque upstream continuation data (reasoning_details)
+	// of a tool-call round. Read only by RecentAssistantMessages; never exported.
+	ProviderState json.RawMessage
+	CreatedAt     time.Time
 }
 
 // AssistantMessageInsert appends one message; Seq is assigned by the store.
@@ -72,6 +75,7 @@ type AssistantMessageInsert struct {
 	Model          string
 	Status         string // "" = complete
 	Usage          json.RawMessage
+	ProviderState  json.RawMessage
 }
 
 // AssistantUsageEvent is one assistant_usage_events row: no content, ever.
@@ -121,14 +125,15 @@ ORDER BY updated_at DESC, id LIMIT $4`
 	// concurrent appends can never collide on UNIQUE (conversation_id, seq).
 	assistantMsgLockSQL   = `SELECT pg_advisory_xact_lock(hashtextextended('assistant_messages:' || $1, 0))`
 	assistantMsgInsertSQL = `
-INSERT INTO assistant_messages (conversation_id, seq, turn_id, role, content, model, status, usage)
-SELECT $1::uuid, coalesce(max(seq), 0) + 1, $2::uuid, $3, $4::jsonb, nullif($5, ''), $6, $7::jsonb
+INSERT INTO assistant_messages (conversation_id, seq, turn_id, role, content, model, status, usage, provider_state)
+SELECT $1::uuid, coalesce(max(seq), 0) + 1, $2::uuid, $3, $4::jsonb, nullif($5, ''), $6, $7::jsonb, $8::jsonb
 FROM assistant_messages WHERE conversation_id = $1::uuid
 RETURNING id::text, seq`
 	assistantConvTouchSQL = `UPDATE assistant_conversations SET updated_at = now() WHERE id = $1::uuid`
 
-	// The newest $2 messages, returned oldest first.
-	assistantMsgRecentSQL = `SELECT * FROM (SELECT ` + assistantMsgColumns + `
+	// The newest $2 messages, returned oldest first, with provider_state (the
+	// only read that carries it: it feeds the upstream continuation).
+	assistantMsgRecentSQL = `SELECT * FROM (SELECT ` + assistantMsgColumns + `, coalesce(provider_state, 'null'::jsonb)
 FROM assistant_messages WHERE conversation_id = $1::uuid ORDER BY seq DESC LIMIT $2) m ORDER BY seq`
 
 	assistantMsgAllSQL = `SELECT ` + assistantMsgColumns + ` FROM assistant_messages WHERE conversation_id = $1::uuid ORDER BY seq`
@@ -167,19 +172,25 @@ func scanAssistantConv(row pgx.Row) (*AssistantConversation, error) {
 	return &c, nil
 }
 
-func scanAssistantMsgs(rows pgx.Rows) ([]AssistantMessage, error) {
+func scanAssistantMsgs(rows pgx.Rows, withState bool) ([]AssistantMessage, error) {
 	defer rows.Close()
 	out := []AssistantMessage{}
 	for rows.Next() {
 		var m AssistantMessage
-		var content, usage []byte
-		if err := rows.Scan(&m.ID, &m.ConversationID, &m.Seq, &m.TurnID, &m.Role, &content, &m.Model, &m.Status,
-			&usage, &m.CreatedAt); err != nil {
+		var content, usage, state []byte
+		dest := []any{&m.ID, &m.ConversationID, &m.Seq, &m.TurnID, &m.Role, &content, &m.Model, &m.Status, &usage, &m.CreatedAt}
+		if withState {
+			dest = append(dest, &state)
+		}
+		if err := rows.Scan(dest...); err != nil {
 			return out, err
 		}
 		m.Content = content
 		if string(usage) != "null" {
 			m.Usage = usage
+		}
+		if len(state) > 0 && string(state) != "null" {
+			m.ProviderState = state
 		}
 		out = append(out, m)
 	}
@@ -243,9 +254,12 @@ func (s *Store) AppendAssistantMessage(ctx context.Context, in AssistantMessageI
 	if status == "" {
 		status = "complete"
 	}
-	var usage any
+	var usage, state any
 	if len(in.Usage) > 0 {
 		usage = string(in.Usage)
+	}
+	if len(in.ProviderState) > 0 {
+		state = string(in.ProviderState)
 	}
 	ctx, cancel := s.ctx(ctx)
 	defer cancel()
@@ -260,7 +274,7 @@ func (s *Store) AppendAssistantMessage(ctx context.Context, in AssistantMessageI
 	var id string
 	var seq int
 	if err := tx.QueryRow(ctx, assistantMsgInsertSQL, in.ConversationID, in.TurnID, in.Role, string(in.Content),
-		in.Model, status, usage).Scan(&id, &seq); err != nil {
+		in.Model, status, usage, state).Scan(&id, &seq); err != nil {
 		return "", 0, err
 	}
 	if _, err := tx.Exec(ctx, assistantConvTouchSQL, in.ConversationID); err != nil {
@@ -280,7 +294,7 @@ func (s *Store) RecentAssistantMessages(ctx context.Context, conversationID stri
 	if err != nil {
 		return nil, err
 	}
-	return scanAssistantMsgs(rows)
+	return scanAssistantMsgs(rows, true)
 }
 
 // AssistantConversationMessages returns every message of a conversation.
@@ -294,7 +308,7 @@ func (s *Store) AssistantConversationMessages(ctx context.Context, conversationI
 	if err != nil {
 		return nil, err
 	}
-	return scanAssistantMsgs(rows)
+	return scanAssistantMsgs(rows, false)
 }
 
 // SetAssistantConversationTitle sets the title once (only while it is empty, so
@@ -408,7 +422,7 @@ func (s *Store) ExportAssistantConversations(ctx context.Context, userID string)
 		if err != nil {
 			return out, err
 		}
-		msgs, err := scanAssistantMsgs(msgRows)
+		msgs, err := scanAssistantMsgs(msgRows, false)
 		if err != nil {
 			return out, err
 		}

@@ -30,6 +30,7 @@ func TestAssistantMigration(t *testing.T) {
 		"CHECK (role IN ('user', 'assistant', 'tool'))",
 		"CHECK (status IN ('complete', 'interrupted', 'error'))",
 		"UNIQUE (conversation_id, seq)",
+		"provider_state  jsonb,",
 		"CREATE TABLE IF NOT EXISTS assistant_message_feedback",
 		"CHECK (rating IN ('up', 'down'))",
 		"CREATE TABLE IF NOT EXISTS assistant_usage_events",

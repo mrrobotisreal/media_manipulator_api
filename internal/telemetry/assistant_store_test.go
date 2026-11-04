@@ -34,6 +34,11 @@ func TestAssistantStoreSQL(t *testing.T) {
 	if !strings.Contains(assistantTitleSQL, "AND title = ''") {
 		t.Error("the title is set once")
 	}
+	// provider_state (reasoning) is read only for the upstream continuation.
+	if strings.Contains(assistantMsgAllSQL, "provider_state") || strings.Contains(assistantExportSQL, "provider_state") ||
+		!strings.Contains(assistantMsgRecentSQL, "provider_state") {
+		t.Error("provider_state is never exported or returned")
+	}
 	// Usage rows carry no content column.
 	for _, banned := range []string{"content", "text", "digest", "frame"} {
 		if strings.Contains(assistantUsageInsertSQL, banned) {
