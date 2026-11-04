@@ -2192,8 +2192,21 @@ Wire format (SSE over POST, `data: {json}\n\n`, `: ping` every 15 s): `meta {con
 | Copilot `503 assistant_paused`, guide gives "short break" answers | `SELECT sum(cost_usd) FROM assistant_usage_events WHERE created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';` | Expected at the cap (default $10/day); resets 00:00 UTC. Raise `ASSISTANT_DAILY_SPEND_CAP_USD` only deliberately. |
 | `error {code:"invalid_ops"}` | The model's ops failed the surface's op schema twice | A prompt/recipe gap (MM106 evals); nothing reached the document, the unit was refunded. |
 | `error {code:"tool_limit"}` | The model kept calling `search_help` | Usually a knowledge gap (MM105); `ASSISTANT_TOOL_MAX_ROUNDS` bounds it. |
-| Low cache hit (`cached_tokens` ≈ 0) | `SELECT surface, sum(cached_tokens)::float / nullif(sum(input_tokens),0) FROM assistant_usage_events WHERE created_at > now() - interval '1 day' GROUP BY 1;` | Block 1 (persona + capsule) must stay byte-stable; it is only cached above Anthropic's minimum prompt length, so the guide's small MM104 prompt is not cached until MM105's capsules land. |
+| Low cache hit (`cached_tokens` ≈ 0) | `SELECT surface, sum(cached_tokens)::float / nullif(sum(input_tokens),0) FROM assistant_usage_events WHERE created_at > now() - interval '1 day' GROUP BY 1;` | Block 1 (persona + capsule) must stay byte-stable; it is only cached above Anthropic's minimum prompt length. Since MM105 every capsule is well above it (guide ≈ 6.2k tokens, photo ≈ 4.5k, studio ≈ 2.4k, vector ≈ 1.1k on top of the persona). |
 | `409 stale_edit_result` | The client sent an `editResult` for an old or answered call | Client bug (MM107/MM108); the turn is already closed. |
+| Guide answers "I'm Medi, the Media Manipulator guide, so I stick to the site…" to a real question | The scope gate (`EmbeddedKnowledge.InScope`, `internal/assistant/knowledge.go`) found no site, media-craft or language term | Add the missing word to a doc's keywords in the UI registry (or `siteVocabulary` / the alias table for a language gap), re-export (below). No model call was made, nothing was charged. |
+| Boot log `assistant: knowledge corpus failed to load` | The embedded export is malformed | Re-run the export from a clean UI `main` and redeploy; Medi keeps working on the stub (no docs, everything in scope) meanwhile. `assistant: knowledge loaded docs=N` is the healthy line. |
+
+#### Regenerate Medi's knowledge (MM105)
+
+Medi's knowledge (`internal/assistant/knowledge/`, embedded with `go:embed`) is **generated** from the web app's registries: tool pages, routes, the Darkroom effect registry, Motion's animators and track properties, Aperture's `LAYER_PARAMS`, masks, looks and shortcuts, the 18 locales' tool and page names. Never edit it by hand; fix the exporter (`media-manipulator-ui/lib/assistant/knowledgeExport.ts`). After any tool page, editor parameter or locale change ships in the UI:
+
+```bash
+cd media-manipulator-ui && npm run export:medi          # writes ../media_manipulator_api/internal/assistant/knowledge/
+cd ../media_manipulator_api && go test ./internal/assistant && git add internal/assistant/knowledge && git commit -m "Medi: refresh knowledge"
+```
+
+`npm run export:medi -- --check` exits 1 when the API copy is stale; the UI test `lib/assistant/knowledgeExport.test.ts` fails the same way when both repos are checked out side by side. Plan numbers are never exported (the API injects the live `/api/tiers` values per request), and a sentence stating a price or a per-plan limit is replaced by a pointer to the live block. Deploy the API to ship new knowledge.
 
 ### 7.x Retention ledger and user retention setting (MM22)
 
