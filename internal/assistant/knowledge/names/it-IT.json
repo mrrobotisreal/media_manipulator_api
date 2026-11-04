@@ -1,0 +1,598 @@
+{
+ "pages/about": {
+  "name": "Chi siamo",
+  "path": "/it/about"
+ },
+ "pages/account": {
+  "name": "Il tuo account",
+  "path": "/it/account"
+ },
+ "pages/blog": {
+  "name": "Blog",
+  "path": "/it/blog"
+ },
+ "pages/blog/audio/audio-quality-guide": {
+  "name": "Audio Quality Guide: Bitrate, Formats, Compression & Cleanup",
+  "path": "/it/blog/audio/audio-quality-guide"
+ },
+ "pages/blog/image/image-optimization-guide": {
+  "name": "Ottimizzazione delle immagini per Jedi del web: JPG vs PNG vs WebP",
+  "path": "/it/blog/image/image-optimization-guide"
+ },
+ "pages/blog/video/video-compression-guide": {
+  "name": "Guida galattica alla compressione video: MP4 vs WebM vs AVI vs MOV",
+  "path": "/it/blog/video/video-compression-guide"
+ },
+ "pages/changelog": {
+  "name": "Changelog",
+  "path": "/it/changelog"
+ },
+ "pages/contact": {
+  "name": "Contatti",
+  "path": "/it/contact"
+ },
+ "pages/delete-account": {
+  "name": "Elimina account",
+  "path": "/it/delete-account"
+ },
+ "pages/home": {
+  "name": "Home",
+  "path": "/it"
+ },
+ "pages/how-it-works": {
+  "name": "Come funziona",
+  "path": "/it/how-it-works"
+ },
+ "pages/licenses": {
+  "name": "Licenze open source",
+  "path": "/it/licenses"
+ },
+ "pages/pricing": {
+  "name": "Prezzi",
+  "path": "/it/pricing"
+ },
+ "pages/privacy-policy": {
+  "name": "Informativa sulla privacy",
+  "path": "/it/privacy-policy"
+ },
+ "pages/status": {
+  "name": "Stato",
+  "path": "/it/status"
+ },
+ "pages/terms-of-service": {
+  "name": "Termini di servizio",
+  "path": "/it/terms-of-service"
+ },
+ "pages/tools": {
+  "name": "Strumenti",
+  "path": "/it/tools"
+ },
+ "pages/tutorials": {
+  "name": "Tutorial",
+  "path": "/it/tutorials"
+ },
+ "pages/tutorials/ai-frame-interpolation": {
+  "name": "Cos'è l'interpolazione IA dei fotogrammi?",
+  "path": "/it/tutorials/ai-frame-interpolation"
+ },
+ "pages/tutorials/aperture": {
+  "name": "Come modificare una foto online con Aperture",
+  "path": "/it/tutorials/aperture"
+ },
+ "pages/tutorials/audio/getting-started": {
+  "name": "Primi passi: convertire file audio",
+  "path": "/it/tutorials/audio/getting-started"
+ },
+ "pages/tutorials/content-studio": {
+  "name": "Come usare Darkroom: montaggio video multitraccia nel browser",
+  "path": "/it/tutorials/content-studio"
+ },
+ "pages/tutorials/image/getting-started": {
+  "name": "Primi passi: convertire file immagine",
+  "path": "/it/tutorials/image/getting-started"
+ },
+ "pages/tutorials/motion": {
+  "name": "Come animare un SVG con Motion",
+  "path": "/it/tutorials/motion"
+ },
+ "pages/tutorials/video/getting-started": {
+  "name": "Primi passi: convertire file video",
+  "path": "/it/tutorials/video/getting-started"
+ },
+ "pages/voices": {
+  "name": "Voci",
+  "path": "/it/voices"
+ },
+ "tools/add-reverb-to-audio": {
+  "name": "Aggiungi riverbero all'audio",
+  "path": "/it/tools/add-reverb-to-audio"
+ },
+ "tools/add-text-to-image": {
+  "name": "Aggiungi testo a un'immagine",
+  "path": "/it/tools/add-text-to-image"
+ },
+ "tools/add-vignette": {
+  "name": "Aggiungi una vignettatura",
+  "path": "/it/tools/add-vignette"
+ },
+ "tools/adjust-audio-volume": {
+  "name": "Regola il volume dell'audio",
+  "path": "/it/tools/adjust-audio-volume"
+ },
+ "tools/adjust-image-contrast": {
+  "name": "Regola contrasto",
+  "path": "/it/tools/adjust-image-contrast"
+ },
+ "tools/adjust-image-hue": {
+  "name": "Regola la tonalità",
+  "path": "/it/tools/adjust-image-hue"
+ },
+ "tools/adjust-video-color": {
+  "name": "Regola luminosità e colori del video",
+  "path": "/it/tools/adjust-video-color"
+ },
+ "tools/ai-document-scan": {
+  "name": "Scansione documenti con IA",
+  "path": "/it/tools/ai-document-scan"
+ },
+ "tools/ai-frame-interpolation": {
+  "name": "Interpolazione di fotogrammi con IA",
+  "path": "/it/tools/ai-frame-interpolation"
+ },
+ "tools/ai-image-restoration": {
+  "name": "Restauro e upscaling di immagini con IA",
+  "path": "/it/tools/ai-image-restoration"
+ },
+ "tools/ai-image-upscaler": {
+  "name": "Upscaler di immagini con IA",
+  "path": "/it/tools/ai-image-upscaler"
+ },
+ "tools/ai-video-restoration": {
+  "name": "Restauro video con IA",
+  "path": "/it/tools/ai-video-restoration"
+ },
+ "tools/aperture": {
+  "name": "Aperture",
+  "path": "/it/tools/aperture"
+ },
+ "tools/apply-lut-to-photo": {
+  "name": "Applica una LUT",
+  "path": "/it/tools/apply-lut-to-photo"
+ },
+ "tools/audio-converter": {
+  "name": "Convertitore audio",
+  "path": "/it/tools/audio-converter"
+ },
+ "tools/audio-equalizer": {
+  "name": "Equalizzatore audio",
+  "path": "/it/tools/audio-equalizer"
+ },
+ "tools/audio-waveform-generator": {
+  "name": "Generatore di forme d'onda audio",
+  "path": "/it/tools/audio-waveform-generator"
+ },
+ "tools/black-and-white-photo": {
+  "name": "Foto in bianco e nero",
+  "path": "/it/tools/black-and-white-photo"
+ },
+ "tools/blur-faces-in-photo": {
+  "name": "Sfoca i volti in una foto",
+  "path": "/it/tools/blur-faces-in-photo"
+ },
+ "tools/blur-image": {
+  "name": "Sfoca immagine",
+  "path": "/it/tools/blur-image"
+ },
+ "tools/brighten-image": {
+  "name": "Schiarisci immagine",
+  "path": "/it/tools/brighten-image"
+ },
+ "tools/caption-translator": {
+  "name": "Traduttore di sottotitoli",
+  "path": "/it/tools/caption-translator"
+ },
+ "tools/change-audio-pitch": {
+  "name": "Cambia l'intonazione dell'audio",
+  "path": "/it/tools/change-audio-pitch"
+ },
+ "tools/change-audio-speed": {
+  "name": "Cambia la velocità dell'audio",
+  "path": "/it/tools/change-audio-speed"
+ },
+ "tools/change-image-color": {
+  "name": "Cambia colore dell'oggetto",
+  "path": "/it/tools/change-image-color"
+ },
+ "tools/change-video-frame-rate": {
+  "name": "Cambia il frame rate del video",
+  "path": "/it/tools/change-video-frame-rate"
+ },
+ "tools/change-video-speed": {
+  "name": "Cambia la velocità del video",
+  "path": "/it/tools/change-video-speed"
+ },
+ "tools/clean-voice-audio": {
+  "name": "Pulisci l'audio della voce",
+  "path": "/it/tools/clean-voice-audio"
+ },
+ "tools/color-balance-photo": {
+  "name": "Bilanciamento colore",
+  "path": "/it/tools/color-balance-photo"
+ },
+ "tools/color-pop": {
+  "name": "Colore selettivo",
+  "path": "/it/tools/color-pop"
+ },
+ "tools/compress-image": {
+  "name": "Comprimi immagine",
+  "path": "/it/tools/compress-image"
+ },
+ "tools/compress-video": {
+  "name": "Comprimi video",
+  "path": "/it/tools/compress-video"
+ },
+ "tools/content-studio": {
+  "name": "Darkroom",
+  "path": "/it/tools/content-studio"
+ },
+ "tools/convert-audio-to-flac": {
+  "name": "Converti audio in FLAC",
+  "path": "/it/tools/convert-audio-to-flac"
+ },
+ "tools/convert-audio-to-m4a": {
+  "name": "Converti audio in M4A / AAC",
+  "path": "/it/tools/convert-audio-to-m4a"
+ },
+ "tools/convert-audio-to-ogg": {
+  "name": "Converti audio in OGG",
+  "path": "/it/tools/convert-audio-to-ogg"
+ },
+ "tools/convert-audio-to-opus": {
+  "name": "Converti audio in Opus",
+  "path": "/it/tools/convert-audio-to-opus"
+ },
+ "tools/convert-audio-to-wav": {
+  "name": "Converti audio in WAV",
+  "path": "/it/tools/convert-audio-to-wav"
+ },
+ "tools/convert-avi-to-mp4": {
+  "name": "Converti AVI in MP4",
+  "path": "/it/tools/convert-avi-to-mp4"
+ },
+ "tools/convert-avif-to-jpg": {
+  "name": "Converti AVIF in JPG",
+  "path": "/it/tools/convert-avif-to-jpg"
+ },
+ "tools/convert-avif-to-png": {
+  "name": "Converti AVIF in PNG",
+  "path": "/it/tools/convert-avif-to-png"
+ },
+ "tools/convert-heic-to-jpg": {
+  "name": "Converti HEIC in JPG",
+  "path": "/it/tools/convert-heic-to-jpg"
+ },
+ "tools/convert-jpg-to-pdf": {
+  "name": "Converti JPG in PDF",
+  "path": "/it/tools/convert-jpg-to-pdf"
+ },
+ "tools/convert-jpg-to-png": {
+  "name": "Converti JPG in PNG",
+  "path": "/it/tools/convert-jpg-to-png"
+ },
+ "tools/convert-jpg-to-webp": {
+  "name": "Converti JPG in WebP",
+  "path": "/it/tools/convert-jpg-to-webp"
+ },
+ "tools/convert-mkv-to-mp4": {
+  "name": "Converti MKV in MP4",
+  "path": "/it/tools/convert-mkv-to-mp4"
+ },
+ "tools/convert-mov-to-mp4": {
+  "name": "Converti MOV in MP4",
+  "path": "/it/tools/convert-mov-to-mp4"
+ },
+ "tools/convert-mp3-to-wav": {
+  "name": "Converti MP3 in WAV",
+  "path": "/it/tools/convert-mp3-to-wav"
+ },
+ "tools/convert-mp4-to-webm": {
+  "name": "Converti MP4 in WebM",
+  "path": "/it/tools/convert-mp4-to-webm"
+ },
+ "tools/convert-png-to-jpg": {
+  "name": "Converti PNG in JPG",
+  "path": "/it/tools/convert-png-to-jpg"
+ },
+ "tools/convert-png-to-pdf": {
+  "name": "Converti PNG in PDF",
+  "path": "/it/tools/convert-png-to-pdf"
+ },
+ "tools/convert-png-to-svg": {
+  "name": "Converti PNG in SVG",
+  "path": "/it/tools/convert-png-to-svg"
+ },
+ "tools/convert-png-to-webp": {
+  "name": "Converti PNG in WebP",
+  "path": "/it/tools/convert-png-to-webp"
+ },
+ "tools/convert-svg-to-png": {
+  "name": "Converti SVG in PNG",
+  "path": "/it/tools/convert-svg-to-png"
+ },
+ "tools/convert-video-to-animated-gif": {
+  "name": "Converti video in GIF animata",
+  "path": "/it/tools/convert-video-to-animated-gif"
+ },
+ "tools/convert-video-to-hevc": {
+  "name": "Converti video in HEVC (H.265)",
+  "path": "/it/tools/convert-video-to-hevc"
+ },
+ "tools/convert-wav-to-mp3": {
+  "name": "Converti WAV in MP3",
+  "path": "/it/tools/convert-wav-to-mp3"
+ },
+ "tools/convert-webm-to-mp4": {
+  "name": "Converti WebM in MP4",
+  "path": "/it/tools/convert-webm-to-mp4"
+ },
+ "tools/convert-webp-to-jpg": {
+  "name": "Converti WebP in JPG",
+  "path": "/it/tools/convert-webp-to-jpg"
+ },
+ "tools/convert-webp-to-png": {
+  "name": "Converti WebP in PNG",
+  "path": "/it/tools/convert-webp-to-png"
+ },
+ "tools/crop-image": {
+  "name": "Ritaglia immagine",
+  "path": "/it/tools/crop-image"
+ },
+ "tools/crop-video": {
+  "name": "Ritaglia video",
+  "path": "/it/tools/crop-video"
+ },
+ "tools/edit-image-metadata": {
+  "name": "Modifica i metadati di un'immagine",
+  "path": "/it/tools/edit-image-metadata"
+ },
+ "tools/extract-audio-from-video": {
+  "name": "Estrai l'audio da un video",
+  "path": "/it/tools/extract-audio-from-video"
+ },
+ "tools/extract-frames-from-video": {
+  "name": "Estrai i fotogrammi da un video",
+  "path": "/it/tools/extract-frames-from-video"
+ },
+ "tools/extract-video-only-from-video": {
+  "name": "Estrai il video senza audio",
+  "path": "/it/tools/extract-video-only-from-video"
+ },
+ "tools/fix-perspective-photo": {
+  "name": "Correggi la prospettiva",
+  "path": "/it/tools/fix-perspective-photo"
+ },
+ "tools/fix-photo-exposure": {
+  "name": "Correggi esposizione",
+  "path": "/it/tools/fix-photo-exposure"
+ },
+ "tools/flip-video": {
+  "name": "Capovolgi e specchia video",
+  "path": "/it/tools/flip-video"
+ },
+ "tools/generate-vtt-captions": {
+  "name": "Generatore di sottotitoli VTT",
+  "path": "/it/tools/generate-vtt-captions"
+ },
+ "tools/grayscale-image": {
+  "name": "Converti immagine in bianco e nero",
+  "path": "/it/tools/grayscale-image"
+ },
+ "tools/image-converter": {
+  "name": "Convertitore di immagini",
+  "path": "/it/tools/image-converter"
+ },
+ "tools/image-filters": {
+  "name": "Filtri ed effetti per immagini",
+  "path": "/it/tools/image-filters"
+ },
+ "tools/image-resizer": {
+  "name": "Ridimensiona immagine",
+  "path": "/it/tools/image-resizer"
+ },
+ "tools/image-saturation": {
+  "name": "Saturazione immagine",
+  "path": "/it/tools/image-saturation"
+ },
+ "tools/image-to-pdf": {
+  "name": "Da immagine a PDF",
+  "path": "/it/tools/image-to-pdf"
+ },
+ "tools/inspect-metadata": {
+  "name": "Ispettore di metadati",
+  "path": "/it/tools/inspect-metadata"
+ },
+ "tools/invert-image-colors": {
+  "name": "Inverti colori",
+  "path": "/it/tools/invert-image-colors"
+ },
+ "tools/isolate-vocals-from-song": {
+  "name": "Isola la voce da una canzone",
+  "path": "/it/tools/isolate-vocals-from-song"
+ },
+ "tools/motion": {
+  "name": "Motion",
+  "path": "/it/tools/motion"
+ },
+ "tools/normalize-audio": {
+  "name": "Normalizza audio",
+  "path": "/it/tools/normalize-audio"
+ },
+ "tools/pdf-converter": {
+  "name": "Convertitore PDF",
+  "path": "/it/tools/pdf-converter"
+ },
+ "tools/pdf-to-jpg": {
+  "name": "Da PDF a JPG",
+  "path": "/it/tools/pdf-to-jpg"
+ },
+ "tools/pdf-to-png": {
+  "name": "Da PDF a PNG",
+  "path": "/it/tools/pdf-to-png"
+ },
+ "tools/photo-curves": {
+  "name": "Curve",
+  "path": "/it/tools/photo-curves"
+ },
+ "tools/photo-levels": {
+  "name": "Livelli",
+  "path": "/it/tools/photo-levels"
+ },
+ "tools/png-to-ico": {
+  "name": "Da PNG a ICO",
+  "path": "/it/tools/png-to-ico"
+ },
+ "tools/posterize-image": {
+  "name": "Posterizza",
+  "path": "/it/tools/posterize-image"
+ },
+ "tools/redact-text-in-image": {
+  "name": "Oscura il testo in un'immagine",
+  "path": "/it/tools/redact-text-in-image"
+ },
+ "tools/reduce-image-noise": {
+  "name": "Riduci il rumore dell'immagine",
+  "path": "/it/tools/reduce-image-noise"
+ },
+ "tools/remove-audio-from-video": {
+  "name": "Rimuovi l'audio da un video",
+  "path": "/it/tools/remove-audio-from-video"
+ },
+ "tools/remove-background-from-image": {
+  "name": "Rimuovi lo sfondo da un'immagine",
+  "path": "/it/tools/remove-background-from-image"
+ },
+ "tools/remove-background-noise": {
+  "name": "Rimuovi il rumore di fondo",
+  "path": "/it/tools/remove-background-noise"
+ },
+ "tools/remove-blemishes": {
+  "name": "Rimuovi le imperfezioni",
+  "path": "/it/tools/remove-blemishes"
+ },
+ "tools/remove-exif-metadata": {
+  "name": "Rimuovi i metadati EXIF dalle immagini",
+  "path": "/it/tools/remove-exif-metadata"
+ },
+ "tools/remove-object-from-photo": {
+  "name": "Rimuovi un oggetto da una foto",
+  "path": "/it/tools/remove-object-from-photo"
+ },
+ "tools/remove-vocals-from-song": {
+  "name": "Rimuovi la voce da una canzone",
+  "path": "/it/tools/remove-vocals-from-song"
+ },
+ "tools/resize-video": {
+  "name": "Ridimensiona video",
+  "path": "/it/tools/resize-video"
+ },
+ "tools/reverse-video": {
+  "name": "Inverti video",
+  "path": "/it/tools/reverse-video"
+ },
+ "tools/rotate-image": {
+  "name": "Ruota immagine",
+  "path": "/it/tools/rotate-image"
+ },
+ "tools/rotate-video": {
+  "name": "Ruota video",
+  "path": "/it/tools/rotate-video"
+ },
+ "tools/select-by-color": {
+  "name": "Seleziona per colore",
+  "path": "/it/tools/select-by-color"
+ },
+ "tools/sharpen-image": {
+  "name": "Aumenta la nitidezza dell'immagine",
+  "path": "/it/tools/sharpen-image"
+ },
+ "tools/sharpen-photo-online": {
+  "name": "Aumenta la nitidezza di una foto",
+  "path": "/it/tools/sharpen-photo-online"
+ },
+ "tools/split-toning": {
+  "name": "Viraggio parziale",
+  "path": "/it/tools/split-toning"
+ },
+ "tools/srt-generator": {
+  "name": "Generatore di sottotitoli SRT",
+  "path": "/it/tools/srt-generator"
+ },
+ "tools/stabilize-video": {
+  "name": "Stabilizza video",
+  "path": "/it/tools/stabilize-video"
+ },
+ "tools/stitch-audio-to-video": {
+  "name": "Aggiungi audio a un video",
+  "path": "/it/tools/stitch-audio-to-video"
+ },
+ "tools/straighten-photo": {
+  "name": "Raddrizza una foto",
+  "path": "/it/tools/straighten-photo"
+ },
+ "tools/summarize-audio": {
+  "name": "Riassumi audio",
+  "path": "/it/tools/summarize-audio"
+ },
+ "tools/summarize-video": {
+  "name": "Riassumi video",
+  "path": "/it/tools/summarize-video"
+ },
+ "tools/tint-photo": {
+  "name": "Colora una foto",
+  "path": "/it/tools/tint-photo"
+ },
+ "tools/transcode-to-dash": {
+  "name": "Transcodifica video in DASH (AV1 / VP9)",
+  "path": "/it/tools/transcode-to-dash"
+ },
+ "tools/transcode-to-hls": {
+  "name": "Transcodifica video in HLS",
+  "path": "/it/tools/transcode-to-hls"
+ },
+ "tools/transcribe-audio": {
+  "name": "Trascrivi audio",
+  "path": "/it/tools/transcribe-audio"
+ },
+ "tools/transcribe-video": {
+  "name": "Trascrivi video",
+  "path": "/it/tools/transcribe-video"
+ },
+ "tools/trim-audio": {
+  "name": "Taglia audio",
+  "path": "/it/tools/trim-audio"
+ },
+ "tools/video-converter": {
+  "name": "Convertitore video",
+  "path": "/it/tools/video-converter"
+ },
+ "tools/video-trimmer": {
+  "name": "Taglia video",
+  "path": "/it/tools/video-trimmer"
+ },
+ "tools/voice-changer": {
+  "name": "Cambia voce",
+  "path": "/it/tools/voice-changer"
+ },
+ "tools/voice-cloning": {
+  "name": "Clonazione vocale",
+  "path": "/it/tools/voice-cloning"
+ },
+ "tools/voice-designer": {
+  "name": "Progettista di voci",
+  "path": "/it/tools/voice-designer"
+ },
+ "tools/white-balance-photo": {
+  "name": "Bilanciamento del bianco",
+  "path": "/it/tools/white-balance-photo"
+ }
+}

@@ -1,0 +1,598 @@
+{
+ "pages/about": {
+  "name": "حول",
+  "path": "/ar/about"
+ },
+ "pages/account": {
+  "name": "حسابك",
+  "path": "/ar/account"
+ },
+ "pages/blog": {
+  "name": "المدونة",
+  "path": "/ar/blog"
+ },
+ "pages/blog/audio/audio-quality-guide": {
+  "name": "Audio Quality Guide: Bitrate, Formats, Compression & Cleanup",
+  "path": "/ar/blog/audio/audio-quality-guide"
+ },
+ "pages/blog/image/image-optimization-guide": {
+  "name": "تحسين الصور لفرسان الويب: JPG مقابل PNG مقابل WebP",
+  "path": "/ar/blog/image/image-optimization-guide"
+ },
+ "pages/blog/video/video-compression-guide": {
+  "name": "دليل المسافر إلى ضغط الفيديو: MP4 مقابل WebM مقابل AVI مقابل MOV",
+  "path": "/ar/blog/video/video-compression-guide"
+ },
+ "pages/changelog": {
+  "name": "سجل التغييرات",
+  "path": "/ar/changelog"
+ },
+ "pages/contact": {
+  "name": "اتصل بنا",
+  "path": "/ar/contact"
+ },
+ "pages/delete-account": {
+  "name": "حذف الحساب",
+  "path": "/ar/delete-account"
+ },
+ "pages/home": {
+  "name": "الرئيسية",
+  "path": "/ar"
+ },
+ "pages/how-it-works": {
+  "name": "كيف يعمل",
+  "path": "/ar/how-it-works"
+ },
+ "pages/licenses": {
+  "name": "تراخيص المصادر المفتوحة",
+  "path": "/ar/licenses"
+ },
+ "pages/pricing": {
+  "name": "الأسعار",
+  "path": "/ar/pricing"
+ },
+ "pages/privacy-policy": {
+  "name": "سياسة الخصوصية",
+  "path": "/ar/privacy-policy"
+ },
+ "pages/status": {
+  "name": "الحالة",
+  "path": "/ar/status"
+ },
+ "pages/terms-of-service": {
+  "name": "شروط الخدمة",
+  "path": "/ar/terms-of-service"
+ },
+ "pages/tools": {
+  "name": "الأدوات",
+  "path": "/ar/tools"
+ },
+ "pages/tutorials": {
+  "name": "الدروس",
+  "path": "/ar/tutorials"
+ },
+ "pages/tutorials/ai-frame-interpolation": {
+  "name": "ما هو استيفاء الإطارات بالذكاء الاصطناعي؟",
+  "path": "/ar/tutorials/ai-frame-interpolation"
+ },
+ "pages/tutorials/aperture": {
+  "name": "كيفية تحرير صورة عبر الإنترنت باستخدام Aperture",
+  "path": "/ar/tutorials/aperture"
+ },
+ "pages/tutorials/audio/getting-started": {
+  "name": "البداية: تحويل الملفات الصوتية",
+  "path": "/ar/tutorials/audio/getting-started"
+ },
+ "pages/tutorials/content-studio": {
+  "name": "كيفية استخدام Darkroom: تحرير فيديو متعدد المسارات في متصفحك",
+  "path": "/ar/tutorials/content-studio"
+ },
+ "pages/tutorials/image/getting-started": {
+  "name": "البداية: تحويل ملفات الصور",
+  "path": "/ar/tutorials/image/getting-started"
+ },
+ "pages/tutorials/motion": {
+  "name": "كيفية تحريك ملف SVG باستخدام Motion",
+  "path": "/ar/tutorials/motion"
+ },
+ "pages/tutorials/video/getting-started": {
+  "name": "البداية: تحويل ملفات الفيديو",
+  "path": "/ar/tutorials/video/getting-started"
+ },
+ "pages/voices": {
+  "name": "الأصوات",
+  "path": "/ar/voices"
+ },
+ "tools/add-reverb-to-audio": {
+  "name": "إضافة صدى إلى الصوت",
+  "path": "/ar/tools/add-reverb-to-audio"
+ },
+ "tools/add-text-to-image": {
+  "name": "إضافة نص إلى الصورة",
+  "path": "/ar/tools/add-text-to-image"
+ },
+ "tools/add-vignette": {
+  "name": "إضافة تظليل للحواف",
+  "path": "/ar/tools/add-vignette"
+ },
+ "tools/adjust-audio-volume": {
+  "name": "ضبط مستوى الصوت",
+  "path": "/ar/tools/adjust-audio-volume"
+ },
+ "tools/adjust-image-contrast": {
+  "name": "ضبط التباين",
+  "path": "/ar/tools/adjust-image-contrast"
+ },
+ "tools/adjust-image-hue": {
+  "name": "ضبط تدرّج لون الصورة",
+  "path": "/ar/tools/adjust-image-hue"
+ },
+ "tools/adjust-video-color": {
+  "name": "ضبط سطوع الفيديو وألوانه",
+  "path": "/ar/tools/adjust-video-color"
+ },
+ "tools/ai-document-scan": {
+  "name": "مسح المستندات بالذكاء الاصطناعي",
+  "path": "/ar/tools/ai-document-scan"
+ },
+ "tools/ai-frame-interpolation": {
+  "name": "استيفاء الإطارات بالذكاء الاصطناعي",
+  "path": "/ar/tools/ai-frame-interpolation"
+ },
+ "tools/ai-image-restoration": {
+  "name": "ترميم الصور وتكبيرها بالذكاء الاصطناعي",
+  "path": "/ar/tools/ai-image-restoration"
+ },
+ "tools/ai-image-upscaler": {
+  "name": "مكبّر الصور بالذكاء الاصطناعي",
+  "path": "/ar/tools/ai-image-upscaler"
+ },
+ "tools/ai-video-restoration": {
+  "name": "ترميم الفيديو بالذكاء الاصطناعي",
+  "path": "/ar/tools/ai-video-restoration"
+ },
+ "tools/aperture": {
+  "name": "Aperture",
+  "path": "/ar/tools/aperture"
+ },
+ "tools/apply-lut-to-photo": {
+  "name": "تطبيق LUT",
+  "path": "/ar/tools/apply-lut-to-photo"
+ },
+ "tools/audio-converter": {
+  "name": "محول الصوت",
+  "path": "/ar/tools/audio-converter"
+ },
+ "tools/audio-equalizer": {
+  "name": "معادل الصوت",
+  "path": "/ar/tools/audio-equalizer"
+ },
+ "tools/audio-waveform-generator": {
+  "name": "مولّد الشكل الموجي للصوت",
+  "path": "/ar/tools/audio-waveform-generator"
+ },
+ "tools/black-and-white-photo": {
+  "name": "صورة بالأبيض والأسود",
+  "path": "/ar/tools/black-and-white-photo"
+ },
+ "tools/blur-faces-in-photo": {
+  "name": "تمويه الوجوه في الصورة",
+  "path": "/ar/tools/blur-faces-in-photo"
+ },
+ "tools/blur-image": {
+  "name": "تمويه الصورة",
+  "path": "/ar/tools/blur-image"
+ },
+ "tools/brighten-image": {
+  "name": "تفتيح الصورة",
+  "path": "/ar/tools/brighten-image"
+ },
+ "tools/caption-translator": {
+  "name": "مترجم الترجمات",
+  "path": "/ar/tools/caption-translator"
+ },
+ "tools/change-audio-pitch": {
+  "name": "تغيير درجة الصوت",
+  "path": "/ar/tools/change-audio-pitch"
+ },
+ "tools/change-audio-speed": {
+  "name": "تغيير سرعة الصوت",
+  "path": "/ar/tools/change-audio-speed"
+ },
+ "tools/change-image-color": {
+  "name": "تغيير لون عنصر",
+  "path": "/ar/tools/change-image-color"
+ },
+ "tools/change-video-frame-rate": {
+  "name": "تغيير معدل إطارات الفيديو",
+  "path": "/ar/tools/change-video-frame-rate"
+ },
+ "tools/change-video-speed": {
+  "name": "تغيير سرعة الفيديو",
+  "path": "/ar/tools/change-video-speed"
+ },
+ "tools/clean-voice-audio": {
+  "name": "تنقية الصوت البشري",
+  "path": "/ar/tools/clean-voice-audio"
+ },
+ "tools/color-balance-photo": {
+  "name": "توازن الألوان",
+  "path": "/ar/tools/color-balance-photo"
+ },
+ "tools/color-pop": {
+  "name": "إبراز اللون",
+  "path": "/ar/tools/color-pop"
+ },
+ "tools/compress-image": {
+  "name": "ضغط الصور",
+  "path": "/ar/tools/compress-image"
+ },
+ "tools/compress-video": {
+  "name": "ضغط الفيديو",
+  "path": "/ar/tools/compress-video"
+ },
+ "tools/content-studio": {
+  "name": "Darkroom",
+  "path": "/ar/tools/content-studio"
+ },
+ "tools/convert-audio-to-flac": {
+  "name": "تحويل الصوت إلى FLAC",
+  "path": "/ar/tools/convert-audio-to-flac"
+ },
+ "tools/convert-audio-to-m4a": {
+  "name": "تحويل الصوت إلى M4A / AAC",
+  "path": "/ar/tools/convert-audio-to-m4a"
+ },
+ "tools/convert-audio-to-ogg": {
+  "name": "تحويل الصوت إلى OGG",
+  "path": "/ar/tools/convert-audio-to-ogg"
+ },
+ "tools/convert-audio-to-opus": {
+  "name": "تحويل الصوت إلى Opus",
+  "path": "/ar/tools/convert-audio-to-opus"
+ },
+ "tools/convert-audio-to-wav": {
+  "name": "تحويل الصوت إلى WAV",
+  "path": "/ar/tools/convert-audio-to-wav"
+ },
+ "tools/convert-avi-to-mp4": {
+  "name": "تحويل AVI إلى MP4",
+  "path": "/ar/tools/convert-avi-to-mp4"
+ },
+ "tools/convert-avif-to-jpg": {
+  "name": "تحويل AVIF إلى JPG",
+  "path": "/ar/tools/convert-avif-to-jpg"
+ },
+ "tools/convert-avif-to-png": {
+  "name": "تحويل AVIF إلى PNG",
+  "path": "/ar/tools/convert-avif-to-png"
+ },
+ "tools/convert-heic-to-jpg": {
+  "name": "تحويل HEIC إلى JPG",
+  "path": "/ar/tools/convert-heic-to-jpg"
+ },
+ "tools/convert-jpg-to-pdf": {
+  "name": "تحويل JPG إلى PDF",
+  "path": "/ar/tools/convert-jpg-to-pdf"
+ },
+ "tools/convert-jpg-to-png": {
+  "name": "تحويل JPG إلى PNG",
+  "path": "/ar/tools/convert-jpg-to-png"
+ },
+ "tools/convert-jpg-to-webp": {
+  "name": "تحويل JPG إلى WebP",
+  "path": "/ar/tools/convert-jpg-to-webp"
+ },
+ "tools/convert-mkv-to-mp4": {
+  "name": "تحويل MKV إلى MP4",
+  "path": "/ar/tools/convert-mkv-to-mp4"
+ },
+ "tools/convert-mov-to-mp4": {
+  "name": "تحويل MOV إلى MP4",
+  "path": "/ar/tools/convert-mov-to-mp4"
+ },
+ "tools/convert-mp3-to-wav": {
+  "name": "تحويل MP3 إلى WAV",
+  "path": "/ar/tools/convert-mp3-to-wav"
+ },
+ "tools/convert-mp4-to-webm": {
+  "name": "تحويل MP4 إلى WebM",
+  "path": "/ar/tools/convert-mp4-to-webm"
+ },
+ "tools/convert-png-to-jpg": {
+  "name": "تحويل PNG إلى JPG",
+  "path": "/ar/tools/convert-png-to-jpg"
+ },
+ "tools/convert-png-to-pdf": {
+  "name": "تحويل PNG إلى PDF",
+  "path": "/ar/tools/convert-png-to-pdf"
+ },
+ "tools/convert-png-to-svg": {
+  "name": "تحويل PNG إلى SVG",
+  "path": "/ar/tools/convert-png-to-svg"
+ },
+ "tools/convert-png-to-webp": {
+  "name": "تحويل PNG إلى WebP",
+  "path": "/ar/tools/convert-png-to-webp"
+ },
+ "tools/convert-svg-to-png": {
+  "name": "تحويل SVG إلى PNG",
+  "path": "/ar/tools/convert-svg-to-png"
+ },
+ "tools/convert-video-to-animated-gif": {
+  "name": "تحويل الفيديو إلى GIF متحرك",
+  "path": "/ar/tools/convert-video-to-animated-gif"
+ },
+ "tools/convert-video-to-hevc": {
+  "name": "تحويل الفيديو إلى HEVC (H.265)",
+  "path": "/ar/tools/convert-video-to-hevc"
+ },
+ "tools/convert-wav-to-mp3": {
+  "name": "تحويل WAV إلى MP3",
+  "path": "/ar/tools/convert-wav-to-mp3"
+ },
+ "tools/convert-webm-to-mp4": {
+  "name": "تحويل WebM إلى MP4",
+  "path": "/ar/tools/convert-webm-to-mp4"
+ },
+ "tools/convert-webp-to-jpg": {
+  "name": "تحويل WebP إلى JPG",
+  "path": "/ar/tools/convert-webp-to-jpg"
+ },
+ "tools/convert-webp-to-png": {
+  "name": "تحويل WebP إلى PNG",
+  "path": "/ar/tools/convert-webp-to-png"
+ },
+ "tools/crop-image": {
+  "name": "اقتصاص الصورة",
+  "path": "/ar/tools/crop-image"
+ },
+ "tools/crop-video": {
+  "name": "اقتصاص الفيديو",
+  "path": "/ar/tools/crop-video"
+ },
+ "tools/edit-image-metadata": {
+  "name": "تعديل البيانات الوصفية للصور",
+  "path": "/ar/tools/edit-image-metadata"
+ },
+ "tools/extract-audio-from-video": {
+  "name": "استخراج الصوت من الفيديو",
+  "path": "/ar/tools/extract-audio-from-video"
+ },
+ "tools/extract-frames-from-video": {
+  "name": "استخراج الإطارات من الفيديو",
+  "path": "/ar/tools/extract-frames-from-video"
+ },
+ "tools/extract-video-only-from-video": {
+  "name": "استخراج الفيديو بدون صوت",
+  "path": "/ar/tools/extract-video-only-from-video"
+ },
+ "tools/fix-perspective-photo": {
+  "name": "تصحيح المنظور",
+  "path": "/ar/tools/fix-perspective-photo"
+ },
+ "tools/fix-photo-exposure": {
+  "name": "تصحيح التعريض",
+  "path": "/ar/tools/fix-photo-exposure"
+ },
+ "tools/flip-video": {
+  "name": "قلب الفيديو وعكسه كمرآة",
+  "path": "/ar/tools/flip-video"
+ },
+ "tools/generate-vtt-captions": {
+  "name": "مولّد ترجمات VTT",
+  "path": "/ar/tools/generate-vtt-captions"
+ },
+ "tools/grayscale-image": {
+  "name": "تحويل الصورة إلى أبيض وأسود",
+  "path": "/ar/tools/grayscale-image"
+ },
+ "tools/image-converter": {
+  "name": "محول الصور",
+  "path": "/ar/tools/image-converter"
+ },
+ "tools/image-filters": {
+  "name": "فلاتر الصور وتأثيراتها",
+  "path": "/ar/tools/image-filters"
+ },
+ "tools/image-resizer": {
+  "name": "تغيير حجم الصورة",
+  "path": "/ar/tools/image-resizer"
+ },
+ "tools/image-saturation": {
+  "name": "تشبّع الصورة",
+  "path": "/ar/tools/image-saturation"
+ },
+ "tools/image-to-pdf": {
+  "name": "تحويل الصور إلى PDF",
+  "path": "/ar/tools/image-to-pdf"
+ },
+ "tools/inspect-metadata": {
+  "name": "فاحص البيانات الوصفية",
+  "path": "/ar/tools/inspect-metadata"
+ },
+ "tools/invert-image-colors": {
+  "name": "عكس ألوان الصورة",
+  "path": "/ar/tools/invert-image-colors"
+ },
+ "tools/isolate-vocals-from-song": {
+  "name": "عزل الغناء من أغنية",
+  "path": "/ar/tools/isolate-vocals-from-song"
+ },
+ "tools/motion": {
+  "name": "Motion",
+  "path": "/ar/tools/motion"
+ },
+ "tools/normalize-audio": {
+  "name": "تسوية مستوى الصوت",
+  "path": "/ar/tools/normalize-audio"
+ },
+ "tools/pdf-converter": {
+  "name": "محول PDF",
+  "path": "/ar/tools/pdf-converter"
+ },
+ "tools/pdf-to-jpg": {
+  "name": "تحويل PDF إلى JPG",
+  "path": "/ar/tools/pdf-to-jpg"
+ },
+ "tools/pdf-to-png": {
+  "name": "تحويل PDF إلى PNG",
+  "path": "/ar/tools/pdf-to-png"
+ },
+ "tools/photo-curves": {
+  "name": "المنحنيات",
+  "path": "/ar/tools/photo-curves"
+ },
+ "tools/photo-levels": {
+  "name": "المستويات",
+  "path": "/ar/tools/photo-levels"
+ },
+ "tools/png-to-ico": {
+  "name": "تحويل PNG إلى ICO",
+  "path": "/ar/tools/png-to-ico"
+ },
+ "tools/posterize-image": {
+  "name": "تقليل المستويات اللونية",
+  "path": "/ar/tools/posterize-image"
+ },
+ "tools/redact-text-in-image": {
+  "name": "حجب النص في الصورة",
+  "path": "/ar/tools/redact-text-in-image"
+ },
+ "tools/reduce-image-noise": {
+  "name": "تقليل تشويش الصورة",
+  "path": "/ar/tools/reduce-image-noise"
+ },
+ "tools/remove-audio-from-video": {
+  "name": "إزالة الصوت من الفيديو",
+  "path": "/ar/tools/remove-audio-from-video"
+ },
+ "tools/remove-background-from-image": {
+  "name": "إزالة الخلفية من الصورة",
+  "path": "/ar/tools/remove-background-from-image"
+ },
+ "tools/remove-background-noise": {
+  "name": "إزالة ضجيج الخلفية",
+  "path": "/ar/tools/remove-background-noise"
+ },
+ "tools/remove-blemishes": {
+  "name": "إزالة العيوب",
+  "path": "/ar/tools/remove-blemishes"
+ },
+ "tools/remove-exif-metadata": {
+  "name": "إزالة بيانات EXIF الوصفية من الصور",
+  "path": "/ar/tools/remove-exif-metadata"
+ },
+ "tools/remove-object-from-photo": {
+  "name": "إزالة عنصر من الصورة",
+  "path": "/ar/tools/remove-object-from-photo"
+ },
+ "tools/remove-vocals-from-song": {
+  "name": "إزالة الغناء من أغنية",
+  "path": "/ar/tools/remove-vocals-from-song"
+ },
+ "tools/resize-video": {
+  "name": "تغيير حجم الفيديو",
+  "path": "/ar/tools/resize-video"
+ },
+ "tools/reverse-video": {
+  "name": "عكس الفيديو",
+  "path": "/ar/tools/reverse-video"
+ },
+ "tools/rotate-image": {
+  "name": "تدوير الصورة",
+  "path": "/ar/tools/rotate-image"
+ },
+ "tools/rotate-video": {
+  "name": "تدوير الفيديو",
+  "path": "/ar/tools/rotate-video"
+ },
+ "tools/select-by-color": {
+  "name": "التحديد بحسب اللون",
+  "path": "/ar/tools/select-by-color"
+ },
+ "tools/sharpen-image": {
+  "name": "زيادة حدة الصورة",
+  "path": "/ar/tools/sharpen-image"
+ },
+ "tools/sharpen-photo-online": {
+  "name": "زيادة حدة الصورة",
+  "path": "/ar/tools/sharpen-photo-online"
+ },
+ "tools/split-toning": {
+  "name": "تلوين مجزّأ",
+  "path": "/ar/tools/split-toning"
+ },
+ "tools/srt-generator": {
+  "name": "مولّد SRT",
+  "path": "/ar/tools/srt-generator"
+ },
+ "tools/stabilize-video": {
+  "name": "تثبيت الفيديو",
+  "path": "/ar/tools/stabilize-video"
+ },
+ "tools/stitch-audio-to-video": {
+  "name": "إضافة صوت إلى الفيديو",
+  "path": "/ar/tools/stitch-audio-to-video"
+ },
+ "tools/straighten-photo": {
+  "name": "تعديل استقامة الصورة",
+  "path": "/ar/tools/straighten-photo"
+ },
+ "tools/summarize-audio": {
+  "name": "تلخيص الصوت",
+  "path": "/ar/tools/summarize-audio"
+ },
+ "tools/summarize-video": {
+  "name": "تلخيص الفيديو",
+  "path": "/ar/tools/summarize-video"
+ },
+ "tools/tint-photo": {
+  "name": "صبغ الصورة بلون",
+  "path": "/ar/tools/tint-photo"
+ },
+ "tools/transcode-to-dash": {
+  "name": "تحويل ترميز الفيديو إلى DASH (AV1 / VP9)",
+  "path": "/ar/tools/transcode-to-dash"
+ },
+ "tools/transcode-to-hls": {
+  "name": "تحويل ترميز الفيديو إلى HLS",
+  "path": "/ar/tools/transcode-to-hls"
+ },
+ "tools/transcribe-audio": {
+  "name": "تحويل الصوت إلى نص",
+  "path": "/ar/tools/transcribe-audio"
+ },
+ "tools/transcribe-video": {
+  "name": "تفريغ الفيديو نصيًا",
+  "path": "/ar/tools/transcribe-video"
+ },
+ "tools/trim-audio": {
+  "name": "قص الصوت",
+  "path": "/ar/tools/trim-audio"
+ },
+ "tools/video-converter": {
+  "name": "محول الفيديو",
+  "path": "/ar/tools/video-converter"
+ },
+ "tools/video-trimmer": {
+  "name": "قص الفيديو",
+  "path": "/ar/tools/video-trimmer"
+ },
+ "tools/voice-changer": {
+  "name": "مغيّر الصوت",
+  "path": "/ar/tools/voice-changer"
+ },
+ "tools/voice-cloning": {
+  "name": "استنساخ الصوت",
+  "path": "/ar/tools/voice-cloning"
+ },
+ "tools/voice-designer": {
+  "name": "مصمّم الأصوات",
+  "path": "/ar/tools/voice-designer"
+ },
+ "tools/white-balance-photo": {
+  "name": "توازن الأبيض",
+  "path": "/ar/tools/white-balance-photo"
+ }
+}

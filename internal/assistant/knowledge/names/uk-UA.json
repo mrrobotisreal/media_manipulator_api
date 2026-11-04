@@ -1,0 +1,598 @@
+{
+ "pages/about": {
+  "name": "Про нас",
+  "path": "/uk/about"
+ },
+ "pages/account": {
+  "name": "Ваш обліковий запис",
+  "path": "/uk/account"
+ },
+ "pages/blog": {
+  "name": "Блог",
+  "path": "/uk/blog"
+ },
+ "pages/blog/audio/audio-quality-guide": {
+  "name": "Audio Quality Guide: Bitrate, Formats, Compression & Cleanup",
+  "path": "/uk/blog/audio/audio-quality-guide"
+ },
+ "pages/blog/image/image-optimization-guide": {
+  "name": "Оптимізація зображень для веб-джедаїв: JPG проти PNG проти WebP",
+  "path": "/uk/blog/image/image-optimization-guide"
+ },
+ "pages/blog/video/video-compression-guide": {
+  "name": "Путівник автостопника по відеокомпресії: MP4 проти WebM проти AVI проти MOV",
+  "path": "/uk/blog/video/video-compression-guide"
+ },
+ "pages/changelog": {
+  "name": "Список змін",
+  "path": "/uk/changelog"
+ },
+ "pages/contact": {
+  "name": "Контакти",
+  "path": "/uk/contact"
+ },
+ "pages/delete-account": {
+  "name": "Видалити обліковий запис",
+  "path": "/uk/delete-account"
+ },
+ "pages/home": {
+  "name": "Головна",
+  "path": "/uk"
+ },
+ "pages/how-it-works": {
+  "name": "Як це працює",
+  "path": "/uk/how-it-works"
+ },
+ "pages/licenses": {
+  "name": "Ліцензії відкритого коду",
+  "path": "/uk/licenses"
+ },
+ "pages/pricing": {
+  "name": "Тарифи",
+  "path": "/uk/pricing"
+ },
+ "pages/privacy-policy": {
+  "name": "Політика конфіденційності",
+  "path": "/uk/privacy-policy"
+ },
+ "pages/status": {
+  "name": "Стан",
+  "path": "/uk/status"
+ },
+ "pages/terms-of-service": {
+  "name": "Умови використання",
+  "path": "/uk/terms-of-service"
+ },
+ "pages/tools": {
+  "name": "Інструменти",
+  "path": "/uk/tools"
+ },
+ "pages/tutorials": {
+  "name": "Посібники",
+  "path": "/uk/tutorials"
+ },
+ "pages/tutorials/ai-frame-interpolation": {
+  "name": "Що таке ШІ-інтерполяція кадрів?",
+  "path": "/uk/tutorials/ai-frame-interpolation"
+ },
+ "pages/tutorials/aperture": {
+  "name": "Як відредагувати фото онлайн у Aperture",
+  "path": "/uk/tutorials/aperture"
+ },
+ "pages/tutorials/audio/getting-started": {
+  "name": "Початок роботи: конвертація аудіофайлів",
+  "path": "/uk/tutorials/audio/getting-started"
+ },
+ "pages/tutorials/content-studio": {
+  "name": "Як використовувати Darkroom: багатодоріжковий відеомонтаж у браузері",
+  "path": "/uk/tutorials/content-studio"
+ },
+ "pages/tutorials/image/getting-started": {
+  "name": "Початок роботи: конвертація файлів зображень",
+  "path": "/uk/tutorials/image/getting-started"
+ },
+ "pages/tutorials/motion": {
+  "name": "Як анімувати SVG у Motion",
+  "path": "/uk/tutorials/motion"
+ },
+ "pages/tutorials/video/getting-started": {
+  "name": "Початок роботи: конвертація відеофайлів",
+  "path": "/uk/tutorials/video/getting-started"
+ },
+ "pages/voices": {
+  "name": "Голоси",
+  "path": "/uk/voices"
+ },
+ "tools/add-reverb-to-audio": {
+  "name": "Додавання реверберації до аудіо",
+  "path": "/uk/tools/add-reverb-to-audio"
+ },
+ "tools/add-text-to-image": {
+  "name": "Додавання тексту на зображення",
+  "path": "/uk/tools/add-text-to-image"
+ },
+ "tools/add-vignette": {
+  "name": "Додати віньєтування",
+  "path": "/uk/tools/add-vignette"
+ },
+ "tools/adjust-audio-volume": {
+  "name": "Зміна гучності аудіо",
+  "path": "/uk/tools/adjust-audio-volume"
+ },
+ "tools/adjust-image-contrast": {
+  "name": "Налаштувати контраст",
+  "path": "/uk/tools/adjust-image-contrast"
+ },
+ "tools/adjust-image-hue": {
+  "name": "Змінити відтінок зображення",
+  "path": "/uk/tools/adjust-image-hue"
+ },
+ "tools/adjust-video-color": {
+  "name": "Яскравість і колір відео",
+  "path": "/uk/tools/adjust-video-color"
+ },
+ "tools/ai-document-scan": {
+  "name": "ШІ-сканування документів",
+  "path": "/uk/tools/ai-document-scan"
+ },
+ "tools/ai-frame-interpolation": {
+  "name": "ШІ-інтерполяція кадрів",
+  "path": "/uk/tools/ai-frame-interpolation"
+ },
+ "tools/ai-image-restoration": {
+  "name": "ШІ-реставрація та збільшення зображень",
+  "path": "/uk/tools/ai-image-restoration"
+ },
+ "tools/ai-image-upscaler": {
+  "name": "ШІ-збільшення зображення",
+  "path": "/uk/tools/ai-image-upscaler"
+ },
+ "tools/ai-video-restoration": {
+  "name": "ШІ-реставрація відео",
+  "path": "/uk/tools/ai-video-restoration"
+ },
+ "tools/aperture": {
+  "name": "Aperture",
+  "path": "/uk/tools/aperture"
+ },
+ "tools/apply-lut-to-photo": {
+  "name": "Застосувати LUT",
+  "path": "/uk/tools/apply-lut-to-photo"
+ },
+ "tools/audio-converter": {
+  "name": "Конвертер аудіо",
+  "path": "/uk/tools/audio-converter"
+ },
+ "tools/audio-equalizer": {
+  "name": "Аудіоеквалайзер",
+  "path": "/uk/tools/audio-equalizer"
+ },
+ "tools/audio-waveform-generator": {
+  "name": "Генератор аудіохвилі",
+  "path": "/uk/tools/audio-waveform-generator"
+ },
+ "tools/black-and-white-photo": {
+  "name": "Чорно-біле фото",
+  "path": "/uk/tools/black-and-white-photo"
+ },
+ "tools/blur-faces-in-photo": {
+  "name": "Розмиття облич на фото",
+  "path": "/uk/tools/blur-faces-in-photo"
+ },
+ "tools/blur-image": {
+  "name": "Розмиття зображення",
+  "path": "/uk/tools/blur-image"
+ },
+ "tools/brighten-image": {
+  "name": "Освітлити зображення",
+  "path": "/uk/tools/brighten-image"
+ },
+ "tools/caption-translator": {
+  "name": "Переклад субтитрів",
+  "path": "/uk/tools/caption-translator"
+ },
+ "tools/change-audio-pitch": {
+  "name": "Зміна тональності аудіо",
+  "path": "/uk/tools/change-audio-pitch"
+ },
+ "tools/change-audio-speed": {
+  "name": "Зміна швидкості аудіо",
+  "path": "/uk/tools/change-audio-speed"
+ },
+ "tools/change-image-color": {
+  "name": "Змінити колір об'єкта",
+  "path": "/uk/tools/change-image-color"
+ },
+ "tools/change-video-frame-rate": {
+  "name": "Зміна частоти кадрів відео",
+  "path": "/uk/tools/change-video-frame-rate"
+ },
+ "tools/change-video-speed": {
+  "name": "Зміна швидкості відео",
+  "path": "/uk/tools/change-video-speed"
+ },
+ "tools/clean-voice-audio": {
+  "name": "Очищення голосу",
+  "path": "/uk/tools/clean-voice-audio"
+ },
+ "tools/color-balance-photo": {
+  "name": "Колірний баланс",
+  "path": "/uk/tools/color-balance-photo"
+ },
+ "tools/color-pop": {
+  "name": "Колірний акцент",
+  "path": "/uk/tools/color-pop"
+ },
+ "tools/compress-image": {
+  "name": "Стиснення зображення",
+  "path": "/uk/tools/compress-image"
+ },
+ "tools/compress-video": {
+  "name": "Стиснення відео",
+  "path": "/uk/tools/compress-video"
+ },
+ "tools/content-studio": {
+  "name": "Darkroom",
+  "path": "/uk/tools/content-studio"
+ },
+ "tools/convert-audio-to-flac": {
+  "name": "Конвертація аудіо у FLAC",
+  "path": "/uk/tools/convert-audio-to-flac"
+ },
+ "tools/convert-audio-to-m4a": {
+  "name": "Конвертація аудіо в M4A / AAC",
+  "path": "/uk/tools/convert-audio-to-m4a"
+ },
+ "tools/convert-audio-to-ogg": {
+  "name": "Конвертація аудіо в OGG",
+  "path": "/uk/tools/convert-audio-to-ogg"
+ },
+ "tools/convert-audio-to-opus": {
+  "name": "Конвертація аудіо в Opus",
+  "path": "/uk/tools/convert-audio-to-opus"
+ },
+ "tools/convert-audio-to-wav": {
+  "name": "Конвертація аудіо у WAV",
+  "path": "/uk/tools/convert-audio-to-wav"
+ },
+ "tools/convert-avi-to-mp4": {
+  "name": "Конвертація AVI у MP4",
+  "path": "/uk/tools/convert-avi-to-mp4"
+ },
+ "tools/convert-avif-to-jpg": {
+  "name": "Конвертація AVIF у JPG",
+  "path": "/uk/tools/convert-avif-to-jpg"
+ },
+ "tools/convert-avif-to-png": {
+  "name": "Конвертація AVIF у PNG",
+  "path": "/uk/tools/convert-avif-to-png"
+ },
+ "tools/convert-heic-to-jpg": {
+  "name": "Конвертація HEIC у JPG",
+  "path": "/uk/tools/convert-heic-to-jpg"
+ },
+ "tools/convert-jpg-to-pdf": {
+  "name": "Конвертація JPG у PDF",
+  "path": "/uk/tools/convert-jpg-to-pdf"
+ },
+ "tools/convert-jpg-to-png": {
+  "name": "Конвертація JPG у PNG",
+  "path": "/uk/tools/convert-jpg-to-png"
+ },
+ "tools/convert-jpg-to-webp": {
+  "name": "Конвертація JPG у WebP",
+  "path": "/uk/tools/convert-jpg-to-webp"
+ },
+ "tools/convert-mkv-to-mp4": {
+  "name": "Конвертація MKV у MP4",
+  "path": "/uk/tools/convert-mkv-to-mp4"
+ },
+ "tools/convert-mov-to-mp4": {
+  "name": "Конвертація MOV у MP4",
+  "path": "/uk/tools/convert-mov-to-mp4"
+ },
+ "tools/convert-mp3-to-wav": {
+  "name": "Конвертація MP3 у WAV",
+  "path": "/uk/tools/convert-mp3-to-wav"
+ },
+ "tools/convert-mp4-to-webm": {
+  "name": "Конвертація MP4 у WebM",
+  "path": "/uk/tools/convert-mp4-to-webm"
+ },
+ "tools/convert-png-to-jpg": {
+  "name": "Конвертація PNG у JPG",
+  "path": "/uk/tools/convert-png-to-jpg"
+ },
+ "tools/convert-png-to-pdf": {
+  "name": "Конвертація PNG у PDF",
+  "path": "/uk/tools/convert-png-to-pdf"
+ },
+ "tools/convert-png-to-svg": {
+  "name": "Конвертація PNG у SVG",
+  "path": "/uk/tools/convert-png-to-svg"
+ },
+ "tools/convert-png-to-webp": {
+  "name": "Конвертація PNG у WebP",
+  "path": "/uk/tools/convert-png-to-webp"
+ },
+ "tools/convert-svg-to-png": {
+  "name": "Конвертація SVG у PNG",
+  "path": "/uk/tools/convert-svg-to-png"
+ },
+ "tools/convert-video-to-animated-gif": {
+  "name": "Конвертувати відео в анімований GIF",
+  "path": "/uk/tools/convert-video-to-animated-gif"
+ },
+ "tools/convert-video-to-hevc": {
+  "name": "Конвертація відео в HEVC (H.265)",
+  "path": "/uk/tools/convert-video-to-hevc"
+ },
+ "tools/convert-wav-to-mp3": {
+  "name": "Конвертація WAV у MP3",
+  "path": "/uk/tools/convert-wav-to-mp3"
+ },
+ "tools/convert-webm-to-mp4": {
+  "name": "Конвертація WebM у MP4",
+  "path": "/uk/tools/convert-webm-to-mp4"
+ },
+ "tools/convert-webp-to-jpg": {
+  "name": "Конвертація WebP у JPG",
+  "path": "/uk/tools/convert-webp-to-jpg"
+ },
+ "tools/convert-webp-to-png": {
+  "name": "Конвертація WebP у PNG",
+  "path": "/uk/tools/convert-webp-to-png"
+ },
+ "tools/crop-image": {
+  "name": "Обрізання зображення",
+  "path": "/uk/tools/crop-image"
+ },
+ "tools/crop-video": {
+  "name": "Кадрування відео",
+  "path": "/uk/tools/crop-video"
+ },
+ "tools/edit-image-metadata": {
+  "name": "Редагування метаданих зображення",
+  "path": "/uk/tools/edit-image-metadata"
+ },
+ "tools/extract-audio-from-video": {
+  "name": "Витягання аудіо з відео",
+  "path": "/uk/tools/extract-audio-from-video"
+ },
+ "tools/extract-frames-from-video": {
+  "name": "Видобування кадрів з відео",
+  "path": "/uk/tools/extract-frames-from-video"
+ },
+ "tools/extract-video-only-from-video": {
+  "name": "Відео без звуку",
+  "path": "/uk/tools/extract-video-only-from-video"
+ },
+ "tools/fix-perspective-photo": {
+  "name": "Виправити перспективу",
+  "path": "/uk/tools/fix-perspective-photo"
+ },
+ "tools/fix-photo-exposure": {
+  "name": "Виправити експозицію",
+  "path": "/uk/tools/fix-photo-exposure"
+ },
+ "tools/flip-video": {
+  "name": "Віддзеркалення та переворот відео",
+  "path": "/uk/tools/flip-video"
+ },
+ "tools/generate-vtt-captions": {
+  "name": "Генератор субтитрів VTT",
+  "path": "/uk/tools/generate-vtt-captions"
+ },
+ "tools/grayscale-image": {
+  "name": "Чорно-біле зображення",
+  "path": "/uk/tools/grayscale-image"
+ },
+ "tools/image-converter": {
+  "name": "Конвертер зображень",
+  "path": "/uk/tools/image-converter"
+ },
+ "tools/image-filters": {
+  "name": "Фільтри та ефекти для зображень",
+  "path": "/uk/tools/image-filters"
+ },
+ "tools/image-resizer": {
+  "name": "Зміна розміру зображення",
+  "path": "/uk/tools/image-resizer"
+ },
+ "tools/image-saturation": {
+  "name": "Насиченість зображення",
+  "path": "/uk/tools/image-saturation"
+ },
+ "tools/image-to-pdf": {
+  "name": "Зображення в PDF",
+  "path": "/uk/tools/image-to-pdf"
+ },
+ "tools/inspect-metadata": {
+  "name": "Перегляд метаданих",
+  "path": "/uk/tools/inspect-metadata"
+ },
+ "tools/invert-image-colors": {
+  "name": "Інвертувати кольори",
+  "path": "/uk/tools/invert-image-colors"
+ },
+ "tools/isolate-vocals-from-song": {
+  "name": "Виділення вокалу з пісні",
+  "path": "/uk/tools/isolate-vocals-from-song"
+ },
+ "tools/motion": {
+  "name": "Motion",
+  "path": "/uk/tools/motion"
+ },
+ "tools/normalize-audio": {
+  "name": "Нормалізація аудіо",
+  "path": "/uk/tools/normalize-audio"
+ },
+ "tools/pdf-converter": {
+  "name": "Конвертер PDF",
+  "path": "/uk/tools/pdf-converter"
+ },
+ "tools/pdf-to-jpg": {
+  "name": "PDF в JPG",
+  "path": "/uk/tools/pdf-to-jpg"
+ },
+ "tools/pdf-to-png": {
+  "name": "PDF в PNG",
+  "path": "/uk/tools/pdf-to-png"
+ },
+ "tools/photo-curves": {
+  "name": "Криві",
+  "path": "/uk/tools/photo-curves"
+ },
+ "tools/photo-levels": {
+  "name": "Рівні",
+  "path": "/uk/tools/photo-levels"
+ },
+ "tools/png-to-ico": {
+  "name": "PNG в ICO",
+  "path": "/uk/tools/png-to-ico"
+ },
+ "tools/posterize-image": {
+  "name": "Постеризація",
+  "path": "/uk/tools/posterize-image"
+ },
+ "tools/redact-text-in-image": {
+  "name": "Приховування тексту на зображенні",
+  "path": "/uk/tools/redact-text-in-image"
+ },
+ "tools/reduce-image-noise": {
+  "name": "Зменшити шум",
+  "path": "/uk/tools/reduce-image-noise"
+ },
+ "tools/remove-audio-from-video": {
+  "name": "Видалення звуку з відео",
+  "path": "/uk/tools/remove-audio-from-video"
+ },
+ "tools/remove-background-from-image": {
+  "name": "Видалення фону із зображення",
+  "path": "/uk/tools/remove-background-from-image"
+ },
+ "tools/remove-background-noise": {
+  "name": "Видалення фонового шуму",
+  "path": "/uk/tools/remove-background-noise"
+ },
+ "tools/remove-blemishes": {
+  "name": "Прибрати дефекти",
+  "path": "/uk/tools/remove-blemishes"
+ },
+ "tools/remove-exif-metadata": {
+  "name": "Видалення EXIF-метаданих із зображень",
+  "path": "/uk/tools/remove-exif-metadata"
+ },
+ "tools/remove-object-from-photo": {
+  "name": "Видалення об’єкта з фото",
+  "path": "/uk/tools/remove-object-from-photo"
+ },
+ "tools/remove-vocals-from-song": {
+  "name": "Видалення вокалу з пісні",
+  "path": "/uk/tools/remove-vocals-from-song"
+ },
+ "tools/resize-video": {
+  "name": "Зміна розміру відео",
+  "path": "/uk/tools/resize-video"
+ },
+ "tools/reverse-video": {
+  "name": "Реверс відео",
+  "path": "/uk/tools/reverse-video"
+ },
+ "tools/rotate-image": {
+  "name": "Обертання зображення",
+  "path": "/uk/tools/rotate-image"
+ },
+ "tools/rotate-video": {
+  "name": "Повертання відео",
+  "path": "/uk/tools/rotate-video"
+ },
+ "tools/select-by-color": {
+  "name": "Виділити за кольором",
+  "path": "/uk/tools/select-by-color"
+ },
+ "tools/sharpen-image": {
+  "name": "Підвищення різкості зображення",
+  "path": "/uk/tools/sharpen-image"
+ },
+ "tools/sharpen-photo-online": {
+  "name": "Підвищити різкість фото",
+  "path": "/uk/tools/sharpen-photo-online"
+ },
+ "tools/split-toning": {
+  "name": "Розділене тонування",
+  "path": "/uk/tools/split-toning"
+ },
+ "tools/srt-generator": {
+  "name": "Генератор SRT",
+  "path": "/uk/tools/srt-generator"
+ },
+ "tools/stabilize-video": {
+  "name": "Стабілізація відео",
+  "path": "/uk/tools/stabilize-video"
+ },
+ "tools/stitch-audio-to-video": {
+  "name": "Додавання аудіо до відео",
+  "path": "/uk/tools/stitch-audio-to-video"
+ },
+ "tools/straighten-photo": {
+  "name": "Вирівняти фото",
+  "path": "/uk/tools/straighten-photo"
+ },
+ "tools/summarize-audio": {
+  "name": "Зведення аудіо",
+  "path": "/uk/tools/summarize-audio"
+ },
+ "tools/summarize-video": {
+  "name": "Зведення відео",
+  "path": "/uk/tools/summarize-video"
+ },
+ "tools/tint-photo": {
+  "name": "Тонувати фото",
+  "path": "/uk/tools/tint-photo"
+ },
+ "tools/transcode-to-dash": {
+  "name": "Транскодування відео в DASH (AV1 / VP9)",
+  "path": "/uk/tools/transcode-to-dash"
+ },
+ "tools/transcode-to-hls": {
+  "name": "Транскодування відео в HLS",
+  "path": "/uk/tools/transcode-to-hls"
+ },
+ "tools/transcribe-audio": {
+  "name": "Розшифрування аудіо",
+  "path": "/uk/tools/transcribe-audio"
+ },
+ "tools/transcribe-video": {
+  "name": "Транскрибування відео",
+  "path": "/uk/tools/transcribe-video"
+ },
+ "tools/trim-audio": {
+  "name": "Обрізання аудіо",
+  "path": "/uk/tools/trim-audio"
+ },
+ "tools/video-converter": {
+  "name": "Конвертер відео",
+  "path": "/uk/tools/video-converter"
+ },
+ "tools/video-trimmer": {
+  "name": "Обрізання відео",
+  "path": "/uk/tools/video-trimmer"
+ },
+ "tools/voice-changer": {
+  "name": "Зміна голосу",
+  "path": "/uk/tools/voice-changer"
+ },
+ "tools/voice-cloning": {
+  "name": "Клонування голосу",
+  "path": "/uk/tools/voice-cloning"
+ },
+ "tools/voice-designer": {
+  "name": "Конструктор голосу",
+  "path": "/uk/tools/voice-designer"
+ },
+ "tools/white-balance-photo": {
+  "name": "Баланс білого",
+  "path": "/uk/tools/white-balance-photo"
+ }
+}

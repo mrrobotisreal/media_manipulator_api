@@ -1,0 +1,598 @@
+{
+ "pages/about": {
+  "name": "About",
+  "path": "/about"
+ },
+ "pages/account": {
+  "name": "Your account",
+  "path": "/account"
+ },
+ "pages/blog": {
+  "name": "Blog",
+  "path": "/blog"
+ },
+ "pages/blog/audio/audio-quality-guide": {
+  "name": "Audio Quality Guide: Bitrate, Formats, Compression & Cleanup",
+  "path": "/blog/audio/audio-quality-guide"
+ },
+ "pages/blog/image/image-optimization-guide": {
+  "name": "Image Optimization for Web Jedis: JPG vs PNG vs WebP",
+  "path": "/blog/image/image-optimization-guide"
+ },
+ "pages/blog/video/video-compression-guide": {
+  "name": "The Hitchhiker's Guide to Video Compression: MP4 vs WebM vs AVI vs MOV",
+  "path": "/blog/video/video-compression-guide"
+ },
+ "pages/changelog": {
+  "name": "Changelog",
+  "path": "/changelog"
+ },
+ "pages/contact": {
+  "name": "Contact",
+  "path": "/contact"
+ },
+ "pages/delete-account": {
+  "name": "Delete account",
+  "path": "/delete-account"
+ },
+ "pages/home": {
+  "name": "Home",
+  "path": "/"
+ },
+ "pages/how-it-works": {
+  "name": "How it works",
+  "path": "/how-it-works"
+ },
+ "pages/licenses": {
+  "name": "Open-source licences",
+  "path": "/licenses"
+ },
+ "pages/pricing": {
+  "name": "Pricing",
+  "path": "/pricing"
+ },
+ "pages/privacy-policy": {
+  "name": "Privacy Policy",
+  "path": "/privacy-policy"
+ },
+ "pages/status": {
+  "name": "Status",
+  "path": "/status"
+ },
+ "pages/terms-of-service": {
+  "name": "Terms of Service",
+  "path": "/terms-of-service"
+ },
+ "pages/tools": {
+  "name": "Tools",
+  "path": "/tools"
+ },
+ "pages/tutorials": {
+  "name": "Tutorials",
+  "path": "/tutorials"
+ },
+ "pages/tutorials/ai-frame-interpolation": {
+  "name": "What Is AI Frame Interpolation?",
+  "path": "/tutorials/ai-frame-interpolation"
+ },
+ "pages/tutorials/aperture": {
+  "name": "How to edit a photo online with Aperture",
+  "path": "/tutorials/aperture"
+ },
+ "pages/tutorials/audio/getting-started": {
+  "name": "Getting Started: Converting Audio Files",
+  "path": "/tutorials/audio/getting-started"
+ },
+ "pages/tutorials/content-studio": {
+  "name": "How to Use Darkroom: Multi-Track Video Editing in Your Browser",
+  "path": "/tutorials/content-studio"
+ },
+ "pages/tutorials/image/getting-started": {
+  "name": "Getting Started: Converting Image Files",
+  "path": "/tutorials/image/getting-started"
+ },
+ "pages/tutorials/motion": {
+  "name": "How to Animate an SVG with Motion",
+  "path": "/tutorials/motion"
+ },
+ "pages/tutorials/video/getting-started": {
+  "name": "Getting Started: Converting Video Files",
+  "path": "/tutorials/video/getting-started"
+ },
+ "pages/voices": {
+  "name": "Voices",
+  "path": "/voices"
+ },
+ "tools/add-reverb-to-audio": {
+  "name": "Add Reverb to Audio",
+  "path": "/tools/add-reverb-to-audio"
+ },
+ "tools/add-text-to-image": {
+  "name": "Add Text to Image",
+  "path": "/tools/add-text-to-image"
+ },
+ "tools/add-vignette": {
+  "name": "Add a vignette",
+  "path": "/tools/add-vignette"
+ },
+ "tools/adjust-audio-volume": {
+  "name": "Adjust Audio Volume",
+  "path": "/tools/adjust-audio-volume"
+ },
+ "tools/adjust-image-contrast": {
+  "name": "Adjust contrast",
+  "path": "/tools/adjust-image-contrast"
+ },
+ "tools/adjust-image-hue": {
+  "name": "Adjust image hue",
+  "path": "/tools/adjust-image-hue"
+ },
+ "tools/adjust-video-color": {
+  "name": "Adjust Video Brightness & Color",
+  "path": "/tools/adjust-video-color"
+ },
+ "tools/ai-document-scan": {
+  "name": "AI Document Scan",
+  "path": "/tools/ai-document-scan"
+ },
+ "tools/ai-frame-interpolation": {
+  "name": "AI Frame Interpolation",
+  "path": "/tools/ai-frame-interpolation"
+ },
+ "tools/ai-image-restoration": {
+  "name": "AI Image Restoration & Upscaling",
+  "path": "/tools/ai-image-restoration"
+ },
+ "tools/ai-image-upscaler": {
+  "name": "AI Image Upscaler",
+  "path": "/tools/ai-image-upscaler"
+ },
+ "tools/ai-video-restoration": {
+  "name": "AI Video Restoration",
+  "path": "/tools/ai-video-restoration"
+ },
+ "tools/aperture": {
+  "name": "Aperture",
+  "path": "/tools/aperture"
+ },
+ "tools/apply-lut-to-photo": {
+  "name": "Apply a LUT",
+  "path": "/tools/apply-lut-to-photo"
+ },
+ "tools/audio-converter": {
+  "name": "Audio Converter",
+  "path": "/tools/audio-converter"
+ },
+ "tools/audio-equalizer": {
+  "name": "Audio Equalizer",
+  "path": "/tools/audio-equalizer"
+ },
+ "tools/audio-waveform-generator": {
+  "name": "Audio Waveform Generator",
+  "path": "/tools/audio-waveform-generator"
+ },
+ "tools/black-and-white-photo": {
+  "name": "Black & white photo",
+  "path": "/tools/black-and-white-photo"
+ },
+ "tools/blur-faces-in-photo": {
+  "name": "Blur Faces in Photo",
+  "path": "/tools/blur-faces-in-photo"
+ },
+ "tools/blur-image": {
+  "name": "Blur Image",
+  "path": "/tools/blur-image"
+ },
+ "tools/brighten-image": {
+  "name": "Brighten image",
+  "path": "/tools/brighten-image"
+ },
+ "tools/caption-translator": {
+  "name": "Caption Translator",
+  "path": "/tools/caption-translator"
+ },
+ "tools/change-audio-pitch": {
+  "name": "Change Audio Pitch",
+  "path": "/tools/change-audio-pitch"
+ },
+ "tools/change-audio-speed": {
+  "name": "Change Audio Speed",
+  "path": "/tools/change-audio-speed"
+ },
+ "tools/change-image-color": {
+  "name": "Change object color",
+  "path": "/tools/change-image-color"
+ },
+ "tools/change-video-frame-rate": {
+  "name": "Change Video Frame Rate",
+  "path": "/tools/change-video-frame-rate"
+ },
+ "tools/change-video-speed": {
+  "name": "Change Video Speed",
+  "path": "/tools/change-video-speed"
+ },
+ "tools/clean-voice-audio": {
+  "name": "Clean Voice Audio",
+  "path": "/tools/clean-voice-audio"
+ },
+ "tools/color-balance-photo": {
+  "name": "Color balance",
+  "path": "/tools/color-balance-photo"
+ },
+ "tools/color-pop": {
+  "name": "Color pop",
+  "path": "/tools/color-pop"
+ },
+ "tools/compress-image": {
+  "name": "Compress Image",
+  "path": "/tools/compress-image"
+ },
+ "tools/compress-video": {
+  "name": "Compress Video",
+  "path": "/tools/compress-video"
+ },
+ "tools/content-studio": {
+  "name": "Darkroom",
+  "path": "/tools/content-studio"
+ },
+ "tools/convert-audio-to-flac": {
+  "name": "Convert Audio to FLAC",
+  "path": "/tools/convert-audio-to-flac"
+ },
+ "tools/convert-audio-to-m4a": {
+  "name": "Convert Audio to M4A / AAC",
+  "path": "/tools/convert-audio-to-m4a"
+ },
+ "tools/convert-audio-to-ogg": {
+  "name": "Convert Audio to OGG",
+  "path": "/tools/convert-audio-to-ogg"
+ },
+ "tools/convert-audio-to-opus": {
+  "name": "Convert Audio to Opus",
+  "path": "/tools/convert-audio-to-opus"
+ },
+ "tools/convert-audio-to-wav": {
+  "name": "Convert Audio to WAV",
+  "path": "/tools/convert-audio-to-wav"
+ },
+ "tools/convert-avi-to-mp4": {
+  "name": "Convert AVI to MP4",
+  "path": "/tools/convert-avi-to-mp4"
+ },
+ "tools/convert-avif-to-jpg": {
+  "name": "Convert AVIF to JPG",
+  "path": "/tools/convert-avif-to-jpg"
+ },
+ "tools/convert-avif-to-png": {
+  "name": "Convert AVIF to PNG",
+  "path": "/tools/convert-avif-to-png"
+ },
+ "tools/convert-heic-to-jpg": {
+  "name": "Convert HEIC to JPG",
+  "path": "/tools/convert-heic-to-jpg"
+ },
+ "tools/convert-jpg-to-pdf": {
+  "name": "Convert JPG to PDF",
+  "path": "/tools/convert-jpg-to-pdf"
+ },
+ "tools/convert-jpg-to-png": {
+  "name": "Convert JPG to PNG",
+  "path": "/tools/convert-jpg-to-png"
+ },
+ "tools/convert-jpg-to-webp": {
+  "name": "Convert JPG to WebP",
+  "path": "/tools/convert-jpg-to-webp"
+ },
+ "tools/convert-mkv-to-mp4": {
+  "name": "Convert MKV to MP4",
+  "path": "/tools/convert-mkv-to-mp4"
+ },
+ "tools/convert-mov-to-mp4": {
+  "name": "Convert MOV to MP4",
+  "path": "/tools/convert-mov-to-mp4"
+ },
+ "tools/convert-mp3-to-wav": {
+  "name": "Convert MP3 to WAV",
+  "path": "/tools/convert-mp3-to-wav"
+ },
+ "tools/convert-mp4-to-webm": {
+  "name": "Convert MP4 to WebM",
+  "path": "/tools/convert-mp4-to-webm"
+ },
+ "tools/convert-png-to-jpg": {
+  "name": "Convert PNG to JPG",
+  "path": "/tools/convert-png-to-jpg"
+ },
+ "tools/convert-png-to-pdf": {
+  "name": "Convert PNG to PDF",
+  "path": "/tools/convert-png-to-pdf"
+ },
+ "tools/convert-png-to-svg": {
+  "name": "Convert PNG to SVG",
+  "path": "/tools/convert-png-to-svg"
+ },
+ "tools/convert-png-to-webp": {
+  "name": "Convert PNG to WebP",
+  "path": "/tools/convert-png-to-webp"
+ },
+ "tools/convert-svg-to-png": {
+  "name": "Convert SVG to PNG",
+  "path": "/tools/convert-svg-to-png"
+ },
+ "tools/convert-video-to-animated-gif": {
+  "name": "Convert Video to Animated GIF",
+  "path": "/tools/convert-video-to-animated-gif"
+ },
+ "tools/convert-video-to-hevc": {
+  "name": "Convert Video to HEVC (H.265)",
+  "path": "/tools/convert-video-to-hevc"
+ },
+ "tools/convert-wav-to-mp3": {
+  "name": "Convert WAV to MP3",
+  "path": "/tools/convert-wav-to-mp3"
+ },
+ "tools/convert-webm-to-mp4": {
+  "name": "Convert WebM to MP4",
+  "path": "/tools/convert-webm-to-mp4"
+ },
+ "tools/convert-webp-to-jpg": {
+  "name": "Convert WebP to JPG",
+  "path": "/tools/convert-webp-to-jpg"
+ },
+ "tools/convert-webp-to-png": {
+  "name": "Convert WebP to PNG",
+  "path": "/tools/convert-webp-to-png"
+ },
+ "tools/crop-image": {
+  "name": "Crop Image",
+  "path": "/tools/crop-image"
+ },
+ "tools/crop-video": {
+  "name": "Crop Video",
+  "path": "/tools/crop-video"
+ },
+ "tools/edit-image-metadata": {
+  "name": "Edit Image Metadata",
+  "path": "/tools/edit-image-metadata"
+ },
+ "tools/extract-audio-from-video": {
+  "name": "Extract Audio from Video",
+  "path": "/tools/extract-audio-from-video"
+ },
+ "tools/extract-frames-from-video": {
+  "name": "Extract Frames from Video",
+  "path": "/tools/extract-frames-from-video"
+ },
+ "tools/extract-video-only-from-video": {
+  "name": "Extract Video Without Audio",
+  "path": "/tools/extract-video-only-from-video"
+ },
+ "tools/fix-perspective-photo": {
+  "name": "Fix perspective",
+  "path": "/tools/fix-perspective-photo"
+ },
+ "tools/fix-photo-exposure": {
+  "name": "Fix exposure",
+  "path": "/tools/fix-photo-exposure"
+ },
+ "tools/flip-video": {
+  "name": "Flip & Mirror Video",
+  "path": "/tools/flip-video"
+ },
+ "tools/generate-vtt-captions": {
+  "name": "VTT Caption Generator",
+  "path": "/tools/generate-vtt-captions"
+ },
+ "tools/grayscale-image": {
+  "name": "Convert Image to Black & White",
+  "path": "/tools/grayscale-image"
+ },
+ "tools/image-converter": {
+  "name": "Image Converter",
+  "path": "/tools/image-converter"
+ },
+ "tools/image-filters": {
+  "name": "Image Filters & Effects",
+  "path": "/tools/image-filters"
+ },
+ "tools/image-resizer": {
+  "name": "Image Resizer",
+  "path": "/tools/image-resizer"
+ },
+ "tools/image-saturation": {
+  "name": "Image saturation",
+  "path": "/tools/image-saturation"
+ },
+ "tools/image-to-pdf": {
+  "name": "Image to PDF",
+  "path": "/tools/image-to-pdf"
+ },
+ "tools/inspect-metadata": {
+  "name": "Metadata Inspector",
+  "path": "/tools/inspect-metadata"
+ },
+ "tools/invert-image-colors": {
+  "name": "Invert colors",
+  "path": "/tools/invert-image-colors"
+ },
+ "tools/isolate-vocals-from-song": {
+  "name": "Isolate Vocals from a Song",
+  "path": "/tools/isolate-vocals-from-song"
+ },
+ "tools/motion": {
+  "name": "Motion",
+  "path": "/tools/motion"
+ },
+ "tools/normalize-audio": {
+  "name": "Normalize Audio",
+  "path": "/tools/normalize-audio"
+ },
+ "tools/pdf-converter": {
+  "name": "PDF Converter",
+  "path": "/tools/pdf-converter"
+ },
+ "tools/pdf-to-jpg": {
+  "name": "PDF to JPG",
+  "path": "/tools/pdf-to-jpg"
+ },
+ "tools/pdf-to-png": {
+  "name": "PDF to PNG",
+  "path": "/tools/pdf-to-png"
+ },
+ "tools/photo-curves": {
+  "name": "Curves",
+  "path": "/tools/photo-curves"
+ },
+ "tools/photo-levels": {
+  "name": "Levels",
+  "path": "/tools/photo-levels"
+ },
+ "tools/png-to-ico": {
+  "name": "PNG to ICO",
+  "path": "/tools/png-to-ico"
+ },
+ "tools/posterize-image": {
+  "name": "Posterize",
+  "path": "/tools/posterize-image"
+ },
+ "tools/redact-text-in-image": {
+  "name": "Redact Text in Image",
+  "path": "/tools/redact-text-in-image"
+ },
+ "tools/reduce-image-noise": {
+  "name": "Reduce image noise",
+  "path": "/tools/reduce-image-noise"
+ },
+ "tools/remove-audio-from-video": {
+  "name": "Remove Audio from Video",
+  "path": "/tools/remove-audio-from-video"
+ },
+ "tools/remove-background-from-image": {
+  "name": "Remove Background from Image",
+  "path": "/tools/remove-background-from-image"
+ },
+ "tools/remove-background-noise": {
+  "name": "Remove Background Noise",
+  "path": "/tools/remove-background-noise"
+ },
+ "tools/remove-blemishes": {
+  "name": "Remove blemishes",
+  "path": "/tools/remove-blemishes"
+ },
+ "tools/remove-exif-metadata": {
+  "name": "Remove EXIF Metadata from Images",
+  "path": "/tools/remove-exif-metadata"
+ },
+ "tools/remove-object-from-photo": {
+  "name": "Remove Object from Photo",
+  "path": "/tools/remove-object-from-photo"
+ },
+ "tools/remove-vocals-from-song": {
+  "name": "Remove Vocals from a Song",
+  "path": "/tools/remove-vocals-from-song"
+ },
+ "tools/resize-video": {
+  "name": "Resize Video",
+  "path": "/tools/resize-video"
+ },
+ "tools/reverse-video": {
+  "name": "Reverse Video",
+  "path": "/tools/reverse-video"
+ },
+ "tools/rotate-image": {
+  "name": "Rotate Image",
+  "path": "/tools/rotate-image"
+ },
+ "tools/rotate-video": {
+  "name": "Rotate Video",
+  "path": "/tools/rotate-video"
+ },
+ "tools/select-by-color": {
+  "name": "Select by color",
+  "path": "/tools/select-by-color"
+ },
+ "tools/sharpen-image": {
+  "name": "Sharpen Image",
+  "path": "/tools/sharpen-image"
+ },
+ "tools/sharpen-photo-online": {
+  "name": "Sharpen a photo",
+  "path": "/tools/sharpen-photo-online"
+ },
+ "tools/split-toning": {
+  "name": "Split toning",
+  "path": "/tools/split-toning"
+ },
+ "tools/srt-generator": {
+  "name": "SRT Generator",
+  "path": "/tools/srt-generator"
+ },
+ "tools/stabilize-video": {
+  "name": "Stabilize Video",
+  "path": "/tools/stabilize-video"
+ },
+ "tools/stitch-audio-to-video": {
+  "name": "Add Audio to Video",
+  "path": "/tools/stitch-audio-to-video"
+ },
+ "tools/straighten-photo": {
+  "name": "Straighten a photo",
+  "path": "/tools/straighten-photo"
+ },
+ "tools/summarize-audio": {
+  "name": "Summarize Audio",
+  "path": "/tools/summarize-audio"
+ },
+ "tools/summarize-video": {
+  "name": "Summarize Video",
+  "path": "/tools/summarize-video"
+ },
+ "tools/tint-photo": {
+  "name": "Tint a photo",
+  "path": "/tools/tint-photo"
+ },
+ "tools/transcode-to-dash": {
+  "name": "Transcode Video to DASH (AV1 / VP9)",
+  "path": "/tools/transcode-to-dash"
+ },
+ "tools/transcode-to-hls": {
+  "name": "Transcode Video to HLS",
+  "path": "/tools/transcode-to-hls"
+ },
+ "tools/transcribe-audio": {
+  "name": "Transcribe Audio",
+  "path": "/tools/transcribe-audio"
+ },
+ "tools/transcribe-video": {
+  "name": "Transcribe Video",
+  "path": "/tools/transcribe-video"
+ },
+ "tools/trim-audio": {
+  "name": "Trim Audio",
+  "path": "/tools/trim-audio"
+ },
+ "tools/video-converter": {
+  "name": "Video Converter",
+  "path": "/tools/video-converter"
+ },
+ "tools/video-trimmer": {
+  "name": "Video Trimmer",
+  "path": "/tools/video-trimmer"
+ },
+ "tools/voice-changer": {
+  "name": "Voice changer",
+  "path": "/tools/voice-changer"
+ },
+ "tools/voice-cloning": {
+  "name": "Voice cloning",
+  "path": "/tools/voice-cloning"
+ },
+ "tools/voice-designer": {
+  "name": "Voice designer",
+  "path": "/tools/voice-designer"
+ },
+ "tools/white-balance-photo": {
+  "name": "White balance",
+  "path": "/tools/white-balance-photo"
+ }
+}

@@ -1,0 +1,598 @@
+{
+ "pages/about": {
+  "name": "Giới thiệu",
+  "path": "/vi/about"
+ },
+ "pages/account": {
+  "name": "Tài khoản của bạn",
+  "path": "/vi/account"
+ },
+ "pages/blog": {
+  "name": "Blog",
+  "path": "/vi/blog"
+ },
+ "pages/blog/audio/audio-quality-guide": {
+  "name": "Audio Quality Guide: Bitrate, Formats, Compression & Cleanup",
+  "path": "/vi/blog/audio/audio-quality-guide"
+ },
+ "pages/blog/image/image-optimization-guide": {
+  "name": "Tối ưu hình ảnh cho Jedi web: JPG vs PNG vs WebP",
+  "path": "/vi/blog/image/image-optimization-guide"
+ },
+ "pages/blog/video/video-compression-guide": {
+  "name": "Cẩm nang nén video cho người đi bụi: MP4 vs WebM vs AVI vs MOV",
+  "path": "/vi/blog/video/video-compression-guide"
+ },
+ "pages/changelog": {
+  "name": "Nhật ký thay đổi",
+  "path": "/vi/changelog"
+ },
+ "pages/contact": {
+  "name": "Liên hệ",
+  "path": "/vi/contact"
+ },
+ "pages/delete-account": {
+  "name": "Xóa tài khoản",
+  "path": "/vi/delete-account"
+ },
+ "pages/home": {
+  "name": "Trang chủ",
+  "path": "/vi"
+ },
+ "pages/how-it-works": {
+  "name": "Cách hoạt động",
+  "path": "/vi/how-it-works"
+ },
+ "pages/licenses": {
+  "name": "Giấy phép mã nguồn mở",
+  "path": "/vi/licenses"
+ },
+ "pages/pricing": {
+  "name": "Bảng giá",
+  "path": "/vi/pricing"
+ },
+ "pages/privacy-policy": {
+  "name": "Chính sách quyền riêng tư",
+  "path": "/vi/privacy-policy"
+ },
+ "pages/status": {
+  "name": "Trạng thái",
+  "path": "/vi/status"
+ },
+ "pages/terms-of-service": {
+  "name": "Điều khoản dịch vụ",
+  "path": "/vi/terms-of-service"
+ },
+ "pages/tools": {
+  "name": "Công cụ",
+  "path": "/vi/tools"
+ },
+ "pages/tutorials": {
+  "name": "Hướng dẫn",
+  "path": "/vi/tutorials"
+ },
+ "pages/tutorials/ai-frame-interpolation": {
+  "name": "Nội suy khung hình AI là gì?",
+  "path": "/vi/tutorials/ai-frame-interpolation"
+ },
+ "pages/tutorials/aperture": {
+  "name": "Cách chỉnh sửa ảnh trực tuyến với Aperture",
+  "path": "/vi/tutorials/aperture"
+ },
+ "pages/tutorials/audio/getting-started": {
+  "name": "Bắt đầu: Chuyển đổi tệp âm thanh",
+  "path": "/vi/tutorials/audio/getting-started"
+ },
+ "pages/tutorials/content-studio": {
+  "name": "Cách dùng Darkroom: Biên tập video đa track trong trình duyệt",
+  "path": "/vi/tutorials/content-studio"
+ },
+ "pages/tutorials/image/getting-started": {
+  "name": "Bắt đầu: Chuyển đổi tệp hình ảnh",
+  "path": "/vi/tutorials/image/getting-started"
+ },
+ "pages/tutorials/motion": {
+  "name": "Cách tạo hoạt ảnh cho SVG với Motion",
+  "path": "/vi/tutorials/motion"
+ },
+ "pages/tutorials/video/getting-started": {
+  "name": "Bắt đầu: Chuyển đổi tệp video",
+  "path": "/vi/tutorials/video/getting-started"
+ },
+ "pages/voices": {
+  "name": "Giọng nói",
+  "path": "/vi/voices"
+ },
+ "tools/add-reverb-to-audio": {
+  "name": "Thêm hiệu ứng vang vào âm thanh",
+  "path": "/vi/tools/add-reverb-to-audio"
+ },
+ "tools/add-text-to-image": {
+  "name": "Thêm chữ vào ảnh",
+  "path": "/vi/tools/add-text-to-image"
+ },
+ "tools/add-vignette": {
+  "name": "Thêm tối góc",
+  "path": "/vi/tools/add-vignette"
+ },
+ "tools/adjust-audio-volume": {
+  "name": "Chỉnh âm lượng",
+  "path": "/vi/tools/adjust-audio-volume"
+ },
+ "tools/adjust-image-contrast": {
+  "name": "Chỉnh độ tương phản",
+  "path": "/vi/tools/adjust-image-contrast"
+ },
+ "tools/adjust-image-hue": {
+  "name": "Chỉnh sắc độ ảnh",
+  "path": "/vi/tools/adjust-image-hue"
+ },
+ "tools/adjust-video-color": {
+  "name": "Chỉnh độ sáng và màu video",
+  "path": "/vi/tools/adjust-video-color"
+ },
+ "tools/ai-document-scan": {
+  "name": "Quét tài liệu bằng AI",
+  "path": "/vi/tools/ai-document-scan"
+ },
+ "tools/ai-frame-interpolation": {
+  "name": "Nội suy khung hình bằng AI",
+  "path": "/vi/tools/ai-frame-interpolation"
+ },
+ "tools/ai-image-restoration": {
+  "name": "Phục hồi và nâng độ phân giải ảnh bằng AI",
+  "path": "/vi/tools/ai-image-restoration"
+ },
+ "tools/ai-image-upscaler": {
+  "name": "Nâng độ phân giải ảnh bằng AI",
+  "path": "/vi/tools/ai-image-upscaler"
+ },
+ "tools/ai-video-restoration": {
+  "name": "Phục hồi video bằng AI",
+  "path": "/vi/tools/ai-video-restoration"
+ },
+ "tools/aperture": {
+  "name": "Aperture",
+  "path": "/vi/tools/aperture"
+ },
+ "tools/apply-lut-to-photo": {
+  "name": "Áp dụng LUT",
+  "path": "/vi/tools/apply-lut-to-photo"
+ },
+ "tools/audio-converter": {
+  "name": "Bộ chuyển đổi âm thanh",
+  "path": "/vi/tools/audio-converter"
+ },
+ "tools/audio-equalizer": {
+  "name": "Bộ cân bằng âm thanh",
+  "path": "/vi/tools/audio-equalizer"
+ },
+ "tools/audio-waveform-generator": {
+  "name": "Trình tạo dạng sóng âm thanh",
+  "path": "/vi/tools/audio-waveform-generator"
+ },
+ "tools/black-and-white-photo": {
+  "name": "Ảnh đen trắng",
+  "path": "/vi/tools/black-and-white-photo"
+ },
+ "tools/blur-faces-in-photo": {
+  "name": "Làm mờ khuôn mặt trong ảnh",
+  "path": "/vi/tools/blur-faces-in-photo"
+ },
+ "tools/blur-image": {
+  "name": "Làm mờ ảnh",
+  "path": "/vi/tools/blur-image"
+ },
+ "tools/brighten-image": {
+  "name": "Làm sáng ảnh",
+  "path": "/vi/tools/brighten-image"
+ },
+ "tools/caption-translator": {
+  "name": "Trình dịch phụ đề",
+  "path": "/vi/tools/caption-translator"
+ },
+ "tools/change-audio-pitch": {
+  "name": "Đổi cao độ âm thanh",
+  "path": "/vi/tools/change-audio-pitch"
+ },
+ "tools/change-audio-speed": {
+  "name": "Đổi tốc độ âm thanh",
+  "path": "/vi/tools/change-audio-speed"
+ },
+ "tools/change-image-color": {
+  "name": "Đổi màu vật thể",
+  "path": "/vi/tools/change-image-color"
+ },
+ "tools/change-video-frame-rate": {
+  "name": "Đổi tốc độ khung hình video",
+  "path": "/vi/tools/change-video-frame-rate"
+ },
+ "tools/change-video-speed": {
+  "name": "Đổi tốc độ video",
+  "path": "/vi/tools/change-video-speed"
+ },
+ "tools/clean-voice-audio": {
+  "name": "Làm sạch âm thanh giọng nói",
+  "path": "/vi/tools/clean-voice-audio"
+ },
+ "tools/color-balance-photo": {
+  "name": "Cân bằng màu",
+  "path": "/vi/tools/color-balance-photo"
+ },
+ "tools/color-pop": {
+  "name": "Nổi bật màu",
+  "path": "/vi/tools/color-pop"
+ },
+ "tools/compress-image": {
+  "name": "Nén ảnh",
+  "path": "/vi/tools/compress-image"
+ },
+ "tools/compress-video": {
+  "name": "Nén video",
+  "path": "/vi/tools/compress-video"
+ },
+ "tools/content-studio": {
+  "name": "Darkroom",
+  "path": "/vi/tools/content-studio"
+ },
+ "tools/convert-audio-to-flac": {
+  "name": "Chuyển âm thanh sang FLAC",
+  "path": "/vi/tools/convert-audio-to-flac"
+ },
+ "tools/convert-audio-to-m4a": {
+  "name": "Chuyển âm thanh sang M4A / AAC",
+  "path": "/vi/tools/convert-audio-to-m4a"
+ },
+ "tools/convert-audio-to-ogg": {
+  "name": "Chuyển âm thanh sang OGG",
+  "path": "/vi/tools/convert-audio-to-ogg"
+ },
+ "tools/convert-audio-to-opus": {
+  "name": "Chuyển âm thanh sang Opus",
+  "path": "/vi/tools/convert-audio-to-opus"
+ },
+ "tools/convert-audio-to-wav": {
+  "name": "Chuyển âm thanh sang WAV",
+  "path": "/vi/tools/convert-audio-to-wav"
+ },
+ "tools/convert-avi-to-mp4": {
+  "name": "Chuyển AVI sang MP4",
+  "path": "/vi/tools/convert-avi-to-mp4"
+ },
+ "tools/convert-avif-to-jpg": {
+  "name": "Chuyển AVIF sang JPG",
+  "path": "/vi/tools/convert-avif-to-jpg"
+ },
+ "tools/convert-avif-to-png": {
+  "name": "Chuyển AVIF sang PNG",
+  "path": "/vi/tools/convert-avif-to-png"
+ },
+ "tools/convert-heic-to-jpg": {
+  "name": "Chuyển HEIC sang JPG",
+  "path": "/vi/tools/convert-heic-to-jpg"
+ },
+ "tools/convert-jpg-to-pdf": {
+  "name": "Chuyển JPG sang PDF",
+  "path": "/vi/tools/convert-jpg-to-pdf"
+ },
+ "tools/convert-jpg-to-png": {
+  "name": "Chuyển JPG sang PNG",
+  "path": "/vi/tools/convert-jpg-to-png"
+ },
+ "tools/convert-jpg-to-webp": {
+  "name": "Chuyển JPG sang WebP",
+  "path": "/vi/tools/convert-jpg-to-webp"
+ },
+ "tools/convert-mkv-to-mp4": {
+  "name": "Chuyển MKV sang MP4",
+  "path": "/vi/tools/convert-mkv-to-mp4"
+ },
+ "tools/convert-mov-to-mp4": {
+  "name": "Chuyển MOV sang MP4",
+  "path": "/vi/tools/convert-mov-to-mp4"
+ },
+ "tools/convert-mp3-to-wav": {
+  "name": "Chuyển MP3 sang WAV",
+  "path": "/vi/tools/convert-mp3-to-wav"
+ },
+ "tools/convert-mp4-to-webm": {
+  "name": "Chuyển MP4 sang WebM",
+  "path": "/vi/tools/convert-mp4-to-webm"
+ },
+ "tools/convert-png-to-jpg": {
+  "name": "Chuyển PNG sang JPG",
+  "path": "/vi/tools/convert-png-to-jpg"
+ },
+ "tools/convert-png-to-pdf": {
+  "name": "Chuyển PNG sang PDF",
+  "path": "/vi/tools/convert-png-to-pdf"
+ },
+ "tools/convert-png-to-svg": {
+  "name": "Chuyển PNG sang SVG",
+  "path": "/vi/tools/convert-png-to-svg"
+ },
+ "tools/convert-png-to-webp": {
+  "name": "Chuyển PNG sang WebP",
+  "path": "/vi/tools/convert-png-to-webp"
+ },
+ "tools/convert-svg-to-png": {
+  "name": "Chuyển SVG sang PNG",
+  "path": "/vi/tools/convert-svg-to-png"
+ },
+ "tools/convert-video-to-animated-gif": {
+  "name": "Chuyển video sang GIF động",
+  "path": "/vi/tools/convert-video-to-animated-gif"
+ },
+ "tools/convert-video-to-hevc": {
+  "name": "Chuyển video sang HEVC (H.265)",
+  "path": "/vi/tools/convert-video-to-hevc"
+ },
+ "tools/convert-wav-to-mp3": {
+  "name": "Chuyển WAV sang MP3",
+  "path": "/vi/tools/convert-wav-to-mp3"
+ },
+ "tools/convert-webm-to-mp4": {
+  "name": "Chuyển WebM sang MP4",
+  "path": "/vi/tools/convert-webm-to-mp4"
+ },
+ "tools/convert-webp-to-jpg": {
+  "name": "Chuyển WebP sang JPG",
+  "path": "/vi/tools/convert-webp-to-jpg"
+ },
+ "tools/convert-webp-to-png": {
+  "name": "Chuyển WebP sang PNG",
+  "path": "/vi/tools/convert-webp-to-png"
+ },
+ "tools/crop-image": {
+  "name": "Cắt ảnh",
+  "path": "/vi/tools/crop-image"
+ },
+ "tools/crop-video": {
+  "name": "Cắt khung video",
+  "path": "/vi/tools/crop-video"
+ },
+ "tools/edit-image-metadata": {
+  "name": "Chỉnh sửa siêu dữ liệu ảnh",
+  "path": "/vi/tools/edit-image-metadata"
+ },
+ "tools/extract-audio-from-video": {
+  "name": "Tách âm thanh khỏi video",
+  "path": "/vi/tools/extract-audio-from-video"
+ },
+ "tools/extract-frames-from-video": {
+  "name": "Tách khung hình từ video",
+  "path": "/vi/tools/extract-frames-from-video"
+ },
+ "tools/extract-video-only-from-video": {
+  "name": "Tách video không âm thanh",
+  "path": "/vi/tools/extract-video-only-from-video"
+ },
+ "tools/fix-perspective-photo": {
+  "name": "Sửa phối cảnh",
+  "path": "/vi/tools/fix-perspective-photo"
+ },
+ "tools/fix-photo-exposure": {
+  "name": "Sửa phơi sáng",
+  "path": "/vi/tools/fix-photo-exposure"
+ },
+ "tools/flip-video": {
+  "name": "Lật và phản chiếu video",
+  "path": "/vi/tools/flip-video"
+ },
+ "tools/generate-vtt-captions": {
+  "name": "Trình tạo phụ đề VTT",
+  "path": "/vi/tools/generate-vtt-captions"
+ },
+ "tools/grayscale-image": {
+  "name": "Chuyển ảnh sang đen trắng",
+  "path": "/vi/tools/grayscale-image"
+ },
+ "tools/image-converter": {
+  "name": "Bộ chuyển đổi ảnh",
+  "path": "/vi/tools/image-converter"
+ },
+ "tools/image-filters": {
+  "name": "Bộ lọc và hiệu ứng ảnh",
+  "path": "/vi/tools/image-filters"
+ },
+ "tools/image-resizer": {
+  "name": "Đổi kích thước ảnh",
+  "path": "/vi/tools/image-resizer"
+ },
+ "tools/image-saturation": {
+  "name": "Độ bão hòa ảnh",
+  "path": "/vi/tools/image-saturation"
+ },
+ "tools/image-to-pdf": {
+  "name": "Ảnh sang PDF",
+  "path": "/vi/tools/image-to-pdf"
+ },
+ "tools/inspect-metadata": {
+  "name": "Trình kiểm tra siêu dữ liệu",
+  "path": "/vi/tools/inspect-metadata"
+ },
+ "tools/invert-image-colors": {
+  "name": "Đảo ngược màu",
+  "path": "/vi/tools/invert-image-colors"
+ },
+ "tools/isolate-vocals-from-song": {
+  "name": "Tách giọng hát khỏi bài hát",
+  "path": "/vi/tools/isolate-vocals-from-song"
+ },
+ "tools/motion": {
+  "name": "Motion",
+  "path": "/vi/tools/motion"
+ },
+ "tools/normalize-audio": {
+  "name": "Chuẩn hóa âm thanh",
+  "path": "/vi/tools/normalize-audio"
+ },
+ "tools/pdf-converter": {
+  "name": "Bộ chuyển đổi PDF",
+  "path": "/vi/tools/pdf-converter"
+ },
+ "tools/pdf-to-jpg": {
+  "name": "PDF sang JPG",
+  "path": "/vi/tools/pdf-to-jpg"
+ },
+ "tools/pdf-to-png": {
+  "name": "PDF sang PNG",
+  "path": "/vi/tools/pdf-to-png"
+ },
+ "tools/photo-curves": {
+  "name": "Đường cong",
+  "path": "/vi/tools/photo-curves"
+ },
+ "tools/photo-levels": {
+  "name": "Mức",
+  "path": "/vi/tools/photo-levels"
+ },
+ "tools/png-to-ico": {
+  "name": "PNG sang ICO",
+  "path": "/vi/tools/png-to-ico"
+ },
+ "tools/posterize-image": {
+  "name": "Phân tách tông màu",
+  "path": "/vi/tools/posterize-image"
+ },
+ "tools/redact-text-in-image": {
+  "name": "Che văn bản trong ảnh",
+  "path": "/vi/tools/redact-text-in-image"
+ },
+ "tools/reduce-image-noise": {
+  "name": "Giảm nhiễu ảnh",
+  "path": "/vi/tools/reduce-image-noise"
+ },
+ "tools/remove-audio-from-video": {
+  "name": "Xóa âm thanh khỏi video",
+  "path": "/vi/tools/remove-audio-from-video"
+ },
+ "tools/remove-background-from-image": {
+  "name": "Xóa nền ảnh",
+  "path": "/vi/tools/remove-background-from-image"
+ },
+ "tools/remove-background-noise": {
+  "name": "Loại bỏ tiếng ồn nền",
+  "path": "/vi/tools/remove-background-noise"
+ },
+ "tools/remove-blemishes": {
+  "name": "Xóa khuyết điểm",
+  "path": "/vi/tools/remove-blemishes"
+ },
+ "tools/remove-exif-metadata": {
+  "name": "Xóa siêu dữ liệu EXIF khỏi ảnh",
+  "path": "/vi/tools/remove-exif-metadata"
+ },
+ "tools/remove-object-from-photo": {
+  "name": "Xóa vật thể khỏi ảnh",
+  "path": "/vi/tools/remove-object-from-photo"
+ },
+ "tools/remove-vocals-from-song": {
+  "name": "Loại bỏ giọng hát khỏi bài hát",
+  "path": "/vi/tools/remove-vocals-from-song"
+ },
+ "tools/resize-video": {
+  "name": "Đổi kích thước video",
+  "path": "/vi/tools/resize-video"
+ },
+ "tools/reverse-video": {
+  "name": "Đảo ngược video",
+  "path": "/vi/tools/reverse-video"
+ },
+ "tools/rotate-image": {
+  "name": "Xoay ảnh",
+  "path": "/vi/tools/rotate-image"
+ },
+ "tools/rotate-video": {
+  "name": "Xoay video",
+  "path": "/vi/tools/rotate-video"
+ },
+ "tools/select-by-color": {
+  "name": "Chọn theo màu",
+  "path": "/vi/tools/select-by-color"
+ },
+ "tools/sharpen-image": {
+  "name": "Làm nét ảnh",
+  "path": "/vi/tools/sharpen-image"
+ },
+ "tools/sharpen-photo-online": {
+  "name": "Làm nét ảnh",
+  "path": "/vi/tools/sharpen-photo-online"
+ },
+ "tools/split-toning": {
+  "name": "Chia tông màu",
+  "path": "/vi/tools/split-toning"
+ },
+ "tools/srt-generator": {
+  "name": "Trình tạo phụ đề SRT",
+  "path": "/vi/tools/srt-generator"
+ },
+ "tools/stabilize-video": {
+  "name": "Ổn định video",
+  "path": "/vi/tools/stabilize-video"
+ },
+ "tools/stitch-audio-to-video": {
+  "name": "Thêm âm thanh vào video",
+  "path": "/vi/tools/stitch-audio-to-video"
+ },
+ "tools/straighten-photo": {
+  "name": "Chỉnh thẳng ảnh",
+  "path": "/vi/tools/straighten-photo"
+ },
+ "tools/summarize-audio": {
+  "name": "Tóm tắt âm thanh",
+  "path": "/vi/tools/summarize-audio"
+ },
+ "tools/summarize-video": {
+  "name": "Tóm tắt video",
+  "path": "/vi/tools/summarize-video"
+ },
+ "tools/tint-photo": {
+  "name": "Phủ sắc cho ảnh",
+  "path": "/vi/tools/tint-photo"
+ },
+ "tools/transcode-to-dash": {
+  "name": "Chuyển mã video sang DASH (AV1 / VP9)",
+  "path": "/vi/tools/transcode-to-dash"
+ },
+ "tools/transcode-to-hls": {
+  "name": "Chuyển mã video sang HLS",
+  "path": "/vi/tools/transcode-to-hls"
+ },
+ "tools/transcribe-audio": {
+  "name": "Chuyển âm thanh thành văn bản",
+  "path": "/vi/tools/transcribe-audio"
+ },
+ "tools/transcribe-video": {
+  "name": "Chuyển video thành văn bản",
+  "path": "/vi/tools/transcribe-video"
+ },
+ "tools/trim-audio": {
+  "name": "Cắt âm thanh",
+  "path": "/vi/tools/trim-audio"
+ },
+ "tools/video-converter": {
+  "name": "Bộ chuyển đổi video",
+  "path": "/vi/tools/video-converter"
+ },
+ "tools/video-trimmer": {
+  "name": "Cắt video",
+  "path": "/vi/tools/video-trimmer"
+ },
+ "tools/voice-changer": {
+  "name": "Đổi giọng nói",
+  "path": "/vi/tools/voice-changer"
+ },
+ "tools/voice-cloning": {
+  "name": "Sao chép giọng nói",
+  "path": "/vi/tools/voice-cloning"
+ },
+ "tools/voice-designer": {
+  "name": "Thiết kế giọng nói",
+  "path": "/vi/tools/voice-designer"
+ },
+ "tools/white-balance-photo": {
+  "name": "Cân bằng trắng",
+  "path": "/vi/tools/white-balance-photo"
+ }
+}

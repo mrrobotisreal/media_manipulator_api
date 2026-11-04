@@ -1,0 +1,2789 @@
+{
+ "editors/photo/color": {
+  "title": "Aperture colour: HSL, colour balance, black & white, mixer, photo filter, split toning",
+  "kind": "editor",
+  "keywords": [
+   "hsl",
+   "hue",
+   "color",
+   "colour",
+   "change color",
+   "grey except",
+   "gray except",
+   "color pop",
+   "colour splash",
+   "keep only red",
+   "selective color",
+   "black and white",
+   "monochrome",
+   "sepia",
+   "color balance",
+   "teal and orange",
+   "split toning",
+   "photo filter",
+   "warming filter",
+   "channel mixer"
+  ],
+  "tokens": 1124
+ },
+ "editors/photo/detail": {
+  "title": "Aperture detail: sharpen, noise, blur, clarity, texture, dehaze, vignette, grain",
+  "kind": "editor",
+  "keywords": [
+   "sharpen",
+   "sharpness",
+   "blurry",
+   "noise",
+   "grainy",
+   "denoise",
+   "noise reduction",
+   "blur",
+   "clarity",
+   "texture",
+   "dehaze",
+   "haze",
+   "fog",
+   "vignette",
+   "grain",
+   "film grain",
+   "skin soften"
+  ],
+  "tokens": 552
+ },
+ "editors/photo/editor-basics": {
+  "title": "Aperture editor basics: panels, layers, undo, export, shortcuts",
+  "kind": "editor",
+  "keywords": [
+   "panels",
+   "layers",
+   "layer stack",
+   "undo",
+   "redo",
+   "history",
+   "export",
+   "save",
+   "jpg",
+   "png",
+   "webp",
+   "avif",
+   "tiff",
+   "full resolution",
+   "before after",
+   "compare",
+   "shortcuts",
+   "batch"
+  ],
+  "tokens": 697
+ },
+ "editors/photo/effects-lut": {
+  "title": "Aperture LUTs and effects: LUT, invert, posterize, threshold, gamma",
+  "kind": "editor",
+  "keywords": [
+   "lut",
+   "cube",
+   "3d lut",
+   "film look",
+   "invert",
+   "negative",
+   "posterize",
+   "threshold",
+   "gamma"
+  ],
+  "tokens": 325
+ },
+ "editors/photo/geometry-heal": {
+  "title": "Aperture geometry (crop, straighten, rotate, flip, perspective) and heal",
+  "kind": "editor",
+  "keywords": [
+   "crop",
+   "straighten",
+   "tilted",
+   "crooked horizon",
+   "rotate",
+   "flip",
+   "mirror",
+   "perspective",
+   "keystone",
+   "aspect ratio",
+   "heal",
+   "remove blemish",
+   "spot removal",
+   "remove object",
+   "blemishes"
+  ],
+  "tokens": 506
+ },
+ "editors/photo/light": {
+  "title": "Aperture light: exposure, contrast, tone, white balance, colour",
+  "kind": "editor",
+  "keywords": [
+   "brighten",
+   "darken",
+   "exposure",
+   "too dark",
+   "too bright",
+   "underexposed",
+   "overexposed",
+   "backlit",
+   "contrast",
+   "highlights",
+   "shadows",
+   "whites",
+   "blacks",
+   "white balance",
+   "warmer",
+   "cooler",
+   "temperature",
+   "tint",
+   "vibrance",
+   "saturation",
+   "fix the lighting"
+  ],
+  "tokens": 516
+ },
+ "editors/photo/masks": {
+  "title": "Aperture masks and local adjustments",
+  "kind": "editor",
+  "keywords": [
+   "mask",
+   "masks",
+   "local adjustment",
+   "gradient mask",
+   "graduated filter",
+   "radial",
+   "spotlight",
+   "brush",
+   "paint",
+   "luminosity mask",
+   "color range",
+   "select by color",
+   "select subject",
+   "subject",
+   "background",
+   "sky"
+  ],
+  "tokens": 726
+ },
+ "editors/photo/presets": {
+  "title": "Aperture built-in looks (presets)",
+  "kind": "editor",
+  "keywords": [
+   "presets",
+   "preset",
+   "looks",
+   "look",
+   "filter",
+   "vintage",
+   "film",
+   "matte",
+   "fade",
+   "vivid",
+   "punch",
+   "warm",
+   "cool",
+   "cross process",
+   "portrait",
+   "landscape",
+   "auto",
+   "auto fix",
+   "one click",
+   "black and white film",
+   "color pop"
+  ],
+  "tokens": 843
+ },
+ "editors/photo/red-eye": {
+  "title": "Aperture red-eye",
+  "kind": "editor",
+  "keywords": [
+   "red eye",
+   "red-eye",
+   "eyes"
+  ],
+  "tokens": 183
+ },
+ "editors/photo/tone-curves": {
+  "title": "Aperture curves and levels",
+  "kind": "editor",
+  "keywords": [
+   "curves",
+   "tone curve",
+   "s-curve",
+   "levels",
+   "black point",
+   "white point",
+   "midtones",
+   "gamma",
+   "faded look",
+   "matte"
+  ],
+  "tokens": 534
+ },
+ "editors/studio/audio": {
+  "title": "Darkroom audio: mixer, EQ, compressor, presets, ducking, loudness",
+  "kind": "editor",
+  "keywords": [
+   "audio",
+   "mixer",
+   "volume",
+   "gain",
+   "pan",
+   "eq",
+   "equalizer",
+   "compressor",
+   "podcast",
+   "voice clarity",
+   "music bed",
+   "ducking",
+   "duck music",
+   "loudness",
+   "lufs",
+   "normalize",
+   "audio preset"
+  ],
+  "tokens": 532
+ },
+ "editors/studio/effects": {
+  "title": "Darkroom clip effects and colour (Lumetri, LUT, chroma key)",
+  "kind": "editor",
+  "keywords": [
+   "effects",
+   "colour grade",
+   "color grade",
+   "grading",
+   "lumetri",
+   "exposure",
+   "contrast",
+   "saturation",
+   "temperature",
+   "tint",
+   "vibrance",
+   "lut",
+   "cube",
+   "chroma key",
+   "green screen",
+   "blend mode",
+   "cinematic look"
+  ],
+  "tokens": 514
+ },
+ "editors/studio/motion-crop": {
+  "title": "Darkroom motion, crop and keyframes",
+  "kind": "editor",
+  "keywords": [
+   "motion",
+   "position",
+   "scale",
+   "rotation",
+   "zoom",
+   "crop",
+   "keyframe",
+   "keyframes",
+   "animate",
+   "ken burns",
+   "fade in",
+   "fade out",
+   "ease",
+   "easing",
+   "pan and zoom",
+   "reframe"
+  ],
+  "tokens": 551
+ },
+ "editors/studio/shortcuts": {
+  "title": "Darkroom keyboard shortcuts",
+  "kind": "editor",
+  "keywords": [
+   "shortcuts",
+   "keyboard shortcuts",
+   "hotkeys",
+   "keys",
+   "razor",
+   "split at playhead",
+   "undo",
+   "redo"
+  ],
+  "tokens": 356
+ },
+ "editors/studio/timeline": {
+  "title": "Darkroom timeline, speed, freeze, captions, markers and export",
+  "kind": "editor",
+  "keywords": [
+   "timeline",
+   "track",
+   "tracks",
+   "split",
+   "cut",
+   "trim",
+   "ripple delete",
+   "speed",
+   "slow motion",
+   "speed ramp",
+   "freeze frame",
+   "marker",
+   "markers",
+   "captions",
+   "subtitles",
+   "srt",
+   "vtt",
+   "burn in",
+   "export",
+   "render",
+   "mp4",
+   "vertical video",
+   "aspect ratio",
+   "shorts",
+   "reels",
+   "tiktok",
+   "canvas"
+  ],
+  "tokens": 566
+ },
+ "editors/studio/titles": {
+  "title": "Darkroom titles, lower-thirds and text",
+  "kind": "editor",
+  "keywords": [
+   "title",
+   "titles",
+   "text",
+   "lower third",
+   "lower-third",
+   "title card",
+   "end card",
+   "caption text",
+   "font",
+   "fonts",
+   "subtitle",
+   "name tag",
+   "text overlay"
+  ],
+  "tokens": 577
+ },
+ "editors/studio/transitions": {
+  "title": "Darkroom transitions",
+  "kind": "editor",
+  "keywords": [
+   "transition",
+   "transitions",
+   "cross dissolve",
+   "crossfade",
+   "dissolve",
+   "dip to black",
+   "fade to black",
+   "dip to white",
+   "wipe",
+   "push",
+   "slide"
+  ],
+  "tokens": 389
+ },
+ "editors/vector/animators": {
+  "title": "Motion animators (draw on, motion path, morph, gradient, mask/clip, blur)",
+  "kind": "editor",
+  "keywords": [
+   "animators",
+   "animate",
+   "draw on",
+   "stroke draw",
+   "handwriting",
+   "line drawing",
+   "motion path",
+   "follow path",
+   "morph",
+   "shape morph",
+   "gradient",
+   "shimmer",
+   "mask",
+   "clip",
+   "wipe reveal",
+   "blur",
+   "blur in",
+   "logo reveal"
+  ],
+  "tokens": 417
+ },
+ "editors/vector/export": {
+  "title": "Motion export formats",
+  "kind": "editor",
+  "keywords": [
+   "export",
+   "svg",
+   "animated svg",
+   "lottie",
+   "json",
+   "react",
+   "tsx",
+   "javascript",
+   "typescript",
+   "flutter",
+   "dart",
+   "gif",
+   "mp4",
+   "webm",
+   "png sequence",
+   "video",
+   "download"
+  ],
+  "tokens": 407
+ },
+ "editors/vector/layers-tools": {
+  "title": "Motion layers and drawing tools",
+  "kind": "editor",
+  "keywords": [
+   "layers",
+   "layer",
+   "group",
+   "path",
+   "shape",
+   "rectangle",
+   "ellipse",
+   "circle",
+   "line",
+   "polygon",
+   "text",
+   "image",
+   "pen tool",
+   "draw",
+   "import svg",
+   "fill",
+   "stroke",
+   "gradient",
+   "shortcuts"
+  ],
+  "tokens": 367
+ },
+ "editors/vector/timeline": {
+  "title": "Motion timeline, keyframes and easing",
+  "kind": "editor",
+  "keywords": [
+   "timeline",
+   "keyframe",
+   "keyframes",
+   "easing",
+   "ease in",
+   "ease out",
+   "ease in out",
+   "bezier",
+   "hold",
+   "duration",
+   "loop",
+   "fps",
+   "opacity",
+   "rotate",
+   "scale",
+   "position",
+   "skew",
+   "animate text in"
+  ],
+  "tokens": 491
+ },
+ "pages/about": {
+  "title": "About Media Manipulator | Free Online Media Tools by CreaTV Ltd.",
+  "kind": "page",
+  "keywords": [
+   "about",
+   "who made this",
+   "founder",
+   "creator",
+   "company",
+   "CreaTV",
+   "about Media Manipulator",
+   "CreaTV Ltd",
+   "free media tools",
+   "online media editor"
+  ],
+  "tokens": 2711
+ },
+ "pages/account": {
+  "title": "Your account",
+  "kind": "page",
+  "keywords": [
+   "account",
+   "my account",
+   "profile",
+   "history",
+   "my files",
+   "saved projects",
+   "billing",
+   "subscription",
+   "cancel",
+   "retention",
+   "how long files are kept",
+   "delete my data",
+   "export my data",
+   "sign in",
+   "sign out",
+   "voices"
+  ],
+  "tokens": 381
+ },
+ "pages/blog": {
+  "title": "Guides",
+  "kind": "page",
+  "keywords": [
+   "blog",
+   "guides",
+   "articles"
+  ],
+  "tokens": 323
+ },
+ "pages/blog/audio/audio-quality-guide": {
+  "title": "Audio Quality Guide: Bitrate, Formats, Compression & Cleanup",
+  "kind": "page",
+  "keywords": [
+   "blog audio audio-quality-guide",
+   "audio quality",
+   "audio bitrate",
+   "compress audio",
+   "convert WAV to MP3",
+   "audio cleanup",
+   "transcribe audio",
+   "Audio"
+  ],
+  "tokens": 3057
+ },
+ "pages/blog/image/image-optimization-guide": {
+  "title": "Image Optimization Guide: Compress, Resize & Convert Images for the Web",
+  "kind": "page",
+  "keywords": [
+   "blog image image-optimization-guide",
+   "image optimization",
+   "compress images",
+   "convert WebP",
+   "resize images",
+   "remove EXIF metadata",
+   "web image formats",
+   "Image"
+  ],
+  "tokens": 3905
+ },
+ "pages/blog/video/video-compression-guide": {
+  "title": "Video Compression Guide: Reduce File Size Without Ruining Quality",
+  "kind": "page",
+  "keywords": [
+   "blog video video-compression-guide",
+   "video compression",
+   "compress MP4",
+   "reduce video file size",
+   "video bitrate",
+   "web video optimization",
+   "FFmpeg compression",
+   "Video"
+  ],
+  "tokens": 3929
+ },
+ "pages/changelog": {
+  "title": "Changelog",
+  "kind": "page",
+  "keywords": [
+   "changelog",
+   "what is new",
+   "updates",
+   "release notes",
+   "new features",
+   "RSS"
+  ],
+  "tokens": 132
+ },
+ "pages/contact": {
+  "title": "Contact",
+  "kind": "page",
+  "keywords": [
+   "contact",
+   "support",
+   "email",
+   "help",
+   "bug",
+   "report a problem",
+   "feedback"
+  ],
+  "tokens": 521
+ },
+ "pages/delete-account": {
+  "title": "Delete your account",
+  "kind": "page",
+  "keywords": [
+   "delete-account",
+   "delete account",
+   "close account",
+   "remove my account",
+   "erase my data",
+   "account deletion"
+  ],
+  "tokens": 619
+ },
+ "pages/home": {
+  "title": "Media Manipulator home",
+  "kind": "page",
+  "keywords": [
+   "home",
+   "homepage",
+   "converter",
+   "upload a file",
+   "start",
+   "free media converter",
+   "online file converter",
+   "image converter",
+   "video converter",
+   "audio converter",
+   "transcribe video",
+   "remove metadata",
+   "EXIF remover",
+   "media tools"
+  ],
+  "tokens": 242
+ },
+ "pages/how-it-works": {
+  "title": "How Media Manipulator Works | File Conversion, AI Processing & Temporary Storage",
+  "kind": "page",
+  "keywords": [
+   "how-it-works",
+   "how it works",
+   "process",
+   "servers",
+   "GPU",
+   "privacy",
+   "how media conversion works",
+   "AI transcription",
+   "temporary file storage",
+   "metadata removal",
+   "file processing"
+  ],
+  "tokens": 211
+ },
+ "pages/licenses": {
+  "title": "Open-source licences",
+  "kind": "page",
+  "keywords": [
+   "licenses",
+   "licences",
+   "open source",
+   "third-party",
+   "anime.js",
+   "mediabunny"
+  ],
+  "tokens": 217
+ },
+ "pages/pricing": {
+  "title": "Pricing and plans",
+  "kind": "page",
+  "keywords": [
+   "pricing",
+   "plans",
+   "price",
+   "cost",
+   "how much",
+   "premium",
+   "pro",
+   "free account",
+   "subscription",
+   "upgrade",
+   "limits",
+   "daily allowance",
+   "ads",
+   "remove ads",
+   "billing"
+  ],
+  "tokens": 1001
+ },
+ "pages/privacy-policy": {
+  "title": "Privacy Policy",
+  "kind": "page",
+  "keywords": [
+   "privacy-policy",
+   "privacy",
+   "privacy policy",
+   "data",
+   "GDPR",
+   "cookies",
+   "tracking",
+   "personal data",
+   "do not sell",
+   "what do you store"
+  ],
+  "tokens": 1492
+ },
+ "pages/status": {
+  "title": "Service status",
+  "kind": "page",
+  "keywords": [
+   "status",
+   "down",
+   "outage",
+   "not working",
+   "is it down",
+   "slow",
+   "service status"
+  ],
+  "tokens": 130
+ },
+ "pages/terms-of-service": {
+  "title": "Terms of Service",
+  "kind": "page",
+  "keywords": [
+   "terms-of-service",
+   "terms",
+   "terms of service",
+   "rules",
+   "acceptable use",
+   "refund",
+   "copyright",
+   "tos"
+  ],
+  "tokens": 1897
+ },
+ "pages/tools": {
+  "title": "All tools",
+  "kind": "page",
+  "keywords": [
+   "tools",
+   "all tools",
+   "tool list",
+   "catalog",
+   "which tool",
+   "search tools",
+   "free media tools",
+   "image converter",
+   "video converter",
+   "audio converter",
+   "transcribe video",
+   "remove EXIF metadata",
+   "compress video",
+   "isolate vocals"
+  ],
+  "tokens": 436
+ },
+ "pages/tutorials": {
+  "title": "Tutorials",
+  "kind": "page",
+  "keywords": [
+   "tutorials",
+   "how to",
+   "learn",
+   "step by step",
+   "getting started",
+   "guide"
+  ],
+  "tokens": 679
+ },
+ "pages/tutorials/ai-frame-interpolation": {
+  "title": "What Is AI Frame Interpolation? How Video FPS Smoothing Works",
+  "kind": "page",
+  "keywords": [
+   "tutorials ai-frame-interpolation",
+   "tutorial",
+   "how to",
+   "AI frame interpolation",
+   "video frame interpolation",
+   "convert video to 60fps",
+   "convert video to 120fps",
+   "smooth video motion",
+   "RIFE frame interpolation",
+   "AI FPS converter",
+   "video motion smoothing"
+  ],
+  "tokens": 2024
+ },
+ "pages/tutorials/aperture": {
+  "title": "How to Edit a Photo with Aperture | Media Manipulator Tutorial",
+  "kind": "page",
+  "keywords": [
+   "tutorials aperture",
+   "tutorial",
+   "how to",
+   "Aperture photo editor",
+   "online photo editor tutorial",
+   "how to edit a photo online",
+   "color pop photo",
+   "photo masks",
+   "heal blemishes online"
+  ],
+  "tokens": 4017
+ },
+ "pages/tutorials/audio/getting-started": {
+  "title": "Getting Started with Audio Conversion | Media Manipulator Tutorial",
+  "kind": "page",
+  "keywords": [
+   "tutorials audio getting-started",
+   "tutorial",
+   "how to",
+   "audio converter tutorial",
+   "convert audio online",
+   "audio transcription",
+   "audio cleanup",
+   "compress audio"
+  ],
+  "tokens": 1771
+ },
+ "pages/tutorials/content-studio": {
+  "title": "How to Use Darkroom: Multi-Track Video Editing in Your Browser",
+  "kind": "page",
+  "keywords": [
+   "tutorials content-studio",
+   "tutorial",
+   "how to",
+   "Darkroom video editor",
+   "darkroom video editor tutorial",
+   "online video editor tutorial",
+   "multi-track timeline",
+   "how to edit video in browser",
+   "cross dissolve",
+   "text overlay video",
+   "export mp4"
+  ],
+  "tokens": 1573
+ },
+ "pages/tutorials/image/getting-started": {
+  "title": "Getting Started with Image Conversion | Media Manipulator Tutorial",
+  "kind": "page",
+  "keywords": [
+   "tutorials image getting-started",
+   "tutorial",
+   "how to",
+   "image converter tutorial",
+   "convert image online",
+   "resize image",
+   "crop image",
+   "remove EXIF metadata"
+  ],
+  "tokens": 1799
+ },
+ "pages/tutorials/motion": {
+  "title": "How to Animate an SVG with Motion | Media Manipulator Tutorial",
+  "kind": "page",
+  "keywords": [
+   "tutorials motion",
+   "tutorial",
+   "how to",
+   "Motion SVG animation editor",
+   "svg animation tutorial",
+   "how to animate svg",
+   "animated svg",
+   "svg to lottie",
+   "keyframe animation",
+   "easing curve"
+  ],
+  "tokens": 1622
+ },
+ "pages/tutorials/video/getting-started": {
+  "title": "Getting Started with Video Conversion | Media Manipulator Tutorial",
+  "kind": "page",
+  "keywords": [
+   "tutorials video getting-started",
+   "tutorial",
+   "how to",
+   "video converter tutorial",
+   "convert video online",
+   "compress video",
+   "trim video",
+   "transcribe video"
+  ],
+  "tokens": 1906
+ },
+ "pages/voices": {
+  "title": "Voices",
+  "kind": "page",
+  "keywords": [
+   "voices",
+   "ElevenLabs",
+   "voice clone",
+   "narration voice",
+   "Mr. Wintrow",
+   "Obsidian",
+   "text to speech",
+   "clone my voice"
+  ],
+  "tokens": 290
+ },
+ "tools/add-reverb-to-audio": {
+  "title": "Add Reverb to Audio",
+  "kind": "tool",
+  "keywords": [
+   "add-reverb-to-audio",
+   "Add Reverb to Audio",
+   "add reverb to audio online",
+   "add echo to audio",
+   "online reverb",
+   "reverb mp3",
+   "add delay to vocal"
+  ],
+  "tokens": 845
+ },
+ "tools/add-text-to-image": {
+  "title": "Add Text to Image",
+  "kind": "tool",
+  "keywords": [
+   "add-text-to-image",
+   "Add Text to Image",
+   "add text to image",
+   "add caption to photo online",
+   "watermark image free",
+   "write on a picture online",
+   "add text to png"
+  ],
+  "tokens": 820
+ },
+ "tools/add-vignette": {
+  "title": "Add a vignette",
+  "kind": "tool",
+  "keywords": [
+   "add-vignette",
+   "Add a vignette",
+   "add vignette online",
+   "remove vignette from photo",
+   "vignette effect online",
+   "darken photo edges",
+   "fix lens vignetting",
+   "photo vignette tool",
+   "lighten corners of photo"
+  ],
+  "tokens": 2366
+ },
+ "tools/adjust-audio-volume": {
+  "title": "Adjust Audio Volume",
+  "kind": "tool",
+  "keywords": [
+   "adjust-audio-volume",
+   "Adjust Audio Volume",
+   "increase audio volume",
+   "make mp3 louder online",
+   "audio volume booster",
+   "decrease audio volume",
+   "amplify audio online"
+  ],
+  "tokens": 855
+ },
+ "tools/adjust-image-contrast": {
+  "title": "Adjust contrast",
+  "kind": "tool",
+  "keywords": [
+   "adjust-image-contrast",
+   "Adjust contrast",
+   "adjust image contrast online",
+   "increase contrast of photo",
+   "reduce contrast of image",
+   "contrast slider online",
+   "make photo less flat",
+   "lower contrast photo online",
+   "image contrast editor"
+  ],
+  "tokens": 2520
+ },
+ "tools/adjust-image-hue": {
+  "title": "Adjust image hue",
+  "kind": "tool",
+  "keywords": [
+   "adjust-image-hue",
+   "Adjust image hue",
+   "adjust image hue",
+   "hue shift online",
+   "change hue of photo",
+   "rotate colors in image",
+   "HSL hue slider",
+   "shift color hue online",
+   "hue adjustment tool"
+  ],
+  "tokens": 2674
+ },
+ "tools/adjust-video-color": {
+  "title": "Adjust Video Brightness & Color",
+  "kind": "tool",
+  "keywords": [
+   "adjust-video-color",
+   "Adjust Video Brightness & Color",
+   "adjust video brightness",
+   "video color correction online",
+   "brighten dark video",
+   "increase video contrast",
+   "video saturation online"
+  ],
+  "tokens": 988
+ },
+ "tools/ai-document-scan": {
+  "title": "AI Document Scan",
+  "kind": "tool",
+  "keywords": [
+   "ai-document-scan",
+   "AI Document Scan",
+   "scanned image to searchable PDF",
+   "convert scanned document to PDF",
+   "image to Word OCR",
+   "handwriting to text",
+   "transcribe handwritten notes to Word",
+   "handwritten notes to PDF",
+   "OCR notebook pages",
+   "convert handwriting to editable document",
+   "searchable PDF from scan",
+   "scan to Word online",
+   "handwriting OCR online"
+  ],
+  "tokens": 3053
+ },
+ "tools/ai-frame-interpolation": {
+  "title": "AI Frame Interpolation",
+  "kind": "tool",
+  "keywords": [
+   "ai-frame-interpolation",
+   "AI Frame Interpolation",
+   "AI frame interpolation",
+   "video frame interpolation",
+   "increase video FPS",
+   "convert video to 60fps",
+   "convert video to 120fps",
+   "smooth video motion",
+   "AI video enhancer",
+   "FPS converter",
+   "RIFE frame interpolation",
+   "smoother video online",
+   "video motion smoothing",
+   "online frame interpolation tool",
+   "AI FPS converter",
+   "video FPS enhancer"
+  ],
+  "tokens": 1837
+ },
+ "tools/ai-image-restoration": {
+  "title": "AI Image Restoration & Upscaling",
+  "kind": "tool",
+  "keywords": [
+   "ai-image-restoration",
+   "AI Image Restoration & Upscaling",
+   "AI image restoration",
+   "AI image upscaler",
+   "restore old photo AI",
+   "enhance low resolution image",
+   "upscale image to 4k",
+   "upscale image to 8k",
+   "AI photo restoration online",
+   "fix blurry photo AI",
+   "enhance face in photo",
+   "CCTV image enhancement",
+   "remove jpeg artifacts AI",
+   "denoise image AI",
+   "deblur image AI"
+  ],
+  "tokens": 3114
+ },
+ "tools/ai-image-upscaler": {
+  "title": "AI Image Upscaler",
+  "kind": "tool",
+  "keywords": [
+   "ai-image-upscaler",
+   "AI Image Upscaler",
+   "ai image upscaler",
+   "upscale image online",
+   "enlarge photo without losing quality",
+   "increase image resolution",
+   "real-esrgan online",
+   "make small image bigger"
+  ],
+  "tokens": 1950
+ },
+ "tools/ai-video-restoration": {
+  "title": "AI Video Restoration",
+  "kind": "tool",
+  "keywords": [
+   "ai-video-restoration",
+   "AI Video Restoration",
+   "AI video restoration",
+   "AI video upscaler",
+   "video super resolution online",
+   "restore old videos with AI",
+   "Real-ESRGAN video upscaling",
+   "SwinIR video restoration",
+   "HAT super resolution",
+   "BasicVSR++ online",
+   "RVRT video restoration",
+   "VRT video super resolution",
+   "compare AI upscaling models",
+   "enhance low resolution video",
+   "AI video enhancement tool",
+   "4x video upscaling online"
+  ],
+  "tokens": 2717
+ },
+ "tools/aperture": {
+  "title": "Aperture",
+  "kind": "tool",
+  "keywords": [
+   "aperture",
+   "Aperture",
+   "online photo editor",
+   "photo editor in browser",
+   "non-destructive photo editing online",
+   "adjustment layers online",
+   "edit photo online with masks",
+   "online image editor with curves",
+   "free photo editor no install"
+  ],
+  "tokens": 2622
+ },
+ "tools/apply-lut-to-photo": {
+  "title": "Apply a LUT",
+  "kind": "tool",
+  "keywords": [
+   "apply-lut-to-photo",
+   "Apply a LUT",
+   "apply LUT to photo online",
+   "cube LUT photo",
+   "apply .cube file to image",
+   "3D LUT image editor",
+   "LUT for photos browser",
+   "color grade photo with LUT"
+  ],
+  "tokens": 2223
+ },
+ "tools/audio-converter": {
+  "title": "Audio Converter",
+  "kind": "tool",
+  "keywords": [
+   "audio-converter",
+   "Audio Converter",
+   "audio converter",
+   "online audio converter",
+   "convert WAV to MP3",
+   "convert FLAC to MP3",
+   "convert audio online",
+   "free audio converter"
+  ],
+  "tokens": 723
+ },
+ "tools/audio-equalizer": {
+  "title": "Audio Equalizer",
+  "kind": "tool",
+  "keywords": [
+   "audio-equalizer",
+   "Audio Equalizer",
+   "audio equalizer online",
+   "bass boost mp3 online",
+   "eq audio file",
+   "treble boost audio",
+   "high pass filter audio online"
+  ],
+  "tokens": 885
+ },
+ "tools/audio-waveform-generator": {
+  "title": "Audio Waveform Generator",
+  "kind": "tool",
+  "keywords": [
+   "audio-waveform-generator",
+   "Audio Waveform Generator",
+   "audio waveform generator",
+   "create waveform from audio",
+   "MP3 waveform generator",
+   "podcast waveform video",
+   "podcast waveform image",
+   "sound wave video generator",
+   "audio visualizer generator",
+   "waveform video maker"
+  ],
+  "tokens": 1317
+ },
+ "tools/black-and-white-photo": {
+  "title": "Black & white photo",
+  "kind": "tool",
+  "keywords": [
+   "black-and-white-photo",
+   "Black & white photo",
+   "convert photo to black and white online",
+   "black and white photo converter",
+   "grayscale image online",
+   "black and white filter",
+   "monochrome photo editor",
+   "black and white with grain",
+   "color to black and white"
+  ],
+  "tokens": 2523
+ },
+ "tools/blur-faces-in-photo": {
+  "title": "Blur Faces in Photo",
+  "kind": "tool",
+  "keywords": [
+   "blur-faces-in-photo",
+   "Blur Faces in Photo",
+   "blur faces in photo",
+   "face blur online",
+   "pixelate faces in image",
+   "anonymize faces in photo",
+   "hide face in picture",
+   "automatic face blur"
+  ],
+  "tokens": 2110
+ },
+ "tools/blur-image": {
+  "title": "Blur Image",
+  "kind": "tool",
+  "keywords": [
+   "blur-image",
+   "Blur Image",
+   "blur image online",
+   "blur photo free",
+   "blur background image",
+   "gaussian blur online",
+   "soften image"
+  ],
+  "tokens": 825
+ },
+ "tools/brighten-image": {
+  "title": "Brighten image",
+  "kind": "tool",
+  "keywords": [
+   "brighten-image",
+   "Brighten image",
+   "brighten image online",
+   "brighten dark photo",
+   "make image brighter",
+   "fix dark photo online",
+   "increase exposure of photo",
+   "lighten a picture online",
+   "brighten underexposed photo"
+  ],
+  "tokens": 2540
+ },
+ "tools/caption-translator": {
+  "title": "Caption Translator",
+  "kind": "tool",
+  "keywords": [
+   "caption-translator",
+   "Caption Translator",
+   "caption translator",
+   "translate SRT file",
+   "translate VTT file",
+   "subtitle translator",
+   "translate subtitles online",
+   "SRT translator",
+   "VTT translator",
+   "caption translator online"
+  ],
+  "tokens": 1249
+ },
+ "tools/change-audio-pitch": {
+  "title": "Change Audio Pitch",
+  "kind": "tool",
+  "keywords": [
+   "change-audio-pitch",
+   "Change Audio Pitch",
+   "change audio pitch",
+   "pitch shifter online",
+   "transpose audio",
+   "change key of song online",
+   "pitch shift mp3"
+  ],
+  "tokens": 850
+ },
+ "tools/change-audio-speed": {
+  "title": "Change Audio Speed",
+  "kind": "tool",
+  "keywords": [
+   "change-audio-speed",
+   "Change Audio Speed",
+   "change audio speed",
+   "speed up audio online",
+   "slow down audio without changing pitch",
+   "audio tempo changer",
+   "speed up mp3"
+  ],
+  "tokens": 832
+ },
+ "tools/change-image-color": {
+  "title": "Change object color",
+  "kind": "tool",
+  "keywords": [
+   "change-image-color",
+   "Change object color",
+   "change the color of an object in a photo",
+   "change image color online",
+   "recolor object in photo",
+   "replace color in image",
+   "color range selection",
+   "change shirt color photo",
+   "change car color in picture"
+  ],
+  "tokens": 2536
+ },
+ "tools/change-video-frame-rate": {
+  "title": "Change Video Frame Rate",
+  "kind": "tool",
+  "keywords": [
+   "change-video-frame-rate",
+   "Change Video Frame Rate",
+   "change video frame rate",
+   "convert 60fps to 30fps",
+   "frame rate converter online",
+   "change fps of video",
+   "convert video to 24fps"
+  ],
+  "tokens": 947
+ },
+ "tools/change-video-speed": {
+  "title": "Change Video Speed",
+  "kind": "tool",
+  "keywords": [
+   "change-video-speed",
+   "Change Video Speed",
+   "change video speed",
+   "speed up video online",
+   "slow down video",
+   "video time-lapse maker",
+   "slow motion video online",
+   "2x video"
+  ],
+  "tokens": 926
+ },
+ "tools/clean-voice-audio": {
+  "title": "Clean Voice Audio",
+  "kind": "tool",
+  "keywords": [
+   "clean-voice-audio",
+   "Clean Voice Audio",
+   "clean up voice recording",
+   "improve voice quality online",
+   "enhance speech audio",
+   "ai voice cleaner",
+   "make voice clearer",
+   "podcast audio cleanup"
+  ],
+  "tokens": 2032
+ },
+ "tools/color-balance-photo": {
+  "title": "Color balance",
+  "kind": "tool",
+  "keywords": [
+   "color-balance-photo",
+   "Color balance",
+   "color balance photo online",
+   "fix color cast",
+   "remove blue tint from photo",
+   "color correction online",
+   "shadows midtones highlights color",
+   "remove orange tint photo",
+   "photo color balance tool"
+  ],
+  "tokens": 2538
+ },
+ "tools/color-pop": {
+  "title": "Color pop",
+  "kind": "tool",
+  "keywords": [
+   "color-pop",
+   "Color pop",
+   "make a photo black and white except one color",
+   "color pop effect",
+   "selective color online",
+   "color splash photo",
+   "keep one color black and white",
+   "black and white with red",
+   "selective color editor"
+  ],
+  "tokens": 2419
+ },
+ "tools/compress-image": {
+  "title": "Compress Image",
+  "kind": "tool",
+  "keywords": [
+   "compress-image",
+   "Compress Image",
+   "compress image online",
+   "image compressor",
+   "reduce image file size",
+   "shrink image",
+   "compress JPG",
+   "compress photo online free"
+  ],
+  "tokens": 1930
+ },
+ "tools/compress-video": {
+  "title": "Compress Video",
+  "kind": "tool",
+  "keywords": [
+   "compress-video",
+   "Compress Video",
+   "compress video online",
+   "reduce video file size",
+   "shrink MP4",
+   "video compressor",
+   "compress video for email",
+   "compress video without quality loss",
+   "video-compressor",
+   "compress-mp4",
+   "compress mp4"
+  ],
+  "tokens": 2279
+ },
+ "tools/content-studio": {
+  "title": "Darkroom",
+  "kind": "tool",
+  "keywords": [
+   "content-studio",
+   "Darkroom",
+   "online video editor",
+   "multi-track video editor",
+   "free video editor",
+   "browser video editor",
+   "timeline video editor",
+   "edit video online",
+   "mix audio and video",
+   "export mp4",
+   "online video timeline"
+  ],
+  "tokens": 2706
+ },
+ "tools/convert-audio-to-flac": {
+  "title": "Convert Audio to FLAC",
+  "kind": "tool",
+  "keywords": [
+   "convert-audio-to-flac",
+   "Convert Audio to FLAC",
+   "convert audio to flac",
+   "flac converter",
+   "mp3 to flac",
+   "online flac converter",
+   "convert to flac free"
+  ],
+  "tokens": 952
+ },
+ "tools/convert-audio-to-m4a": {
+  "title": "Convert Audio to M4A / AAC",
+  "kind": "tool",
+  "keywords": [
+   "convert-audio-to-m4a",
+   "Convert Audio to M4A / AAC",
+   "convert audio to m4a / aac",
+   "aac converter",
+   "mp3 to aac",
+   "online aac converter",
+   "convert to m4a / aac free"
+  ],
+  "tokens": 953
+ },
+ "tools/convert-audio-to-ogg": {
+  "title": "Convert Audio to OGG",
+  "kind": "tool",
+  "keywords": [
+   "convert-audio-to-ogg",
+   "Convert Audio to OGG",
+   "convert audio to ogg",
+   "ogg converter",
+   "mp3 to ogg",
+   "online ogg converter",
+   "convert to ogg free"
+  ],
+  "tokens": 952
+ },
+ "tools/convert-audio-to-opus": {
+  "title": "Convert Audio to Opus",
+  "kind": "tool",
+  "keywords": [
+   "convert-audio-to-opus",
+   "Convert Audio to Opus",
+   "convert audio to opus",
+   "opus converter",
+   "mp3 to opus",
+   "online opus converter",
+   "convert to opus free"
+  ],
+  "tokens": 966
+ },
+ "tools/convert-audio-to-wav": {
+  "title": "Convert Audio to WAV",
+  "kind": "tool",
+  "keywords": [
+   "convert-audio-to-wav",
+   "Convert Audio to WAV",
+   "convert audio to wav",
+   "wav converter",
+   "mp3 to wav",
+   "online wav converter",
+   "convert to wav free"
+  ],
+  "tokens": 986
+ },
+ "tools/convert-avi-to-mp4": {
+  "title": "Convert AVI to MP4",
+  "kind": "tool",
+  "keywords": [
+   "convert-avi-to-mp4",
+   "Convert AVI to MP4",
+   "avi to mp4",
+   "avi to mp4 converter",
+   "convert avi to mp4",
+   "avi to mp4 online",
+   "free avi to mp4"
+  ],
+  "tokens": 811
+ },
+ "tools/convert-avif-to-jpg": {
+  "title": "Convert AVIF to JPG",
+  "kind": "tool",
+  "keywords": [
+   "convert-avif-to-jpg",
+   "Convert AVIF to JPG",
+   "avif to jpg",
+   "convert avif to jpg",
+   "avif to jpeg",
+   ".avif to .jpg",
+   "avif converter",
+   "open avif file"
+  ],
+  "tokens": 870
+ },
+ "tools/convert-avif-to-png": {
+  "title": "Convert AVIF to PNG",
+  "kind": "tool",
+  "keywords": [
+   "convert-avif-to-png",
+   "Convert AVIF to PNG",
+   "avif to png",
+   "convert avif to png",
+   ".avif to .png",
+   "avif to transparent png",
+   "avif converter",
+   "avif to png online"
+  ],
+  "tokens": 907
+ },
+ "tools/convert-heic-to-jpg": {
+  "title": "Convert HEIC to JPG",
+  "kind": "tool",
+  "keywords": [
+   "convert-heic-to-jpg",
+   "Convert HEIC to JPG",
+   "heic to jpg",
+   "convert heic to jpg",
+   "heic to jpeg",
+   "iphone photo to jpg",
+   ".heic to .jpg",
+   "heic converter"
+  ],
+  "tokens": 908
+ },
+ "tools/convert-jpg-to-pdf": {
+  "title": "Convert JPG to PDF",
+  "kind": "tool",
+  "keywords": [
+   "convert-jpg-to-pdf",
+   "Convert JPG to PDF",
+   "jpg to pdf",
+   "jpg to pdf converter",
+   "convert jpg to pdf",
+   "jpeg to pdf",
+   ".jpg to .pdf",
+   "photo to pdf"
+  ],
+  "tokens": 902
+ },
+ "tools/convert-jpg-to-png": {
+  "title": "Convert JPG to PNG",
+  "kind": "tool",
+  "keywords": [
+   "convert-jpg-to-png",
+   "Convert JPG to PNG",
+   "convert JPG to PNG",
+   "JPG to PNG",
+   "JPEG to PNG",
+   "change JPG to PNG",
+   ".jpg to .png",
+   "JPG to PNG converter free"
+  ],
+  "tokens": 989
+ },
+ "tools/convert-jpg-to-webp": {
+  "title": "Convert JPG to WebP",
+  "kind": "tool",
+  "keywords": [
+   "convert-jpg-to-webp",
+   "Convert JPG to WebP",
+   "convert JPG to WebP",
+   "JPG to WebP",
+   "JPEG to WebP",
+   "change JPG to WebP",
+   ".jpg to .webp",
+   "JPG to WebP converter free"
+  ],
+  "tokens": 961
+ },
+ "tools/convert-mkv-to-mp4": {
+  "title": "Convert MKV to MP4",
+  "kind": "tool",
+  "keywords": [
+   "convert-mkv-to-mp4",
+   "Convert MKV to MP4",
+   "mkv to mp4",
+   "mkv to mp4 converter",
+   "convert mkv to mp4",
+   "matroska to mp4",
+   "mkv to mp4 online"
+  ],
+  "tokens": 857
+ },
+ "tools/convert-mov-to-mp4": {
+  "title": "Convert MOV to MP4",
+  "kind": "tool",
+  "keywords": [
+   "convert-mov-to-mp4",
+   "Convert MOV to MP4",
+   "mov to mp4",
+   "mov to mp4 converter",
+   "convert mov to mp4",
+   "quicktime to mp4",
+   "iphone mov to mp4",
+   "mov to mp4 online"
+  ],
+  "tokens": 996
+ },
+ "tools/convert-mp3-to-wav": {
+  "title": "Convert MP3 to WAV",
+  "kind": "tool",
+  "keywords": [
+   "convert-mp3-to-wav",
+   "Convert MP3 to WAV",
+   "convert mp3 to wav",
+   "mp3 to wav online",
+   "mp3 to wav converter free",
+   "decode mp3 to wav"
+  ],
+  "tokens": 750
+ },
+ "tools/convert-mp4-to-webm": {
+  "title": "Convert MP4 to WebM",
+  "kind": "tool",
+  "keywords": [
+   "convert-mp4-to-webm",
+   "Convert MP4 to WebM",
+   "mp4 to webm",
+   "mp4 to webm converter",
+   "convert mp4 to webm",
+   "mp4 to webm online",
+   "free mp4 to webm"
+  ],
+  "tokens": 829
+ },
+ "tools/convert-png-to-jpg": {
+  "title": "Convert PNG to JPG",
+  "kind": "tool",
+  "keywords": [
+   "convert-png-to-jpg",
+   "Convert PNG to JPG",
+   "convert PNG to JPG",
+   "PNG to JPG",
+   "PNG to JPEG",
+   "change PNG to JPG",
+   ".png to .jpg",
+   "PNG to JPG converter free"
+  ],
+  "tokens": 1032
+ },
+ "tools/convert-png-to-pdf": {
+  "title": "Convert PNG to PDF",
+  "kind": "tool",
+  "keywords": [
+   "convert-png-to-pdf",
+   "Convert PNG to PDF",
+   "png to pdf",
+   "png to pdf converter",
+   "convert png to pdf",
+   ".png to .pdf",
+   "screenshot to pdf",
+   "image to pdf"
+  ],
+  "tokens": 874
+ },
+ "tools/convert-png-to-svg": {
+  "title": "Convert PNG to SVG",
+  "kind": "tool",
+  "keywords": [
+   "convert-png-to-svg",
+   "Convert PNG to SVG",
+   "png to svg",
+   "convert png to svg",
+   "vectorize png",
+   "png to svg converter",
+   "image to vector",
+   "png to vector"
+  ],
+  "tokens": 992
+ },
+ "tools/convert-png-to-webp": {
+  "title": "Convert PNG to WebP",
+  "kind": "tool",
+  "keywords": [
+   "convert-png-to-webp",
+   "Convert PNG to WebP",
+   "convert PNG to WebP",
+   "PNG to WebP",
+   "change PNG to WebP",
+   ".png to .webp",
+   "PNG to WebP transparent",
+   "PNG to WebP converter free"
+  ],
+  "tokens": 937
+ },
+ "tools/convert-svg-to-png": {
+  "title": "Convert SVG to PNG",
+  "kind": "tool",
+  "keywords": [
+   "convert-svg-to-png",
+   "Convert SVG to PNG",
+   "svg to png",
+   "convert svg to png",
+   "svg to png converter",
+   "rasterize svg",
+   ".svg to .png",
+   "svg to image"
+  ],
+  "tokens": 897
+ },
+ "tools/convert-video-to-animated-gif": {
+  "title": "Convert Video to Animated GIF",
+  "kind": "tool",
+  "keywords": [
+   "convert-video-to-animated-gif",
+   "Convert Video to Animated GIF",
+   "convert video to GIF",
+   "video to animated GIF",
+   "MP4 to GIF",
+   "WebM to GIF",
+   "make a GIF from a video",
+   "free video to GIF converter",
+   "video-to-gif",
+   "mp4-to-gif",
+   "gif-converter",
+   "video to gif",
+   "mp4 to gif",
+   "gif converter"
+  ],
+  "tokens": 1961
+ },
+ "tools/convert-video-to-hevc": {
+  "title": "Convert Video to HEVC (H.265)",
+  "kind": "tool",
+  "keywords": [
+   "convert-video-to-hevc",
+   "Convert Video to HEVC (H.265)",
+   "convert video to HEVC",
+   "h265 converter online",
+   "h264 to h265",
+   "hevc encoder free",
+   "convert mp4 to hevc"
+  ],
+  "tokens": 979
+ },
+ "tools/convert-wav-to-mp3": {
+  "title": "Convert WAV to MP3",
+  "kind": "tool",
+  "keywords": [
+   "convert-wav-to-mp3",
+   "Convert WAV to MP3",
+   "convert WAV to MP3",
+   "WAV to MP3 converter",
+   "change WAV to MP3",
+   "compress WAV",
+   ".wav to .mp3",
+   "WAV file to MP3 online"
+  ],
+  "tokens": 819
+ },
+ "tools/convert-webm-to-mp4": {
+  "title": "Convert WebM to MP4",
+  "kind": "tool",
+  "keywords": [
+   "convert-webm-to-mp4",
+   "Convert WebM to MP4",
+   "webm to mp4",
+   "webm to mp4 converter",
+   "convert webm to mp4",
+   "webm to mp4 online",
+   "free webm to mp4"
+  ],
+  "tokens": 848
+ },
+ "tools/convert-webp-to-jpg": {
+  "title": "Convert WebP to JPG",
+  "kind": "tool",
+  "keywords": [
+   "convert-webp-to-jpg",
+   "Convert WebP to JPG",
+   "convert WebP to JPG",
+   "WebP to JPEG",
+   "change WebP to JPG",
+   "WebP converter",
+   ".webp to .jpg",
+   "open WebP file"
+  ],
+  "tokens": 855
+ },
+ "tools/convert-webp-to-png": {
+  "title": "Convert WebP to PNG",
+  "kind": "tool",
+  "keywords": [
+   "convert-webp-to-png",
+   "Convert WebP to PNG",
+   "convert WebP to PNG",
+   "WebP to PNG",
+   "change WebP to PNG",
+   ".webp to .png",
+   "WebP to PNG transparent",
+   "WebP to PNG converter free"
+  ],
+  "tokens": 929
+ },
+ "tools/crop-image": {
+  "title": "Crop Image",
+  "kind": "tool",
+  "keywords": [
+   "crop-image",
+   "Crop Image",
+   "crop image online",
+   "image cropper free",
+   "crop photo online",
+   "crop png",
+   "cut out part of image"
+  ],
+  "tokens": 741
+ },
+ "tools/crop-video": {
+  "title": "Crop Video",
+  "kind": "tool",
+  "keywords": [
+   "crop-video",
+   "Crop Video",
+   "crop video",
+   "video cropper",
+   "crop video online",
+   "crop mp4",
+   "crop video free"
+  ],
+  "tokens": 802
+ },
+ "tools/edit-image-metadata": {
+  "title": "Edit Image Metadata",
+  "kind": "tool",
+  "keywords": [
+   "edit-image-metadata",
+   "Edit Image Metadata",
+   "edit image metadata",
+   "edit EXIF online",
+   "add copyright to photo",
+   "change photo GPS location",
+   "IPTC keywords editor"
+  ],
+  "tokens": 991
+ },
+ "tools/extract-audio-from-video": {
+  "title": "Extract Audio from Video",
+  "kind": "tool",
+  "keywords": [
+   "extract-audio-from-video",
+   "Extract Audio from Video",
+   "extract audio from video",
+   "video to MP3",
+   "convert video to audio",
+   "save audio from video",
+   "MP4 to MP3",
+   "MOV to WAV",
+   "extract audio MP4 online",
+   "video-to-mp3",
+   "mp4-to-mp3",
+   "video to mp3",
+   "mp4 to mp3"
+  ],
+  "tokens": 1901
+ },
+ "tools/extract-frames-from-video": {
+  "title": "Extract Frames from Video",
+  "kind": "tool",
+  "keywords": [
+   "extract-frames-from-video",
+   "Extract Frames from Video",
+   "extract frames from video",
+   "video to images",
+   "video frame extractor",
+   "capture still images from video",
+   "export frames from video",
+   "video to JPG online",
+   "extract every Nth frame"
+  ],
+  "tokens": 1115
+ },
+ "tools/extract-video-only-from-video": {
+  "title": "Extract Video Without Audio",
+  "kind": "tool",
+  "keywords": [
+   "extract-video-only-from-video",
+   "Extract Video Without Audio",
+   "extract video without audio",
+   "video only extractor",
+   "silent video maker",
+   "B-roll without sound",
+   "delete audio track from video",
+   "strip audio from MP4"
+  ],
+  "tokens": 1126
+ },
+ "tools/fix-perspective-photo": {
+  "title": "Fix perspective",
+  "kind": "tool",
+  "keywords": [
+   "fix-perspective-photo",
+   "Fix perspective",
+   "fix perspective photo online",
+   "keystone correction online",
+   "fix converging verticals",
+   "straighten building photo",
+   "perspective correction tool",
+   "four corner perspective",
+   "square up a document photo"
+  ],
+  "tokens": 2429
+ },
+ "tools/fix-photo-exposure": {
+  "title": "Fix exposure",
+  "kind": "tool",
+  "keywords": [
+   "fix-photo-exposure",
+   "Fix exposure",
+   "fix overexposed photo",
+   "fix underexposed photo",
+   "correct photo exposure online",
+   "recover highlights online",
+   "fix washed out photo",
+   "photo too bright fix",
+   "exposure correction tool"
+  ],
+  "tokens": 2647
+ },
+ "tools/flip-video": {
+  "title": "Flip & Mirror Video",
+  "kind": "tool",
+  "keywords": [
+   "flip-video",
+   "Flip & Mirror Video",
+   "flip video",
+   "mirror video online",
+   "flip video horizontally",
+   "un-mirror selfie video",
+   "flip video vertically"
+  ],
+  "tokens": 860
+ },
+ "tools/generate-vtt-captions": {
+  "title": "VTT Caption Generator",
+  "kind": "tool",
+  "keywords": [
+   "generate-vtt-captions",
+   "VTT Caption Generator",
+   "vtt caption generator",
+   "generate webvtt captions",
+   "vtt file maker",
+   "auto captions online",
+   "video to vtt"
+  ],
+  "tokens": 832
+ },
+ "tools/grayscale-image": {
+  "title": "Convert Image to Black & White",
+  "kind": "tool",
+  "keywords": [
+   "grayscale-image",
+   "Convert Image to Black & White",
+   "convert image to black and white",
+   "grayscale image online",
+   "black and white photo converter",
+   "sepia photo online",
+   "make photo black and white"
+  ],
+  "tokens": 798
+ },
+ "tools/image-converter": {
+  "title": "Image Converter",
+  "kind": "tool",
+  "keywords": [
+   "image-converter",
+   "Image Converter",
+   "image converter",
+   "online image converter",
+   "convert JPG to PNG",
+   "convert HEIC to JPG",
+   "convert PNG to WebP",
+   "free image converter",
+   "jpg-converter",
+   "png-converter",
+   "svg-converter",
+   "jpg converter",
+   "png converter",
+   "svg converter"
+  ],
+  "tokens": 831
+ },
+ "tools/image-filters": {
+  "title": "Image Filters & Effects",
+  "kind": "tool",
+  "keywords": [
+   "image-filters",
+   "Image Filters & Effects",
+   "image filters online",
+   "photo to sketch online",
+   "oil painting filter",
+   "emboss image online",
+   "photo effects free"
+  ],
+  "tokens": 839
+ },
+ "tools/image-resizer": {
+  "title": "Image Resizer",
+  "kind": "tool",
+  "keywords": [
+   "image-resizer",
+   "Image Resizer",
+   "resize image online",
+   "image resizer",
+   "resize photo",
+   "change image dimensions",
+   "resize JPG",
+   "resize PNG online free"
+  ],
+  "tokens": 1902
+ },
+ "tools/image-saturation": {
+  "title": "Image saturation",
+  "kind": "tool",
+  "keywords": [
+   "image-saturation",
+   "Image saturation",
+   "increase saturation of image online",
+   "decrease saturation of image",
+   "vibrance vs saturation",
+   "desaturate photo online",
+   "make colors more vivid",
+   "saturation slider online",
+   "boost photo colors"
+  ],
+  "tokens": 2520
+ },
+ "tools/image-to-pdf": {
+  "title": "Image to PDF",
+  "kind": "tool",
+  "keywords": [
+   "image-to-pdf",
+   "Image to PDF",
+   "image to pdf",
+   "image to pdf converter",
+   "jpg png to pdf",
+   "photo to pdf",
+   "convert image to pdf",
+   "picture to pdf"
+  ],
+  "tokens": 1826
+ },
+ "tools/inspect-metadata": {
+  "title": "Metadata Inspector",
+  "kind": "tool",
+  "keywords": [
+   "inspect-metadata",
+   "Metadata Inspector",
+   "metadata inspector",
+   "view EXIF data online",
+   "check photo GPS location",
+   "ffprobe online",
+   "view ID3 tags",
+   "PDF metadata viewer"
+  ],
+  "tokens": 1100
+ },
+ "tools/invert-image-colors": {
+  "title": "Invert colors",
+  "kind": "tool",
+  "keywords": [
+   "invert-image-colors",
+   "Invert colors",
+   "invert image colors online",
+   "invert photo colors",
+   "make image negative online",
+   "convert negative to positive",
+   "invert picture colors",
+   "negative image effect"
+  ],
+  "tokens": 2089
+ },
+ "tools/isolate-vocals-from-song": {
+  "title": "Isolate Vocals from a Song",
+  "kind": "tool",
+  "keywords": [
+   "isolate-vocals-from-song",
+   "Isolate Vocals from a Song",
+   "isolate vocals from a song",
+   "extract vocals from song",
+   "vocal isolator online",
+   "AI vocal extractor",
+   "separate vocals from music",
+   "acapella maker"
+  ],
+  "tokens": 996
+ },
+ "tools/motion": {
+  "title": "Motion",
+  "kind": "tool",
+  "keywords": [
+   "motion",
+   "Motion",
+   "svg animation editor",
+   "animate svg online",
+   "svg animator",
+   "animated svg maker",
+   "svg to lottie",
+   "lottie editor",
+   "svg animation to react",
+   "css svg animation generator",
+   "svg to gif",
+   "logo animation"
+  ],
+  "tokens": 2792
+ },
+ "tools/normalize-audio": {
+  "title": "Normalize Audio",
+  "kind": "tool",
+  "keywords": [
+   "normalize-audio",
+   "Normalize Audio",
+   "normalize audio",
+   "audio normalizer online",
+   "normalize mp3 volume",
+   "loudness normalization",
+   "even out audio volume"
+  ],
+  "tokens": 949
+ },
+ "tools/pdf-converter": {
+  "title": "PDF Converter",
+  "kind": "tool",
+  "keywords": [
+   "pdf-converter",
+   "PDF Converter",
+   "pdf converter",
+   "online pdf converter",
+   "convert pdf to image",
+   "convert image to pdf",
+   "pdf to jpg",
+   "free pdf converter"
+  ],
+  "tokens": 907
+ },
+ "tools/pdf-to-jpg": {
+  "title": "PDF to JPG",
+  "kind": "tool",
+  "keywords": [
+   "pdf-to-jpg",
+   "PDF to JPG",
+   "pdf to jpg",
+   "pdf to image",
+   "pdf page to jpg",
+   "convert pdf to jpg",
+   "pdf to jpeg",
+   "pdf to jpg converter"
+  ],
+  "tokens": 1725
+ },
+ "tools/pdf-to-png": {
+  "title": "PDF to PNG",
+  "kind": "tool",
+  "keywords": [
+   "pdf-to-png",
+   "PDF to PNG",
+   "pdf to png",
+   "pdf page to png",
+   "convert pdf to png",
+   "pdf to image",
+   "pdf to png converter",
+   "pdf to transparent png"
+  ],
+  "tokens": 921
+ },
+ "tools/photo-curves": {
+  "title": "Curves",
+  "kind": "tool",
+  "keywords": [
+   "photo-curves",
+   "Curves",
+   "photo curves tool online",
+   "curves tool online",
+   "rgb curves photo editor",
+   "tone curve online",
+   "s curve photo",
+   "per channel curves browser"
+  ],
+  "tokens": 2177
+ },
+ "tools/photo-levels": {
+  "title": "Levels",
+  "kind": "tool",
+  "keywords": [
+   "photo-levels",
+   "Levels",
+   "adjust levels of a photo online",
+   "photo levels tool",
+   "levels adjustment online",
+   "set black point white point",
+   "histogram levels editor",
+   "fix flat photo contrast"
+  ],
+  "tokens": 2132
+ },
+ "tools/png-to-ico": {
+  "title": "PNG to ICO",
+  "kind": "tool",
+  "keywords": [
+   "png-to-ico",
+   "PNG to ICO",
+   "png to ico",
+   "convert png to ico",
+   "png to favicon",
+   "favicon generator",
+   ".png to .ico",
+   "create ico file"
+  ],
+  "tokens": 868
+ },
+ "tools/posterize-image": {
+  "title": "Posterize",
+  "kind": "tool",
+  "keywords": [
+   "posterize-image",
+   "Posterize",
+   "posterize image online",
+   "posterize photo",
+   "posterize effect online",
+   "reduce colors in image",
+   "poster effect photo",
+   "flat color photo filter"
+  ],
+  "tokens": 2070
+ },
+ "tools/redact-text-in-image": {
+  "title": "Redact Text in Image",
+  "kind": "tool",
+  "keywords": [
+   "redact-text-in-image",
+   "Redact Text in Image",
+   "redact text in image",
+   "censor text in screenshot",
+   "blur personal information in image",
+   "hide pii in screenshot",
+   "black out text in image",
+   "image redaction tool"
+  ],
+  "tokens": 2226
+ },
+ "tools/reduce-image-noise": {
+  "title": "Reduce image noise",
+  "kind": "tool",
+  "keywords": [
+   "reduce-image-noise",
+   "Reduce image noise",
+   "reduce noise in photo online",
+   "denoise image online",
+   "remove grain from photo",
+   "high ISO noise reduction",
+   "reduce color noise",
+   "photo noise reduction tool",
+   "luminance noise reduction"
+  ],
+  "tokens": 2400
+ },
+ "tools/remove-audio-from-video": {
+  "title": "Remove Audio from Video",
+  "kind": "tool",
+  "keywords": [
+   "remove-audio-from-video",
+   "Remove Audio from Video",
+   "remove audio from video",
+   "mute video",
+   "remove sound from video",
+   "silence video",
+   "strip audio from video"
+  ],
+  "tokens": 886
+ },
+ "tools/remove-background-from-image": {
+  "title": "Remove Background from Image",
+  "kind": "tool",
+  "keywords": [
+   "remove-background-from-image",
+   "Remove Background from Image",
+   "remove background from image",
+   "background remover",
+   "remove image background",
+   "transparent background maker",
+   "erase background from photo",
+   "free background remover online"
+  ],
+  "tokens": 1879
+ },
+ "tools/remove-background-noise": {
+  "title": "Remove Background Noise",
+  "kind": "tool",
+  "keywords": [
+   "remove-background-noise",
+   "Remove Background Noise",
+   "remove background noise from audio",
+   "audio denoiser online",
+   "reduce noise in recording",
+   "remove hiss from audio",
+   "ai noise reduction",
+   "remove hum from audio"
+  ],
+  "tokens": 1954
+ },
+ "tools/remove-blemishes": {
+  "title": "Remove blemishes",
+  "kind": "tool",
+  "keywords": [
+   "remove-blemishes",
+   "Remove blemishes",
+   "remove blemishes from photo online",
+   "remove spots from photo",
+   "spot healing online",
+   "remove pimples from photo",
+   "remove dust spots from photo",
+   "photo retouching tool",
+   "red eye removal online"
+  ],
+  "tokens": 2324
+ },
+ "tools/remove-exif-metadata": {
+  "title": "Remove EXIF Metadata from Images",
+  "kind": "tool",
+  "keywords": [
+   "remove-exif-metadata",
+   "Remove EXIF Metadata from Images",
+   "remove EXIF metadata",
+   "strip GPS from photo",
+   "remove image metadata",
+   "photo metadata remover",
+   "remove EXIF online",
+   "IPTC remover"
+  ],
+  "tokens": 2456
+ },
+ "tools/remove-object-from-photo": {
+  "title": "Remove Object from Photo",
+  "kind": "tool",
+  "keywords": [
+   "remove-object-from-photo",
+   "Remove Object from Photo",
+   "remove object from photo",
+   "erase object from image",
+   "remove unwanted objects from photos",
+   "ai object remover",
+   "inpainting online",
+   "remove photobomber"
+  ],
+  "tokens": 1952
+ },
+ "tools/remove-vocals-from-song": {
+  "title": "Remove Vocals from a Song",
+  "kind": "tool",
+  "keywords": [
+   "remove-vocals-from-song",
+   "Remove Vocals from a Song",
+   "remove vocals from song",
+   "karaoke maker online",
+   "make instrumental from song",
+   "vocal remover",
+   "ai vocal remover",
+   "create backing track"
+  ],
+  "tokens": 2109
+ },
+ "tools/resize-video": {
+  "title": "Resize Video",
+  "kind": "tool",
+  "keywords": [
+   "resize-video",
+   "Resize Video",
+   "resize video",
+   "video resizer",
+   "change video resolution",
+   "resize video online",
+   "scale video"
+  ],
+  "tokens": 795
+ },
+ "tools/reverse-video": {
+  "title": "Reverse Video",
+  "kind": "tool",
+  "keywords": [
+   "reverse-video",
+   "Reverse Video",
+   "reverse video",
+   "reverse video online",
+   "play video backwards",
+   "boomerang video maker",
+   "ping pong video loop"
+  ],
+  "tokens": 868
+ },
+ "tools/rotate-image": {
+  "title": "Rotate Image",
+  "kind": "tool",
+  "keywords": [
+   "rotate-image",
+   "Rotate Image",
+   "rotate image online",
+   "rotate photo 90 degrees",
+   "rotate jpg online",
+   "fix sideways photo",
+   "rotate png"
+  ],
+  "tokens": 821
+ },
+ "tools/rotate-video": {
+  "title": "Rotate Video",
+  "kind": "tool",
+  "keywords": [
+   "rotate-video",
+   "Rotate Video",
+   "rotate video",
+   "rotate mp4",
+   "rotate video online",
+   "fix sideways video",
+   "flip video"
+  ],
+  "tokens": 822
+ },
+ "tools/select-by-color": {
+  "title": "Select by color",
+  "kind": "tool",
+  "keywords": [
+   "select-by-color",
+   "Select by color",
+   "select by color online",
+   "color range selection online",
+   "select color in photo",
+   "change one color in photo",
+   "color range mask",
+   "select sky by color",
+   "fuzziness color selection"
+  ],
+  "tokens": 2387
+ },
+ "tools/sharpen-image": {
+  "title": "Sharpen Image",
+  "kind": "tool",
+  "keywords": [
+   "sharpen-image",
+   "Sharpen Image",
+   "sharpen image online",
+   "sharpen photo free",
+   "make image sharper",
+   "unsharp mask online",
+   "crisp up blurry photo"
+  ],
+  "tokens": 830
+ },
+ "tools/sharpen-photo-online": {
+  "title": "Sharpen a photo",
+  "kind": "tool",
+  "keywords": [
+   "sharpen-photo-online",
+   "Sharpen a photo",
+   "sharpen photo online",
+   "unsharp mask online",
+   "sharpen blurry photo",
+   "sharpen image radius threshold",
+   "clarity and texture photo",
+   "make photo sharper online",
+   "photo sharpening tool"
+  ],
+  "tokens": 2361
+ },
+ "tools/split-toning": {
+  "title": "Split toning",
+  "kind": "tool",
+  "keywords": [
+   "split-toning",
+   "Split toning",
+   "split toning online",
+   "split tone photo",
+   "teal and orange photo editor",
+   "tint shadows and highlights",
+   "duotone photo online",
+   "color grade photo in browser"
+  ],
+  "tokens": 2191
+ },
+ "tools/srt-generator": {
+  "title": "SRT Generator",
+  "kind": "tool",
+  "keywords": [
+   "srt-generator",
+   "SRT Generator",
+   "SRT generator",
+   "generate SRT from video",
+   "video to SRT",
+   "audio to SRT",
+   "free SRT generator",
+   "create SRT file from video",
+   "subtitle generator online",
+   "MP4 to SRT"
+  ],
+  "tokens": 1231
+ },
+ "tools/stabilize-video": {
+  "title": "Stabilize Video",
+  "kind": "tool",
+  "keywords": [
+   "stabilize-video",
+   "Stabilize Video",
+   "stabilize video",
+   "stabilize shaky video online",
+   "video stabilizer free",
+   "fix shaky video",
+   "remove camera shake"
+  ],
+  "tokens": 916
+ },
+ "tools/stitch-audio-to-video": {
+  "title": "Add Audio to Video",
+  "kind": "tool",
+  "keywords": [
+   "stitch-audio-to-video",
+   "Add Audio to Video",
+   "add audio to video",
+   "add music to video",
+   "add voiceover to video",
+   "combine audio and video",
+   "replace audio in video",
+   "mix audio with video",
+   "add narration to video"
+  ],
+  "tokens": 1156
+ },
+ "tools/straighten-photo": {
+  "title": "Straighten a photo",
+  "kind": "tool",
+  "keywords": [
+   "straighten-photo",
+   "Straighten a photo",
+   "straighten photo online",
+   "fix tilted horizon",
+   "straighten crooked picture",
+   "rotate photo by degrees",
+   "level horizon online",
+   "auto crop after rotate",
+   "straighten image tool"
+  ],
+  "tokens": 2330
+ },
+ "tools/summarize-audio": {
+  "title": "Summarize Audio",
+  "kind": "tool",
+  "keywords": [
+   "summarize-audio",
+   "Summarize Audio",
+   "summarize audio",
+   "audio summarizer ai",
+   "podcast summary generator",
+   "summarize mp3",
+   "voice memo summary"
+  ],
+  "tokens": 922
+ },
+ "tools/summarize-video": {
+  "title": "Summarize Video",
+  "kind": "tool",
+  "keywords": [
+   "summarize-video",
+   "Summarize Video",
+   "summarize video",
+   "video summarizer ai",
+   "video chapters generator",
+   "lecture summary from video",
+   "meeting video summary"
+  ],
+  "tokens": 1179
+ },
+ "tools/tint-photo": {
+  "title": "Tint a photo",
+  "kind": "tool",
+  "keywords": [
+   "tint-photo",
+   "Tint a photo",
+   "tint a photo",
+   "add color tint to photo",
+   "sepia photo online",
+   "photo filter online",
+   "warming filter photo",
+   "color overlay photo",
+   "tint image online"
+  ],
+  "tokens": 2351
+ },
+ "tools/transcode-to-dash": {
+  "title": "Transcode Video to DASH (AV1 / VP9)",
+  "kind": "tool",
+  "keywords": [
+   "transcode-to-dash",
+   "Transcode Video to DASH (AV1 / VP9)",
+   "transcode video to DASH",
+   "MPEG-DASH transcoder",
+   "AV1 DASH packager",
+   "VP9 DASH packager",
+   "manifest.mpd generator",
+   "adaptive bitrate streaming"
+  ],
+  "tokens": 1233
+ },
+ "tools/transcode-to-hls": {
+  "title": "Transcode Video to HLS",
+  "kind": "tool",
+  "keywords": [
+   "transcode-to-hls",
+   "Transcode Video to HLS",
+   "transcode video to HLS",
+   "HLS transcoder",
+   "convert MP4 to HLS",
+   "master.m3u8 generator",
+   "adaptive bitrate streaming",
+   "HLS VOD packaging"
+  ],
+  "tokens": 2473
+ },
+ "tools/transcribe-audio": {
+  "title": "Transcribe Audio",
+  "kind": "tool",
+  "keywords": [
+   "transcribe-audio",
+   "Transcribe Audio",
+   "transcribe audio to text",
+   "audio to text converter",
+   "mp3 to text online",
+   "transcribe voice memo",
+   "free audio transcription"
+  ],
+  "tokens": 887
+ },
+ "tools/transcribe-video": {
+  "title": "Transcribe Video",
+  "kind": "tool",
+  "keywords": [
+   "transcribe-video",
+   "Transcribe Video",
+   "transcribe video online",
+   "video to text",
+   "free video transcription",
+   "auto captions",
+   "speech to text from video",
+   "generate VTT subtitles"
+  ],
+  "tokens": 2147
+ },
+ "tools/trim-audio": {
+  "title": "Trim Audio",
+  "kind": "tool",
+  "keywords": [
+   "trim-audio",
+   "Trim Audio",
+   "trim audio online",
+   "cut mp3 online",
+   "audio cutter free",
+   "ringtone maker",
+   "crop audio file"
+  ],
+  "tokens": 812
+ },
+ "tools/video-converter": {
+  "title": "Video Converter",
+  "kind": "tool",
+  "keywords": [
+   "video-converter",
+   "Video Converter",
+   "video converter",
+   "online video converter",
+   "MP4 converter",
+   "convert MOV to MP4",
+   "convert AVI to MP4",
+   "free video converter",
+   "mp4-converter",
+   "mp4 converter"
+  ],
+  "tokens": 885
+ },
+ "tools/video-trimmer": {
+  "title": "Video Trimmer",
+  "kind": "tool",
+  "keywords": [
+   "video-trimmer",
+   "Video Trimmer",
+   "video trimmer",
+   "trim video online",
+   "online video trimmer",
+   "cut video",
+   "free video trimmer",
+   "mp4-trimmer",
+   "video-cutter",
+   "cut-video-online",
+   "mp4 trimmer",
+   "video cutter",
+   "cut video online"
+  ],
+  "tokens": 2067
+ },
+ "tools/voice-changer": {
+  "title": "Voice changer",
+  "kind": "tool",
+  "keywords": [
+   "voice-changer",
+   "Voice changer",
+   "voice changer",
+   "change voice in recording",
+   "pitch shift voice online",
+   "ai voice conversion",
+   "make my voice deeper"
+  ],
+  "tokens": 1212
+ },
+ "tools/voice-cloning": {
+  "title": "Voice cloning",
+  "kind": "tool",
+  "keywords": [
+   "voice-cloning",
+   "Voice cloning",
+   "clone your voice",
+   "voice cloning online",
+   "text to speech in my voice",
+   "create a voice from a recording",
+   "multilingual voice clone"
+  ],
+  "tokens": 1382
+ },
+ "tools/voice-designer": {
+  "title": "Voice designer",
+  "kind": "tool",
+  "keywords": [
+   "voice-designer",
+   "Voice designer",
+   "ai voice designer",
+   "create a voice from text description",
+   "custom voice generator",
+   "design a narrator voice",
+   "text to speech custom voice"
+  ],
+  "tokens": 1090
+ },
+ "tools/white-balance-photo": {
+  "title": "White balance",
+  "kind": "tool",
+  "keywords": [
+   "white-balance-photo",
+   "White balance",
+   "fix white balance photo online",
+   "remove color cast from photo",
+   "fix yellow photo",
+   "fix blue tint photo",
+   "photo temperature tint online",
+   "correct color cast online",
+   "warm up a photo"
+  ],
+  "tokens": 2530
+ }
+}
