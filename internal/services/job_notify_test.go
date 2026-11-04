@@ -125,3 +125,23 @@ func TestNotifyCarriesToolAndIdentity(t *testing.T) {
 		t.Errorf("notified with %+v", n.last)
 	}
 }
+
+// MA56: a long, unwatched Aperture heal notifies like the other AI tools; a
+// short one, or a photo export (an everyday job), does not.
+func TestNotifyLongPhotoHeal(t *testing.T) {
+	jm := NewJobManager()
+	n := &recNotifier{}
+	jm.SetJobFinishedNotifier(n)
+	if !toolIsAI("photo_heal") || toolIsAI("photo_export") {
+		t.Fatalf("toolIsAI: photo_heal=%v photo_export=%v", toolIsAI("photo_heal"), toolIsAI("photo_export"))
+	}
+	finishedJob(t, jm, 3*time.Minute, signedIn, "photo_heal", true)
+	if n.count() != 1 || n.last.Tool != "photo_heal" {
+		t.Fatalf("long heal: notified %d, tool %q", n.count(), n.last.Tool)
+	}
+	finishedJob(t, jm, 30*time.Second, signedIn, "photo_heal", true)
+	finishedJob(t, jm, 5*time.Minute, signedIn, "photo_export", true)
+	if n.count() != 1 {
+		t.Fatalf("short heal or export notified: %d", n.count())
+	}
+}
