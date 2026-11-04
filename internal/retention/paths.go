@@ -12,7 +12,14 @@ func IsWithin(candidate, root string) bool {
 	if err != nil {
 		return false
 	}
-	rel, err := filepath.Rel(filepath.Clean(root), cand)
+	// Both sides absolute: filepath.Rel cannot relate an absolute candidate to
+	// a relative root (e.g. the default PHOTO_DIR "uploads/photo"), and an
+	// error here used to read as "outside" and 404 every Aperture file.
+	base, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(base, cand)
 	if err != nil {
 		return false
 	}
