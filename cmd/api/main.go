@@ -402,6 +402,7 @@ func main() {
 	// dark: VOICES_ENABLED=false). Its deletes use the same user-delete sweeper.
 	voicesHandler = newVoicesHandler(cfg, tierRegistry, jobManager, gpuMgr, store, s3Client, limiter,
 		newUserDeleteSweeper(cfg, store, jobManager, s3Client, metricsReg, logging), logging)
+	assistantHandler.SetAnalyticsEmitter(analyticsEmitter) // MM107 server_assistant_turn_counted
 	// MM79: the Darkroom voiceover ingests into the studio handler's projects.
 	voicesHandler.SetVoiceover(studioHandler)
 	voicesHandler.SetAnalyticsEmitter(analyticsEmitter)

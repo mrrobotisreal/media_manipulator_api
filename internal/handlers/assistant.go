@@ -313,7 +313,9 @@ func (h *AssistantHandler) Chat(c *gin.Context) {
 			return
 		}
 	}
-	turn := &assistant.Turn{Body: body, FrameURL: frame, FrameAfterURL: frameAfter, UserID: a.userID(), VisitorHash: visitorHash(c)}
+	turn := &assistant.Turn{Body: body, FrameURL: frame, FrameAfterURL: frameAfter, UserID: a.userID(), VisitorHash: visitorHash(c),
+		AnalyticsVisitorID: strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
+		AnalyticsSessionID: strings.TrimSpace(c.GetHeader("X-MM-Session-ID"))}
 	if body.ConversationID != "" && turn.UserID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "sign_in_required"})
 		return

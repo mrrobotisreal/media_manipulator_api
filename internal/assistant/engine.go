@@ -61,6 +61,11 @@ type Turn struct {
 	// RegisterConversation records a new conversation in the retention ledger
 	// (kind assistant_conversation) under the caller's window.
 	RegisterConversation func(ctx context.Context, conversationID string)
+	// AnalyticsVisitorID / AnalyticsSessionID are the raw X-MM-Visitor-ID and
+	// X-MM-Session-ID headers, passed through to TurnReport for the server
+	// analytics event only (MM107); never stored.
+	AnalyticsVisitorID string
+	AnalyticsSessionID string
 }
 
 // TurnReport summarises a finished request for analytics (no content).
@@ -73,6 +78,11 @@ type TurnReport struct {
 	InputTokens  int
 	CachedTokens int
 	Latency      time.Duration
+	// Tier and the analytics ids come from the Turn (MM107); the ids are ""
+	// when the caller sent none (the emitter then drops the event).
+	Tier      string
+	VisitorID string
+	SessionID string
 }
 
 // historyWindow is how many stored rows feed the model (design §7.3: the
@@ -966,7 +976,8 @@ func (r *run) report(outcome string) {
 		return
 	}
 	r.e.OnTurnCounted(TurnReport{Surface: r.surface, ModelTier: r.tier, Outcome: outcome, ToolRounds: r.rounds,
-		CostUSD: r.cost, InputTokens: r.usage.InputTokens, CachedTokens: r.usage.CachedTokens, Latency: time.Since(r.started)})
+		CostUSD: r.cost, InputTokens: r.usage.InputTokens, CachedTokens: r.usage.CachedTokens, Latency: time.Since(r.started),
+		Tier: r.t.Live.Tier, VisitorID: r.t.AnalyticsVisitorID, SessionID: r.t.AnalyticsSessionID})
 }
 
 // title generates a conversation title with the title model (best-effort;
