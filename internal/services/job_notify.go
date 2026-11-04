@@ -78,6 +78,9 @@ var aiTools = map[string]struct{}{
 	"image_restore": {}, "video_restore": {}, "document_scan": {},
 	"studio_captions": {}, "studio_derive": {},
 	"video_summary": {}, // MM74
+	// MA56: an Aperture heal (LaMa, one ai_ops) can outlast a phone in the
+	// background; a long, unwatched heal ends with a push like other AI jobs.
+	"photo_heal": {},
 }
 
 func toolIsAI(tool string) bool {
