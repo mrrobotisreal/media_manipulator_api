@@ -91,8 +91,9 @@ const StudioOptionAdvanced = "advanced"
 
 // StudioFormatRefusal is the JSON body of a 403 format_not_in_plan.
 // Required is the lowest public plan that unlocks Option ("free" means a free
-// account, i.e. sign up); UpgradePath mirrors the other 403s ("signup" |
-// "premium" | "pro"), omitted when nothing public unlocks it.
+// account, i.e. sign up); UpgradePath mirrors the other 403s ("signup" for an
+// anonymous caller or a free-account option, else "premium" | "pro"), omitted
+// when nothing public unlocks it.
 type StudioFormatRefusal struct {
 	Error       string `json:"error"`
 	Message     string `json:"message"`
@@ -156,7 +157,9 @@ func CheckStudioOutput(tier Tier, l Limits, tokens []string, advanced bool, requ
 	if requiredFor != nil {
 		if req := requiredFor(option); req != "" && Rank(req) > Rank(tier) {
 			ref.Required = string(req)
-			if req == TierFree {
+			// An anonymous caller signs up first whatever unlocks it (the
+			// output-height refusal's rule); `required` still names the plan.
+			if req == TierFree || tier == TierAnonymous {
 				ref.UpgradePath = "signup"
 			} else {
 				ref.UpgradePath = string(req)
