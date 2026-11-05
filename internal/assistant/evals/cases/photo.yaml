@@ -1,4 +1,4 @@
-# Aperture copilot cases. `requires: photo` until MM108 lands the photo op schema.
+# Aperture copilot cases (MM108: the photo op schema is merged, so these run). `requires: photo` keeps them off until a build has the schema.
 - id: photo-grey-except-red
   surface: photo
   requires: photo
