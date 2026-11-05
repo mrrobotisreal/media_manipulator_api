@@ -1,0 +1,231 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 1080,
+    "height": 1920,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 1080,
+      "height": 1920
+    },
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "type": "group",
+      "id": "bullets-1",
+      "name": "Bullets",
+      "children": [
+        {
+          "type": "group",
+          "id": "bullet-1",
+          "name": "Bullet 1",
+          "opacity": 1,
+          "children": [
+            {
+              "type": "ellipse",
+              "id": "bullet-dot-1",
+              "cx": 129.6,
+              "cy": 738.816,
+              "rx": 20.736,
+              "ry": 20.736,
+              "fill": "#ff5a36"
+            },
+            {
+              "type": "text",
+              "id": "bullet-text-1",
+              "x": 210.24,
+              "y": 775.68,
+              "text": "Fast",
+              "fontFamily": "Inter, sans-serif",
+              "fontSize": 115.2,
+              "fill": "#ffffff"
+            }
+          ]
+        },
+        {
+          "type": "group",
+          "id": "bullet-2",
+          "name": "Bullet 2",
+          "opacity": 1,
+          "children": [
+            {
+              "type": "ellipse",
+              "id": "bullet-dot-2",
+              "cx": 129.6,
+              "cy": 923.136,
+              "rx": 20.736,
+              "ry": 20.736,
+              "fill": "#ff5a36"
+            },
+            {
+              "type": "text",
+              "id": "bullet-text-2",
+              "x": 210.24,
+              "y": 960,
+              "text": "Simple",
+              "fontFamily": "Inter, sans-serif",
+              "fontSize": 115.2,
+              "fill": "#ffffff"
+            }
+          ]
+        },
+        {
+          "type": "group",
+          "id": "bullet-3",
+          "name": "Bullet 3",
+          "opacity": 1,
+          "children": [
+            {
+              "type": "ellipse",
+              "id": "bullet-dot-3",
+              "cx": 129.6,
+              "cy": 1107.456,
+              "rx": 20.736,
+              "ry": 20.736,
+              "fill": "#ff5a36"
+            },
+            {
+              "type": "text",
+              "id": "bullet-text-3",
+              "x": 210.24,
+              "y": 1144.32,
+              "text": "Free",
+              "fontFamily": "Inter, sans-serif",
+              "fontSize": 115.2,
+              "fill": "#ffffff"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": [
+    {
+      "layerId": "bullet-1",
+      "property": "transform.x",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": -32.4,
+          "easing": "easeOut"
+        },
+        {
+          "t": 450,
+          "value": 0,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "bullet-1",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "easeOut"
+        },
+        {
+          "t": 450,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "bullet-2",
+      "property": "transform.x",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": -32.4,
+          "easing": "hold"
+        },
+        {
+          "t": 338,
+          "value": -32.4,
+          "easing": "easeOut"
+        },
+        {
+          "t": 788,
+          "value": 0,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "bullet-2",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 338,
+          "value": 0,
+          "easing": "easeOut"
+        },
+        {
+          "t": 788,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "bullet-3",
+      "property": "transform.x",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": -32.4,
+          "easing": "hold"
+        },
+        {
+          "t": 676,
+          "value": -32.4,
+          "easing": "easeOut"
+        },
+        {
+          "t": 1126,
+          "value": 0,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "bullet-3",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 676,
+          "value": 0,
+          "easing": "easeOut"
+        },
+        {
+          "t": 1126,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 512,
+    "height": 512,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 512,
+      "height": 512
+    },
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "type": "path",
+      "id": "logo",
+      "name": "Logo",
+      "d": "M0 0L100 0L50 80Z",
+      "fill": "none",
+      "stroke": "#ff5a36",
+      "strokeWidth": 4,
+      "strokeDasharray": [
+        288.68
+      ],
+      "strokeDashoffset": 288.68
+    },
+    {
+      "type": "text",
+      "id": "brand",
+      "x": 50,
+      "y": 120,
+      "text": "ACME",
+      "fontSize": 24,
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "rotation": 0,
+        "skewX": 0,
+        "skewY": 0,
+        "anchorX": 78.8,
+        "anchorY": 112.8
+      }
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": [
+    {
+      "layerId": "logo",
+      "property": "strokeDashoffset",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 288.68,
+          "easing": "easeBoth"
+        },
+        {
+          "t": 1500,
+          "value": 0,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "brand",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "easeOut"
+        },
+        {
+          "t": 900,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "brand",
+      "property": "transform.scaleX",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0.8,
+          "easing": "easeOut"
+        },
+        {
+          "t": 1500,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "brand",
+      "property": "transform.scaleY",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0.8,
+          "easing": "easeOut"
+        },
+        {
+          "t": 1500,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    }
+  ]
+}

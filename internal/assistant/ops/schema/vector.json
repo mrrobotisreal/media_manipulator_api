@@ -1,0 +1,1543 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "minItems": 1,
+  "maxItems": 24,
+  "type": "array",
+  "items": {
+    "anyOf": [
+      {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "add_layer"
+              },
+              "type": {
+                "type": "string",
+                "const": "rect"
+              },
+              "props": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "$ref": "#/$defs/coord"
+                  },
+                  "y": {
+                    "$ref": "#/$defs/coord"
+                  },
+                  "width": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100000
+                  },
+                  "height": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100000
+                  },
+                  "rx": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100000
+                  },
+                  "ry": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100000
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "hidden": {
+                    "type": "boolean"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "fill": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "fillOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "stroke": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "strokeWidth": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "strokeOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "strokeLinecap": {
+                    "type": "string",
+                    "enum": [
+                      "butt",
+                      "round",
+                      "square"
+                    ]
+                  },
+                  "strokeLinejoin": {
+                    "type": "string",
+                    "enum": [
+                      "miter",
+                      "round",
+                      "bevel"
+                    ]
+                  },
+                  "strokeDasharray": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "transform": {
+                    "$ref": "#/$defs/transform"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ],
+                "additionalProperties": false
+              },
+              "parentId": {
+                "$ref": "#/$defs/layer_id"
+              }
+            },
+            "required": [
+              "op",
+              "type",
+              "props"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "add_layer"
+              },
+              "type": {
+                "type": "string",
+                "const": "ellipse"
+              },
+              "props": {
+                "type": "object",
+                "properties": {
+                  "cx": {
+                    "$ref": "#/$defs/coord"
+                  },
+                  "cy": {
+                    "$ref": "#/$defs/coord"
+                  },
+                  "rx": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100000
+                  },
+                  "ry": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100000
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "hidden": {
+                    "type": "boolean"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "fill": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "fillOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "stroke": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "strokeWidth": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "strokeOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "strokeLinecap": {
+                    "type": "string",
+                    "enum": [
+                      "butt",
+                      "round",
+                      "square"
+                    ]
+                  },
+                  "strokeLinejoin": {
+                    "type": "string",
+                    "enum": [
+                      "miter",
+                      "round",
+                      "bevel"
+                    ]
+                  },
+                  "strokeDasharray": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "transform": {
+                    "$ref": "#/$defs/transform"
+                  }
+                },
+                "required": [
+                  "cx",
+                  "cy",
+                  "rx",
+                  "ry"
+                ],
+                "additionalProperties": false
+              },
+              "parentId": {
+                "$ref": "#/$defs/layer_id"
+              }
+            },
+            "required": [
+              "op",
+              "type",
+              "props"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "add_layer"
+              },
+              "type": {
+                "type": "string",
+                "const": "line"
+              },
+              "props": {
+                "type": "object",
+                "properties": {
+                  "x1": {
+                    "$ref": "#/$defs/coord"
+                  },
+                  "y1": {
+                    "$ref": "#/$defs/coord"
+                  },
+                  "x2": {
+                    "$ref": "#/$defs/coord"
+                  },
+                  "y2": {
+                    "$ref": "#/$defs/coord"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "hidden": {
+                    "type": "boolean"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "fill": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "fillOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "stroke": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "strokeWidth": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "strokeOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "strokeLinecap": {
+                    "type": "string",
+                    "enum": [
+                      "butt",
+                      "round",
+                      "square"
+                    ]
+                  },
+                  "strokeLinejoin": {
+                    "type": "string",
+                    "enum": [
+                      "miter",
+                      "round",
+                      "bevel"
+                    ]
+                  },
+                  "strokeDasharray": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "transform": {
+                    "$ref": "#/$defs/transform"
+                  }
+                },
+                "required": [
+                  "x1",
+                  "y1",
+                  "x2",
+                  "y2"
+                ],
+                "additionalProperties": false
+              },
+              "parentId": {
+                "$ref": "#/$defs/layer_id"
+              }
+            },
+            "required": [
+              "op",
+              "type",
+              "props"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "add_layer"
+              },
+              "type": {
+                "type": "string",
+                "const": "polyline"
+              },
+              "props": {
+                "type": "object",
+                "properties": {
+                  "points": {
+                    "minItems": 4,
+                    "maxItems": 2000,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/coord"
+                    }
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "hidden": {
+                    "type": "boolean"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "fill": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "fillOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "stroke": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "strokeWidth": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "strokeOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "strokeLinecap": {
+                    "type": "string",
+                    "enum": [
+                      "butt",
+                      "round",
+                      "square"
+                    ]
+                  },
+                  "strokeLinejoin": {
+                    "type": "string",
+                    "enum": [
+                      "miter",
+                      "round",
+                      "bevel"
+                    ]
+                  },
+                  "strokeDasharray": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "transform": {
+                    "$ref": "#/$defs/transform"
+                  }
+                },
+                "required": [
+                  "points"
+                ],
+                "additionalProperties": false
+              },
+              "parentId": {
+                "$ref": "#/$defs/layer_id"
+              }
+            },
+            "required": [
+              "op",
+              "type",
+              "props"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "add_layer"
+              },
+              "type": {
+                "type": "string",
+                "const": "polygon"
+              },
+              "props": {
+                "type": "object",
+                "properties": {
+                  "points": {
+                    "minItems": 4,
+                    "maxItems": 2000,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/coord"
+                    }
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "hidden": {
+                    "type": "boolean"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "fill": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "fillOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "stroke": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "strokeWidth": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "strokeOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "strokeLinecap": {
+                    "type": "string",
+                    "enum": [
+                      "butt",
+                      "round",
+                      "square"
+                    ]
+                  },
+                  "strokeLinejoin": {
+                    "type": "string",
+                    "enum": [
+                      "miter",
+                      "round",
+                      "bevel"
+                    ]
+                  },
+                  "strokeDasharray": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "transform": {
+                    "$ref": "#/$defs/transform"
+                  }
+                },
+                "required": [
+                  "points"
+                ],
+                "additionalProperties": false
+              },
+              "parentId": {
+                "$ref": "#/$defs/layer_id"
+              }
+            },
+            "required": [
+              "op",
+              "type",
+              "props"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "add_layer"
+              },
+              "type": {
+                "type": "string",
+                "const": "path"
+              },
+              "props": {
+                "type": "object",
+                "properties": {
+                  "d": {
+                    "type": "string",
+                    "maxLength": 20000,
+                    "pattern": "^[MmLlHhVvCcSsQqTtAaZz0-9eE.,+\\-\\s]+$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "hidden": {
+                    "type": "boolean"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "fill": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "fillOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "stroke": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "strokeWidth": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "strokeOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "strokeLinecap": {
+                    "type": "string",
+                    "enum": [
+                      "butt",
+                      "round",
+                      "square"
+                    ]
+                  },
+                  "strokeLinejoin": {
+                    "type": "string",
+                    "enum": [
+                      "miter",
+                      "round",
+                      "bevel"
+                    ]
+                  },
+                  "strokeDasharray": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "transform": {
+                    "$ref": "#/$defs/transform"
+                  }
+                },
+                "required": [
+                  "d"
+                ],
+                "additionalProperties": false
+              },
+              "parentId": {
+                "$ref": "#/$defs/layer_id"
+              }
+            },
+            "required": [
+              "op",
+              "type",
+              "props"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "add_layer"
+              },
+              "type": {
+                "type": "string",
+                "const": "text"
+              },
+              "props": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "$ref": "#/$defs/coord"
+                  },
+                  "y": {
+                    "$ref": "#/$defs/coord"
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "fontFamily": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9 ,_-]{1,100}$"
+                  },
+                  "fontSize": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 2000
+                  },
+                  "fontWeight": {
+                    "type": "string",
+                    "enum": [
+                      "300",
+                      "400",
+                      "500",
+                      "600",
+                      "700",
+                      "800",
+                      "900",
+                      "normal",
+                      "bold"
+                    ]
+                  },
+                  "fontStyle": {
+                    "type": "string",
+                    "enum": [
+                      "normal",
+                      "italic"
+                    ]
+                  },
+                  "textAnchor": {
+                    "type": "string",
+                    "enum": [
+                      "start",
+                      "middle",
+                      "end"
+                    ]
+                  },
+                  "letterSpacing": {
+                    "type": "number",
+                    "minimum": -100,
+                    "maximum": 100
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "hidden": {
+                    "type": "boolean"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "fill": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "fillOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "stroke": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "strokeWidth": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "strokeOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "strokeLinecap": {
+                    "type": "string",
+                    "enum": [
+                      "butt",
+                      "round",
+                      "square"
+                    ]
+                  },
+                  "strokeLinejoin": {
+                    "type": "string",
+                    "enum": [
+                      "miter",
+                      "round",
+                      "bevel"
+                    ]
+                  },
+                  "strokeDasharray": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "transform": {
+                    "$ref": "#/$defs/transform"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "text"
+                ],
+                "additionalProperties": false
+              },
+              "parentId": {
+                "$ref": "#/$defs/layer_id"
+              }
+            },
+            "required": [
+              "op",
+              "type",
+              "props"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "add_layer"
+              },
+              "type": {
+                "type": "string",
+                "const": "group"
+              },
+              "props": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "hidden": {
+                    "type": "boolean"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "fill": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "fillOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "stroke": {
+                    "$ref": "#/$defs/color"
+                  },
+                  "strokeWidth": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "strokeOpacity": {
+                    "$ref": "#/$defs/unit"
+                  },
+                  "strokeLinecap": {
+                    "type": "string",
+                    "enum": [
+                      "butt",
+                      "round",
+                      "square"
+                    ]
+                  },
+                  "strokeLinejoin": {
+                    "type": "string",
+                    "enum": [
+                      "miter",
+                      "round",
+                      "bevel"
+                    ]
+                  },
+                  "strokeDasharray": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "transform": {
+                    "$ref": "#/$defs/transform"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "parentId": {
+                "$ref": "#/$defs/layer_id"
+              }
+            },
+            "required": [
+              "op",
+              "type",
+              "props"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "add_text"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "x": {
+            "$ref": "#/$defs/coord"
+          },
+          "y": {
+            "$ref": "#/$defs/coord"
+          },
+          "font": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9 ,_-]{1,100}$"
+          },
+          "size": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 2000
+          },
+          "weight": {
+            "type": "string",
+            "enum": [
+              "300",
+              "400",
+              "500",
+              "600",
+              "700",
+              "800",
+              "900",
+              "normal",
+              "bold"
+            ]
+          },
+          "fill": {
+            "$ref": "#/$defs/color"
+          },
+          "anchor": {
+            "type": "string",
+            "enum": [
+              "start",
+              "middle",
+              "end"
+            ]
+          },
+          "parentId": {
+            "$ref": "#/$defs/layer_id"
+          }
+        },
+        "required": [
+          "op",
+          "text",
+          "x",
+          "y"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "import_svg"
+          },
+          "markup": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 200000
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "op",
+          "markup"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "update_layer"
+          },
+          "layerId": {
+            "$ref": "#/$defs/layer_id"
+          },
+          "patch": {
+            "$ref": "#/$defs/layer_patch"
+          }
+        },
+        "required": [
+          "op",
+          "layerId",
+          "patch"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "delete_layer"
+          },
+          "layerId": {
+            "$ref": "#/$defs/layer_id"
+          }
+        },
+        "required": [
+          "op",
+          "layerId"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "animate"
+          },
+          "layerId": {
+            "$ref": "#/$defs/layer_id"
+          },
+          "property": {
+            "type": "string",
+            "pattern": "^(transform\\.(x|y|scaleX|scaleY|rotation|skewX|skewY|anchorX|anchorY)|opacity|fill|stroke|strokeWidth|strokeDashoffset|d|gradientStop\\[(0|[1-9]\\d{0,2})\\]\\.(color|offset)|mask|clipPath|filter\\.blur|motionPath)$"
+          },
+          "keyframes": {
+            "minItems": 2,
+            "maxItems": 64,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "t": {
+                  "$ref": "#/$defs/ms"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -10000000,
+                      "maximum": 10000000
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    }
+                  ]
+                },
+                "easing": {
+                  "$ref": "#/$defs/easing"
+                }
+              },
+              "required": [
+                "t",
+                "value",
+                "easing"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "op",
+          "layerId",
+          "property",
+          "keyframes"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "apply_animator"
+          },
+          "layerIds": {
+            "minItems": 1,
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/layer_id"
+            }
+          },
+          "animator": {
+            "type": "string",
+            "enum": [
+              "drawOn",
+              "motionPath",
+              "morph",
+              "gradient",
+              "maskClip",
+              "blur"
+            ]
+          },
+          "span": {
+            "$ref": "#/$defs/span"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "pathId": {
+                "$ref": "#/$defs/layer_id"
+              },
+              "d": {
+                "type": "string",
+                "maxLength": 20000,
+                "pattern": "^[MmLlHhVvCcSsQqTtAaZz0-9eE.,+\\-\\s]+$"
+              },
+              "autoOrient": {
+                "type": "boolean"
+              },
+              "targetId": {
+                "$ref": "#/$defs/layer_id"
+              },
+              "amount": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 200
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "op",
+          "layerIds",
+          "animator",
+          "span"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "template"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "lowerThird",
+              "logoReveal",
+              "titlePop",
+              "bulletReveal",
+              "counter",
+              "badgeBounce"
+            ]
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "minItems": 1,
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              }
+            ]
+          },
+          "colors": {
+            "minItems": 1,
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/color"
+            }
+          },
+          "at": {
+            "$ref": "#/$defs/ms"
+          },
+          "duration": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 60000
+          },
+          "value": {
+            "type": "number",
+            "minimum": -1000000000,
+            "maximum": 1000000000
+          },
+          "layerIds": {
+            "minItems": 1,
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/layer_id"
+            }
+          }
+        },
+        "required": [
+          "op",
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "set_duration"
+          },
+          "ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 3600000
+          }
+        },
+        "required": [
+          "op",
+          "ms"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "set_canvas"
+          },
+          "width": {
+            "type": "number",
+            "minimum": 16,
+            "maximum": 8192
+          },
+          "height": {
+            "type": "number",
+            "minimum": 16,
+            "maximum": 8192
+          },
+          "background": {
+            "$ref": "#/$defs/color"
+          },
+          "fps": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 120
+          }
+        },
+        "required": [
+          "op"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "set_loop"
+          },
+          "loop": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "op",
+          "loop"
+        ],
+        "additionalProperties": false
+      }
+    ]
+  },
+  "$defs": {
+    "coord": {
+      "type": "number",
+      "minimum": -100000,
+      "maximum": 100000
+    },
+    "unit": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "color": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^(#[0-9A-Fa-f]{3,8}|[A-Za-z]{3,30}|(rgb|rgba|hsl|hsla)\\([0-9.,%\\s/+-]{1,60}\\))$"
+    },
+    "transform": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/coord"
+        },
+        "y": {
+          "$ref": "#/$defs/coord"
+        },
+        "scaleX": {
+          "type": "number",
+          "minimum": -100,
+          "maximum": 100
+        },
+        "scaleY": {
+          "type": "number",
+          "minimum": -100,
+          "maximum": 100
+        },
+        "rotation": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "skewX": {
+          "type": "number",
+          "minimum": -89,
+          "maximum": 89
+        },
+        "skewY": {
+          "type": "number",
+          "minimum": -89,
+          "maximum": 89
+        },
+        "anchorX": {
+          "$ref": "#/$defs/coord"
+        },
+        "anchorY": {
+          "$ref": "#/$defs/coord"
+        }
+      },
+      "additionalProperties": false
+    },
+    "layer_id": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+    },
+    "layer_patch": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/coord"
+        },
+        "y": {
+          "$ref": "#/$defs/coord"
+        },
+        "width": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "height": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "rx": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "ry": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "cx": {
+          "$ref": "#/$defs/coord"
+        },
+        "cy": {
+          "$ref": "#/$defs/coord"
+        },
+        "x1": {
+          "$ref": "#/$defs/coord"
+        },
+        "y1": {
+          "$ref": "#/$defs/coord"
+        },
+        "x2": {
+          "$ref": "#/$defs/coord"
+        },
+        "y2": {
+          "$ref": "#/$defs/coord"
+        },
+        "points": {
+          "minItems": 4,
+          "maxItems": 2000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/coord"
+          }
+        },
+        "d": {
+          "type": "string",
+          "maxLength": 20000,
+          "pattern": "^[MmLlHhVvCcSsQqTtAaZz0-9eE.,+\\-\\s]+$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "fontFamily": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9 ,_-]{1,100}$"
+        },
+        "fontSize": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "fontWeight": {
+          "type": "string",
+          "enum": [
+            "300",
+            "400",
+            "500",
+            "600",
+            "700",
+            "800",
+            "900",
+            "normal",
+            "bold"
+          ]
+        },
+        "fontStyle": {
+          "type": "string",
+          "enum": [
+            "normal",
+            "italic"
+          ]
+        },
+        "textAnchor": {
+          "type": "string",
+          "enum": [
+            "start",
+            "middle",
+            "end"
+          ]
+        },
+        "letterSpacing": {
+          "type": "number",
+          "minimum": -100,
+          "maximum": 100
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "opacity": {
+          "$ref": "#/$defs/unit"
+        },
+        "fill": {
+          "$ref": "#/$defs/color"
+        },
+        "fillOpacity": {
+          "$ref": "#/$defs/unit"
+        },
+        "stroke": {
+          "$ref": "#/$defs/color"
+        },
+        "strokeWidth": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "strokeOpacity": {
+          "$ref": "#/$defs/unit"
+        },
+        "strokeLinecap": {
+          "type": "string",
+          "enum": [
+            "butt",
+            "round",
+            "square"
+          ]
+        },
+        "strokeLinejoin": {
+          "type": "string",
+          "enum": [
+            "miter",
+            "round",
+            "bevel"
+          ]
+        },
+        "strokeDasharray": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100000
+          }
+        },
+        "transform": {
+          "$ref": "#/$defs/transform"
+        },
+        "locked": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3600000
+    },
+    "easing": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "linear",
+            "easeIn",
+            "easeOut",
+            "easeBoth",
+            "hold"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cubicBezier": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "type": "number",
+                  "minimum": -5,
+                  "maximum": 5
+                },
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "type": "number",
+                  "minimum": -5,
+                  "maximum": 5
+                }
+              ]
+            }
+          },
+          "required": [
+            "cubicBezier"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "span": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/ms"
+        },
+        "end": {
+          "$ref": "#/$defs/ms"
+        },
+        "easing": {
+          "$ref": "#/$defs/easing"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

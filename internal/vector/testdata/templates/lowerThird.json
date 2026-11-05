@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080
+    },
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "type": "group",
+      "id": "lower-third-1",
+      "name": "Lower third",
+      "children": [
+        {
+          "type": "rect",
+          "id": "lower-third-bar-1",
+          "name": "Accent bar",
+          "x": 115.2,
+          "y": 801.63,
+          "width": 15.36,
+          "height": 136.62,
+          "fill": "#ff5a36",
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "rotation": 0,
+            "skewX": 0,
+            "skewY": 0,
+            "anchorX": 115.2,
+            "anchorY": 869.94
+          }
+        },
+        {
+          "type": "text",
+          "id": "lower-third-name-1",
+          "name": "Name",
+          "x": 161.28,
+          "y": 864,
+          "text": "Jo Park",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 59.4,
+          "fontWeight": "700",
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "lower-third-role-1",
+          "name": "Role",
+          "x": 161.28,
+          "y": 926.37,
+          "text": "Producer",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 36.828,
+          "opacity": 0.85,
+          "fill": "#ffffff"
+        }
+      ]
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": [
+    {
+      "layerId": "lower-third-bar-1",
+      "property": "transform.scaleY",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "easeOut"
+        },
+        {
+          "t": 360,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "lower-third-name-1",
+      "property": "transform.x",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": -76.8,
+          "easing": "hold"
+        },
+        {
+          "t": 225,
+          "value": -76.8,
+          "easing": "easeOut"
+        },
+        {
+          "t": 900,
+          "value": 0,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "lower-third-name-1",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 225,
+          "value": 0,
+          "easing": "easeOut"
+        },
+        {
+          "t": 900,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "lower-third-role-1",
+      "property": "transform.x",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": -76.8,
+          "easing": "hold"
+        },
+        {
+          "t": 360,
+          "value": -76.8,
+          "easing": "easeOut"
+        },
+        {
+          "t": 900,
+          "value": 0,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "lower-third-role-1",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 360,
+          "value": 0,
+          "easing": "easeOut"
+        },
+        {
+          "t": 900,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    }
+  ]
+}
