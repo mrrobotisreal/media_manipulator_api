@@ -74,3 +74,9 @@ A: It is its own panel and needs no AI. Clicking an eye places a small circular 
 
 - Opens the Aperture editor with the heal panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone wants spots, pimples, dust or small marks removed from a photo: they paint over them and an AI inpainting model fills them from the surrounding texture. Typical asks: "remove a zit from my photo", "clean dust spots".
+When to send them elsewhere: For a whole person or a large object use Remove Object from Photo (remove-object-from-photo). For overall skin smoothing use Reduce image noise (reduce-image-noise). To repair an old damaged photo use AI Image Restoration & Upscaling (ai-image-restoration).
+Related tools: remove-object-from-photo (erase large objects); reduce-image-noise (gentle overall smoothing); ai-image-restoration (restore old photos); aperture (full photo editing)

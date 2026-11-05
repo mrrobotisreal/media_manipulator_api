@@ -84,3 +84,9 @@ A: Daily limits and file caps depend on the plan; quote them only from the live 
 
 - Panel: AI video restoration. Media kind: video; task: ai_video_restoration.
 - Default output format: mp4.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want to upscale or restore a short, low-resolution or degraded video snippet and compare several AI models side by side. Fits "make this old clip sharper" or "upscale this short 480p video".
+When to send them elsewhere: It is not for whole films or sources above 1080p. For a smaller file, format change or cut use Compress Video (compress-video), Video Converter (video-converter) or Video Trimmer (video-trimmer); still photos go to AI Image Restoration & Upscaling (ai-image-restoration).
+Related tools: video-trimmer (cut the snippet first); ai-image-restoration (restore a photo); compress-video (shrink the output); resize-video (plain non-AI scaling)

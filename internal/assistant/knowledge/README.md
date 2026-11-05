@@ -7,6 +7,7 @@ Embedded into the API with `go:embed` (`internal/assistant/corpus.go`) and ranke
 the UI test `lib/assistant/knowledgeExport.test.ts` fails when this copy is stale.
 
 - `tools/<slug>.md`: one per primary tool page (aliases are keywords of their target)
+- `tools/<slug>.options.json`: that tool's option JSON Schema (or an explicit `none`), from the code that builds the form
 - `pages/<route>.md`: every other public route
 - `editors/{studio,vector,photo}/*.md`: what each editor can do, from its registries
 - `recipes/{photo,studio,vector,workflow}/*.md`: professional techniques with op examples (from `content/medi/recipes/`)

@@ -66,3 +66,9 @@ A: Whisper supports dozens of languages and can auto-detect the spoken language.
 - Panel: Generate an SRT subtitle file. Media kind: video; task: srt_generator.
 - Default output format: srt.
 - Opens in transcription mode.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want a subtitle file generated from speech: "make an SRT for my YouTube video", "auto subtitles for this clip". Accepts video or audio and returns a time-coded .srt.
+When to send them elsewhere: If they already have captions and need another language, use Caption Translator (caption-translator). For WebVTT output use VTT Caption Generator (generate-vtt-captions), and for a plain transcript use Transcribe Video (transcribe-video) or Transcribe Audio (transcribe-audio).
+Related tools: caption-translator (translate the SRT); generate-vtt-captions (WebVTT instead of SRT); transcribe-video (plain transcript); extract-audio-from-video (pull the audio first)

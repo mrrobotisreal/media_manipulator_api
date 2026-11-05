@@ -25,6 +25,8 @@ func (r *run) serverTool(c ToolCall) string {
 		return r.analyzeCompare()
 	case ToolAnalyzeImage, ToolAnalyzeAudio, ToolAnalyzeVideo:
 		return r.analyzeFile(c)
+	case ToolInspectFile:
+		return r.inspectFile(c)
 	}
 	text, _ := executeServerTool(c, r.surface, r.e.Knowledge)
 	return text
@@ -58,7 +60,7 @@ func (r *run) analyzeFile(c ToolCall) string {
 	if r.e.Files == nil || r.t.FileRef == "" || args.FileRef != r.t.FileRef {
 		return "Error: no such file in this conversation."
 	}
-	path, cleanup, err := r.e.Files.ResolveFile(r.ctx, r.t.UserID, args.FileRef)
+	path, cleanup, err := r.e.Files.ResolveFile(r.ctx, firstNonEmpty(r.t.FileOwner, r.t.UserID), args.FileRef)
 	if err != nil {
 		return "Error: the file could not be opened."
 	}

@@ -1,0 +1,1 @@
+{"slug":"transcribe-video","family":"transcribe","options":{"type":"object","properties":{"format":{"x-uiLabel":"Transcript format","default":"vtt","type":"string","enum":["vtt","srt","txt","json"]},"language":{"x-uiLabel":"Spoken language","description":"Leave out to auto-detect, or a code such as en, es, ru.","type":"string","maxLength":12}},"additionalProperties":false}}

@@ -64,3 +64,9 @@ A: Yes. PNG supports an alpha channel, so once you have the PNG you can erase or
 - Panel: Convert JPG to PNG. Media kind: image; task: jpg_to_png.
 - Output format is fixed to png.
 - Input format is fixed to jpg.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want a lossless PNG copy of a JPG photo before editing, layering or adding transparency: "JPG to PNG", "convert my photo to PNG".
+When to send them elsewhere: Converting does not remove existing JPG artefacts or make the background transparent; for a transparent cutout use Remove Background from Image (remove-background-from-image). To make a file smaller, PNG is the wrong direction; use Compress Image (compress-image).
+Related tools: remove-background-from-image (get a transparent cutout); convert-png-to-jpg (go back to JPG); image-converter (other formats and options); compress-image (reduce file size instead)

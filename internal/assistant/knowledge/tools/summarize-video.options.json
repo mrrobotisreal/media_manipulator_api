@@ -1,0 +1,1 @@
+{"slug":"summarize-video","family":"summarize","options":{"type":"object","properties":{"depth":{"x-uiLabel":"Depth","default":"standard","type":"string","enum":["standard","deep"]},"language":{"x-uiLabel":"Summary language","description":"BCP-47 code; defaults to the page language.","type":"string","maxLength":12}},"additionalProperties":false}}

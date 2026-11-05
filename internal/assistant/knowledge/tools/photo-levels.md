@@ -74,3 +74,9 @@ A: Stretching an 8-bit source spreads its values apart, so a strong stretch on a
 
 - Opens the Aperture editor with the levels panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone wants to set the black point, white point and midtone gamma of a photo, overall or per red, green and blue channel, against a live histogram. Typical asks: "photo looks hazy and grey", "set levels".
+When to send them elsewhere: For an S-curve or a targeted tone lift use Curves (photo-curves). For underexposure use Fix exposure (fix-photo-exposure). For a lighting cast use White balance (white-balance-photo); for a one-slider fix use Adjust contrast (adjust-image-contrast).
+Related tools: photo-curves (multi-point tone shaping); adjust-image-contrast (one-slider contrast); fix-photo-exposure (exposure in stops); white-balance-photo (cast correction)

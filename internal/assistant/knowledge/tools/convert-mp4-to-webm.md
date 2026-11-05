@@ -62,3 +62,9 @@ A: VP9 is more computationally intensive than H.264. The payoff is a smaller fil
 - Panel: Convert MP4 to WebM. Media kind: video; task: mp4_to_webm.
 - Output format is fixed to webm.
 - Input format is fixed to mp4.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want an MP4 turned into WebM (VP9 + Opus) for a web page or open-format embed, usually to get a smaller file at similar quality. Fits "make a webm for my website".
+When to send them elsewhere: For WebM to MP4 use Convert WebM to MP4 (convert-webm-to-mp4). To keep MP4 and just reduce size use Compress Video (compress-video); for adaptive streaming output use Transcode Video to HLS (transcode-to-hls) or Transcode Video to DASH (transcode-to-dash).
+Related tools: convert-webm-to-mp4 (the reverse direction); video-converter (other formats); compress-video (smaller file while staying MP4); transcode-to-hls (adaptive streaming for the web)

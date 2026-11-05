@@ -73,3 +73,9 @@ A: Masks live in the corrected frame. Changing the crop re-maps every mask coord
 
 - Opens the Aperture editor with the geometry panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when a photo is tilted, like a crooked horizon or leaning door frame, and someone wants it levelled by angle or by drawing a line, then auto-cropped to the largest clean rectangle.
+When to send them elsewhere: For converging lines from pointing the camera up use Fix perspective (fix-perspective-photo). For a plain 90 or 180 degree turn use Rotate Image (rotate-image). To straighten video use Rotate Video (rotate-video).
+Related tools: fix-perspective-photo (converging lines and keystone); rotate-image (quarter turns); crop-image (custom crop afterwards); image-resizer (resize the result)

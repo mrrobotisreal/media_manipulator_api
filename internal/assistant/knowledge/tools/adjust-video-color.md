@@ -68,3 +68,9 @@ A: Yes. Use the unsharp mask controls; for real detail recovery try AI video res
 - Panel: Adjust the colour of a video. Media kind: video; task: adjust_video_color.
 - Default output format: mp4.
 - The form opens already set up for this task (effect color).
+
+## Routing
+
+When to send a visitor here: Send visitors here when a video is too dark, flat or washed out and they want brightness, contrast, saturation, hue, gamma, exposure, shadows or highlights adjusted, or a blur, sharpening, grain or noise look.
+When to send them elsewhere: Photos go to Brighten image (brighten-image) or Image Filters & Effects (image-filters). For AI upscaling or restoring a degraded clip use AI Video Restoration (ai-video-restoration); full multi-clip editing is Darkroom (content-studio).
+Related tools: ai-video-restoration (restore detail); content-studio (full editing); brighten-image (photos instead); stabilize-video (fix shake too); compress-video (shrink the result)

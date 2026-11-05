@@ -73,3 +73,9 @@ A: The multiplication scales R, G and B equally, so hue is unchanged, though a d
 
 - Opens the Aperture editor with the detail panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone wants to darken or lighten the edges of a photo to draw the eye to the centre, with midpoint, roundness, feather and highlight protection. Typical asks: "add a vignette", "darken the corners".
+When to send them elsewhere: If the subject sits at the frame edge, a vignette will dim it; use a radial mask in Aperture (aperture). To brighten a whole dark photo use Fix exposure (fix-photo-exposure). It cannot add a solid border.
+Related tools: fix-photo-exposure (brighten the whole photo); black-and-white-photo (pairs with monochrome); split-toning (finishing colour grade); crop-image (reframe before vignetting)

@@ -74,3 +74,9 @@ A: No. Color range reads the source photo after geometry, never the output of la
 
 - Opens the Aperture editor with the masks panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone wants to adjust only the parts of a photo that share a colour, like a sky or a jacket, by picking it with an eyedropper (up to 8 targets) and widening with fuzziness.
+When to send them elsewhere: If the subject shares colours with the background, use a subject or brush mask in Aperture (aperture). For near-grey photos a luminosity mask works better. To shift a hue everywhere use Change object color (change-image-color).
+Related tools: change-image-color (recolour the selection); color-pop (keep one colour, grey the rest); image-saturation (colour strength); remove-background-from-image (cut a subject out)

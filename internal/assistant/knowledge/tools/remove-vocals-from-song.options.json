@@ -1,0 +1,1 @@
+{"slug":"remove-vocals-from-song","family":"audio:stems","options":{"type":"object","properties":{"stemFormat":{"x-uiLabel":"Output format","description":"auto keeps the input format.","default":"auto","type":"string","enum":["auto","mp3","flac","wav"]}},"additionalProperties":false}}

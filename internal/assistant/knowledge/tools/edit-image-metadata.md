@@ -65,3 +65,9 @@ A: Use the Remove EXIF metadata tool, which strips every tag in one click.
 
 - Panel: Edit the metadata of an image. Media kind: image; task: edit_image_metadata.
 - The form opens already set up for this task (effect metadata).
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want to set a photo's title, author, copyright, keywords or description, remove or replace its GPS location, or rewrite specific EXIF and IPTC tags.
+When to send them elsewhere: To only look at the tags use Metadata Inspector (inspect-metadata). To wipe all metadata at once use Remove EXIF Metadata from Images (remove-exif-metadata).
+Related tools: inspect-metadata (check tags first); remove-exif-metadata (strip everything); image-converter (change format); crop-image (edit the picture itself)

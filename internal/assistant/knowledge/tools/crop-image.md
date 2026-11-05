@@ -63,3 +63,9 @@ A: Use the Rotate image tool, then crop.
 
 - Panel: Crop an image. Media kind: image; task: crop_image.
 - The form opens already set up for this task (effect crop).
+
+## Routing
+
+When to send a visitor here: Use when someone wants to keep only part of a photo: cut out the edges, frame a subject, or crop to exact coordinates by dragging a box. It can be combined with a resize to a target width and height.
+When to send them elsewhere: To crop a video use Crop Video (crop-video). To fix a tilted horizon use Straighten a photo (straighten-photo), and for converging lines use Fix perspective (fix-perspective-photo). To change dimensions without cutting anything use Image Resizer (image-resizer).
+Related tools: image-resizer (scale instead of cut); crop-video (the same job for video); straighten-photo (level a tilted photo with auto-crop); rotate-image (turn a sideways image first)

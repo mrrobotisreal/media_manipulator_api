@@ -74,3 +74,9 @@ A: It multiplies the saturation of pixels fully inside the kept range by 1.1 so 
 
 - Opens the Aperture editor with the hsl panel in front and the color-pop-red look applied.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone wants selective colour: keep the reds (or yellows, greens, cyans, blues, magentas, or an eyedropper colour) and turn everything else grey. Typical asks: "black and white except the red dress".
+When to send them elsewhere: For a clean full monochrome use Black & white photo (black-and-white-photo). For stronger or weaker colours overall use Image saturation (image-saturation). To change the kept colour rather than keep it use Change object color (change-image-color).
+Related tools: black-and-white-photo (full monochrome conversion); image-saturation (overall colour strength); change-image-color (recolour instead of isolate); select-by-color (precise colour masks)

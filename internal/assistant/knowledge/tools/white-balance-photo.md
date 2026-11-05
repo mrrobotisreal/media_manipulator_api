@@ -74,3 +74,9 @@ A: Yes, with two layers: one White balance layer under a linear gradient mask co
 
 - Opens the Aperture editor with the basic panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when a photo has an unwanted yellow, orange, blue, green or magenta cast and someone wants neutral colours, using Temperature and Tint sliders on the midtones. Typical asks: "photo looks too yellow", "fix the blue tint".
+When to send them elsewhere: If the cast differs between shadows and highlights use Color balance (color-balance-photo). To add a mood colour rather than remove one use Tint a photo (tint-photo) or Split toning (split-toning).
+Related tools: color-balance-photo (casts that vary by tone); tint-photo (add a colour on purpose); photo-curves (per-channel correction); image-saturation (adjust colour strength after)

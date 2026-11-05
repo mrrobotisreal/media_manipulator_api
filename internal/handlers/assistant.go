@@ -50,6 +50,7 @@ type AssistantHandler struct {
 	store    assistant.Store
 	registry *tiers.Registry
 	expirer  Expirer
+	files    *AssistantFiles // MM116a: files dropped into the guide
 	logger   *slog.Logger
 	now      func() time.Time
 }
@@ -62,6 +63,26 @@ func NewAssistantHandler(cfg config.AssistantConfig, engine *assistant.Engine, s
 		logger = slog.Default()
 	}
 	return &AssistantHandler{cfg: cfg, engine: engine, store: store, registry: registry, logger: logger, now: time.Now}
+}
+
+// SetFiles attaches the dropped-file service (MM116a); nil leaves the route 404.
+func (h *AssistantHandler) SetFiles(f *AssistantFiles) {
+	if h != nil {
+		h.files = f
+	}
+}
+
+// UploadFile handles POST /assistant/files.
+func (h *AssistantHandler) UploadFile(c *gin.Context) {
+	a, ok := h.enabledOr404(c)
+	if !ok {
+		return
+	}
+	if h.files == nil || !h.cfg.GuideEnabled {
+		h.notFound(c)
+		return
+	}
+	h.files.Upload(c, a)
 }
 
 // SetDeletion attaches the user-delete sweeper (conversation DELETE).
@@ -78,6 +99,7 @@ func RegisterAssistantRoutes(r gin.IRouter, h *AssistantHandler) {
 	}
 	r.GET("/assistant/capabilities", h.Capabilities)
 	r.POST("/assistant/chat", h.Chat)
+	r.POST("/assistant/files", h.UploadFile)
 	r.GET("/assistant/conversations", h.ListConversations)
 	r.GET("/assistant/conversations/:id", h.GetConversation)
 	r.DELETE("/assistant/conversations/:id", h.DeleteConversation)
@@ -316,7 +338,16 @@ func (h *AssistantHandler) Chat(c *gin.Context) {
 			return
 		}
 	}
-	turn := &assistant.Turn{Body: body, FrameURL: frame, FrameAfterURL: frameAfter, UserID: a.userID(), VisitorHash: visitorHash(c),
+	fileRef, fileOwner := "", ""
+	if body.FileRef != "" {
+		fileOwner = assistantFileOwner(c, a.userID())
+		if h.files == nil || !h.files.Owns(fileOwner, body.FileRef) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "file_not_found", "message": "that file is gone or is not yours; drop it again"})
+			return
+		}
+		fileRef = body.FileRef
+	}
+	turn := &assistant.Turn{Body: body, FileRef: fileRef, FileOwner: fileOwner, FrameURL: frame, FrameAfterURL: frameAfter, UserID: a.userID(), VisitorHash: visitorHash(c),
 		AnalyticsVisitorID: strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
 		AnalyticsSessionID: strings.TrimSpace(c.GetHeader("X-MM-Session-ID"))}
 	if body.ConversationID != "" && turn.UserID == "" {

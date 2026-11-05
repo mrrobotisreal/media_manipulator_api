@@ -75,3 +75,9 @@ A: No. AI operations bypass the exiftool copy that the normal converter performs
 - Panel: Remove the background from an image. Media kind: image; task: remove_background.
 - Output format is fixed to png.
 - AI image operation preselected: remove_background.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want the background erased from a photo with a clear subject (a person, product or pet) and a transparent PNG cutout back: "remove background", "make the background transparent", "product photo cutout".
+When to send them elsewhere: To erase a smaller object while keeping the scene, use Remove Object from Photo (remove-object-from-photo). To hide faces rather than cut out a subject, use Blur Faces in Photo (blur-faces-in-photo). It returns PNG only; for a JPG, flatten it afterwards with Convert PNG to JPG (convert-png-to-jpg).
+Related tools: remove-object-from-photo (erase an object and fill the gap); convert-png-to-jpg (flatten the cutout to JPG); image-resizer (size the cutout for a listing); ai-image-upscaler (enlarge a small cutout)

@@ -66,3 +66,9 @@ A: No problem — the tool succeeds normally and returns a clean re-packaged cop
 
 - Panel: Remove audio from a video. Media kind: video; task: extract_video_only.
 - Default output format: mp4.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want a silent, video-only copy with every audio track removed, for B-roll, silent previews or re-scoring. Fits "give me the video without any sound".
+When to send them elsewhere: To keep the sound instead use Extract Audio from Video (extract-audio-from-video). To replace the soundtrack with music or narration, use Add Audio to Video (stitch-audio-to-video).
+Related tools: remove-audio-from-video (same goal, mute a clip); extract-audio-from-video (keep the audio instead); stitch-audio-to-video (add a new soundtrack); extract-frames-from-video (still images instead)

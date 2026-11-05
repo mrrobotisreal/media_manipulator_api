@@ -63,3 +63,9 @@ A: It sets the black/white cutoff before tracing. Raise it to capture more (ligh
 - Panel: Vectorize PNG to SVG. Media kind: image; task: png_to_svg.
 - Output format is fixed to svg.
 - Input format is fixed to png.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want a logo, icon, signature or black-and-white line art traced from PNG into real scalable SVG paths: "vectorize my logo", "PNG to SVG". A threshold control sets how much detail is captured.
+When to send them elsewhere: It traces to black and white and is not meant for photographs or full-colour artwork. To go from SVG to a raster image, use Convert SVG to PNG (convert-svg-to-png). To animate the result, use Motion (motion).
+Related tools: convert-svg-to-png (rasterise an SVG); motion (animate the traced SVG); remove-background-from-image (isolate a logo before tracing); png-to-ico (make a favicon instead)

@@ -60,6 +60,9 @@ type Case struct {
 	// Adjust (MM115) makes this a multi-round "numbers first" case: the runner
 	// plays the browser, answering each edit with the next canned meters.
 	Adjust *Adjust `yaml:"adjust"`
+	// Suite (MM116a) puts a guide case in a named suite ("routing" or "options"); such cases
+	// run only with --suite and never count toward the default per-surface pass rates.
+	Suite string `yaml:"suite"`
 	// Source is the file the case came from (set by the loader).
 	Source string `yaml:"-"`
 }
@@ -80,6 +83,8 @@ type Expect struct {
 	// OffTopic: answered by the scope gate, or a short decline from the model
 	// with no buttons or edits that steers back to the site.
 	OffTopic bool `yaml:"off_topic"`
+	// Options (MM116a) grades the options of an open_tool button; see options_check.go.
+	Options []string `yaml:"options"`
 }
 
 // Adjust scripts the browser side of the adjust loop (MM115). The meters are
@@ -195,6 +200,17 @@ func (c *Case) validate() error {
 	}
 	if c.Surface != "guide" && c.Requires == "" && len(c.Expect.Ops) > 0 {
 		return fmt.Errorf("%s: op checks need `requires: <surface>`", c.ID)
+	}
+	if c.Suite != "" && c.Suite != "routing" && c.Suite != "options" {
+		return fmt.Errorf("%s: suite %q (routing | options)", c.ID, c.Suite)
+	}
+	if (c.Suite != "" || len(c.Expect.Options) > 0) && c.Surface != "guide" {
+		return fmt.Errorf("%s: suites and option checks are for the guide", c.ID)
+	}
+	for _, o := range c.Expect.Options {
+		if _, err := ParseOptionCheck(o); err != nil {
+			return fmt.Errorf("%s: %w", c.ID, err)
+		}
 	}
 	for _, a := range c.Expect.Actions {
 		if _, _, err := parseActionExpect(a); err != nil {
@@ -339,6 +355,12 @@ func Grade(c Case, out Output) Result {
 		kind, target, _ := parseActionExpect(a)
 		if !hasAction(out.Actions, kind, target) {
 			fail("no %s action for %s (got %s)", kind, target, describeActions(out.Actions))
+		}
+	}
+	for _, src := range e.Options {
+		chk, _ := ParseOptionCheck(src)
+		if ok, why := chk.Eval(out.Actions); !ok {
+			fail("option check %s: %s", src, why)
 		}
 	}
 	if e.Language != "" {

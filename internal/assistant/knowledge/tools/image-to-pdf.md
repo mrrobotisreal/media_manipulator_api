@@ -75,3 +75,9 @@ A: For a JPEG, yes, because the whole JPEG stream including its EXIF is inside t
 
 - Panel: Convert an image to PDF. Media kind: image; task: image_to_pdf.
 - Output format is fixed to pdf.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want a single image (JPG, PNG, GIF or WebP) wrapped in a one-page PDF for a form, email or printing: "turn this image into a PDF", "photo to PDF".
+When to send them elsewhere: It makes one page per image, not a multi-page document. For a phone photo of a paper page, AI Document Scan (ai-document-scan) is a better start. To go from PDF to images, use PDF to JPG (pdf-to-jpg) or PDF to PNG (pdf-to-png).
+Related tools: ai-document-scan (clean up a photographed document); compress-image (shrink the image before wrapping); pdf-to-jpg (convert in the other direction); pdf-converter (both directions in one place)

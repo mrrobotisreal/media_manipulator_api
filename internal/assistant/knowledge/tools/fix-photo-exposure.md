@@ -75,3 +75,9 @@ A: Exposure scales all three channels equally in linear light, and Tone scales t
 
 - Opens the Aperture editor with the basic panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when a photo is over- or underexposed and someone wants to correct it in stops, then recover highlights and shadows separately with a histogram. Typical asks: "photo is overexposed", "sky is too bright and faces too dark".
+When to send them elsewhere: For a photo that is only dull, not too bright or dark, use Adjust contrast (adjust-image-contrast) or Curves (photo-curves). Solid white blown areas cannot be restored. If only the edges are off use Add a vignette (add-vignette).
+Related tools: brighten-image (simple dark-photo lift); adjust-image-contrast (flat but well-exposed photos); photo-levels (black and white points); add-vignette (edge-only brightness changes)

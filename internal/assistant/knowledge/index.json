@@ -2098,7 +2098,7 @@
    "reverb mp3",
    "add delay to vocal"
   ],
-  "tokens": 845
+  "tokens": 1079
  },
  "tools/add-text-to-image": {
   "title": "Add Text to Image",
@@ -2112,7 +2112,7 @@
    "write on a picture online",
    "add text to png"
   ],
-  "tokens": 820
+  "tokens": 1043
  },
  "tools/add-vignette": {
   "title": "Add a vignette",
@@ -2128,7 +2128,7 @@
    "photo vignette tool",
    "lighten corners of photo"
   ],
-  "tokens": 2366
+  "tokens": 2558
  },
  "tools/adjust-audio-volume": {
   "title": "Adjust Audio Volume",
@@ -2142,7 +2142,7 @@
    "decrease audio volume",
    "amplify audio online"
   ],
-  "tokens": 855
+  "tokens": 1010
  },
  "tools/adjust-image-contrast": {
   "title": "Adjust contrast",
@@ -2158,7 +2158,7 @@
    "lower contrast photo online",
    "image contrast editor"
   ],
-  "tokens": 2520
+  "tokens": 2723
  },
  "tools/adjust-image-hue": {
   "title": "Adjust image hue",
@@ -2174,7 +2174,7 @@
    "shift color hue online",
    "hue adjustment tool"
   ],
-  "tokens": 2674
+  "tokens": 2890
  },
  "tools/adjust-video-color": {
   "title": "Adjust Video Brightness & Color",
@@ -2188,7 +2188,7 @@
    "increase video contrast",
    "video saturation online"
   ],
-  "tokens": 988
+  "tokens": 1189
  },
  "tools/ai-document-scan": {
   "title": "AI Document Scan",
@@ -2208,7 +2208,7 @@
    "scan to Word online",
    "handwriting OCR online"
   ],
-  "tokens": 3053
+  "tokens": 3255
  },
  "tools/ai-frame-interpolation": {
   "title": "AI Frame Interpolation",
@@ -2231,7 +2231,7 @@
    "AI FPS converter",
    "video FPS enhancer"
   ],
-  "tokens": 1837
+  "tokens": 2018
  },
  "tools/ai-image-restoration": {
   "title": "AI Image Restoration & Upscaling",
@@ -2253,7 +2253,7 @@
    "denoise image AI",
    "deblur image AI"
   ],
-  "tokens": 3114
+  "tokens": 3324
  },
  "tools/ai-image-upscaler": {
   "title": "AI Image Upscaler",
@@ -2268,7 +2268,7 @@
    "real-esrgan online",
    "make small image bigger"
   ],
-  "tokens": 1950
+  "tokens": 2168
  },
  "tools/ai-video-restoration": {
   "title": "AI Video Restoration",
@@ -2291,7 +2291,7 @@
    "AI video enhancement tool",
    "4x video upscaling online"
   ],
-  "tokens": 2717
+  "tokens": 2926
  },
  "tools/aperture": {
   "title": "Aperture",
@@ -2307,7 +2307,7 @@
    "online image editor with curves",
    "free photo editor no install"
   ],
-  "tokens": 2622
+  "tokens": 2858
  },
  "tools/apply-lut-to-photo": {
   "title": "Apply a LUT",
@@ -2322,7 +2322,7 @@
    "LUT for photos browser",
    "color grade photo with LUT"
   ],
-  "tokens": 2223
+  "tokens": 2416
  },
  "tools/audio-converter": {
   "title": "Audio Converter",
@@ -2337,7 +2337,7 @@
    "convert audio online",
    "free audio converter"
   ],
-  "tokens": 723
+  "tokens": 932
  },
  "tools/audio-equalizer": {
   "title": "Audio Equalizer",
@@ -2351,7 +2351,7 @@
    "treble boost audio",
    "high pass filter audio online"
   ],
-  "tokens": 885
+  "tokens": 1056
  },
  "tools/audio-waveform-generator": {
   "title": "Audio Waveform Generator",
@@ -2368,7 +2368,7 @@
    "audio visualizer generator",
    "waveform video maker"
   ],
-  "tokens": 1317
+  "tokens": 1499
  },
  "tools/black-and-white-photo": {
   "title": "Black & white photo",
@@ -2384,7 +2384,7 @@
    "black and white with grain",
    "color to black and white"
   ],
-  "tokens": 2523
+  "tokens": 2724
  },
  "tools/blur-faces-in-photo": {
   "title": "Blur Faces in Photo",
@@ -2399,7 +2399,7 @@
    "hide face in picture",
    "automatic face blur"
   ],
-  "tokens": 2110
+  "tokens": 2329
  },
  "tools/blur-image": {
   "title": "Blur Image",
@@ -2413,7 +2413,7 @@
    "gaussian blur online",
    "soften image"
   ],
-  "tokens": 825
+  "tokens": 1012
  },
  "tools/brighten-image": {
   "title": "Brighten image",
@@ -2429,7 +2429,7 @@
    "lighten a picture online",
    "brighten underexposed photo"
   ],
-  "tokens": 2540
+  "tokens": 2753
  },
  "tools/caption-translator": {
   "title": "Caption Translator",
@@ -2446,7 +2446,7 @@
    "VTT translator",
    "caption translator online"
   ],
-  "tokens": 1249
+  "tokens": 1416
  },
  "tools/change-audio-pitch": {
   "title": "Change Audio Pitch",
@@ -2460,7 +2460,7 @@
    "change key of song online",
    "pitch shift mp3"
   ],
-  "tokens": 850
+  "tokens": 1020
  },
  "tools/change-audio-speed": {
   "title": "Change Audio Speed",
@@ -2474,7 +2474,7 @@
    "audio tempo changer",
    "speed up mp3"
   ],
-  "tokens": 832
+  "tokens": 994
  },
  "tools/change-image-color": {
   "title": "Change object color",
@@ -2490,7 +2490,7 @@
    "change shirt color photo",
    "change car color in picture"
   ],
-  "tokens": 2536
+  "tokens": 2748
  },
  "tools/change-video-frame-rate": {
   "title": "Change Video Frame Rate",
@@ -2504,7 +2504,7 @@
    "change fps of video",
    "convert video to 24fps"
   ],
-  "tokens": 947
+  "tokens": 1122
  },
  "tools/change-video-speed": {
   "title": "Change Video Speed",
@@ -2519,7 +2519,7 @@
    "slow motion video online",
    "2x video"
   ],
-  "tokens": 926
+  "tokens": 1114
  },
  "tools/clean-voice-audio": {
   "title": "Clean Voice Audio",
@@ -2534,7 +2534,7 @@
    "make voice clearer",
    "podcast audio cleanup"
   ],
-  "tokens": 2032
+  "tokens": 2269
  },
  "tools/color-balance-photo": {
   "title": "Color balance",
@@ -2550,7 +2550,7 @@
    "remove orange tint photo",
    "photo color balance tool"
   ],
-  "tokens": 2538
+  "tokens": 2719
  },
  "tools/color-pop": {
   "title": "Color pop",
@@ -2566,7 +2566,7 @@
    "black and white with red",
    "selective color editor"
   ],
-  "tokens": 2419
+  "tokens": 2628
  },
  "tools/compress-image": {
   "title": "Compress Image",
@@ -2581,7 +2581,7 @@
    "compress JPG",
    "compress photo online free"
   ],
-  "tokens": 1930
+  "tokens": 2162
  },
  "tools/compress-video": {
   "title": "Compress Video",
@@ -2599,7 +2599,7 @@
    "compress-mp4",
    "compress mp4"
   ],
-  "tokens": 2279
+  "tokens": 2534
  },
  "tools/content-studio": {
   "title": "Darkroom",
@@ -2617,7 +2617,7 @@
    "export mp4",
    "online video timeline"
   ],
-  "tokens": 2706
+  "tokens": 2973
  },
  "tools/convert-audio-to-flac": {
   "title": "Convert Audio to FLAC",
@@ -2631,7 +2631,7 @@
    "online flac converter",
    "convert to flac free"
   ],
-  "tokens": 952
+  "tokens": 1144
  },
  "tools/convert-audio-to-m4a": {
   "title": "Convert Audio to M4A / AAC",
@@ -2645,7 +2645,7 @@
    "online aac converter",
    "convert to m4a / aac free"
   ],
-  "tokens": 953
+  "tokens": 1144
  },
  "tools/convert-audio-to-ogg": {
   "title": "Convert Audio to OGG",
@@ -2659,7 +2659,7 @@
    "online ogg converter",
    "convert to ogg free"
   ],
-  "tokens": 952
+  "tokens": 1143
  },
  "tools/convert-audio-to-opus": {
   "title": "Convert Audio to Opus",
@@ -2673,7 +2673,7 @@
    "online opus converter",
    "convert to opus free"
   ],
-  "tokens": 966
+  "tokens": 1150
  },
  "tools/convert-audio-to-wav": {
   "title": "Convert Audio to WAV",
@@ -2687,7 +2687,7 @@
    "online wav converter",
    "convert to wav free"
   ],
-  "tokens": 986
+  "tokens": 1201
  },
  "tools/convert-avi-to-mp4": {
   "title": "Convert AVI to MP4",
@@ -2701,7 +2701,7 @@
    "avi to mp4 online",
    "free avi to mp4"
   ],
-  "tokens": 811
+  "tokens": 1017
  },
  "tools/convert-avif-to-jpg": {
   "title": "Convert AVIF to JPG",
@@ -2716,7 +2716,7 @@
    "avif converter",
    "open avif file"
   ],
-  "tokens": 870
+  "tokens": 1052
  },
  "tools/convert-avif-to-png": {
   "title": "Convert AVIF to PNG",
@@ -2731,7 +2731,7 @@
    "avif converter",
    "avif to png online"
   ],
-  "tokens": 907
+  "tokens": 1103
  },
  "tools/convert-heic-to-jpg": {
   "title": "Convert HEIC to JPG",
@@ -2746,7 +2746,7 @@
    ".heic to .jpg",
    "heic converter"
   ],
-  "tokens": 908
+  "tokens": 1122
  },
  "tools/convert-jpg-to-pdf": {
   "title": "Convert JPG to PDF",
@@ -2761,7 +2761,7 @@
    ".jpg to .pdf",
    "photo to pdf"
   ],
-  "tokens": 902
+  "tokens": 1100
  },
  "tools/convert-jpg-to-png": {
   "title": "Convert JPG to PNG",
@@ -2776,7 +2776,7 @@
    ".jpg to .png",
    "JPG to PNG converter free"
   ],
-  "tokens": 989
+  "tokens": 1187
  },
  "tools/convert-jpg-to-webp": {
   "title": "Convert JPG to WebP",
@@ -2791,7 +2791,7 @@
    ".jpg to .webp",
    "JPG to WebP converter free"
   ],
-  "tokens": 961
+  "tokens": 1132
  },
  "tools/convert-mkv-to-mp4": {
   "title": "Convert MKV to MP4",
@@ -2805,7 +2805,7 @@
    "matroska to mp4",
    "mkv to mp4 online"
   ],
-  "tokens": 857
+  "tokens": 1052
  },
  "tools/convert-mov-to-mp4": {
   "title": "Convert MOV to MP4",
@@ -2820,7 +2820,7 @@
    "iphone mov to mp4",
    "mov to mp4 online"
   ],
-  "tokens": 996
+  "tokens": 1184
  },
  "tools/convert-mp3-to-wav": {
   "title": "Convert MP3 to WAV",
@@ -2833,7 +2833,7 @@
    "mp3 to wav converter free",
    "decode mp3 to wav"
   ],
-  "tokens": 750
+  "tokens": 918
  },
  "tools/convert-mp4-to-webm": {
   "title": "Convert MP4 to WebM",
@@ -2847,7 +2847,7 @@
    "mp4 to webm online",
    "free mp4 to webm"
   ],
-  "tokens": 829
+  "tokens": 1033
  },
  "tools/convert-png-to-jpg": {
   "title": "Convert PNG to JPG",
@@ -2862,7 +2862,7 @@
    ".png to .jpg",
    "PNG to JPG converter free"
   ],
-  "tokens": 1032
+  "tokens": 1231
  },
  "tools/convert-png-to-pdf": {
   "title": "Convert PNG to PDF",
@@ -2877,7 +2877,7 @@
    "screenshot to pdf",
    "image to pdf"
   ],
-  "tokens": 874
+  "tokens": 1054
  },
  "tools/convert-png-to-svg": {
   "title": "Convert PNG to SVG",
@@ -2892,7 +2892,7 @@
    "image to vector",
    "png to vector"
   ],
-  "tokens": 992
+  "tokens": 1188
  },
  "tools/convert-png-to-webp": {
   "title": "Convert PNG to WebP",
@@ -2907,7 +2907,7 @@
    "PNG to WebP transparent",
    "PNG to WebP converter free"
   ],
-  "tokens": 937
+  "tokens": 1107
  },
  "tools/convert-svg-to-png": {
   "title": "Convert SVG to PNG",
@@ -2922,7 +2922,7 @@
    ".svg to .png",
    "svg to image"
   ],
-  "tokens": 897
+  "tokens": 1081
  },
  "tools/convert-video-to-animated-gif": {
   "title": "Convert Video to Animated GIF",
@@ -2943,7 +2943,7 @@
    "mp4 to gif",
    "gif converter"
   ],
-  "tokens": 1961
+  "tokens": 2194
  },
  "tools/convert-video-to-hevc": {
   "title": "Convert Video to HEVC (H.265)",
@@ -2957,7 +2957,7 @@
    "hevc encoder free",
    "convert mp4 to hevc"
   ],
-  "tokens": 979
+  "tokens": 1166
  },
  "tools/convert-wav-to-mp3": {
   "title": "Convert WAV to MP3",
@@ -2972,7 +2972,7 @@
    ".wav to .mp3",
    "WAV file to MP3 online"
   ],
-  "tokens": 819
+  "tokens": 1021
  },
  "tools/convert-webm-to-mp4": {
   "title": "Convert WebM to MP4",
@@ -2986,7 +2986,7 @@
    "webm to mp4 online",
    "free webm to mp4"
   ],
-  "tokens": 848
+  "tokens": 1055
  },
  "tools/convert-webp-to-jpg": {
   "title": "Convert WebP to JPG",
@@ -3001,7 +3001,7 @@
    ".webp to .jpg",
    "open WebP file"
   ],
-  "tokens": 855
+  "tokens": 1060
  },
  "tools/convert-webp-to-png": {
   "title": "Convert WebP to PNG",
@@ -3016,7 +3016,7 @@
    "WebP to PNG transparent",
    "WebP to PNG converter free"
   ],
-  "tokens": 929
+  "tokens": 1107
  },
  "tools/crop-image": {
   "title": "Crop Image",
@@ -3030,7 +3030,7 @@
    "crop png",
    "cut out part of image"
   ],
-  "tokens": 741
+  "tokens": 948
  },
  "tools/crop-video": {
   "title": "Crop Video",
@@ -3044,7 +3044,7 @@
    "crop mp4",
    "crop video free"
   ],
-  "tokens": 802
+  "tokens": 980
  },
  "tools/edit-image-metadata": {
   "title": "Edit Image Metadata",
@@ -3058,7 +3058,7 @@
    "change photo GPS location",
    "IPTC keywords editor"
   ],
-  "tokens": 991
+  "tokens": 1154
  },
  "tools/extract-audio-from-video": {
   "title": "Extract Audio from Video",
@@ -3078,7 +3078,7 @@
    "video to mp3",
    "mp4 to mp3"
   ],
-  "tokens": 1901
+  "tokens": 2130
  },
  "tools/extract-frames-from-video": {
   "title": "Extract Frames from Video",
@@ -3094,7 +3094,7 @@
    "video to JPG online",
    "extract every Nth frame"
   ],
-  "tokens": 1115
+  "tokens": 1303
  },
  "tools/extract-video-only-from-video": {
   "title": "Extract Video Without Audio",
@@ -3109,7 +3109,7 @@
    "delete audio track from video",
    "strip audio from MP4"
   ],
-  "tokens": 1126
+  "tokens": 1310
  },
  "tools/fix-perspective-photo": {
   "title": "Fix perspective",
@@ -3125,7 +3125,7 @@
    "four corner perspective",
    "square up a document photo"
   ],
-  "tokens": 2429
+  "tokens": 2618
  },
  "tools/fix-photo-exposure": {
   "title": "Fix exposure",
@@ -3141,7 +3141,7 @@
    "photo too bright fix",
    "exposure correction tool"
   ],
-  "tokens": 2647
+  "tokens": 2853
  },
  "tools/flip-video": {
   "title": "Flip & Mirror Video",
@@ -3155,7 +3155,7 @@
    "un-mirror selfie video",
    "flip video vertically"
   ],
-  "tokens": 860
+  "tokens": 1016
  },
  "tools/generate-vtt-captions": {
   "title": "VTT Caption Generator",
@@ -3169,7 +3169,7 @@
    "auto captions online",
    "video to vtt"
   ],
-  "tokens": 832
+  "tokens": 1031
  },
  "tools/grayscale-image": {
   "title": "Convert Image to Black & White",
@@ -3183,7 +3183,7 @@
    "sepia photo online",
    "make photo black and white"
   ],
-  "tokens": 798
+  "tokens": 1003
  },
  "tools/image-converter": {
   "title": "Image Converter",
@@ -3204,7 +3204,7 @@
    "png converter",
    "svg converter"
   ],
-  "tokens": 831
+  "tokens": 1055
  },
  "tools/image-filters": {
   "title": "Image Filters & Effects",
@@ -3218,7 +3218,7 @@
    "emboss image online",
    "photo effects free"
   ],
-  "tokens": 839
+  "tokens": 1043
  },
  "tools/image-resizer": {
   "title": "Image Resizer",
@@ -3233,7 +3233,7 @@
    "resize JPG",
    "resize PNG online free"
   ],
-  "tokens": 1902
+  "tokens": 2121
  },
  "tools/image-saturation": {
   "title": "Image saturation",
@@ -3249,7 +3249,7 @@
    "saturation slider online",
    "boost photo colors"
   ],
-  "tokens": 2520
+  "tokens": 2741
  },
  "tools/image-to-pdf": {
   "title": "Image to PDF",
@@ -3264,7 +3264,7 @@
    "convert image to pdf",
    "picture to pdf"
   ],
-  "tokens": 1826
+  "tokens": 2021
  },
  "tools/inspect-metadata": {
   "title": "Metadata Inspector",
@@ -3279,7 +3279,7 @@
    "view ID3 tags",
    "PDF metadata viewer"
   ],
-  "tokens": 1100
+  "tokens": 1278
  },
  "tools/invert-image-colors": {
   "title": "Invert colors",
@@ -3294,7 +3294,7 @@
    "invert picture colors",
    "negative image effect"
   ],
-  "tokens": 2089
+  "tokens": 2285
  },
  "tools/isolate-vocals-from-song": {
   "title": "Isolate Vocals from a Song",
@@ -3309,7 +3309,7 @@
    "separate vocals from music",
    "acapella maker"
   ],
-  "tokens": 996
+  "tokens": 1198
  },
  "tools/motion": {
   "title": "Motion",
@@ -3328,7 +3328,7 @@
    "svg to gif",
    "logo animation"
   ],
-  "tokens": 2792
+  "tokens": 3055
  },
  "tools/normalize-audio": {
   "title": "Normalize Audio",
@@ -3342,7 +3342,7 @@
    "loudness normalization",
    "even out audio volume"
   ],
-  "tokens": 949
+  "tokens": 1127
  },
  "tools/pdf-converter": {
   "title": "PDF Converter",
@@ -3357,7 +3357,7 @@
    "pdf to jpg",
    "free pdf converter"
   ],
-  "tokens": 907
+  "tokens": 1104
  },
  "tools/pdf-to-jpg": {
   "title": "PDF to JPG",
@@ -3372,7 +3372,7 @@
    "pdf to jpeg",
    "pdf to jpg converter"
   ],
-  "tokens": 1725
+  "tokens": 1939
  },
  "tools/pdf-to-png": {
   "title": "PDF to PNG",
@@ -3387,7 +3387,7 @@
    "pdf to png converter",
    "pdf to transparent png"
   ],
-  "tokens": 921
+  "tokens": 1106
  },
  "tools/photo-curves": {
   "title": "Curves",
@@ -3402,7 +3402,7 @@
    "s curve photo",
    "per channel curves browser"
   ],
-  "tokens": 2177
+  "tokens": 2376
  },
  "tools/photo-levels": {
   "title": "Levels",
@@ -3417,7 +3417,7 @@
    "histogram levels editor",
    "fix flat photo contrast"
   ],
-  "tokens": 2132
+  "tokens": 2337
  },
  "tools/png-to-ico": {
   "title": "PNG to ICO",
@@ -3432,7 +3432,7 @@
    ".png to .ico",
    "create ico file"
   ],
-  "tokens": 868
+  "tokens": 1057
  },
  "tools/posterize-image": {
   "title": "Posterize",
@@ -3447,7 +3447,7 @@
    "poster effect photo",
    "flat color photo filter"
   ],
-  "tokens": 2070
+  "tokens": 2258
  },
  "tools/redact-text-in-image": {
   "title": "Redact Text in Image",
@@ -3462,7 +3462,7 @@
    "black out text in image",
    "image redaction tool"
   ],
-  "tokens": 2226
+  "tokens": 2452
  },
  "tools/reduce-image-noise": {
   "title": "Reduce image noise",
@@ -3478,7 +3478,7 @@
    "photo noise reduction tool",
    "luminance noise reduction"
   ],
-  "tokens": 2400
+  "tokens": 2612
  },
  "tools/remove-audio-from-video": {
   "title": "Remove Audio from Video",
@@ -3492,7 +3492,7 @@
    "silence video",
    "strip audio from video"
   ],
-  "tokens": 886
+  "tokens": 1073
  },
  "tools/remove-background-from-image": {
   "title": "Remove Background from Image",
@@ -3507,7 +3507,7 @@
    "erase background from photo",
    "free background remover online"
   ],
-  "tokens": 1879
+  "tokens": 2112
  },
  "tools/remove-background-noise": {
   "title": "Remove Background Noise",
@@ -3522,7 +3522,7 @@
    "ai noise reduction",
    "remove hum from audio"
   ],
-  "tokens": 1954
+  "tokens": 2157
  },
  "tools/remove-blemishes": {
   "title": "Remove blemishes",
@@ -3538,7 +3538,7 @@
    "photo retouching tool",
    "red eye removal online"
   ],
-  "tokens": 2324
+  "tokens": 2538
  },
  "tools/remove-exif-metadata": {
   "title": "Remove EXIF Metadata from Images",
@@ -3553,7 +3553,7 @@
    "remove EXIF online",
    "IPTC remover"
   ],
-  "tokens": 2456
+  "tokens": 2715
  },
  "tools/remove-object-from-photo": {
   "title": "Remove Object from Photo",
@@ -3568,7 +3568,7 @@
    "inpainting online",
    "remove photobomber"
   ],
-  "tokens": 1952
+  "tokens": 2170
  },
  "tools/remove-vocals-from-song": {
   "title": "Remove Vocals from a Song",
@@ -3583,7 +3583,7 @@
    "ai vocal remover",
    "create backing track"
   ],
-  "tokens": 2109
+  "tokens": 2322
  },
  "tools/resize-video": {
   "title": "Resize Video",
@@ -3597,7 +3597,7 @@
    "resize video online",
    "scale video"
   ],
-  "tokens": 795
+  "tokens": 992
  },
  "tools/reverse-video": {
   "title": "Reverse Video",
@@ -3611,7 +3611,7 @@
    "boomerang video maker",
    "ping pong video loop"
   ],
-  "tokens": 868
+  "tokens": 1049
  },
  "tools/rotate-image": {
   "title": "Rotate Image",
@@ -3625,7 +3625,7 @@
    "fix sideways photo",
    "rotate png"
   ],
-  "tokens": 821
+  "tokens": 1028
  },
  "tools/rotate-video": {
   "title": "Rotate Video",
@@ -3639,7 +3639,7 @@
    "fix sideways video",
    "flip video"
   ],
-  "tokens": 822
+  "tokens": 995
  },
  "tools/select-by-color": {
   "title": "Select by color",
@@ -3655,7 +3655,7 @@
    "select sky by color",
    "fuzziness color selection"
   ],
-  "tokens": 2387
+  "tokens": 2579
  },
  "tools/sharpen-image": {
   "title": "Sharpen Image",
@@ -3669,7 +3669,7 @@
    "unsharp mask online",
    "crisp up blurry photo"
   ],
-  "tokens": 830
+  "tokens": 1047
  },
  "tools/sharpen-photo-online": {
   "title": "Sharpen a photo",
@@ -3685,7 +3685,7 @@
    "make photo sharper online",
    "photo sharpening tool"
   ],
-  "tokens": 2361
+  "tokens": 2570
  },
  "tools/split-toning": {
   "title": "Split toning",
@@ -3700,7 +3700,7 @@
    "duotone photo online",
    "color grade photo in browser"
   ],
-  "tokens": 2191
+  "tokens": 2387
  },
  "tools/srt-generator": {
   "title": "SRT Generator",
@@ -3717,7 +3717,7 @@
    "subtitle generator online",
    "MP4 to SRT"
   ],
-  "tokens": 1231
+  "tokens": 1440
  },
  "tools/stabilize-video": {
   "title": "Stabilize Video",
@@ -3731,7 +3731,7 @@
    "fix shaky video",
    "remove camera shake"
   ],
-  "tokens": 916
+  "tokens": 1094
  },
  "tools/stitch-audio-to-video": {
   "title": "Add Audio to Video",
@@ -3747,7 +3747,7 @@
    "mix audio with video",
    "add narration to video"
   ],
-  "tokens": 1156
+  "tokens": 1334
  },
  "tools/straighten-photo": {
   "title": "Straighten a photo",
@@ -3763,7 +3763,7 @@
    "auto crop after rotate",
    "straighten image tool"
   ],
-  "tokens": 2330
+  "tokens": 2513
  },
  "tools/summarize-audio": {
   "title": "Summarize Audio",
@@ -3777,7 +3777,7 @@
    "summarize mp3",
    "voice memo summary"
   ],
-  "tokens": 922
+  "tokens": 1120
  },
  "tools/summarize-video": {
   "title": "Summarize Video",
@@ -3791,7 +3791,7 @@
    "lecture summary from video",
    "meeting video summary"
   ],
-  "tokens": 1179
+  "tokens": 1392
  },
  "tools/tint-photo": {
   "title": "Tint a photo",
@@ -3807,7 +3807,7 @@
    "color overlay photo",
    "tint image online"
   ],
-  "tokens": 2351
+  "tokens": 2554
  },
  "tools/transcode-to-dash": {
   "title": "Transcode Video to DASH (AV1 / VP9)",
@@ -3822,7 +3822,7 @@
    "manifest.mpd generator",
    "adaptive bitrate streaming"
   ],
-  "tokens": 1233
+  "tokens": 1451
  },
  "tools/transcode-to-hls": {
   "title": "Transcode Video to HLS",
@@ -3837,7 +3837,7 @@
    "adaptive bitrate streaming",
    "HLS VOD packaging"
   ],
-  "tokens": 2473
+  "tokens": 2703
  },
  "tools/transcribe-audio": {
   "title": "Transcribe Audio",
@@ -3851,7 +3851,7 @@
    "transcribe voice memo",
    "free audio transcription"
   ],
-  "tokens": 887
+  "tokens": 1136
  },
  "tools/transcribe-video": {
   "title": "Transcribe Video",
@@ -3866,7 +3866,7 @@
    "speech to text from video",
    "generate VTT subtitles"
   ],
-  "tokens": 2147
+  "tokens": 2389
  },
  "tools/trim-audio": {
   "title": "Trim Audio",
@@ -3880,7 +3880,7 @@
    "ringtone maker",
    "crop audio file"
   ],
-  "tokens": 812
+  "tokens": 1040
  },
  "tools/video-converter": {
   "title": "Video Converter",
@@ -3897,7 +3897,7 @@
    "mp4-converter",
    "mp4 converter"
   ],
-  "tokens": 885
+  "tokens": 1098
  },
  "tools/video-trimmer": {
   "title": "Video Trimmer",
@@ -3917,7 +3917,7 @@
    "video cutter",
    "cut video online"
   ],
-  "tokens": 2067
+  "tokens": 2285
  },
  "tools/voice-changer": {
   "title": "Voice changer",
@@ -3931,7 +3931,7 @@
    "ai voice conversion",
    "make my voice deeper"
   ],
-  "tokens": 1212
+  "tokens": 1419
  },
  "tools/voice-cloning": {
   "title": "Voice cloning",
@@ -3945,7 +3945,7 @@
    "create a voice from a recording",
    "multilingual voice clone"
   ],
-  "tokens": 1382
+  "tokens": 1592
  },
  "tools/voice-designer": {
   "title": "Voice designer",
@@ -3959,7 +3959,7 @@
    "design a narrator voice",
    "text to speech custom voice"
   ],
-  "tokens": 1090
+  "tokens": 1276
  },
  "tools/white-balance-photo": {
   "title": "White balance",
@@ -3975,6 +3975,6 @@
    "correct color cast online",
    "warm up a photo"
   ],
-  "tokens": 2530
+  "tokens": 2725
  }
 }

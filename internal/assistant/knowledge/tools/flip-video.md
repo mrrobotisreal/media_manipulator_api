@@ -65,3 +65,9 @@ A: Re-encoding has a small cost; choose high quality to keep it negligible.
 - Panel: Flip or mirror a video. Media kind: video; task: flip_video.
 - Default output format: mp4.
 - The form opens already set up for this task (effect flip).
+
+## Routing
+
+When to send a visitor here: Send visitors here when a video is mirrored, for example a reversed webcam or selfie recording, or needs a vertical flip. Flips can be combined with a rotation in the same pass.
+When to send them elsewhere: If the problem is only orientation, Rotate Video (rotate-video) is the direct page. Playing a clip backwards is Reverse Video (reverse-video), not flipping.
+Related tools: rotate-video (fix sideways footage); reverse-video (play backwards); crop-video (reframe); video-converter (change format)

@@ -74,3 +74,9 @@ A: Yes. Find a neutral gray with the eyedropper on each channel and drag the res
 
 - Opens the Aperture editor with the curves panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone wants precise tone or colour shaping with a draggable curve for RGB and each channel, up to 16 points, such as an S-curve for contrast or a faded matte look.
+When to send them elsewhere: For just black and white points use Levels (photo-levels); for a single contrast change use Adjust contrast (adjust-image-contrast); exposure problems belong in Fix exposure (fix-photo-exposure). If the grade is a .cube file use Apply a LUT (apply-lut-to-photo).
+Related tools: photo-levels (simpler black and white points); adjust-image-contrast (one-slider contrast); split-toning (colour toning by tone); apply-lut-to-photo (exact grade from a file)

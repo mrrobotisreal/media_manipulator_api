@@ -64,3 +64,9 @@ A: Yes. Cover art is detected as a picture, not a video stream, so the file is a
 
 - Panel: Convert audio to Opus. Media kind: audio; task: audio_to_opus.
 - Output format is fixed to opus.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want an audio file as Opus at a chosen bitrate, sample rate and channels, typically for small voice or web audio. Trim, volume, normalisation and EQ apply in the same pass.
+When to send them elsewhere: For OGG Vorbis use Convert Audio to OGG (convert-audio-to-ogg); for broad device support use Convert Audio to M4A / AAC (convert-audio-to-m4a) or Audio Converter (audio-converter) for MP3.
+Related tools: audio-converter (MP3 and other formats); convert-audio-to-ogg (Vorbis instead); convert-audio-to-m4a (AAC for wide support); clean-voice-audio (clean a voice first)

@@ -73,3 +73,9 @@ A: No. The table is kept in the project document, parsed in the browser and read
 
 - Opens the Aperture editor with the lut panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone has a .cube 3D LUT (a colour grade or film look) and wants to apply it to a photo at a chosen intensity and export at full resolution. Typical asks: "apply my LUT to this image".
+When to send them elsewhere: Without a LUT file, use Curves (photo-curves) for tone mapping or Split toning (split-toning) for shadow and highlight hues. 1D LUTs and very large tables are not supported. A log-to-display LUT on a normal JPEG will look wrong.
+Related tools: photo-curves (hand-built tone mapping); split-toning (simple two-hue grade); tint-photo (single-colour wash); fix-photo-exposure (correct exposure before grading)

@@ -64,3 +64,9 @@ A: Yes. Use Normalize audio for a consistent perceived loudness.
 - Panel: Adjust the volume of an audio file. Media kind: audio; task: adjust_audio_volume.
 - Default output format: mp3.
 - The form opens already set up for this task (effect volume).
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want an audio file louder or quieter by a fixed amount, from 0.1x to 2x or by decibels, optionally with fade in and fade out.
+When to send them elsewhere: For a consistent target loudness across files use Normalize Audio (normalize-audio). Tone changes such as more bass belong in Audio Equalizer (audio-equalizer).
+Related tools: normalize-audio (target loudness); audio-equalizer (shape the tone); audio-converter (change format); remove-background-noise (reduce noise)

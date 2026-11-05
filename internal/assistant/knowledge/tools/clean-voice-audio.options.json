@@ -1,0 +1,1 @@
+{"slug":"clean-voice-audio","family":"audio:ai","options":{"type":"object","properties":{"format":{"x-uiLabel":"Output format","default":"mp3","type":"string","enum":["mp3","wav","aac","ogg","flac","alac","opus","ac3","dts"]}},"additionalProperties":false}}

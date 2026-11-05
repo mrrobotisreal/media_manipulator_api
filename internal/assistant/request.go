@@ -26,6 +26,8 @@ type ChatBody struct {
 	Frame          *FrameIn    `json:"frame,omitempty"`
 	EditResult     *EditResult `json:"editResult,omitempty"`
 	Plan           bool        `json:"plan,omitempty"`
+	// FileRef names a file the user dropped into the guide (POST /assistant/files, MM116a).
+	FileRef string `json:"fileRef,omitempty"`
 }
 
 // PageRef is the page the user is on.
@@ -149,6 +151,9 @@ func (b *ChatBody) Validate(maxFrameBytes int) (frameURL, frameAfterURL string, 
 		for i, e := range b.EditResult.Errors {
 			b.EditResult.Errors[i] = clip(e, maxErrorChars)
 		}
+	}
+	if b.FileRef != "" && (b.Surface != SurfaceGuide || b.Message == nil || !IsUUID(b.FileRef)) {
+		return "", "", bad("invalid_file_ref", "fileRef is a file id from /assistant/files, on a guide message")
 	}
 	if b.Plan && b.Surface == SurfaceGuide {
 		return "", "", bad("invalid_body", "plan is for copilot surfaces")
