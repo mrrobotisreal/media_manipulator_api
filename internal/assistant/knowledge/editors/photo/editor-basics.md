@@ -22,6 +22,7 @@ Tool pages that open the editor on a panel: aperture â†’ basic; brighten-image â
 - Mod+S: Save
 - Mod+E: Export
 - ?: Show shortcuts
+- Mod+J: Open Medi
 - \: Hold to see the original
 - 0: Fit to screen
 - 1: Zoom to 100%
