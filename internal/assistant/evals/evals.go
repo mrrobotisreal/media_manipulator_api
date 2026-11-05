@@ -273,7 +273,14 @@ func Grade(c Case, out Output) Result {
 		}
 	}
 	if e.Language != "" {
-		if l := DetectLanguage(out.Text); l != e.Language {
+		// An edit turn may carry no prose: its undo label is the user-visible
+		// text then (photo-ru-moody, 2026-11-05: Russian label, empty text).
+		said := out.Text
+		for _, ed := range out.Edits {
+			said += " " + ed.Summary
+		}
+		said += " " + strings.Join(out.Asks, " ")
+		if l := DetectLanguage(strings.TrimSpace(said)); l != e.Language {
 			fail("answer language %s, want %s", l, e.Language)
 		}
 	}

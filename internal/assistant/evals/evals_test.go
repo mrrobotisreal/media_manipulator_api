@@ -398,3 +398,25 @@ func TestHarnessRefusesWithoutFlag(t *testing.T) {
 		t.Errorf("--estimate: %v\n%s", err, out)
 	}
 }
+
+// 2026-11-05 photo eval: a Russian edit turn with no prose was graded "en".
+// The undo label is what the user reads, so the language check counts it.
+func TestGradeLanguageCountsEditLabel(t *testing.T) {
+	c := Case{ID: "ru-edit", Surface: "photo", Expect: Expect{Language: "ru"}}
+	out := Output{Model: "m", Edits: []Edit{{Summary: "Тёплый баланс белого", Ops: []map[string]any{{"op": "auto_tone"}}}}}
+	if r := Grade(c, out); !r.Pass {
+		t.Fatalf("Russian undo label with empty text should pass the language check: %v", r.Failures)
+	}
+	out.Edits[0].Summary = "Warm white balance"
+	if r := Grade(c, out); r.Pass {
+		t.Fatal("an English-only edit turn must fail a ru language check")
+	}
+}
+
+func TestAnyOfReadsButtonLabels(t *testing.T) {
+	c := Case{ID: "mask", Surface: "photo", Expect: Expect{AnyOf: []string{"subject", "mask"}}}
+	out := Output{Model: "m", Actions: []Action{{Kind: "suggest_action", Label: "Select the person", Params: map[string]any{"kind": "subject_mask"}}}}
+	if r := Grade(c, out); !r.Pass {
+		t.Fatalf("a subject_mask button should satisfy any_of: %v", r.Failures)
+	}
+}
