@@ -196,6 +196,7 @@ type Output struct {
 // Action is one action button (navigate / open_tool / suggest_action).
 type Action struct {
 	Kind   string
+	Label  string
 	Params map[string]any
 }
 
@@ -333,6 +334,9 @@ func hasAction(acts []Action, kind, target string) bool {
 func actionsMention(acts []Action, s string) bool {
 	s = strings.ToLower(s)
 	for _, a := range acts {
+		if strings.Contains(strings.ToLower(a.Kind), s) || strings.Contains(strings.ToLower(a.Label), s) {
+			return true
+		}
 		for _, v := range a.Params {
 			if str, ok := v.(string); ok && strings.Contains(strings.ToLower(str), s) {
 				return true

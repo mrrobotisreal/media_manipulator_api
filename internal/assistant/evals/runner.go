@@ -24,7 +24,7 @@ func (r *recorder) Send(ev any) error {
 	case assistant.DeltaEvent:
 		r.out.Text += e.Text
 	case assistant.ActionEvent:
-		r.out.Actions = append(r.out.Actions, Action{Kind: e.Kind, Params: e.Params})
+		r.out.Actions = append(r.out.Actions, Action{Kind: e.Kind, Label: e.Label, Params: e.Params})
 	case assistant.AskEvent:
 		r.out.Asks = append(r.out.Asks, e.Question)
 	case assistant.EditsEvent:
@@ -213,10 +213,27 @@ func Markdown(date string, rs []Result, s Summary, models assistantModels) strin
 		case r.Skipped != "":
 			res, notes = "⏭ skipped", r.Skipped
 		case !r.Pass:
-			res, notes = "❌ fail", strings.Join(r.Failures, "; ")
+			res, notes = "❌ fail", strings.Join(r.Failures, "; ")+" — "+failureExcerpt(r.Output)
 		}
 		fmt.Fprintf(&b, "| `%s` | %s | %s | $%.4f | %s |\n", r.Case.ID, r.Case.Surface, res, r.Output.CostUSD, strings.ReplaceAll(notes, "|", "\\|"))
 	}
 	b.WriteString("\n## Failure triage\n\n(Filled in by the session: each failure is a knowledge gap fixed in the corpus/recipes, or logged for MM107/MM108.)\n")
 	return b.String()
+}
+
+// failureExcerpt is what the model did, short enough for one table cell, so a
+// failure can be triaged without re-running it (answer text, buttons, edits).
+func failureExcerpt(out Output) string {
+	text := strings.Join(strings.Fields(out.Text), " ")
+	if r := []rune(text); len(r) > 240 {
+		text = string(r[:240]) + "…"
+	}
+	parts := []string{fmt.Sprintf("said: %q", text), "actions: " + describeActions(out.Actions)}
+	for _, ed := range out.Edits {
+		parts = append(parts, fmt.Sprintf("edit %q (%d ops)", ed.Summary, len(ed.Ops)))
+	}
+	if out.Error != "" {
+		parts = append(parts, "error: "+out.Error)
+	}
+	return strings.ReplaceAll(strings.Join(parts, "; "), "\n", " ")
 }
