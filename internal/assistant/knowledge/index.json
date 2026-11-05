@@ -1548,7 +1548,7 @@
    "background music balance",
    "voice over music mix"
   ],
-  "tokens": 374
+  "tokens": 373
  },
  "recipes/studio/picture-in-picture": {
   "title": "Picture in picture (webcam over screen)",
@@ -1574,7 +1574,7 @@
    "even out the volume",
    "radio voice"
   ],
-  "tokens": 437
+  "tokens": 440
  },
  "recipes/studio/shorts-captions": {
   "title": "Caption styling for Shorts, Reels and TikTok",
