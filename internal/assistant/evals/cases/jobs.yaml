@@ -93,10 +93,10 @@
 - id: job-none-tool-opens-instead
   surface: guide
   suite: jobs
-  message: "run it for me: resize my image to 800 pixels wide"
+  message: "run it for me: brighten my photo"
   expect:
     no_confirm_job: true
-    actions: [tool:image-resizer]
+    actions: [tool:brighten-image]
 # An editor is not a single-tool job.
 - id: job-editor-not-submitted
   surface: guide

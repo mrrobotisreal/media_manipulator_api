@@ -292,6 +292,10 @@ var pageScopedPhrases = []string{
 	"cette page", "ce site", "cet outil", "questa pagina", "questo sito", "questo strumento",
 	"このページ", "このサイト", "このツール", "这个页面", "这个网站", "这个工具", "這個頁面", "這個網站", "這個工具",
 	"이 페이지", "이 사이트", "이 도구", "هذه الصفحة", "هذا الموقع", "هذه الأداة", "यह पेज", "इस पेज", "यह टूल",
+	// MM116b: "just run it" and its kin are about the tool the visitor is looking at (a job proposal).
+	"run it", "do it", "go ahead", "start it", "start the job", "run the job", "run this",
+	"запусти", "ejecútalo", "ejecutalo", "hazlo", "lance-le", "lance ça", "vas-y", "mach es", "führ es aus", "starte es", "avvialo", "eseguilo",
+	"実行して", "やって", "运行它", "开始吧", "執行", "실행해", "시작해", "شغّله", "نفّذه", "चला दो", "शुरू करो", "chạy đi", "bắt đầu đi", "תריץ", "הפעל",
 	"este site", "esta ferramenta", "trang này", "công cụ này", "הדף הזה", "האתר הזה", "הכלי הזה",
 	// Questions about Medi itself and the visitor's own things.
 	"what can you do", "who are you", "what are you", "what do you do", "how do you work", "can you do",

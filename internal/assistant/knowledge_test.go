@@ -167,6 +167,12 @@ func TestScopeGate(t *testing.T) {
 		"Raconte-moi une blague pour les enfants":     false,
 		"Как сделать гифку из видео":                  true,
 		"Wie schneide ich ein Video":                  true,
+		// MM116b: "just run it" is about the tool in front of the visitor.
+		"just run it":    true,
+		"запусти":        true,
+		"ejecútalo ya":   true,
+		"この動画を今すぐ実行して":   true,
+		"Tell me a joke": false,
 	}
 	for q, want := range cases {
 		if got := k.InScope(q); got != want {
