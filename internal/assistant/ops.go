@@ -31,10 +31,20 @@ func NewOpsValidator() *OpsValidator {
 	v := &OpsValidator{schemas: map[string]*jsonschema.Schema{}, raw: map[string][]byte{}}
 	for _, s := range []string{SurfacePhoto, SurfaceStudio, SurfaceVector} {
 		if b, err := fs.ReadFile(opsFS, "ops/schema/"+s+".json"); err == nil {
-			v.raw[s] = b
+			v.raw[s] = compactJSON(b)
 		}
 	}
 	return v
+}
+
+// compactJSON drops the file's indentation: the schema is inlined into the
+// apply_edits tool definition, where every byte is an input token.
+func compactJSON(b []byte) []byte {
+	var out bytes.Buffer
+	if err := json.Compact(&out, b); err != nil {
+		return b
+	}
+	return out.Bytes()
 }
 
 // NewOpsValidatorFrom builds a validator from in-memory schemas (tests).

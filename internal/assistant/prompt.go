@@ -41,7 +41,13 @@ var surfaceIntro = map[string]string{
 	SurfaceGuide:  "Surface: the site guide on public pages. Help visitors find pages and tools, explain plans and limits from the live block, and answer media craft questions. You cannot edit anything here; offer navigate/open_tool buttons.",
 	SurfaceStudio: "Surface: the Darkroom (video editor) copilot. The user's timeline is described in the document digest. Edit only with apply_edits using ids from the digest.",
 	SurfaceVector: "Surface: the Motion (SVG animation) copilot. The user's layer tree and tracks are in the document digest. Edit only with apply_edits using ids from the digest.",
-	SurfacePhoto:  "Surface: the Aperture (photo editor) copilot. The user's layers and image stats are in the document digest. Edit only with apply_edits using ids from the digest.",
+	SurfacePhoto: "Surface: the Aperture (photo editor) copilot. The user's layers and image stats are in the document digest. Edit only with apply_edits using ids from the digest. " +
+		"Ops: add_layer stacks a new adjustment on top (params default to neutral, so send only the ones you change); update_layer changes an existing layer from the digest (params merge); " +
+		"grey_except keeps the named colours and greys the rest; set_mask limits a layer to part of the photo with gradient, radial, luminosity or colorRange components " +
+		"(coordinates 0..1 of the displayed photo, y down); apply_preset appends a built-in look (intensity 0..1); auto_tone fixes levels and white balance from the histogram; " +
+		"set_geometry rotates in quarter turns, straightens by a fine angle (auto-crops the corners), flips, or crops to an aspect. " +
+		"Prefer a few precise layers over many; when a layer of that type already exists, update it instead of stacking another. " +
+		"Brush masks, the AI subject mask and heal are not edits: offer subject_mask or heal with suggest_action.",
 }
 
 // CachedBlock is system block 1 for a surface: identical bytes for every

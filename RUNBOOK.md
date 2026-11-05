@@ -1214,7 +1214,7 @@ Medi (code name `assistant`, ADR-0018, design `docs/design/MEDI_ASSISTANT.md`) i
 | `ASSISTANT_OPENROUTER_API_KEY` | (unset) | Medi's own OpenRouter key. Unset = Medi off whatever `ASSISTANT_ENABLED` says (a boot warning says so). Never falls back to `OPENROUTER_API_KEY` (the DR chat lab's). Never log or paste it. |
 | `ASSISTANT_OPERATOR_ONLY` | `false` | `true`: only the operator tier sees `enabled:true` (MM106 evals before launch). |
 | `ASSISTANT_GUIDE_ENABLED` | `true` | `false`: guide messages 404. |
-| `ASSISTANT_COPILOT_SURFACES` | `photo,studio,vector` | Copilot surfaces that answer. `apply_edits` is offered on a surface only once its op schema (`internal/assistant/ops/schema/<surface>.json`, MM108–MM110) is in the build. |
+| `ASSISTANT_COPILOT_SURFACES` | `photo,studio,vector` | Copilot surfaces that answer. `apply_edits` is offered on a surface only once its op schema (`internal/assistant/ops/schema/<surface>.json`) is in the build: `photo` since MM108, `studio` MM109, `vector` MM110. **Set it explicitly in production** (e.g. `photo` after the MM108 eval passes): the default would switch on Darkroom and Motion copilots that can only talk, not edit. |
 | `ASSISTANT_MODEL_GUIDE` / `_COPILOT` / `_PLAN` / `_TITLE` | `anthropic/claude-haiku-5.5` / `anthropic/claude-sonnet-5.5` / `anthropic/claude-opus-5.5` / `anthropic/claude-haiku-5.5` | OpenRouter slugs, confirmed against the live catalog 2026-11-04. Effort low / medium / high; `temperature`/`top_p` are never sent. |
 | `ASSISTANT_MAX_TOKENS_GUIDE` / `_COPILOT` / `_PLAN` | `2048` / `8192` / `32768` | Output cap per call. Above the design's 1024/4096/8192 because OpenRouter turns `reasoning.effort` into a thinking budget that is a share of `max_tokens` (low 20 %, medium 50 %, high 80 %, floor 1024). |
 | `ASSISTANT_PROVIDER_ORDER` | `anthropic` | `provider.order`, sent with `allow_fallbacks:false` and `data_collection:"deny"`, so text and frames go to OpenRouter and Anthropic only. |
@@ -2209,6 +2209,17 @@ cd ../media_manipulator_api && go test ./internal/assistant && git add internal/
 ```
 
 `npm run export:medi -- --check` exits 1 when the API copy is stale; the UI test `lib/assistant/knowledgeExport.test.ts` fails the same way when both repos are checked out side by side. Plan numbers are never exported (the API injects the live `/api/tiers` values per request), and a sentence stating a price or a per-plan limit is replaced by a pointer to the live block. Deploy the API to ship new knowledge.
+
+#### Op schemas and the Aperture copilot (MM108)
+
+`internal/assistant/ops/schema/photo.json` is the JSON Schema of the Aperture copilot's op list, generated in the web app from `lib/assistant/ops/photo.ts`. Never edit it by hand. After an op change in the UI:
+
+```bash
+cd media-manipulator-ui && npm run export:ops            # writes the UI copy and ../media_manipulator_api/internal/assistant/ops/schema/photo.json
+cd ../media_manipulator_api && go test ./internal/assistant && git add internal/assistant/ops/schema && git commit -m "Medi: photo op schema"
+```
+
+Both repos fail a test when the copies differ. To switch the Aperture copilot on after its eval passes: `ASSISTANT_COPILOT_SURFACES=photo`, restart the API (`capabilities.copilot.surfaces` and `editSurfaces` then list `photo`, and the Aperture toolbar shows the Medi button). Troubleshooting: the button is missing → capabilities do not list `photo` (env, or the API build predates MM108); every edit ends in `invalid_ops` → the API's schema is older than the UI's (`npm run export:ops -- --check`), redeploy the API.
 
 #### Recipes and evals (MM106)
 

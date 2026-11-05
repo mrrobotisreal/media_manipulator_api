@@ -71,8 +71,7 @@ func ToolsFor(surface string, ops *OpsValidator) []ToolDef {
 		if ops.Has(surface) {
 			tools = append(tools, ToolDef{Name: ToolApplyEdits,
 				Description: "Apply edits to the open document as ONE undoable step. summary (<= 60 chars) becomes the undo label. ops use only ids from the document digest.",
-				Parameters: json.RawMessage(`{"type":"object","properties":{"summary":{"type":"string","minLength":1,"maxLength":60},"ops":` +
-					string(ops.Schema(surface)) + `},"required":["summary","ops"],"additionalProperties":false}`)})
+				Parameters:  applyEditsParameters(ops.Schema(surface))})
 		}
 		tools = append(tools, ToolDef{Name: ToolSuggestAction,
 			Description: "Offer a button for something that spends the user's allowance or needs a human: captions, AI subject mask, heal, voiceover, derived audio, export, or opening a tool.",
@@ -109,6 +108,32 @@ type ClientAction struct {
 	Choices  []string
 	// Awaits is true when the client must answer with editResult (apply_edits).
 	Awaits bool
+}
+
+// applyEditsParameters wraps a surface's ops schema as the apply_edits
+// parameters. The ops schema's shared definitions ($defs, referenced as
+// "#/$defs/…") move to the parameters' root so the references resolve there,
+// and its own $schema keyword (only valid at a root) is dropped.
+func applyEditsParameters(opsSchema json.RawMessage) json.RawMessage {
+	var ops map[string]json.RawMessage
+	if err := json.Unmarshal(opsSchema, &ops); err != nil {
+		return json.RawMessage(`{"type":"object","properties":{"summary":{"type":"string","minLength":1,"maxLength":60},"ops":` +
+			string(opsSchema) + `},"required":["summary","ops"],"additionalProperties":false}`)
+	}
+	defs := ops["$defs"]
+	delete(ops, "$defs")
+	delete(ops, "$schema")
+	inner, _ := json.Marshal(ops)
+	var b strings.Builder
+	b.WriteString(`{"type":"object","properties":{"summary":{"type":"string","minLength":1,"maxLength":60},"ops":`)
+	b.Write(inner)
+	b.WriteString(`},"required":["summary","ops"],"additionalProperties":false`)
+	if len(defs) > 0 {
+		b.WriteString(`,"$defs":`)
+		b.Write(defs)
+	}
+	b.WriteString(`}`)
+	return json.RawMessage(b.String())
 }
 
 // validateClientCall checks one client tool call: the offered tool's schema,
