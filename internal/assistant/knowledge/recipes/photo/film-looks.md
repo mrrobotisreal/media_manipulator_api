@@ -20,6 +20,7 @@ Film looks are combinations of a colour cast, lifted blacks (no true black on ol
 ```json
 {
   "summary": "Vintage film look",
+  "reason": "You asked for a vintage film feel: faded blacks, soft contrast and a warm cast",
   "ops": [
     {"op": "apply_preset", "presetId": "vintage", "intensity": 0.8}
   ]

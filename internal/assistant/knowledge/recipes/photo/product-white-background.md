@@ -20,6 +20,7 @@ Marketplaces want a background at or very near pure white. Brighten only the bri
 ```json
 {
   "summary": "White background",
+  "reason": "A clean product shot needs a white background, so I push the near-white range to pure white",
   "ops": [
     {"op": "add_layer", "type": "levels", "params": {"master": {"inWhite": 0.86}}, "mask": {"components": [{"kind": "luminosity", "lo": 0.7, "hi": 1, "feather": 0.1}]}},
     {"op": "add_layer", "type": "vibranceSaturation", "params": {"saturation": -60}, "mask": {"components": [{"kind": "luminosity", "lo": 0.75, "hi": 1, "feather": 0.1}]}}

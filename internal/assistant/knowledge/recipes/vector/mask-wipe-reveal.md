@@ -20,6 +20,7 @@ A rectangle used as the layer's clip or mask grows from width 0 to full width; t
 ```json
 {
   "summary": "Wipe reveal",
+  "reason": "You asked for a wipe reveal: a mask grows across the layer to uncover it",
   "ops": [
     {"op": "apply_animator", "layerIds": ["LAYER_ID"], "animator": "maskClip", "span": {"start": 0, "end": 600, "easing": "easeOut"}}
   ]

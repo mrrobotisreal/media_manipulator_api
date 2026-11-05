@@ -20,6 +20,7 @@ A slow push-in (scale 1.0 to about 1.15 over the clip) with a small drift in pos
 ```json
 {
   "summary": "Ken Burns push-in",
+  "reason": "A still image feels static, so a slow push-in adds motion",
   "ops": [
     {"op": "set_keyframes", "clipId": "CLIP_ID", "property": "scale", "keyframes": [{"t": 0, "value": 1.0, "ease": "easeBoth"}, {"t": 5, "value": 1.15, "ease": "linear"}]},
     {"op": "set_keyframes", "clipId": "CLIP_ID", "property": "positionX", "keyframes": [{"t": 0, "value": 0, "ease": "easeBoth"}, {"t": 5, "value": -0.04, "ease": "linear"}]}

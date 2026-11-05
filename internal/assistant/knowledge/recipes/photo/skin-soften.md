@@ -20,6 +20,7 @@ Natural retouching lowers mid-frequency contrast (clarity and texture) on skin o
 ```json
 {
   "summary": "Soft skin",
+  "reason": "You asked for softer skin: a light blur on a masked layer keeps the eyes sharp",
   "ops": [
     {"op": "add_layer", "type": "clarity", "params": {"amount": -25}, "mask": {"components": [{"kind": "colorRange", "colors": [{"r": 224, "g": 172, "b": 150}, {"r": 190, "g": 130, "b": 105}], "fuzziness": 45}]}},
     {"op": "add_layer", "type": "texture", "params": {"amount": -20}, "mask": {"components": [{"kind": "colorRange", "colors": [{"r": 224, "g": 172, "b": 150}, {"r": 190, "g": 130, "b": 105}], "fuzziness": 45}]}}

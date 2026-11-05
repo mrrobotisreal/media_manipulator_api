@@ -20,6 +20,7 @@ A broadcast voice chain cuts low rumble, adds presence around 2 to 5 kHz and com
 ```json
 {
   "summary": "Podcast voice chain",
+  "reason": "The voice track sounds thin and uneven, so a podcast voice chain evens it out",
   "ops": [
     {"op": "audio_preset", "track": "A1", "preset": "podcast"}
   ]

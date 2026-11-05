@@ -20,6 +20,7 @@ A punch-in is a fast scale change (1.0 to 1.2 within 0.2 s) held for the line, t
 ```json
 {
   "summary": "Punch-in zoom",
+  "reason": "You want emphasis on this moment, so a quick punch-in zoom draws attention",
   "ops": [
     {"op": "set_keyframes", "clipId": "CLIP_ID", "property": "scale", "keyframes": [{"t": 3, "value": 1, "ease": "easeOut"}, {"t": 3.2, "value": 1.2, "ease": "hold"}, {"t": 5, "value": 1, "ease": "linear"}]}
   ]

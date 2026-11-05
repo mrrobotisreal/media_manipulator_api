@@ -20,6 +20,7 @@ Hold one frame for 1 to 3 s at the exact moment, optionally with a slight zoom a
 ```json
 {
   "summary": "Freeze 2 s",
+  "reason": "You asked to hold a moment: a two second freeze frame at that time",
   "ops": [
     {"op": "freeze_frame", "clipId": "CLIP_ID", "at": 4.2, "duration": 2}
   ]

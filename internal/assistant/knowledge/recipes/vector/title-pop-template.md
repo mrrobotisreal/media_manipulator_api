@@ -20,6 +20,7 @@ The template creates the text centred on the canvas with the scale overshoot and
 ```json
 {
   "summary": "Title pop",
+  "reason": "You asked for a title pop: the title template adds the pop and settle for you",
   "ops": [
     {"op": "template", "kind": "titlePop", "text": "New collection", "colors": ["#ffffff"], "at": 0}
   ]

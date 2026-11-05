@@ -20,6 +20,7 @@ Short-form captions are large (5 to 7 % of the height), high contrast, with a so
 ```json
 {
   "summary": "Shorts caption style",
+  "reason": "Short videos are watched muted, so large high-contrast captions near the bottom help",
   "ops": [
     {"op": "set_caption_style", "fontSizePct": 6.5, "color": "#FFFFFF", "backgroundColor": "#000000", "backgroundOpacity": 0.7, "position": "bottom", "maxWidthPct": 80}
   ]

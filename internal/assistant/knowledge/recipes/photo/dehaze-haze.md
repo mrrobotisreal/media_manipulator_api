@@ -20,6 +20,7 @@ Dehaze restores contrast that scales with haze depth; a little goes a long way. 
 ```json
 {
   "summary": "Remove haze",
+  "reason": "The distance looks washed out, so I add contrast and clarity to cut the haze",
   "ops": [
     {"op": "add_layer", "type": "dehaze", "params": {"amount": 30}},
     {"op": "add_layer", "type": "tone", "params": {"blacks": -10}},

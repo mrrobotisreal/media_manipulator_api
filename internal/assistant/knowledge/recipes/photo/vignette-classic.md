@@ -20,6 +20,7 @@ A good vignette is barely noticed: amount -20 to -35, a wide midpoint, a soft fe
 ```json
 {
   "summary": "Subtle vignette",
+  "reason": "A subtle vignette draws the eye to the centre without being noticeable",
   "ops": [
     {"op": "add_layer", "type": "vignette", "params": {"amount": -28, "midpoint": 45, "roundness": 0, "feather": 65, "highlights": 30}}
   ]

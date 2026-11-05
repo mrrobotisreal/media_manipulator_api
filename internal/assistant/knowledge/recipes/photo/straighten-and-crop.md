@@ -20,6 +20,7 @@ Straighten first, then crop, so the crop does not need to change. Small angles (
 ```json
 {
   "summary": "Straighten and crop 4:5",
+  "reason": "The horizon is slightly tilted and you want 4:5, so I straighten then crop",
   "ops": [
     {"op": "set_geometry", "straighten": -2, "crop": {"aspect": "4:5"}}
   ]

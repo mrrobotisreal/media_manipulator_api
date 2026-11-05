@@ -934,7 +934,7 @@
    "make it feel fresh",
    "wedding style bright"
   ],
-  "tokens": 493
+  "tokens": 520
  },
  "recipes/photo/auto-fix": {
   "title": "One-click fix, then refine",
@@ -948,7 +948,7 @@
    "quick fix",
    "improve the photo"
   ],
-  "tokens": 407
+  "tokens": 437
  },
  "recipes/photo/backlit-portrait": {
   "title": "Fix a backlit portrait (dark face, bright sky)",
@@ -962,7 +962,7 @@
    "sun behind them",
    "subject is a silhouette"
   ],
-  "tokens": 514
+  "tokens": 547
  },
  "recipes/photo/bw-classic": {
   "title": "Classic black and white",
@@ -975,7 +975,7 @@
    "classic bw photo",
    "timeless black and white"
   ],
-  "tokens": 376
+  "tokens": 403
  },
  "recipes/photo/bw-dramatic-sky": {
   "title": "Dramatic black and white with a dark sky",
@@ -988,7 +988,7 @@
    "ansel adams look",
    "high contrast bw"
   ],
-  "tokens": 402
+  "tokens": 427
  },
  "recipes/photo/color-balance-grade": {
   "title": "Subtle colour grade with Colour Balance",
@@ -1001,7 +1001,7 @@
    "add a slight tint to shadows",
    "film colour feel"
   ],
-  "tokens": 362
+  "tokens": 394
  },
  "recipes/photo/curves-s-contrast": {
   "title": "Add contrast with an S-curve",
@@ -1014,7 +1014,7 @@
    "s curve",
    "deeper blacks and brighter whites"
   ],
-  "tokens": 366
+  "tokens": 390
  },
  "recipes/photo/dehaze-haze": {
   "title": "Cut haze and fog",
@@ -1027,7 +1027,7 @@
    "the view is milky",
    "foggy landscape fix"
   ],
-  "tokens": 344
+  "tokens": 370
  },
  "recipes/photo/exposure-rescue": {
   "title": "Rescue an underexposed photo",
@@ -1040,7 +1040,7 @@
    "it came out underexposed",
    "lift the shadows"
   ],
-  "tokens": 459
+  "tokens": 481
  },
  "recipes/photo/film-looks": {
   "title": "Film looks: vintage, faded, matte, cross-processed",
@@ -1056,7 +1056,7 @@
    "faded film",
    "analog look"
   ],
-  "tokens": 472
+  "tokens": 498
  },
  "recipes/photo/fix-perspective": {
   "title": "Fix converging lines (buildings leaning back)",
@@ -1082,7 +1082,7 @@
    "sunny glow",
    "evening light"
   ],
-  "tokens": 525
+  "tokens": 556
  },
  "recipes/photo/grey-except-red": {
   "title": "Everything grey except the reds",
@@ -1095,7 +1095,7 @@
    "colour splash red",
    "selective colour red"
   ],
-  "tokens": 475
+  "tokens": 501
  },
  "recipes/photo/hue-shift-object": {
   "title": "Change the colour of one thing (hue shift)",
@@ -1108,7 +1108,7 @@
    "recolour an object",
    "different colour for the dress"
   ],
-  "tokens": 396
+  "tokens": 420
  },
  "recipes/photo/keep-one-colour": {
   "title": "Keep one exact colour (custom hue)",
@@ -1121,7 +1121,7 @@
    "grey except one colour",
    "selective colour custom"
   ],
-  "tokens": 388
+  "tokens": 412
  },
  "recipes/photo/landscape-punch": {
   "title": "Landscape punch: depth, clarity and colour",
@@ -1135,7 +1135,7 @@
    "clearer mountains",
    "enhance a travel photo"
   ],
-  "tokens": 372
+  "tokens": 395
  },
  "recipes/photo/levels-black-white": {
   "title": "Set black and white points with Levels",
@@ -1148,7 +1148,7 @@
    "foggy photo fix",
    "stretch the histogram"
   ],
-  "tokens": 365
+  "tokens": 390
  },
  "recipes/photo/low-light-noise": {
   "title": "Clean up a noisy low-light photo",
@@ -1161,7 +1161,7 @@
    "clean up the speckles",
    "phone photo in the dark"
   ],
-  "tokens": 398
+  "tokens": 420
  },
  "recipes/photo/lut-intensity": {
   "title": "Tame a LUT that is too strong",
@@ -1174,7 +1174,7 @@
    "lut intensity",
    "soften the colour look"
   ],
-  "tokens": 350
+  "tokens": 375
  },
  "recipes/photo/moody-dark": {
   "title": "Moody, dark and desaturated",
@@ -1188,7 +1188,7 @@
    "muted colours",
    "cinematic and dark"
   ],
-  "tokens": 500
+  "tokens": 529
  },
  "recipes/photo/overexposed-recovery": {
   "title": "Recover a bright, washed-out photo",
@@ -1202,7 +1202,7 @@
    "the sky is blown out",
    "tone it down"
   ],
-  "tokens": 380
+  "tokens": 406
  },
  "recipes/photo/posterize-invert": {
   "title": "Graphic effects: posterize and invert",
@@ -1215,7 +1215,7 @@
    "negative effect",
    "poster style"
   ],
-  "tokens": 374
+  "tokens": 399
  },
  "recipes/photo/product-white-background": {
   "title": "Clean white background for product photos",
@@ -1228,7 +1228,7 @@
    "ecommerce photo",
    "studio white background"
   ],
-  "tokens": 447
+  "tokens": 477
  },
  "recipes/photo/red-eye-fix": {
   "title": "Fix red eyes",
@@ -1241,7 +1241,7 @@
    "remove red pupils",
    "eyes glow red"
   ],
-  "tokens": 379
+  "tokens": 402
  },
  "recipes/photo/remove-blemishes": {
   "title": "Remove blemishes, spots and small objects",
@@ -1268,7 +1268,7 @@
    "crisper details",
    "a bit blurry"
   ],
-  "tokens": 376
+  "tokens": 403
  },
  "recipes/photo/skin-soften": {
   "title": "Soften skin naturally",
@@ -1281,7 +1281,7 @@
    "reduce wrinkles a little",
    "beauty retouch"
   ],
-  "tokens": 516
+  "tokens": 542
  },
  "recipes/photo/sky-darken-gradient": {
   "title": "Darken a bright sky with a graduated filter",
@@ -1294,7 +1294,7 @@
    "graduated filter",
    "balance sky and ground"
   ],
-  "tokens": 484
+  "tokens": 510
  },
  "recipes/photo/split-tone-classic": {
   "title": "Split toning",
@@ -1307,7 +1307,7 @@
    "duotone look",
    "warm highlights cool shadows"
   ],
-  "tokens": 334
+  "tokens": 362
  },
  "recipes/photo/straighten-and-crop": {
   "title": "Straighten and crop for the destination",
@@ -1320,7 +1320,7 @@
    "make it square",
    "crop to 4:5"
   ],
-  "tokens": 347
+  "tokens": 373
  },
  "recipes/photo/subject-pop": {
   "title": "Make the subject pop",
@@ -1333,7 +1333,7 @@
    "separate subject from background",
    "focus on the main thing"
   ],
-  "tokens": 469
+  "tokens": 494
  },
  "recipes/photo/teal-orange": {
   "title": "Teal and orange (blockbuster look)",
@@ -1346,7 +1346,7 @@
    "movie poster colours",
    "cinematic colour grade"
   ],
-  "tokens": 481
+  "tokens": 507
  },
  "recipes/photo/tint-photo-filter": {
   "title": "Tint a photo with a colour filter",
@@ -1359,7 +1359,7 @@
    "colour wash",
    "warming filter"
   ],
-  "tokens": 322
+  "tokens": 349
  },
  "recipes/photo/vignette-classic": {
   "title": "A subtle vignette",
@@ -1372,7 +1372,7 @@
    "soft dark edges",
    "old lens look"
   ],
-  "tokens": 332
+  "tokens": 356
  },
  "recipes/photo/white-balance-fix": {
   "title": "Fix a colour cast (too yellow, too blue)",
@@ -1386,7 +1386,7 @@
    "white balance",
    "the whites look orange"
   ],
-  "tokens": 400
+  "tokens": 425
  },
  "recipes/studio/audio-volume-balance": {
   "title": "Balance clip loudness",
@@ -1399,7 +1399,7 @@
    "make the voice louder",
    "volume is uneven"
   ],
-  "tokens": 321
+  "tokens": 345
  },
  "recipes/studio/cinematic-grade": {
   "title": "Cinematic grade",
@@ -1412,7 +1412,7 @@
    "cinematic colour grade",
    "make it look like a film"
   ],
-  "tokens": 440
+  "tokens": 472
  },
  "recipes/studio/end-card": {
   "title": "End card with a call to action",
@@ -1425,7 +1425,7 @@
    "thanks for watching screen",
    "outro text"
   ],
-  "tokens": 376
+  "tokens": 407
  },
  "recipes/studio/fade-from-black": {
   "title": "Fade in from black and out to black",
@@ -1438,7 +1438,7 @@
    "end on black",
    "cinema style start"
   ],
-  "tokens": 337
+  "tokens": 361
  },
  "recipes/studio/freeze-frame": {
   "title": "Freeze frame",
@@ -1451,7 +1451,7 @@
    "freeze here and add text",
    "still frame in the video"
   ],
-  "tokens": 287
+  "tokens": 310
  },
  "recipes/studio/green-screen": {
   "title": "Remove a green screen",
@@ -1477,7 +1477,7 @@
    "smoother cut between interview shots",
    "audio overlap between clips"
   ],
-  "tokens": 444
+  "tokens": 471
  },
  "recipes/studio/ken-burns-still": {
   "title": "Ken Burns move on a still photo",
@@ -1490,7 +1490,7 @@
    "pan across the image",
    "make the still image move"
   ],
-  "tokens": 453
+  "tokens": 474
  },
  "recipes/studio/looks-catalog": {
   "title": "Choosing a look (bleach bypass, warm film, cool night, vintage, high-key, noir, pastel, punchy, golden hour)",
@@ -1511,7 +1511,7 @@
    "bright pastel video",
    "punchy social video colours"
   ],
-  "tokens": 764
+  "tokens": 788
  },
  "recipes/studio/lower-third": {
   "title": "Lower-third name title",
@@ -1524,7 +1524,7 @@
    "add a name caption",
    "interview name tag"
   ],
-  "tokens": 462
+  "tokens": 490
  },
  "recipes/studio/lut-intensity-video": {
   "title": "Use a LUT without overdoing it",
@@ -1550,7 +1550,7 @@
    "subtle cinematic colour",
    "warm cinematic tone"
   ],
-  "tokens": 432
+  "tokens": 460
  },
  "recipes/studio/match-two-clips": {
   "title": "Match two clips that look different",
@@ -1563,7 +1563,7 @@
    "make the shots consistent",
    "two cameras look different"
   ],
-  "tokens": 422
+  "tokens": 448
  },
  "recipes/studio/music-ducking": {
   "title": "Duck music under speech",
@@ -1576,7 +1576,7 @@
    "background music balance",
    "voice over music mix"
   ],
-  "tokens": 373
+  "tokens": 400
  },
  "recipes/studio/picture-in-picture": {
   "title": "Picture in picture (webcam over screen)",
@@ -1589,7 +1589,7 @@
    "reaction video layout",
    "facecam"
   ],
-  "tokens": 356
+  "tokens": 383
  },
  "recipes/studio/podcast-voice-chain": {
   "title": "Podcast voice: clear and even",
@@ -1602,7 +1602,7 @@
    "even out the volume",
    "radio voice"
   ],
-  "tokens": 440
+  "tokens": 467
  },
  "recipes/studio/shorts-captions": {
   "title": "Caption styling for Shorts, Reels and TikTok",
@@ -1616,7 +1616,7 @@
    "captions in the middle",
    "readable subtitles"
   ],
-  "tokens": 450
+  "tokens": 478
  },
  "recipes/studio/speed-ramp": {
   "title": "Speed ramp and slow motion",
@@ -1629,7 +1629,7 @@
    "speed ramp",
    "make this part slower"
   ],
-  "tokens": 440
+  "tokens": 466
  },
  "recipes/studio/split-and-delete": {
   "title": "Cut out a section",
@@ -1642,7 +1642,7 @@
    "trim the boring part",
    "remove a mistake"
   ],
-  "tokens": 348
+  "tokens": 378
  },
  "recipes/studio/teal-orange-video": {
   "title": "Teal and orange for video",
@@ -1655,7 +1655,7 @@
    "action movie look",
    "hollywood grade"
   ],
-  "tokens": 334
+  "tokens": 362
  },
  "recipes/studio/tighten-pauses": {
   "title": "Tighten pauses with markers",
@@ -1668,7 +1668,7 @@
    "make it faster paced",
    "jump cuts"
   ],
-  "tokens": 414
+  "tokens": 437
  },
  "recipes/studio/title-card": {
   "title": "Opening title card",
@@ -1681,7 +1681,7 @@
    "intro text",
    "video title screen"
   ],
-  "tokens": 373
+  "tokens": 398
  },
  "recipes/studio/transitions-by-pace": {
   "title": "Pick transitions by pace",
@@ -1694,7 +1694,7 @@
    "fade between clips",
    "make cuts less abrupt"
   ],
-  "tokens": 394
+  "tokens": 417
  },
  "recipes/studio/vertical-reframe": {
   "title": "Reframe a horizontal video for vertical",
@@ -1707,7 +1707,7 @@
    "shorts from a landscape video",
    "portrait version"
   ],
-  "tokens": 406
+  "tokens": 433
  },
  "recipes/studio/volume-fades": {
   "title": "Fade audio in and out",
@@ -1720,7 +1720,7 @@
    "smooth audio ending",
    "volume fade"
   ],
-  "tokens": 352
+  "tokens": 374
  },
  "recipes/studio/zoom-punch-in": {
   "title": "Punch-in zoom for emphasis",
@@ -1733,7 +1733,7 @@
    "zoom on the punchline",
    "quick zoom"
   ],
-  "tokens": 342
+  "tokens": 368
  },
  "recipes/vector/badge-bounce": {
   "title": "Bouncing badge or sticker",
@@ -1746,7 +1746,7 @@
    "bounce in",
    "wobbly sticker"
   ],
-  "tokens": 333
+  "tokens": 356
  },
  "recipes/vector/blur-in": {
   "title": "Blur-in entrance",
@@ -1759,7 +1759,7 @@
    "dreamy text reveal",
    "fade in with blur"
   ],
-  "tokens": 355
+  "tokens": 381
  },
  "recipes/vector/bullet-reveal": {
   "title": "Bullet points that reveal one by one",
@@ -1772,7 +1772,7 @@
    "points appear one after another",
    "list animation"
   ],
-  "tokens": 384
+  "tokens": 407
  },
  "recipes/vector/counter": {
   "title": "Number counter",
@@ -1785,7 +1785,7 @@
    "number goes up",
    "counting animation"
   ],
-  "tokens": 360
+  "tokens": 387
  },
  "recipes/vector/export-by-destination": {
   "title": "Choose the export for the destination",
@@ -1811,7 +1811,7 @@
    "subtle ui animation",
    "slide in from the left"
   ],
-  "tokens": 406
+  "tokens": 431
  },
  "recipes/vector/gradient-shimmer": {
   "title": "Gradient shimmer",
@@ -1824,7 +1824,7 @@
    "gradient moves",
    "glossy sweep"
   ],
-  "tokens": 369
+  "tokens": 393
  },
  "recipes/vector/logo-draw-on": {
   "title": "Logo reveal by drawing the outline",
@@ -1837,7 +1837,7 @@
    "signature animation",
    "line drawing reveal"
   ],
-  "tokens": 428
+  "tokens": 457
  },
  "recipes/vector/logo-reveal-template": {
   "title": "Logo reveal template",
@@ -1850,7 +1850,7 @@
    "animate a logo for youtube",
    "brand reveal"
   ],
-  "tokens": 356
+  "tokens": 384
  },
  "recipes/vector/lower-third-slide-in": {
   "title": "Lower-third that slides in",
@@ -1863,7 +1863,7 @@
    "broadcast lower third",
    "animated caption bar"
   ],
-  "tokens": 446
+  "tokens": 469
  },
  "recipes/vector/mask-wipe-reveal": {
   "title": "Mask wipe reveal",
@@ -1876,7 +1876,7 @@
    "text appears behind a wipe",
    "slide reveal"
   ],
-  "tokens": 408
+  "tokens": 433
  },
  "recipes/vector/motion-path-follow": {
   "title": "Move along a path",
@@ -1889,7 +1889,7 @@
    "animate on a path",
    "motion path"
   ],
-  "tokens": 348
+  "tokens": 376
  },
  "recipes/vector/shape-morph": {
   "title": "Morph one shape into another",
@@ -1902,7 +1902,7 @@
    "morph icons",
    "path morph"
   ],
-  "tokens": 350
+  "tokens": 376
  },
  "recipes/vector/spin-loader": {
   "title": "Looping spinner or rotating icon",
@@ -1915,7 +1915,7 @@
    "loop rotation",
    "loader animation"
   ],
-  "tokens": 360
+  "tokens": 383
  },
  "recipes/vector/text-pop": {
   "title": "Title that pops in",
@@ -1928,7 +1928,7 @@
    "title pop",
    "punchy text animation"
   ],
-  "tokens": 497
+  "tokens": 520
  },
  "recipes/vector/title-pop-template": {
   "title": "Title pop template",
@@ -1941,7 +1941,7 @@
    "headline animation",
    "word pops on screen"
   ],
-  "tokens": 330
+  "tokens": 356
  },
  "recipes/workflow/animated-logo-intro": {
   "title": "Animated logo intro for videos",

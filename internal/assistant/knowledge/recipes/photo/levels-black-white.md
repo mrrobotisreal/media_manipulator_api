@@ -20,6 +20,7 @@ Moving the input black and white points to where the data starts and ends restor
 ```json
 {
   "summary": "Levels black and white",
+  "reason": "The histogram does not reach the ends, so I set the black and white points",
   "ops": [
     {"op": "add_layer", "type": "levels", "params": {"master": {"inBlack": 0.05, "inWhite": 0.94, "gamma": 1.05}}}
   ]

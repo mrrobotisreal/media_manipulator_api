@@ -20,6 +20,7 @@ Counting reads well over 1 to 2 s with an ease-out so it slows near the final va
 ```json
 {
   "summary": "Count to 10,000",
+  "reason": "You asked for a counting number: the counter template animates it to the target",
   "ops": [
     {"op": "template", "kind": "counter", "value": 10000, "text": "users", "at": 0, "duration": 1800}
   ]

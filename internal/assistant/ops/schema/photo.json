@@ -14,6 +14,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "exposure"
@@ -46,6 +49,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -80,6 +86,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "tone"
@@ -112,6 +121,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -146,6 +158,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "curves"
@@ -178,6 +193,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -212,6 +230,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "vibranceSaturation"
@@ -244,6 +265,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -278,6 +302,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "colorBalance"
@@ -310,6 +337,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -344,6 +374,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "channelMixer"
@@ -376,6 +409,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -410,6 +446,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "splitTone"
@@ -442,6 +481,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -476,6 +518,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "invert"
@@ -508,6 +553,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -542,6 +590,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "threshold"
@@ -574,6 +625,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -608,6 +662,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "redEye"
@@ -640,6 +697,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -674,6 +734,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "blur"
@@ -706,6 +769,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -740,6 +806,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "clarity"
@@ -772,6 +841,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -806,6 +878,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "dehaze"
@@ -839,6 +914,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "vignette"
@@ -871,6 +949,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -906,6 +987,9 @@
           "op": {
             "type": "string",
             "const": "update_layer"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "layerId": {
             "$ref": "#/$defs/layer_id"
@@ -1021,6 +1105,9 @@
             "type": "string",
             "const": "remove_layer"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "layerId": {
             "$ref": "#/$defs/layer_id"
           }
@@ -1037,6 +1124,9 @@
           "op": {
             "type": "string",
             "const": "move_layer"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "layerId": {
             "$ref": "#/$defs/layer_id"
@@ -1060,6 +1150,9 @@
           "op": {
             "type": "string",
             "const": "grey_except"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "ranges": {
             "minItems": 1,
@@ -1119,6 +1212,9 @@
             "type": "string",
             "const": "set_mask"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "layerId": {
             "$ref": "#/$defs/layer_id"
           },
@@ -1161,6 +1257,9 @@
             "type": "string",
             "const": "apply_preset"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "presetId": {
             "type": "string",
             "enum": [
@@ -1201,6 +1300,9 @@
           "op": {
             "type": "string",
             "const": "auto_tone"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           }
         },
         "required": [
@@ -1214,6 +1316,9 @@
           "op": {
             "type": "string",
             "const": "set_geometry"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "rotate": {
             "type": "integer",
@@ -1308,11 +1413,42 @@
           "op"
         ],
         "additionalProperties": false,
-        "minProperties": 2
+        "anyOf": [
+          {
+            "required": [
+              "rotate"
+            ]
+          },
+          {
+            "required": [
+              "straighten"
+            ]
+          },
+          {
+            "required": [
+              "flipH"
+            ]
+          },
+          {
+            "required": [
+              "flipV"
+            ]
+          },
+          {
+            "required": [
+              "crop"
+            ]
+          }
+        ]
       }
     ]
   },
   "$defs": {
+    "reason": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 140
+    },
     "params_exposure": {
       "type": "object",
       "properties": {

@@ -20,6 +20,7 @@ Red-eye correction desaturates and darkens red pixels, but only inside a small m
 ```json
 {
   "summary": "Fix red eyes",
+  "reason": "The pupils read red, so I desaturate and darken only those spots",
   "ops": [
     {"op": "add_layer", "type": "redEye", "params": {}, "mask": {"components": [{"kind": "radial", "center": {"x": 0.42, "y": 0.38}, "rx": 0.02, "ry": 0.02, "feather": 0.3}, {"kind": "radial", "center": {"x": 0.55, "y": 0.38}, "rx": 0.02, "ry": 0.02, "feather": 0.3}]}}
   ]

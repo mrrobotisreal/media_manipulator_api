@@ -20,6 +20,7 @@ Detail that is truly white cannot come back, but near-white detail can. Lower ex
 ```json
 {
   "summary": "Recover highlights",
+  "reason": "The highlights are close to clipping, so I pull them down to recover detail",
   "ops": [
     {"op": "add_layer", "type": "exposure", "params": {"ev": -0.5}},
     {"op": "add_layer", "type": "tone", "params": {"highlights": -60, "whites": -25, "blacks": -10}}

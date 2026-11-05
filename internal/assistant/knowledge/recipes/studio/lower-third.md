@@ -20,6 +20,7 @@ A designed lower-third sits in the bottom 30 % of the frame, left-aligned inside
 ```json
 {
   "summary": "Lower-third: name and role",
+  "reason": "You asked for a name and role on screen: a lower-third title at the start of the clip",
   "ops": [
     {"op": "add_title", "template": "lowerThird", "lines": ["Alex Morgan", "Producer"], "start": 2, "duration": 5, "style": {"fontFamily": "Montserrat", "fillColor": "#FFFFFF", "backgroundColor": "#111111", "backgroundOpacity": 0.6}, "animateIn": "slideLeft", "animateOut": "fade"}
   ]

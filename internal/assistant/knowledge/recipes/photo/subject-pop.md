@@ -20,6 +20,7 @@ The eye goes to the brightest, sharpest, most contrasty area. A professional bri
 ```json
 {
   "summary": "Subject pop",
+  "reason": "The subject blends into the background, so I lift it with a masked boost",
   "ops": [
     {"op": "add_layer", "type": "exposure", "params": {"ev": 0.3}, "mask": {"components": [{"kind": "radial", "center": {"x": 0.5, "y": 0.5}, "rx": 0.3, "ry": 0.35, "feather": 0.6}]}},
     {"op": "add_layer", "type": "clarity", "params": {"amount": 15}, "mask": {"components": [{"kind": "radial", "center": {"x": 0.5, "y": 0.5}, "rx": 0.3, "ry": 0.35, "feather": 0.6}]}},

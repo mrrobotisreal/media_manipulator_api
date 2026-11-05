@@ -20,6 +20,7 @@ An HSL layer with a single range moves only that hue. Pick the range centre from
 ```json
 {
   "summary": "Shift greens to blue",
+  "reason": "The greens are the target, so I shift only that hue range toward blue",
   "ops": [
     {"op": "add_layer", "type": "hsl", "params": {"ranges": [{"id": "target", "center": 120, "width": 35, "feather": 25, "hue": 120, "saturation": 5, "lightness": 0}]}}
   ]

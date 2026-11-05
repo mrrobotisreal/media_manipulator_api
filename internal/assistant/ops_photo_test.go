@@ -64,10 +64,10 @@ func TestPhotoOpsSchemaCompactInTool(t *testing.T) {
 	}
 	for _, td := range ToolsFor("photo", v) {
 		if td.Name == ToolApplyEdits {
-			if err := validateArgs(td.Parameters, `{"summary":"Grey except red","ops":[{"op":"grey_except","ranges":["red"]}]}`); err != nil {
+			if err := validateArgs(td.Parameters, `{"summary":"Grey except red","reason":"Because the digest shows it","ops":[{"op":"grey_except","ranges":["red"]}]}`); err != nil {
 				t.Fatalf("apply_edits refuses a valid call: %v", err)
 			}
-			if err := validateArgs(td.Parameters, `{"summary":"x","ops":[{"op":"grey_except","ranges":["crimson"]}]}`); err == nil {
+			if err := validateArgs(td.Parameters, `{"summary":"x","reason":"Because the digest shows it","ops":[{"op":"grey_except","ranges":["crimson"]}]}`); err == nil {
 				t.Fatal("apply_edits accepts an invalid op")
 			}
 			return
@@ -135,7 +135,7 @@ func TestPhotoRecipesMatchOpSchema(t *testing.T) {
 // out-of-range one goes back to the model once (with the validator's reason)
 // and then fails as invalid_ops without ever reaching the client.
 func TestEngineRealPhotoSchema(t *testing.T) {
-	good := call("e1", ToolApplyEdits, `{"summary":"Backlit fix","ops":[{"op":"add_layer","type":"tone","params":{"shadows":45,"highlights":-55}}]}`)
+	good := call("e1", ToolApplyEdits, `{"summary":"Backlit fix","reason":"Because the digest shows it","ops":[{"op":"add_layer","type":"tone","params":{"shadows":45,"highlights":-55}}]}`)
 	v := newEnv(t, round{calls: []ToolCall{good}})
 	v.e.Ops = NewOpsValidator()
 	v.run(v.turn(photoMsg("it's backlit"), "user-1"), nil)
@@ -143,7 +143,7 @@ func TestEngineRealPhotoSchema(t *testing.T) {
 		t.Fatalf("valid edit: events = %s", got)
 	}
 
-	bad := call("e2", ToolApplyEdits, `{"summary":"Too bright","ops":[{"op":"add_layer","type":"exposure","params":{"ev":9}}]}`)
+	bad := call("e2", ToolApplyEdits, `{"summary":"Too bright","reason":"Because the digest shows it","ops":[{"op":"add_layer","type":"exposure","params":{"ev":9}}]}`)
 	v = newEnv(t, round{calls: []ToolCall{bad}}, round{calls: []ToolCall{bad}})
 	v.e.Ops = NewOpsValidator()
 	v.run(v.turn(photoMsg("brighter!"), "user-1"), nil)
@@ -163,4 +163,50 @@ func TestEngineRealPhotoSchema(t *testing.T) {
 			t.Fatal("an invalid edit reached the client")
 		}
 	}
+}
+
+// MM114: reason is required on apply_edits (4-140 chars) and optional on each op;
+// the validated reason rides the edits event.
+func TestApplyEditsRequiresReason(t *testing.T) {
+	v := NewOpsValidator()
+	var params json.RawMessage
+	for _, td := range ToolsFor("photo", v) {
+		if td.Name == ToolApplyEdits {
+			params = td.Parameters
+		}
+	}
+	if params == nil {
+		t.Fatal("apply_edits is not offered on photo")
+	}
+	op := `[{"op":"grey_except","ranges":["red"],"reason":"Only the red jacket should keep colour"}]`
+	cases := []struct {
+		name, args string
+		ok         bool
+	}{
+		{"batch and op reason", `{"summary":"s","reason":"The sky clips, so I pull highlights","ops":` + op + `}`, true},
+		{"op reason optional", `{"summary":"s","reason":"The sky clips, so I pull highlights","ops":[{"op":"auto_tone"}]}`, true},
+		{"missing batch reason", `{"summary":"s","ops":[{"op":"auto_tone"}]}`, false},
+		{"too short", `{"summary":"s","reason":"abc","ops":[{"op":"auto_tone"}]}`, false},
+		{"too long", `{"summary":"s","reason":"` + strings.Repeat("x", 141) + `","ops":[{"op":"auto_tone"}]}`, false},
+		{"op reason too long", `{"summary":"s","reason":"valid reason","ops":[{"op":"auto_tone","reason":"` + strings.Repeat("x", 141) + `"}]}`, false},
+	}
+	for _, c := range cases {
+		if err := validateArgs(params, c.args); (err == nil) != c.ok {
+			t.Errorf("%s: err = %v, want ok=%v", c.name, err, c.ok)
+		}
+	}
+}
+
+func TestEditsEventCarriesReason(t *testing.T) {
+	v := newEnv(t, round{calls: []ToolCall{call("e1", ToolApplyEdits, greyOps)}})
+	v.run(v.turn(photoMsg("make everything grey except the red jacket"), "user-1"), nil)
+	for _, ev := range v.em.events {
+		if ev["type"] == "edits" {
+			if ev["reason"] != "Because the digest shows it" {
+				t.Errorf("edits reason = %v", ev["reason"])
+			}
+			return
+		}
+	}
+	t.Fatal("no edits event")
 }

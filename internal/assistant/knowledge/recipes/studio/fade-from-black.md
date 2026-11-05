@@ -20,6 +20,7 @@ An opacity keyframe from 0 to 1 over 1 s at the start and back to 0 at the end i
 ```json
 {
   "summary": "Fade in from black",
+  "reason": "The clip opens abruptly, so a fade in from black eases the viewer in",
   "ops": [
     {"op": "set_keyframes", "clipId": "CLIP_ID", "property": "opacity", "keyframes": [{"t": 0, "value": 0, "ease": "easeOut"}, {"t": 1, "value": 1, "ease": "linear"}]}
   ]

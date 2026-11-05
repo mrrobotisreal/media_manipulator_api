@@ -72,10 +72,10 @@ func TestVectorOpsSchemaInTool(t *testing.T) {
 	}
 	for _, td := range ToolsFor(SurfaceVector, v) {
 		if td.Name == ToolApplyEdits {
-			if err := validateArgs(td.Parameters, `{"summary":"Title pop","ops":[{"op":"template","kind":"titlePop","text":"Hi"}]}`); err != nil {
+			if err := validateArgs(td.Parameters, `{"summary":"Title pop","reason":"Because the digest shows it","ops":[{"op":"template","kind":"titlePop","text":"Hi"}]}`); err != nil {
 				t.Fatalf("apply_edits refuses a valid call: %v", err)
 			}
-			if err := validateArgs(td.Parameters, `{"summary":"x","ops":[{"op":"template","kind":"nope"}]}`); err == nil {
+			if err := validateArgs(td.Parameters, `{"summary":"x","reason":"Because the digest shows it","ops":[{"op":"template","kind":"nope"}]}`); err == nil {
 				t.Fatal("apply_edits accepts an invalid op")
 			}
 			return

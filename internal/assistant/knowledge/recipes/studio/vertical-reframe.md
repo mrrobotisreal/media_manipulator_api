@@ -20,6 +20,7 @@ Change the canvas to 9:16, then scale each clip up so it fills the height (about
 ```json
 {
   "summary": "Reframe to 9:16",
+  "reason": "You want a vertical video, so I switch the canvas to 9:16 and recentre the clip",
   "ops": [
     {"op": "set_canvas", "aspect": "9:16"},
     {"op": "set_transform", "clipId": "CLIP_ID", "scale": 3.16, "x": 0}
