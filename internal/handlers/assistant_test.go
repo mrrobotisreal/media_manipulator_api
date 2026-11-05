@@ -242,6 +242,7 @@ func newAsstRig(t *testing.T, mutate func(*config.Config), rounds ...asstRound) 
 	cfg := config.Load()
 	cfg.OperatorEmails = []string{"op@example.com"}
 	cfg.Assistant.Enabled, cfg.Assistant.APIKey = true, "test-key"
+	cfg.Assistant.CopilotSurfaces = []string{"photo", "studio", "vector"}
 	if mutate != nil {
 		mutate(cfg)
 	}

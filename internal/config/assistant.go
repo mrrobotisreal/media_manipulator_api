@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
 // AssistantConfig is Medi's configuration (MM104, code name `assistant`,
 // docs/design/MEDI_ASSISTANT.md §10, ADR-0018). With nothing set Medi is off:
@@ -16,8 +19,9 @@ type AssistantConfig struct {
 	OperatorOnly bool
 	// GuideEnabled is ASSISTANT_GUIDE_ENABLED (default true).
 	GuideEnabled bool
-	// CopilotSurfaces is ASSISTANT_COPILOT_SURFACES (CSV, default
-	// photo,studio,vector).
+	// CopilotSurfaces is ASSISTANT_COPILOT_SURFACES (CSV, default empty: no
+	// copilot answers until its surface is listed after its eval passes).
+	// Set-but-empty also means none; it never falls back to a default.
 	CopilotSurfaces []string
 	// APIKey is ASSISTANT_OPENROUTER_API_KEY, Medi's own key. Never falls back
 	// to OPENROUTER_API_KEY. Never log it.
@@ -79,7 +83,7 @@ func loadAssistantConfig() AssistantConfig {
 		Enabled:          getEnvBool("ASSISTANT_ENABLED", false),
 		OperatorOnly:     getEnvBool("ASSISTANT_OPERATOR_ONLY", false),
 		GuideEnabled:     getEnvBool("ASSISTANT_GUIDE_ENABLED", true),
-		CopilotSurfaces:  splitCSVLower(getEnv("ASSISTANT_COPILOT_SURFACES", "photo,studio,vector")),
+		CopilotSurfaces:  splitCSVLower(os.Getenv("ASSISTANT_COPILOT_SURFACES")),
 		APIKey:           getEnv("ASSISTANT_OPENROUTER_API_KEY", ""),
 		BaseURL:          getEnv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
 		AttributionURL:   getEnv("ASSISTANT_ATTRIBUTION_URL", "https://media-manipulator.com"),
