@@ -467,3 +467,23 @@ func TestGradeReasons(t *testing.T) {
 		t.Errorf("guide: %v", r.Failures)
 	}
 }
+
+// MM111: an edit turn with no prose satisfies any_of through its edit summary
+// (the undo label), the way the language check already reads it.
+func TestAnyOfReadsEditSummaries(t *testing.T) {
+	mentions := func(r Result) bool {
+		for _, f := range r.Failures {
+			if strings.Contains(f, "mentions none of") {
+				return false
+			}
+		}
+		return true
+	}
+	c := Case{ID: "x", Surface: "vector", Expect: Expect{AnyOf: []string{"gradient", "shimmer"}}}
+	if !mentions(Grade(c, Output{Model: "m", Edits: []Edit{{Summary: "Gradient headline for shimmer"}}})) {
+		t.Fatal("an edit summary should satisfy any_of")
+	}
+	if mentions(Grade(c, Output{Model: "m", Edits: []Edit{{Summary: "Spin the logo"}}})) {
+		t.Fatal("an unrelated edit summary must not satisfy any_of")
+	}
+}

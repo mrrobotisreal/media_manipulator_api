@@ -348,9 +348,16 @@ func Grade(c Case, out Output) Result {
 		}
 	}
 	if len(e.AnyOf) > 0 {
+		// An edit turn may carry no prose: its undo label (the edit summary) is
+		// the user-visible text then (vector-shimmer, MM111 go-live: empty text,
+		// edit "Gradient headline for shimmer").
+		said := low
+		for _, ed := range out.Edits {
+			said += " " + strings.ToLower(ed.Summary)
+		}
 		hit := false
 		for _, s := range e.AnyOf {
-			if strings.Contains(low, strings.ToLower(s)) || actionsMention(out.Actions, s) {
+			if strings.Contains(said, strings.ToLower(s)) || actionsMention(out.Actions, s) {
 				hit = true
 			}
 		}
