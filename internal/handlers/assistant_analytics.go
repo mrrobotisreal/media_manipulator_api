@@ -37,6 +37,9 @@ func assistantTurnEvent(r assistant.TurnReport, at time.Time) analyticsemit.Even
 			"cost_usd_micros":     micros,
 			"cost_bucket":         assistantCostBucket(r.CostUSD),
 			"cached_ratio_bucket": assistantCachedRatioBucket(r.CachedTokens, r.InputTokens),
+			// MM111: the content hash of the model-facing text (MM113), so the
+			// admin /medi page can group spend and quality by prompt version.
+			"prompt_version": assistant.PromptVersion(),
 		},
 	}
 }

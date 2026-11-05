@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ func TestAssistantTurnEvent(t *testing.T) {
 		t.Errorf("context = %v", ev.Context)
 	}
 	want := map[string]any{"surface": "photo", "model_tier": "copilot", "outcome": "edits",
-		"cost_usd_micros": int64(23457), "cost_bucket": "<0.05", "cached_ratio_bucket": "76-100"}
+		"cost_usd_micros": int64(23457), "cost_bucket": "<0.05", "cached_ratio_bucket": "76-100", "prompt_version": assistant.PromptVersion()}
 	if len(ev.Properties) != len(want) {
 		t.Errorf("props = %v", ev.Properties)
 	}
@@ -63,5 +64,14 @@ func TestAssistantSetAnalyticsEmitterDisabled(t *testing.T) {
 	h.SetAnalyticsEmitter(nil)
 	if h.engine.OnTurnCounted != nil {
 		t.Error("a nil emitter must not install the hook")
+	}
+}
+
+// MM111: the turn event carries the 12-hex prompt version so rollups can group by it.
+func TestAssistantTurnEventCarriesPromptVersion(t *testing.T) {
+	ev := assistantTurnEvent(assistant.TurnReport{Surface: "guide", ModelTier: "guide", Outcome: "text"}, time.Now())
+	v, _ := ev.Properties["prompt_version"].(string)
+	if len(v) != 12 || strings.Trim(v, "0123456789abcdef") != "" {
+		t.Errorf("prompt_version = %q, want 12 lowercase hex", v)
 	}
 }
