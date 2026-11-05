@@ -364,6 +364,9 @@ func Grade(c Case, out Output) Result {
 			fail("%s", f)
 		}
 	}
+	for _, f := range ReasonProblems(c, out) {
+		fail("%s", f)
+	}
 	if len(e.Ops) > 0 {
 		var ops []map[string]any
 		for _, ed := range out.Edits {

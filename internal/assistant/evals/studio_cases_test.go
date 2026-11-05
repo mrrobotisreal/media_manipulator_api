@@ -67,7 +67,7 @@ func TestStudioCasesPassableWithRealOps(t *testing.T) {
 			if err := json.Unmarshal([]byte(ref.ops), &ops); err != nil {
 				t.Fatal(err)
 			}
-			out.Edits = []Edit{{Summary: "ref", Ops: ops}}
+			out.Edits = []Edit{{Summary: "ref", Reason: "You asked: " + c.Message, Ops: ops}}
 		}
 		if r := Grade(c, out); !r.Pass {
 			t.Errorf("%s: a schema-valid reference answer fails the grader: %v", c.ID, r.Failures)
