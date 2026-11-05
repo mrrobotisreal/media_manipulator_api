@@ -144,6 +144,9 @@ func (f *asstStore) AssistantConversationMessages(_ context.Context, id string) 
 	return append([]telemetry.AssistantMessage(nil), f.msgs[id]...), nil
 }
 func (f *asstStore) SetAssistantConversationTitle(context.Context, string, string) error { return nil }
+func (f *asstStore) SetAssistantConversationSummary(context.Context, string, string, int) error {
+	return nil
+}
 func (f *asstStore) SoftDeleteAssistantConversation(_ context.Context, id, owner string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -376,6 +379,9 @@ func TestAssistantCapabilities(t *testing.T) {
 	w := g.do("GET", "/api/assistant/capabilities", "free", "")
 	var body map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &body)
+	if body["promptVersion"] != assistant.PromptVersion() || body["promptVersion"] == "" {
+		t.Errorf("promptVersion = %v", body["promptVersion"])
+	}
 	if body["enabled"] != true || body["frames"] != true || body["maxFrameBytes"].(float64) != 307200 || body["spendCapReached"] != false {
 		t.Fatalf("capabilities = %v", body)
 	}
@@ -610,7 +616,7 @@ func TestAssistantSSETranscript(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		`"model":"anthropic/claude-sonnet-5.5"}`,
+		`"model":"anthropic/claude-sonnet-5.5","promptVersion":"` + assistant.PromptVersion() + `"}`,
 		`data: {"type":"edits","callId":"e1","summary":"Grey except red","ops":[{"op":"grey_except","ranges":["red"]}]}` + "\n\n",
 		`data: {"type":"done","awaiting":"edit_result","messageId":"`,
 	} {

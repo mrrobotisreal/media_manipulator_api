@@ -39,6 +39,17 @@ func TestAssistantStoreSQL(t *testing.T) {
 		!strings.Contains(assistantMsgRecentSQL, "provider_state") {
 		t.Error("provider_state is never exported or returned")
 	}
+	// MM113: every row insert carries the prompt version; the summary is
+	// append-only and forward-only.
+	if !strings.Contains(assistantMsgInsertSQL, "prompt_version") || !strings.Contains(assistantUsageInsertSQL, "prompt_version") {
+		t.Error("message and usage inserts must store prompt_version")
+	}
+	if !strings.Contains(assistantSummarySQL, "summary || ") || !strings.Contains(assistantSummarySQL, "summary_upto < $3") {
+		t.Error("the summary appends and only moves forward")
+	}
+	if !strings.Contains(assistantEvalRunInsertSQL, "assistant_eval_runs") || !strings.Contains(assistantEvalRunLatestSQL, "ORDER BY created_at DESC") {
+		t.Error("eval run SQL")
+	}
 	// Usage rows carry no content column.
 	for _, banned := range []string{"content", "text", "digest", "frame"} {
 		if strings.Contains(assistantUsageInsertSQL, banned) {

@@ -7,6 +7,13 @@
 //	go run ./cmd/assistant-eval --estimate                       # print the estimate, no calls
 //	go run ./cmd/assistant-eval --surface guide --i-know-this-costs-money
 //	go run ./cmd/assistant-eval --case guide-gif-from-video --repeat 3 --i-know-this-costs-money
+//	go run ./cmd/assistant-eval --gate --i-know-this-costs-money     # fail when a surface's pass rate drops
+//	go run ./cmd/assistant-eval --record --i-know-this-costs-money   # write assistant_eval_runs rows
+//
+// --record and --gate read DATABASE_URL (from --env-file or the environment);
+// without them the CLI never touches a database. --gate compares each surface
+// with the latest recorded run of that surface, prints that run's prompt
+// version and exits 1 on a drop; --gate with --record gates first, then records.
 //
 // The key is ASSISTANT_OPENROUTER_API_KEY from the environment (Medi's own key,
 // never OPENROUTER_API_KEY). On the API host, --env-file loads the service's
@@ -25,6 +32,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"sort"
 	"strings"
 	"time"
@@ -34,6 +42,8 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/assistant"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/assistant/evals"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/db"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 )
 
 func main() {
@@ -45,6 +55,9 @@ func main() {
 	maxUSD := flag.Float64("max-usd", 2, "stop starting cases once this run has spent this much")
 	envFile := flag.String("env-file", "", "load environment variables from this file first (e.g. the API service's EnvironmentFile)")
 	out := flag.String("out", "", "write the evidence markdown here")
+	record := flag.Bool("record", false, "write one assistant_eval_runs row per surface (needs DATABASE_URL)")
+	gate := flag.Bool("gate", false, "compare each surface's pass rate with its latest recorded run; exit 1 if lower (needs DATABASE_URL)")
+	gitSHA := flag.String("git-sha", "", "git sha stored with --record (default: git rev-parse --short HEAD when available)")
 	flag.Parse()
 
 	if *envFile != "" {
@@ -93,6 +106,17 @@ func main() {
 	runner := &evals.Runner{Engine: engine}
 
 	ctx := context.Background()
+	var runStore evals.RunStore
+	if *record || *gate {
+		cfgAll := config.Load()
+		pool, err := db.New(ctx, cfgAll)
+		if err != nil || pool == nil {
+			fail("--record/--gate need a reachable DATABASE_URL: %v", err)
+		}
+		defer pool.Close()
+		runStore = telemetry.NewStore(pool, cfgAll, slog.Default())
+	}
+	fmt.Println("prompt version", assistant.PromptVersion())
 	results := append([]evals.Result(nil), skipped...)
 	spent := 0.0
 	for _, c := range run {
@@ -128,6 +152,29 @@ func main() {
 		}
 	}
 	fmt.Printf("cost $%.4f\n", s.CostUSD)
+	exit := 0
+	if runStore != nil {
+		rows := evals.Records(results, evals.RunMeta{PromptVersion: assistant.PromptVersion(), GitSHA: gitSHAOr(*gitSHA),
+			ModelGuide: cfg.ModelGuide, ModelCopilot: cfg.ModelCopilot, EvidencePath: *out})
+		if *gate {
+			verdicts, err := evals.Gate(ctx, runStore, rows)
+			if err != nil {
+				fail("gate: %v", err)
+			}
+			for _, v := range verdicts {
+				fmt.Println(v.Line())
+			}
+			if evals.Regressed(verdicts) {
+				exit = 1
+			}
+		}
+		if *record {
+			if err := evals.Record(ctx, runStore, rows); err != nil {
+				fail("%v", err)
+			}
+			fmt.Printf("recorded %d assistant_eval_runs row(s)\n", len(rows))
+		}
+	}
 	if *out != "" {
 		md := evals.Markdown(time.Now().UTC().Format("2006-01-02"), results, s, evals.ModelsOf(engine))
 		if err := os.WriteFile(*out, []byte(md), 0o644); err != nil {
@@ -135,6 +182,22 @@ func main() {
 		}
 		fmt.Println("wrote", *out)
 	}
+	if exit != 0 {
+		fmt.Fprintln(os.Stderr, "assistant-eval: pass rate regressed against the latest recorded run")
+		os.Exit(exit)
+	}
+}
+
+// gitSHAOr is the flag, else the checkout's short sha, else "".
+func gitSHAOr(flagValue string) string {
+	if flagValue != "" {
+		return flagValue
+	}
+	out, err := exec.Command("git", "rev-parse", "--short", "HEAD").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func printEstimate(e evals.Estimate, skipped int) {

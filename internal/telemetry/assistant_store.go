@@ -37,6 +37,8 @@ type AssistantConversation struct {
 	ProjectID   string // "" = none
 	Title       string
 	Summary     string
+	// SummaryUpto is the seq of the last message the summary covers (MM113).
+	SummaryUpto int
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -63,6 +65,8 @@ type AssistantMessage struct {
 	// ProviderState is the opaque upstream continuation data (reasoning_details)
 	// of a tool-call round. Read only by RecentAssistantMessages; never exported.
 	ProviderState json.RawMessage
+	// PromptVersion is the build hash that produced the row (MM113); "" before it.
+	PromptVersion string
 	CreatedAt     time.Time
 }
 
@@ -76,6 +80,7 @@ type AssistantMessageInsert struct {
 	Status         string // "" = complete
 	Usage          json.RawMessage
 	ProviderState  json.RawMessage
+	PromptVersion  string // "" = not recorded
 }
 
 // AssistantUsageEvent is one assistant_usage_events row: no content, ever.
@@ -90,6 +95,8 @@ type AssistantUsageEvent struct {
 	CachedTokens int
 	CostUSD      float64
 	Estimated    bool
+	// PromptVersion is the build hash (MM113); "" = not recorded.
+	PromptVersion string
 }
 
 // AssistantExportConversation is one conversation with its messages, for the
@@ -100,10 +107,10 @@ type AssistantExportConversation struct {
 }
 
 const assistantConvColumns = `id::text, owner_user_id::text, surface, coalesce(project_kind, ''), coalesce(project_id, ''),
-	title, coalesce(summary, ''), created_at, updated_at`
+	title, coalesce(summary, ''), summary_upto, created_at, updated_at`
 
 const assistantMsgColumns = `id::text, conversation_id::text, seq, turn_id::text, role, content, coalesce(model, ''), status,
-	coalesce(usage, 'null'::jsonb), created_at`
+	coalesce(usage, 'null'::jsonb), coalesce(prompt_version, ''), created_at`
 
 const (
 	assistantConvInsertSQL = `
@@ -125,8 +132,8 @@ ORDER BY updated_at DESC, id LIMIT $4`
 	// concurrent appends can never collide on UNIQUE (conversation_id, seq).
 	assistantMsgLockSQL   = `SELECT pg_advisory_xact_lock(hashtextextended('assistant_messages:' || $1, 0))`
 	assistantMsgInsertSQL = `
-INSERT INTO assistant_messages (conversation_id, seq, turn_id, role, content, model, status, usage, provider_state)
-SELECT $1::uuid, coalesce(max(seq), 0) + 1, $2::uuid, $3, $4::jsonb, nullif($5, ''), $6, $7::jsonb, $8::jsonb
+INSERT INTO assistant_messages (conversation_id, seq, turn_id, role, content, model, status, usage, provider_state, prompt_version)
+SELECT $1::uuid, coalesce(max(seq), 0) + 1, $2::uuid, $3, $4::jsonb, nullif($5, ''), $6, $7::jsonb, $8::jsonb, nullif($9, '')
 FROM assistant_messages WHERE conversation_id = $1::uuid
 RETURNING id::text, seq`
 	assistantConvTouchSQL = `UPDATE assistant_conversations SET updated_at = now() WHERE id = $1::uuid`
@@ -138,6 +145,12 @@ FROM assistant_messages WHERE conversation_id = $1::uuid ORDER BY seq DESC LIMIT
 
 	assistantMsgAllSQL = `SELECT ` + assistantMsgColumns + ` FROM assistant_messages WHERE conversation_id = $1::uuid ORDER BY seq`
 
+	// The summary is append-only: each refresh adds one paragraph for the
+	// messages that aged out since the last one, and only moves forward (a
+	// write covering fewer messages than the stored one is ignored) (MM113).
+	assistantSummarySQL = `UPDATE assistant_conversations
+SET summary = CASE WHEN coalesce(summary, '') = '' THEN $2 ELSE summary || E'\n\n' || $2 END, summary_upto = $3
+WHERE id = $1::uuid AND summary_upto < $3`
 	assistantTitleSQL      = `UPDATE assistant_conversations SET title = $2 WHERE id = $1::uuid AND title = ''`
 	assistantSoftDeleteSQL = `UPDATE assistant_conversations SET deleted_at = coalesce(deleted_at, now()) WHERE id = $1::uuid AND owner_user_id = $2::uuid`
 	assistantHardDeleteSQL = `DELETE FROM assistant_conversations WHERE id = $1::uuid`
@@ -153,8 +166,8 @@ ON CONFLICT (message_id) DO UPDATE SET rating = EXCLUDED.rating, reason = EXCLUD
 
 	assistantUsageInsertSQL = `
 INSERT INTO assistant_usage_events
-	(user_id, visitor_hash, surface, kind, model, input_tokens, output_tokens, cached_tokens, cost_usd, estimated)
-VALUES (nullif($1, '')::uuid, nullif($2, ''), $3, $4, $5, $6, $7, $8, $9, $10)`
+	(user_id, visitor_hash, surface, kind, model, input_tokens, output_tokens, cached_tokens, cost_usd, estimated, prompt_version)
+VALUES (nullif($1, '')::uuid, nullif($2, ''), $3, $4, $5, $6, $7, $8, $9, $10, nullif($11, ''))`
 
 	assistantSpendSinceSQL = `SELECT coalesce(sum(cost_usd), 0)::float8 FROM assistant_usage_events WHERE created_at >= $1`
 
@@ -165,7 +178,7 @@ WHERE owner_user_id = $1::uuid AND deleted_at IS NULL ORDER BY updated_at DESC`
 
 func scanAssistantConv(row pgx.Row) (*AssistantConversation, error) {
 	var c AssistantConversation
-	if err := row.Scan(&c.ID, &c.OwnerUserID, &c.Surface, &c.ProjectKind, &c.ProjectID, &c.Title, &c.Summary,
+	if err := row.Scan(&c.ID, &c.OwnerUserID, &c.Surface, &c.ProjectKind, &c.ProjectID, &c.Title, &c.Summary, &c.SummaryUpto,
 		&c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -178,7 +191,7 @@ func scanAssistantMsgs(rows pgx.Rows, withState bool) ([]AssistantMessage, error
 	for rows.Next() {
 		var m AssistantMessage
 		var content, usage, state []byte
-		dest := []any{&m.ID, &m.ConversationID, &m.Seq, &m.TurnID, &m.Role, &content, &m.Model, &m.Status, &usage, &m.CreatedAt}
+		dest := []any{&m.ID, &m.ConversationID, &m.Seq, &m.TurnID, &m.Role, &content, &m.Model, &m.Status, &usage, &m.PromptVersion, &m.CreatedAt}
 		if withState {
 			dest = append(dest, &state)
 		}
@@ -274,7 +287,7 @@ func (s *Store) AppendAssistantMessage(ctx context.Context, in AssistantMessageI
 	var id string
 	var seq int
 	if err := tx.QueryRow(ctx, assistantMsgInsertSQL, in.ConversationID, in.TurnID, in.Role, string(in.Content),
-		in.Model, status, usage, state).Scan(&id, &seq); err != nil {
+		in.Model, status, usage, state, in.PromptVersion).Scan(&id, &seq); err != nil {
 		return "", 0, err
 	}
 	if _, err := tx.Exec(ctx, assistantConvTouchSQL, in.ConversationID); err != nil {
@@ -320,6 +333,18 @@ func (s *Store) SetAssistantConversationTitle(ctx context.Context, id, title str
 	ctx, cancel := s.ctx(ctx)
 	defer cancel()
 	_, err := s.Pool.Exec(ctx, assistantTitleSQL, id, title)
+	return err
+}
+
+// SetAssistantConversationSummary appends one paragraph to the summary and
+// records the seq it covers. Forward only: a stale (lower) upto is a no-op.
+func (s *Store) SetAssistantConversationSummary(ctx context.Context, id, summary string, upto int) error {
+	if !s.Enabled() {
+		return ErrNoStore
+	}
+	ctx, cancel := s.ctx(ctx)
+	defer cancel()
+	_, err := s.Pool.Exec(ctx, assistantSummarySQL, id, summary, upto)
 	return err
 }
 
@@ -374,7 +399,7 @@ func (s *Store) RecordAssistantUsage(ctx context.Context, ev AssistantUsageEvent
 	ctx, cancel := s.ctx(ctx)
 	defer cancel()
 	_, err := s.Pool.Exec(ctx, assistantUsageInsertSQL, ev.UserID, ev.VisitorHash, ev.Surface, ev.Kind, ev.Model,
-		ev.InputTokens, ev.OutputTokens, ev.CachedTokens, ev.CostUSD, ev.Estimated)
+		ev.InputTokens, ev.OutputTokens, ev.CachedTokens, ev.CostUSD, ev.Estimated, ev.PromptVersion)
 	return err
 }
 

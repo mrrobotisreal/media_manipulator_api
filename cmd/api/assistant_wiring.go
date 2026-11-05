@@ -41,7 +41,7 @@ func newAssistantHandler(appCtx context.Context, cfg *config.Config, store *tele
 		logger.Error("assistant: knowledge corpus failed to load; Medi answers without docs", "error", err.Error())
 	} else {
 		knowledge = k
-		logger.Info("assistant: knowledge loaded", "docs", len(k.Corpus().Docs))
+		logger.Info("assistant: knowledge loaded", "docs", len(k.Corpus().Docs), "promptVersion", assistant.PromptVersion())
 	}
 	engine := &assistant.Engine{
 		Provider:  assistant.NewOpenRouterProvider(ac.BaseURL, ac.APIKey, ac.AttributionURL, ac.ProviderOrder),

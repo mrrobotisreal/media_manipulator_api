@@ -17,6 +17,7 @@ type Store interface {
 	RecentAssistantMessages(ctx context.Context, conversationID string, limit int) ([]telemetry.AssistantMessage, error)
 	AssistantConversationMessages(ctx context.Context, conversationID string) ([]telemetry.AssistantMessage, error)
 	SetAssistantConversationTitle(ctx context.Context, id, title string) error
+	SetAssistantConversationSummary(ctx context.Context, id, summary string, upto int) error
 	SoftDeleteAssistantConversation(ctx context.Context, id, ownerUID string) error
 	DeleteAssistantConversationRow(ctx context.Context, id string) error
 	SetAssistantFeedback(ctx context.Context, messageID, userID, rating, reason string) error

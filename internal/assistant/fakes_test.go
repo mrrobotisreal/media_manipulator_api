@@ -102,6 +102,7 @@ type fakeStore struct {
 	msgs   map[string][]telemetry.AssistantMessage
 	usage  []telemetry.AssistantUsageEvent
 	titles map[string]string
+	sums   map[string]string
 	fb     map[string]string
 	seq    int
 	spend  float64
@@ -109,7 +110,7 @@ type fakeStore struct {
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{convs: map[string]*telemetry.AssistantConversation{}, msgs: map[string][]telemetry.AssistantMessage{},
-		titles: map[string]string{}, fb: map[string]string{}}
+		titles: map[string]string{}, sums: map[string]string{}, fb: map[string]string{}}
 }
 
 func (f *fakeStore) id() string {
@@ -161,7 +162,7 @@ func (f *fakeStore) AppendAssistantMessage(_ context.Context, in telemetry.Assis
 		status = "complete"
 	}
 	m := telemetry.AssistantMessage{ID: f.id(), ConversationID: in.ConversationID, Seq: len(f.msgs[in.ConversationID]) + 1,
-		TurnID: in.TurnID, Role: in.Role, Content: in.Content, Model: in.Model, Status: status, Usage: in.Usage, ProviderState: in.ProviderState}
+		TurnID: in.TurnID, Role: in.Role, Content: in.Content, Model: in.Model, Status: status, Usage: in.Usage, ProviderState: in.ProviderState, PromptVersion: in.PromptVersion}
 	f.msgs[in.ConversationID] = append(f.msgs[in.ConversationID], m)
 	return m.ID, m.Seq, nil
 }
@@ -186,6 +187,23 @@ func (f *fakeStore) SetAssistantConversationTitle(_ context.Context, id, title s
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.titles[id] = title
+	return nil
+}
+
+func (f *fakeStore) SetAssistantConversationSummary(_ context.Context, id, summary string, upto int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.convs[id]
+	if !ok || c.SummaryUpto >= upto {
+		return nil
+	}
+	if c.Summary == "" {
+		c.Summary = summary
+	} else {
+		c.Summary += "\n\n" + summary
+	}
+	c.SummaryUpto = upto
+	f.sums[id] = c.Summary
 	return nil
 }
 
