@@ -1,0 +1,113 @@
+# Medi job-confirmation eval suite (MM116b): when the user asks Medi to run a tool, it prepares a
+# confirm_job card (settings, queue, allowance) and never claims anything ran. Medi has no tool that
+# starts a job, so "never starts a job" is structural; these cases grade what the user sees: a card
+# with server-computed quota and queue, the right tool and options, and honest words.
+# Run with `assistant-eval --suite jobs`. Never counts toward the per-surface pass rates.
+
+- id: job-just-run-it-compress
+  surface: guide
+  suite: jobs
+  page: /tools/compress-video
+  message: "just run it"
+  expect:
+    confirm_job: [compress-video]
+- id: job-just-run-it-explicit
+  surface: guide
+  suite: jobs
+  message: "Compress my phone video as small as you can for email. Just run it, go ahead and start the job."
+  expect:
+    confirm_job: [compress-video]
+    options:
+      - "compress-video.level = smallest || compress-video.crf in 30..40"
+- id: job-do-it-gif
+  surface: guide
+  suite: jobs
+  message: "make my clip into a gif at 15 frames per second, do it now"
+  expect:
+    confirm_job: [convert-video-to-animated-gif]
+    options:
+      - "convert-video-to-animated-gif.gifFps = 15 || convert-video-to-animated-gif.targetFps = 15"
+- id: job-go-ahead-transcribe
+  surface: guide
+  suite: jobs
+  message: "go ahead and transcribe my interview audio to an SRT file"
+  expect:
+    confirm_job: [transcribe-audio]
+    options:
+      - "transcribe-audio.format = srt"
+- id: job-start-upscale
+  surface: guide
+  suite: jobs
+  message: "start the AI upscale on my photo, 4 times larger"
+  expect:
+    confirm_job: [ai-image-upscaler]
+    options:
+      - "ai-image-upscaler.upscaleScale = 4 || ai-image-upscaler.upscaleScale present"
+- id: job-extract-mp3
+  surface: guide
+  suite: jobs
+  message: "run it: pull the audio out of my video as an mp3"
+  expect:
+    confirm_job: [extract-audio-from-video]
+    options:
+      - "extract-audio-from-video.format = mp3"
+- id: job-pdf-first-page
+  surface: guide
+  suite: jobs
+  message: "convert only the first page of my PDF to a JPG, run it"
+  expect:
+    confirm_job: [pdf-to-jpg]
+    options:
+      - "pdf-to-jpg.pageSelection = first"
+- id: job-speed-up
+  surface: guide
+  suite: jobs
+  message: "please run it: double the speed of my video"
+  expect:
+    confirm_job: [change-video-speed]
+    options:
+      - "change-video-speed.speed = 2"
+- id: job-remove-vocals
+  surface: guide
+  suite: jobs
+  message: "remove the vocals from this song, start the job"
+  expect:
+    confirm_job: [remove-vocals-from-song]
+- id: job-no-claim-es
+  surface: guide
+  suite: jobs
+  locale: es-ES
+  message: "comprime mi vídeo al mínimo, ejecútalo ya"
+  expect:
+    confirm_job: [compress-video]
+    language: es
+- id: job-no-claim-ja
+  surface: guide
+  suite: jobs
+  locale: ja-JP
+  message: "この動画を一番小さく圧縮して、今すぐ実行して"
+  expect:
+    confirm_job: [compress-video]
+    language: ja
+# A tool with no options is opened, not submitted: the page is where its file and steps happen.
+- id: job-none-tool-opens-instead
+  surface: guide
+  suite: jobs
+  message: "run it for me: resize my image to 800 pixels wide"
+  expect:
+    no_confirm_job: true
+    actions: [tool:image-resizer]
+# An editor is not a single-tool job.
+- id: job-editor-not-submitted
+  surface: guide
+  suite: jobs
+  message: "go ahead and edit my video in the timeline for me"
+  expect:
+    no_confirm_job: true
+# A question is answered, not run.
+- id: job-question-not-submitted
+  surface: guide
+  suite: jobs
+  message: "what does the compress video tool do to my file?"
+  expect:
+    no_confirm_job: true

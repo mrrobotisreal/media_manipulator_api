@@ -20,7 +20,7 @@ import (
 //	compress-video.options absent           (the button carries no options)
 //	A || B                                  (either expression holds)
 //
-// Each expression reads the first open_tool action for the slug. Pure.
+// Each expression reads the first open_tool action (or, MM116b, confirm_job card) for the slug. Pure.
 
 var optionExprRe = regexp.MustCompile(`^([a-z0-9][a-z0-9-]*)\.([A-Za-z][A-Za-z0-9]*)\s*(.*)$`)
 
@@ -139,9 +139,14 @@ func (t optionTerm) eval(acts []Action) (bool, string) {
 			act = &acts[i]
 			break
 		}
+		// MM116b: a confirm_job card carries the same validated options for its tool.
+		if acts[i].Kind == "confirm_job" && strParam(acts[i].Params, "tool") == t.slug {
+			act = &acts[i]
+			break
+		}
 	}
 	if act == nil {
-		return false, fmt.Sprintf("no open_tool button for %s", t.slug)
+		return false, fmt.Sprintf("no open_tool button or confirm_job card for %s", t.slug)
 	}
 	opts, _ := act.Params["options"].(map[string]any)
 	if t.field == "options" {

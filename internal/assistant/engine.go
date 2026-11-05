@@ -40,6 +40,8 @@ type Engine struct {
 	Files FileResolver
 	// Inspect reads a resolved file's metadata for inspect_file (MM116a); nil = the tool is not offered.
 	Inspect FileInspector
+	// Jobs prices submit_job proposals (MM116b); nil = submit_job is not offered. It is read-only.
+	Jobs JobEstimator
 	// OnTurnCounted is told once per completed upstream request (MM107 turns it
 	// into the server analytics event).
 	OnTurnCounted func(t TurnReport)
@@ -60,6 +62,8 @@ type Turn struct {
 	FileRef string
 	// FileOwner is who the file belongs to: the user id, else the guest session ("s:<id>").
 	FileOwner string
+	// QuotaSubject is whose daily counters a submit_job proposal reads (MM116b).
+	QuotaSubject QuotaSubject
 	// UserID is the mm_users id ("" = guest: nothing is stored).
 	UserID      string
 	VisitorHash string
@@ -243,6 +247,8 @@ func syntheticResult(name string) string {
 		return "The question was shown; the user's next message answers it."
 	case ToolNavigate, ToolOpenTool, ToolSuggestAction:
 		return "Shown to the user as a button."
+	case ToolSubmitJob:
+		return "Shown to the user as a confirmation card. Nothing has run: the job starts only if the user presses the card's button."
 	default:
 		return "Not run."
 	}
@@ -556,6 +562,9 @@ func (r *run) exec(prep *Prepared) {
 	}
 
 	tools := ToolsFor(b.Surface, e.Ops)
+	if b.Surface == SurfaceGuide && e.Jobs != nil {
+		tools = append(tools, SubmitJobTool())
+	}
 	if e.Files != nil && r.t.FileRef != "" {
 		tools = append(tools, FileToolsFor()...)
 		if e.Inspect != nil {
@@ -677,6 +686,11 @@ func (r *run) exec(prep *Prepared) {
 				ev = AskEvent{Type: "ask", CallID: a.CallID, Question: a.Question, Choices: a.Choices}
 				if outcome == "" {
 					outcome = "ask"
+				}
+			case ToolSubmitJob:
+				ev = r.confirmJob(a)
+				if outcome == "" || outcome == "ask" {
+					outcome = "action"
 				}
 			default:
 				ev = ActionEvent{Type: "action", CallID: a.CallID, Kind: a.Kind, Label: a.Label, Params: a.Params}
@@ -874,7 +888,7 @@ func (r *run) complete(rc *roundCalls, state json.RawMessage, outcome string) {
 			switch a.Name {
 			case ToolAskUser:
 				se.Kind, se.Summary = "ask", a.Question
-			case ToolNavigate, ToolOpenTool, ToolSuggestAction:
+			case ToolNavigate, ToolOpenTool, ToolSuggestAction, ToolSubmitJob:
 				se.Summary = a.Label
 			}
 			sc.Actions = append(sc.Actions, se)

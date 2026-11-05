@@ -43,6 +43,9 @@ type optionsFile struct {
 	Reason  string          `json:"reason"`
 }
 
+// ParseToolOptions parses one tools/<slug>.options.json (the corpus loader and tests in other packages).
+func ParseToolOptions(b []byte) (*ToolOptions, error) { return parseOptionsFile(b) }
+
 func parseOptionsFile(b []byte) (*ToolOptions, error) {
 	var f optionsFile
 	if err := json.Unmarshal(b, &f); err != nil {

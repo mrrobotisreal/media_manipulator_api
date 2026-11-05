@@ -347,7 +347,7 @@ func (h *AssistantHandler) Chat(c *gin.Context) {
 		}
 		fileRef = body.FileRef
 	}
-	turn := &assistant.Turn{Body: body, FileRef: fileRef, FileOwner: fileOwner, FrameURL: frame, FrameAfterURL: frameAfter, UserID: a.userID(), VisitorHash: visitorHash(c),
+	turn := &assistant.Turn{QuotaSubject: assistantQuotaSubject(callerSession(c), a.userID()), Body: body, FileRef: fileRef, FileOwner: fileOwner, FrameURL: frame, FrameAfterURL: frameAfter, UserID: a.userID(), VisitorHash: visitorHash(c),
 		AnalyticsVisitorID: strings.TrimSpace(c.GetHeader("X-MM-Visitor-ID")),
 		AnalyticsSessionID: strings.TrimSpace(c.GetHeader("X-MM-Session-ID"))}
 	if body.ConversationID != "" && turn.UserID == "" {

@@ -83,8 +83,15 @@ type Expect struct {
 	// OffTopic: answered by the scope gate, or a short decline from the model
 	// with no buttons or edits that steers back to the site.
 	OffTopic bool `yaml:"off_topic"`
-	// Options (MM116a) grades the options of an open_tool button; see options_check.go.
+	// Options (MM116a) grades the options of an open_tool button (or, MM116b, a confirm_job
+	// card for the same slug); see options_check.go.
 	Options []string `yaml:"options"`
+	// ConfirmJob (MM116b) lists tool slugs the answer must propose a confirm_job card for. The
+	// card is all Medi can do: the grader also checks that the server priced it (quota and
+	// queueEstimate present) and that the answer does not claim the job started.
+	ConfirmJob []string `yaml:"confirm_job"`
+	// NoConfirmJob (MM116b): the answer must not propose a job card (a tool without options, a question).
+	NoConfirmJob bool `yaml:"no_confirm_job"`
 }
 
 // Adjust scripts the browser side of the adjust loop (MM115). The meters are
@@ -201,10 +208,10 @@ func (c *Case) validate() error {
 	if c.Surface != "guide" && c.Requires == "" && len(c.Expect.Ops) > 0 {
 		return fmt.Errorf("%s: op checks need `requires: <surface>`", c.ID)
 	}
-	if c.Suite != "" && c.Suite != "routing" && c.Suite != "options" {
-		return fmt.Errorf("%s: suite %q (routing | options)", c.ID, c.Suite)
+	if c.Suite != "" && c.Suite != "routing" && c.Suite != "options" && c.Suite != "jobs" {
+		return fmt.Errorf("%s: suite %q (routing | options | jobs)", c.ID, c.Suite)
 	}
-	if (c.Suite != "" || len(c.Expect.Options) > 0) && c.Surface != "guide" {
+	if (c.Suite != "" || len(c.Expect.Options) > 0 || len(c.Expect.ConfirmJob) > 0 || c.Expect.NoConfirmJob) && c.Surface != "guide" {
 		return fmt.Errorf("%s: suites and option checks are for the guide", c.ID)
 	}
 	for _, o := range c.Expect.Options {
@@ -363,6 +370,34 @@ func Grade(c Case, out Output) Result {
 			fail("option check %s: %s", src, why)
 		}
 	}
+	for _, slug := range e.ConfirmJob {
+		card := confirmCard(out.Actions, slug)
+		if card == nil {
+			fail("no confirm_job card for %s (got %s)", slug, describeActions(out.Actions))
+			continue
+		}
+		if _, ok := card.Params["quota"].(map[string]any); !ok {
+			fail("confirm_job card for %s carries no server-computed quota", slug)
+		}
+		if _, ok := card.Params["queueEstimate"].(map[string]any); !ok {
+			fail("confirm_job card for %s carries no queue estimate", slug)
+		}
+	}
+	if e.NoConfirmJob {
+		for _, a := range out.Actions {
+			if a.Kind == "confirm_job" {
+				fail("proposed a job card where none was wanted: %s", describeActions(out.Actions))
+			}
+		}
+	}
+	if len(e.ConfirmJob) > 0 {
+		// Medi only proposes: it must not tell the user the job started or finished (English cases).
+		for _, claim := range []string{"job has started", "is now running", "is running now", "has been started", "i started", "i've started", "i have started", "is done", "has finished"} {
+			if strings.Contains(low, claim) {
+				fail("answer claims the job ran (%q); Medi can only propose it", claim)
+			}
+		}
+	}
 	if e.Language != "" {
 		// An edit turn may carry no prose: its undo label is the user-visible
 		// text then (photo-ru-moody, 2026-11-05: Russian label, empty text).
@@ -417,11 +452,25 @@ func parseActionExpect(s string) (kind, target string, err error) {
 	return k, t, nil
 }
 
+// confirmCard finds the confirm_job action for a tool slug.
+func confirmCard(acts []Action, slug string) *Action {
+	for i := range acts {
+		if acts[i].Kind == "confirm_job" && strParam(acts[i].Params, "tool") == slug {
+			return &acts[i]
+		}
+	}
+	return nil
+}
+
 func hasAction(acts []Action, kind, target string) bool {
 	for _, a := range acts {
 		switch kind {
 		case "tool":
 			if a.Kind == "open_tool" && strParam(a.Params, "slug") == target {
+				return true
+			}
+			// MM116b: a confirmation card is a way of sending the user to that tool.
+			if a.Kind == "confirm_job" && strParam(a.Params, "tool") == target {
 				return true
 			}
 			if a.Kind == "navigate" && stripLocale(strParam(a.Params, "target")) == "/tools/"+target {

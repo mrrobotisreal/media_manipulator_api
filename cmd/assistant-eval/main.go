@@ -10,6 +10,7 @@
 //	go run ./cmd/assistant-eval --suite adjust --i-know-this-costs-money   # MM115: the multi-round adjust suite
 //	go run ./cmd/assistant-eval --suite routing --i-know-this-costs-money  # MM116a: the which-tool suite
 //	go run ./cmd/assistant-eval --suite options --i-know-this-costs-money  # MM116a: the tool-options suite
+//	go run ./cmd/assistant-eval --suite jobs --i-know-this-costs-money     # MM116b: submit_job confirmation cards
 //	go run ./cmd/assistant-eval --gate --i-know-this-costs-money     # fail when a surface's pass rate drops
 //	go run ./cmd/assistant-eval --record --i-know-this-costs-money   # write assistant_eval_runs rows
 //
@@ -46,12 +47,14 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/assistant/evals"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/db"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/handlers"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
 
 func main() {
 	surface := flag.String("surface", "", "only cases of this surface (guide|photo|studio|vector)")
-	suite := flag.String("suite", "", "\"adjust\" (MM115), \"routing\" or \"options\" (MM116a) run a named suite; default runs the single-turn suites")
+	suite := flag.String("suite", "", "\"adjust\" (MM115), \"routing\" or \"options\" (MM116a), \"jobs\" (MM116b) run a named suite; default runs the single-turn suites")
 	caseID := flag.String("case", "", "only this case id")
 	repeat := flag.Int("repeat", 1, "run each case N times")
 	estimateOnly := flag.Bool("estimate", false, "print the cost estimate and exit (no model calls)")
@@ -77,8 +80,8 @@ func main() {
 	if err != nil {
 		fail("cases: %v", err)
 	}
-	if *suite != "" && *suite != "adjust" && *suite != "routing" && *suite != "options" {
-		fail("--suite must be adjust, routing or options (or empty)")
+	if *suite != "" && *suite != "adjust" && *suite != "routing" && *suite != "options" && *suite != "jobs" {
+		fail("--suite must be adjust, routing, options or jobs (or empty)")
 	}
 	if *suite != "" && (*record || *gate) {
 		fail("--record and --gate compare per-surface pass rates of the single-turn suites; the named suites are reported in their evidence files")
@@ -110,6 +113,9 @@ func main() {
 		fail("knowledge: %v", err)
 	}
 	engine.Knowledge = k
+	// MM116b: submit_job is offered. The estimator is the real read-only one over the tier registry
+	// (no counters, no GPU probe): it prices a card, and nothing in the eval can start a job.
+	engine.Jobs = &handlers.AssistantJobs{Registry: tiers.New(config.Load())}
 	engine.Provider = assistant.NewOpenRouterProvider(cfg.BaseURL, cfg.APIKey, cfg.AttributionURL, cfg.ProviderOrder)
 	// The eval's own budget: the shared daily cap is not consulted (no store),
 	// --max-usd is; the OpenRouter key's credit limit stays the hard backstop.
