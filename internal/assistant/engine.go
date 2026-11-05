@@ -42,6 +42,9 @@ type Engine struct {
 	Inspect FileInspector
 	// Jobs prices submit_job proposals (MM116b); nil = submit_job is not offered. It is read-only.
 	Jobs JobEstimator
+	// Exports validates a studio suggest_action export's params against the
+	// output table and the caller's plan (MM118); nil = params pass through.
+	Exports ExportAdvisor
 	// OnTurnCounted is told once per completed upstream request (MM107 turns it
 	// into the server analytics event).
 	OnTurnCounted func(t TurnReport)
@@ -643,6 +646,11 @@ func (r *run) exec(prep *Prepared) {
 		invalid := map[string]string{}
 		for _, c := range client {
 			a, err := validateClientCall(c, r.surface, tools, e.Ops, e.Knowledge.Routes(), e.Knowledge)
+			if err == nil && a.Name == ToolSuggestAction && a.Kind == SuggestKindExport && r.surface == SurfaceStudio && e.Exports != nil {
+				// MM118: the export params are checked against the output table and the
+				// caller's plan before anything streams.
+				a.Params, err = e.Exports.AdviseExport(r.t.Live.Tier, a.Params)
+			}
 			if err != nil {
 				invalid[c.ID] = err.Error()
 				errs = append(errs, err.Error())

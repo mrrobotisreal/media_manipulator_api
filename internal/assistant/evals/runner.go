@@ -102,7 +102,7 @@ func (r *Runner) Run(ctx context.Context, c Case) (Output, error) {
 	defer cancel()
 	rec := &recorder{}
 	turn := &assistant.Turn{Body: body, FrameURL: frameURL, VisitorHash: "eval",
-		Live: assistant.LiveContext{Tier: "operator", TurnsLimit: -1, TurnsRemaining: -1}}
+		Live: assistant.LiveContext{Tier: caseTier(c), TurnsLimit: -1, TurnsRemaining: -1}}
 	r.Engine.Run(ctx, turn, rec, nil)
 	return rec.out, nil
 }
@@ -396,4 +396,12 @@ func (r *Runner) runAdjust(ctx context.Context, c Case) (Output, error) {
 		turn = &assistant.Turn{Body: cont, UserID: "eval", VisitorHash: "eval", Live: live, Conversation: conv}
 	}
 	return total, nil
+}
+
+// caseTier is the plan a case asks as (MM118): operator unless the case says.
+func caseTier(c Case) string {
+	if c.Tier != "" {
+		return c.Tier
+	}
+	return "operator"
 }

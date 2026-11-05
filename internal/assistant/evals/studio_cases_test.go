@@ -32,6 +32,12 @@ var studioReference = map[string]struct {
 	"studio-warmer":           {"Warmed the beach clip.", `[{"op":"grade","clipIds":["clipA"],"lumetri":{"temperature":20}}]`, false, nil},
 	"studio-marker":           {"Marker added at 10 s.", `[{"op":"add_marker","at":10,"label":"b-roll here"}]`, false, nil},
 	"studio-de-grade":         {"Die Farben sind jetzt kräftiger.", `[{"op":"grade","clipIds":"all","lumetri":{"saturation":1.2,"vibrance":0.3}}]`, false, nil},
+	// MM118 export suggestions: the params as the server's export advisor returns them.
+	"studio-export-reel":      {"A vertical MP4 in H.264 plays everywhere on Instagram.", "", false, []Action{{Kind: "export", Params: map[string]any{"preset": "mp4_h264", "container": "mp4", "videoCodec": "h264", "audioCodec": "aac"}}}},
+	"studio-export-final-cut": {"MOV opens straight in Final Cut.", "", false, []Action{{Kind: "export", Params: map[string]any{"preset": "mov_h264", "container": "mov", "videoCodec": "h264", "audioCodec": "aac"}}}},
+	"studio-export-smallest":  {"H.265 in MP4 is about half the size at the same quality.", "", false, []Action{{Kind: "export", Params: map[string]any{"preset": "mp4_hevc", "container": "mp4", "videoCodec": "hevc", "audioCodec": "aac"}}}},
+	"studio-export-anon-hevc": {"H.265 needs a free account: sign up and it unlocks. For now the dialog has H.264.", "", false, []Action{{Kind: "export", Params: map[string]any{"preset": "mp4_h264", "container": "mp4", "videoCodec": "h264", "audioCodec": "aac", "upgrade": map[string]any{"required": "free", "option": "hevc"}}}}},
+	"studio-export-free-mov":  {"MOV is a Premium format; the dialog has MP4, the closest your plan allows.", "", false, []Action{{Kind: "export", Params: map[string]any{"preset": "mp4_h264", "container": "mp4", "videoCodec": "h264", "audioCodec": "aac", "upgrade": map[string]any{"required": "premium", "option": "mov"}}}}},
 }
 
 func TestStudioCasesPassableWithRealOps(t *testing.T) {
