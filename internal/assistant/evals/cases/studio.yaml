@@ -1,78 +1,79 @@
-# Darkroom copilot cases. `requires: studio` until MM109 lands the studio op schema.
+# Darkroom copilot cases (MM109 landed the studio op schema; each case has a schema-valid
+# reference answer in studio_cases_test.go, so a failure means the model chose badly).
 - id: studio-cinematic
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Make it look cinematic"
   expect:
     ops: ["has_op(apply_look) || field(grade, lumetri.saturation) < 1"]
 - id: studio-lower-third
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Add a lower-third with my name, Sam Lee, Designer, at 2 seconds"
   expect:
     ops: ["title_in_region(lower30)", "has_op(add_title)"]
 - id: studio-title-card
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Put a big title 'Summer' at the start"
   expect:
     ops: ["has_op(add_title)", "field(add_title, start) < 1"]
 - id: studio-duck
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "The music is too loud when I talk"
   expect:
     ops: ["has_op(set_ducking) || has_op(set_volume) || has_op(set_keyframes)"]
 - id: studio-voice-clear
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Make the voice clearer"
   expect:
     ops: ["has_op(audio_preset)"]
 - id: studio-transition
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Add a smooth transition between the two clips"
   expect:
     ops: ["has_op(set_transition)", "field(set_transition, durationSeconds) <= 1.5"]
 - id: studio-vertical
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Make this a vertical video for TikTok"
   expect:
     ops: ["has_op(set_canvas)"]
 - id: studio-fade-in
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Fade in from black at the start"
   expect:
     ops: ["keyframe_within(opacity, 3000)"]
 - id: studio-slowmo
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Slow down the city clip to half speed"
   expect:
     ops: ["field(set_speed, speed) ≈ 0.5"]
 - id: studio-ken-burns
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Add a slow zoom in on the beach clip"
   expect:
     ops: ["has_op(set_keyframes)"]
 - id: studio-delete-asks
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Delete the second clip"
   expect:
     ask: true
@@ -80,21 +81,21 @@
 - id: studio-captions-suggest
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Add captions"
   expect:
     actions: [suggest:generate_captions]
 - id: studio-warmer
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "The beach clip looks cold, warm it up"
   expect:
     ops: ["field(grade, lumetri.temperature) > 0 || has_op(apply_look)"]
 - id: studio-marker
   surface: studio
   requires: studio
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Put a marker at 10 seconds called 'b-roll here'"
   expect:
     ops: ["field(add_marker, at) ≈ 10"]
@@ -102,7 +103,7 @@
   surface: studio
   requires: studio
   locale: de-DE
-  fixture_doc: studio/two-clips.json
+  fixture_doc: studio/two-clips.txt
   message: "Mach die Farben etwas kräftiger"
   expect:
     language: de

@@ -125,7 +125,7 @@ _Avoid_: "medi" in Go identifiers, routes or tables; "chatbot".
 The two Medi surfaces. The **guide** (`surface: guide`) answers on public pages, is free for everyone (rate-limited) and can only show buttons (`navigate`, `open_tool`). A **copilot** (`surface: studio | vector | photo`) runs inside an editor, needs an account, spends `assistant_turns`, and can edit (`apply_edits`) or offer a button (`suggest_action`).
 
 **Op schema** (`internal/assistant/ops/schema/<surface>.json`, MM108):
-The JSON Schema of one editor's `apply_edits` op list, generated in the UI from the Zod vocabulary and committed byte for byte here (`TestPhotoOpsSchemaMatchesUI`). Its presence switches `apply_edits` on for that surface; it is compacted and its `$defs` hoisted when inlined into the tool (`applyEditsParameters`). Photo since MM108, vector since MM110 (`TestVectorOpsSchemaMatchesUI`); studio MM109.
+The JSON Schema of one editor's `apply_edits` op list, generated in the UI from the Zod vocabulary and committed byte for byte here (`TestPhotoOpsSchemaMatchesUI`, `TestStudioOpsSchemaMatchesUI`, `TestVectorOpsSchemaMatchesUI`; `photo.json` MM108, `studio.json` MM109, `vector.json` MM110). Its presence switches `apply_edits` on for that surface; it is compacted and its `$defs` hoisted when inlined into the tool (`applyEditsParameters`).
 
 **Motion template** (UI `lib/vector/templates.ts`, MM110): a ready-made animation (lower third, logo reveal, title pop, bullet reveal, counter, badge bounce) the Motion editor's Templates menu and Medi's `template` op both run. Its goldens in `internal/vector/testdata/templates/` must pass `vector.Sanitize` byte for byte.
 

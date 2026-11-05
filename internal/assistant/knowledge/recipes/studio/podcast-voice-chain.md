@@ -21,11 +21,11 @@ A broadcast voice chain cuts low rumble, adds presence around 2 to 5 kHz and com
 {
   "summary": "Podcast voice chain",
   "ops": [
-    {"op": "audio_preset", "trackIndex": 0, "preset": "podcast"}
+    {"op": "audio_preset", "track": "A1", "preset": "podcast"}
   ]
 }
 ```
-`trackIndex` is the voice track from the digest. Set export loudness to podcast or streaming in the export dialog.
+`track` is the voice track's label from the digest (A1, A2…). Set export loudness to podcast or streaming in the export dialog.
 ### How to adjust
 Thin or harsh: use `voiceClarity`. Still noisy: suggest Clean Voice. Music track too: give it `musicBed`.
 

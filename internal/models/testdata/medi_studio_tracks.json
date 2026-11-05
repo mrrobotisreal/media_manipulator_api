@@ -1,0 +1,257 @@
+[
+  {
+    "id": "tv1",
+    "kind": "video",
+    "index": 0,
+    "muted": false,
+    "clips": [
+      {
+        "id": "clipA",
+        "assetId": "beach",
+        "streamIndex": 0,
+        "timelineStart": 0,
+        "sourceIn": 0,
+        "sourceOut": 12,
+        "effects": [
+          {
+            "type": "lumetri",
+            "id": "look-cinematic",
+            "enabled": true,
+            "exposure": -0.08,
+            "contrast": 1.12,
+            "saturation": 0.88,
+            "temperature": 4.8,
+            "tint": 0,
+            "vibrance": -0.08
+          }
+        ],
+        "keyframes": {
+          "scale": [
+            {
+              "t": 0,
+              "value": 1,
+              "ease": "easeBoth"
+            },
+            {
+              "t": 11,
+              "value": 1.15,
+              "ease": "linear"
+            }
+          ]
+        }
+      },
+      {
+        "id": "clipB",
+        "assetId": "city",
+        "streamIndex": 0,
+        "timelineStart": 11.2,
+        "sourceIn": 3,
+        "sourceOut": 15,
+        "effects": [
+          {
+            "type": "lumetri",
+            "id": "medi1",
+            "enabled": true,
+            "exposure": 0.3,
+            "contrast": 1,
+            "saturation": 0.95,
+            "temperature": -12,
+            "tint": 0,
+            "vibrance": 0
+          }
+        ],
+        "transition": {
+          "type": "crossDissolve",
+          "durationSeconds": 0.8
+        },
+        "transitionInSeconds": 0.8,
+        "speed": 0.5
+      },
+      {
+        "id": "medi4",
+        "assetId": "city",
+        "streamIndex": 0,
+        "timelineStart": 35.2,
+        "sourceIn": 4.4,
+        "sourceOut": 6.4,
+        "freeze": {
+          "sourceTime": 4.4
+        },
+        "effects": [
+          {
+            "type": "lumetri",
+            "id": "medi1",
+            "enabled": true,
+            "exposure": 0.3,
+            "contrast": 1,
+            "saturation": 0.95,
+            "temperature": -12,
+            "tint": 0,
+            "vibrance": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ta1",
+    "kind": "audio",
+    "index": 0,
+    "muted": false,
+    "name": "Voice",
+    "clips": [
+      {
+        "id": "voice1",
+        "assetId": "voice",
+        "streamIndex": 0,
+        "timelineStart": 0,
+        "sourceIn": 0,
+        "sourceOut": 24
+      }
+    ],
+    "effects": {
+      "eq": {
+        "lowGainDb": -4,
+        "midGainDb": 2,
+        "highGainDb": 3
+      },
+      "compressor": {
+        "thresholdDb": -22,
+        "ratio": 3,
+        "attackMs": 8,
+        "releaseMs": 180,
+        "makeupDb": 3
+      }
+    }
+  },
+  {
+    "id": "ta2",
+    "kind": "audio",
+    "index": 1,
+    "muted": false,
+    "name": "Music",
+    "clips": [
+      {
+        "id": "music1",
+        "assetId": "song",
+        "streamIndex": 0,
+        "timelineStart": 0,
+        "sourceIn": 0,
+        "sourceOut": 24,
+        "volume": 0.5012,
+        "keyframes": {
+          "volume": [
+            {
+              "t": 0,
+              "value": 0,
+              "ease": "easeOut"
+            },
+            {
+              "t": 2,
+              "value": 0.5,
+              "ease": "linear"
+            }
+          ]
+        },
+        "volumeKeyframes": [
+          {
+            "t": 0,
+            "gain": 0
+          },
+          {
+            "t": 2,
+            "gain": 0.5
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "medi2",
+    "kind": "video",
+    "index": 1,
+    "muted": false,
+    "clips": [
+      {
+        "id": "medi3",
+        "assetId": "",
+        "streamIndex": 0,
+        "timelineStart": 2,
+        "sourceIn": 0,
+        "sourceOut": 5,
+        "title": {
+          "layers": [
+            {
+              "type": "rect",
+              "x": 0.05,
+              "y": 0.76,
+              "w": 0.42,
+              "h": 0.14,
+              "color": "#111111",
+              "opacity": 0.6,
+              "radiusPx": 6
+            },
+            {
+              "type": "text",
+              "text": "Sam Lee",
+              "fontFamily": "Montserrat",
+              "fontSizePx": 56,
+              "fontWeight": 700,
+              "fillColor": "#FFFFFF",
+              "align": "left",
+              "x": 0.075,
+              "y": 0.8
+            },
+            {
+              "type": "text",
+              "text": "Designer",
+              "fontFamily": "Montserrat",
+              "fontSizePx": 34,
+              "fontWeight": 400,
+              "fillColor": "#FFFFFF",
+              "align": "left",
+              "x": 0.075,
+              "y": 0.86
+            }
+          ]
+        },
+        "keyframes": {
+          "positionX": [
+            {
+              "t": 0,
+              "value": -0.6,
+              "ease": "easeOut"
+            },
+            {
+              "t": 0.5,
+              "value": 0,
+              "ease": "linear"
+            }
+          ],
+          "opacity": [
+            {
+              "t": 0,
+              "value": 0,
+              "ease": "easeOut"
+            },
+            {
+              "t": 0.5,
+              "value": 1,
+              "ease": "linear"
+            },
+            {
+              "t": 4.6,
+              "value": 1,
+              "ease": "easeIn"
+            },
+            {
+              "t": 5,
+              "value": 0,
+              "ease": "linear"
+            }
+          ]
+        }
+      }
+    ]
+  }
+]

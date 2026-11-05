@@ -21,7 +21,7 @@ Professional mixes keep music 15 to 20 dB under speech while someone talks and b
 {
   "summary": "Duck music under voice",
   "ops": [
-    {"op": "set_ducking", "enabled": true, "voiceTrackIndex": 0, "amountDb": 12, "attackMs": 120, "releaseMs": 500}
+    {"op": "set_ducking", "enabled": true, "voiceTrack": "A1", "amountDb": 12, "attackMs": 120, "releaseMs": 500}
   ]
 }
 ```

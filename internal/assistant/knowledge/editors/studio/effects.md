@@ -30,10 +30,24 @@ A LUT needs a .cube file uploaded to the media bin; intensity mixes it with the 
 - `keyColor`: the colour to remove, a hex colour, default #00FF00 (pick it from the preview with the eyedropper).
 ### Blend modes (clip opacity & blend)
 - normal, multiply, screen, overlay, lighten, darken, addition, difference
+### Looks (Effects panel → Looks row; Medi op `apply_look`)
+One-click grades made only of Lumetri values, applied as one Lumetri effect per clip (a new look replaces the old one; intensity mixes it from neutral):
+- `cinematic` (Cinematic): exposure -0.1, contrast 1.15, saturation 0.85, temperature 6, vibrance -0.1
+- `teal-orange` (Teal & orange): contrast 1.12, saturation 0.95, temperature 14, tint -6, vibrance 0.35
+- `bleach-bypass` (Bleach bypass): exposure 0.05, contrast 1.35, saturation 0.45, vibrance -0.3
+- `warm-film` (Warm film): exposure 0.05, contrast 0.92, saturation 0.9, temperature 22, tint 4
+- `cool-night` (Cool night): exposure -0.35, contrast 1.08, saturation 0.8, temperature -28, tint 6
+- `vintage` (Vintage): exposure 0.1, contrast 0.85, saturation 0.7, temperature 18, tint 8, vibrance -0.25
+- `high-key` (High key): exposure 0.45, contrast 0.85, saturation 0.9, vibrance 0.1
+- `noir` (Noir): exposure -0.1, contrast 1.4, saturation 0
+- `pastel` (Pastel): exposure 0.25, contrast 0.8, saturation 0.75, tint 6, vibrance 0.2
+- `punchy-social` (Punchy social): exposure 0.1, contrast 1.18, saturation 1.25, vibrance 0.45
+- `moody` (Moody): exposure -0.3, contrast 1.2, saturation 0.7, temperature -8, vibrance -0.2
+- `golden-hour` (Golden hour): exposure 0.1, contrast 1.05, saturation 1.05, temperature 32, tint 6, vibrance 0.2
 
 ## Search keywords
 
-`effects`, `colour grade`, `color grade`, `grading`, `lumetri`, `exposure`, `contrast`, `saturation`, `temperature`, `tint`, `vibrance`, `lut`, `cube`, `chroma key`, `green screen`, `blend mode`, `cinematic look`
+`effects`, `colour grade`, `color grade`, `grading`, `lumetri`, `exposure`, `contrast`, `saturation`, `temperature`, `tint`, `vibrance`, `lut`, `cube`, `chroma key`, `green screen`, `blend mode`, `cinematic look`, `looks`, `look`, `teal and orange`, `noir`, `film look`
 
 ## Links
 
