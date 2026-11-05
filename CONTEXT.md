@@ -124,6 +124,9 @@ _Avoid_: "medi" in Go identifiers, routes or tables; "chatbot".
 **Guide / copilot** (MM104):
 The two Medi surfaces. The **guide** (`surface: guide`) answers on public pages, is free for everyone (rate-limited) and can only show buttons (`navigate`, `open_tool`). A **copilot** (`surface: studio | vector | photo`) runs inside an editor, needs an account, spends `assistant_turns`, and can edit (`apply_edits`) or offer a button (`suggest_action`).
 
+**Prompt version** (MM113):
+`assistant.PromptVersion()`, the first 12 hex of a SHA-256 over the persona, surface intros, capsules, `knowledge/index.json` and every op schema file; stored on every assistant message and usage row, returned by capabilities and the `meta` event, and recorded with every eval run (`assistant_eval_runs`). MM114/MM115/MM116 must keep any new model-facing text inside those inputs so the version moves with it.
+
 **Op schema** (`internal/assistant/ops/schema/<surface>.json`, MM108):
 The JSON Schema of one editor's `apply_edits` op list, generated in the UI from the Zod vocabulary and committed byte for byte here (`TestPhotoOpsSchemaMatchesUI`, `TestStudioOpsSchemaMatchesUI`, `TestVectorOpsSchemaMatchesUI`; `photo.json` MM108, `studio.json` MM109, `vector.json` MM110). Its presence switches `apply_edits` on for that surface; it is compacted and its `$defs` hoisted when inlined into the tool (`applyEditsParameters`).
 
