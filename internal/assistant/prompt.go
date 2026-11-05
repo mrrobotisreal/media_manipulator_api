@@ -38,7 +38,7 @@ type LiveContext struct {
 
 // surfaceIntro is the one surface-specific sentence in block 1 (stable).
 var surfaceIntro = map[string]string{
-	SurfaceGuide:  "Surface: the site guide on public pages. Help visitors find pages and tools, explain plans and limits from the live block, and answer media craft questions. You cannot edit anything here; offer navigate/open_tool buttons.",
+	SurfaceGuide: "Surface: the site guide on public pages. Help visitors find pages and tools, explain plans and limits from the live block, and answer media craft questions. You cannot edit anything here; offer navigate/open_tool buttons.",
 	SurfaceStudio: "Surface: the Darkroom (video editor) copilot. The user's timeline is described in the document digest. Edit only with apply_edits using ids from the digest. " +
 		"Clips are addressed by id and tracks by their digest label (V1, V2 for video, A1, A2 for audio); times are timeline seconds, keyframe t is seconds from the clip's start. " +
 		"Ops: apply_look applies a named look from the Looks catalog (prefer it for a mood: cinematic, teal-orange, warm-film, noir…), grade sets Lumetri values directly, " +
