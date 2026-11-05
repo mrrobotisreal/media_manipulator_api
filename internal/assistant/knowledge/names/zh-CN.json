@@ -419,6 +419,10 @@
   "name": "提取歌曲人声",
   "path": "/zh-cn/tools/isolate-vocals-from-song"
  },
+ "tools/medi": {
+  "name": "Medi",
+  "path": "/zh-cn/tools/medi"
+ },
  "tools/motion": {
   "name": "Motion",
   "path": "/zh-cn/tools/motion"

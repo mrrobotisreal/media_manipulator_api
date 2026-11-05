@@ -419,6 +419,10 @@
   "name": "Gesang aus einem Song isolieren",
   "path": "/de/tools/isolate-vocals-from-song"
  },
+ "tools/medi": {
+  "name": "Medi",
+  "path": "/de/tools/medi"
+ },
  "tools/motion": {
   "name": "Motion",
   "path": "/de/tools/motion"

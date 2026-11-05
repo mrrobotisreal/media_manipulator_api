@@ -17,7 +17,7 @@ Every plan runs the same tools on the same hardware. What changes is how much yo
 - Free account: Six times the daily volume, saved history, and Darkroom projects that survive a refresh.
 - Premium: 4K output, long files, priority on the GPU queue, and no ads.
 - Pro: Everything in Premium, much higher daily limits for operations, AI jobs and exports, and the largest Motion allowance.
-Rows compared on the page: Everyday jobs per day; AI jobs per day; Maximum file size; Maximum video length; Maximum output resolution; Saved Studio projects; GPU queue; Ads; Darkroom exports per day; Motion exports per day; Saved Motion projects; Saved Aperture projects; Largest Aperture export; Aperture photos per batch; Saved Aperture presets.
+Rows compared on the page: Everyday jobs per day; AI jobs per day; Maximum file size; Maximum video length; Maximum output resolution; Saved Studio projects; GPU queue; Ads; Darkroom exports per day; Motion exports per day; Saved Motion projects; Saved Aperture projects; Largest Aperture export; Aperture photos per batch; Saved Aperture presets; {{medi}} site guide; {{medi}} copilot edits per day.
 ### FAQ
 Q: What counts toward my daily allowance?
 A: Each plan has two separate daily allowances that add up. An everyday job is one conversion, compression, transcode or other standard tool. An AI job is one run of a tool that uses an AI model, such as transcription, upscaling or vocal removal. An AI job never uses up an everyday job, so you can use every AI job and still have every everyday job. Darkroom exports have their own allowance. Previews, probes and downloads are free — you are only charged for work the server actually does.

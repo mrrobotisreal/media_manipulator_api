@@ -791,6 +791,11 @@
   "slug": "isolate-vocals-from-song"
  },
  {
+  "route": "/tools/medi",
+  "kind": "tool",
+  "slug": "medi"
+ },
+ {
   "route": "/tools/motion",
   "kind": "tool",
   "slug": "motion"

@@ -419,6 +419,10 @@
   "name": "عزل الغناء من أغنية",
   "path": "/ar/tools/isolate-vocals-from-song"
  },
+ "tools/medi": {
+  "name": "Medi",
+  "path": "/ar/tools/medi"
+ },
  "tools/motion": {
   "name": "Motion",
   "path": "/ar/tools/motion"

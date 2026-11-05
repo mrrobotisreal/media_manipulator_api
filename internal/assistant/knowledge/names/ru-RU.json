@@ -419,6 +419,10 @@
   "name": "Выделение вокала из песни",
   "path": "/ru/tools/isolate-vocals-from-song"
  },
+ "tools/medi": {
+  "name": "Medi",
+  "path": "/ru/tools/medi"
+ },
  "tools/motion": {
   "name": "Motion",
   "path": "/ru/tools/motion"
