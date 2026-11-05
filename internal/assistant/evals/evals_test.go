@@ -274,7 +274,7 @@ func TestGradeCopilotOutputs(t *testing.T) {
 	c := Case{ID: "p", Surface: "photo", Requires: "photo", Message: "grey except red", Expect: Expect{
 		Ops: []string{"has_op(grey_except) || param(hsl, ranges.0.saturation) <= -50", "mentions_range(red) || has_layer(hsl)"},
 	}}
-	good := Output{Model: "m", Edits: []Edit{{Summary: "Grey except red", Ops: []map[string]any{{"op": "grey_except", "ranges": []any{"red"}}}}}}
+	good := Output{Model: "m", Edits: []Edit{{Summary: "Grey except red", Reason: "You asked to keep only the red", Ops: []map[string]any{{"op": "grey_except", "ranges": []any{"red"}}}}}}
 	if r := Grade(c, good); !r.Pass {
 		t.Errorf("good: %v", r.Failures)
 	}
@@ -407,7 +407,7 @@ func TestHarnessRefusesWithoutFlag(t *testing.T) {
 // The undo label is what the user reads, so the language check counts it.
 func TestGradeLanguageCountsEditLabel(t *testing.T) {
 	c := Case{ID: "ru-edit", Surface: "photo", Expect: Expect{Language: "ru"}}
-	out := Output{Model: "m", Edits: []Edit{{Summary: "Тёплый баланс белого", Ops: []map[string]any{{"op": "auto_tone"}}}}}
+	out := Output{Model: "m", Edits: []Edit{{Summary: "Тёплый баланс белого", Reason: "На фото заметный холодный оттенок 4500 K", Ops: []map[string]any{{"op": "auto_tone"}}}}}
 	if r := Grade(c, out); !r.Pass {
 		t.Fatalf("Russian undo label with empty text should pass the language check: %v", r.Failures)
 	}
@@ -422,5 +422,48 @@ func TestAnyOfReadsButtonLabels(t *testing.T) {
 	out := Output{Model: "m", Actions: []Action{{Kind: "suggest_action", Label: "Select the person", Params: map[string]any{"kind": "subject_mask"}}}}
 	if r := Grade(c, out); !r.Pass {
 		t.Fatalf("a subject_mask button should satisfy any_of: %v", r.Failures)
+	}
+}
+
+// MM114: reason_present and reason_cites run on every copilot answer that edited.
+func TestGradeReasons(t *testing.T) {
+	c := Case{ID: "r", Surface: "photo", Requires: "photo", Message: "Brighten it a bit", Expect: Expect{Ops: []string{"has_op(auto_tone)"}}}
+	ops := []map[string]any{{"op": "auto_tone"}}
+	edit := func(reason string) Output {
+		return Output{Model: "m", Edits: []Edit{{Summary: "Auto tone", Reason: reason, Ops: ops}}}
+	}
+	for _, ok := range []string{
+		"Shadows are clipped: 3 % of pixels sit at black",
+		"You asked to brighten it, so I lift the exposure",
+		"The histogram is bunched in the mids",
+		"Das Foto ist zu dunkel, du wolltest es heller",
+	} {
+		c.Message = "Brighten it a bit"
+		if strings.HasPrefix(ok, "Das") {
+			c.Message = "Mach es heller, das Foto ist zu dunkel"
+		}
+		if r := Grade(c, edit(ok)); !r.Pass {
+			t.Errorf("%q: %v", ok, r.Failures)
+		}
+	}
+	c.Message = "Brighten it a bit"
+	r := Grade(c, edit(""))
+	if r.Pass || !strings.Contains(strings.Join(r.Failures, ";"), "reason_present") {
+		t.Errorf("a missing reason must fail reason_present: %v", r.Failures)
+	}
+	r = Grade(c, edit("ok"))
+	if r.Pass || !strings.Contains(strings.Join(r.Failures, ";"), "reason_present") {
+		t.Errorf("a 2-character reason must fail reason_present: %v", r.Failures)
+	}
+	r = Grade(c, edit("Because it looks nicer this way"))
+	if r.Pass || !strings.Contains(strings.Join(r.Failures, ";"), "reason_cites") {
+		t.Errorf("a generic reason must fail reason_cites: %v", r.Failures)
+	}
+	if r := Grade(c, edit(strings.Repeat("x", 141))); r.Pass {
+		t.Error("a 141-character reason passed")
+	}
+	// No edit, no reason needed; the guide never edits.
+	if r := Grade(Case{ID: "g", Surface: "guide", Message: "hi"}, Output{Model: "m", Text: "Hello"}); len(ReasonProblems(Case{Surface: "guide"}, Output{Edits: []Edit{{}}})) != 0 || !r.Pass {
+		t.Errorf("guide: %v", r.Failures)
 	}
 }
