@@ -252,9 +252,10 @@ func TestApplyEditsOfferedOnlyWithSchema(t *testing.T) {
 	if got := names(ToolsFor("guide", ops)); got != "search_help,get_recipe,get_tool_page,navigate,open_tool,ask_user" {
 		t.Errorf("guide tools = %s", got)
 	}
-	// The MM104 build embeds no op schema at all.
-	if NewOpsValidator().Has("photo") {
-		t.Error("ops/schema/photo.json lands in MM108")
+	// MM108 embeds the photo op schema; studio (MM109) and vector (MM110) are still off.
+	emb := NewOpsValidator()
+	if !emb.Has("photo") || emb.Has("studio") || emb.Has("vector") {
+		t.Errorf("embedded op schemas: photo=%v studio=%v vector=%v", emb.Has("photo"), emb.Has("studio"), emb.Has("vector"))
 	}
 	// Every tool schema compiles and refuses extra properties.
 	for _, td := range ToolsFor("photo", ops) {
