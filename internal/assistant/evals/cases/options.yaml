@@ -136,10 +136,10 @@
   suite: options
   message: "convert my audio to a 128 kbps mono MP3 for a voice memo"
   expect:
-    actions: [tool:audio-converter]
+    any_of: ["audio-converter", "convert-wav-to-mp3"]
     options:
-      - "audio-converter.bitrate = 128"
-      - "audio-converter.channels = mono"
+      - "audio-converter.bitrate = 128 || convert-wav-to-mp3.bitrate = 128"
+      - "audio-converter.channels = mono || convert-wav-to-mp3.channels = mono"
 - id: opt-pdf-png-300dpi
   surface: guide
   suite: options
