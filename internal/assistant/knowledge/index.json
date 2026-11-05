@@ -3078,7 +3078,7 @@
    "video to mp3",
    "mp4 to mp3"
   ],
-  "tokens": 2130
+  "tokens": 2168
  },
  "tools/extract-frames-from-video": {
   "title": "Extract Frames from Video",
@@ -3492,7 +3492,7 @@
    "silence video",
    "strip audio from video"
   ],
-  "tokens": 1073
+  "tokens": 1096
  },
  "tools/remove-background-from-image": {
   "title": "Remove Background from Image",

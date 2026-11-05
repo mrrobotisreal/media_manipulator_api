@@ -352,7 +352,11 @@ abbonamento account limite animazione
 vídeo vídeos foto fotografia imagem imagens áudio música ficheiro arquivo formato comprimir converter editar cortar legendas preço
 custa plano assinatura subscrição conta limite animação
 video ảnh hình âm thanh nhạc tệp định dạng nén chuyển đổi chỉnh sửa cắt phụ đề giá gói đăng ký tài khoản giới hạn hoạt hình
-וידאו סרטון תמונה תמונות אודיו שמע מוזיקה קובץ פורמט לדחוס להמיר לערוך לחתוך כתוביות מחיר עולה תוכנית מנוי חשבון מגבלה אנימציה`
+וידאו סרטון תמונה תמונות אודיו שמע מוזיקה קובץ פורמט לדחוס להמיר לערוך לחתוך כתוביות מחיר עולה תוכנית מנוי חשבון מגבלה אנימציה
+תמלל לתמלל תמלול הקלטה הקלטות פודקאסט
+запись подкаст расшифровать расшифровка запис подкаст розшифрувати розшифровка aufnahme aufnahmen podcast transkribieren grabación podcast transcribir
+enregistrement podcast transcrire registrazione podcast trascrivere gravação podcast transcrever 録音 ポッドキャスト 文字起こし 书写 录音 播客 转文字 转写 錄音 播客 轉文字 轉寫
+녹음 팟캐스트 텍스트 변환 تسجيل بودكاست تفريغ نص रिकॉर्डिंग पॉडकास्ट टेक्स्ट ghi âm podcast chuyển thành văn bản`
 
 func (k *EmbeddedKnowledge) buildScope() {
 	k.scopeTerms = map[string]bool{}

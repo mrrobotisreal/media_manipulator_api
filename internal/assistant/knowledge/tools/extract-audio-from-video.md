@@ -77,6 +77,6 @@ A: Yes. Daily limits and file caps depend on the plan; quote them only from the 
 
 ## Routing
 
-When to send a visitor here: Send visitors here when they want the sound from a video saved as its own file: "get the mp3 from this video", "save the audio of my recording". Outputs MP3, WAV, M4A, AAC, FLAC or OGG from the first audio track.
+When to send a visitor here: Send visitors here when they want the sound from a video saved as its own file: "get the mp3 from this video", "rip the audio track out of my video", "pull the sound out of a clip", "save the audio of my recording". The video itself is left alone: this makes a new audio file. Outputs MP3, WAV, M4A, AAC, FLAC or OGG from the first audio track.
 When to send them elsewhere: It copies the sound as is; to improve it use Clean Voice Audio (clean-voice-audio) or Remove Background Noise (remove-background-noise). For the spoken words as text use Transcribe Video (transcribe-video), and for a silent video use Extract Video Without Audio (extract-video-only-from-video).
 Related tools: transcribe-video (get the words instead); clean-voice-audio (improve the voice); remove-background-noise (reduce noise); remove-vocals-from-song (strip vocals from music); video-trimmer (cut the video first)

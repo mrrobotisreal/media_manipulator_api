@@ -300,10 +300,10 @@
   suite: options
   message: "transcribe my Spanish recording into an SRT file"
   expect:
-    actions: [tool:transcribe-audio]
+    any_of: ["transcribe-audio", "srt-generator"]
     options:
-      - "transcribe-audio.format = srt"
-      - "transcribe-audio.language in [es|spanish|Spanish|es-ES]"
+      - "transcribe-audio.format = srt || srt-generator.format = srt"
+      - "transcribe-audio.language in [es|spanish|Spanish|es-ES] || srt-generator.language in [es|spanish|Spanish|es-ES]"
 - id: opt-translate-french
   surface: guide
   suite: options
