@@ -13,6 +13,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/handlers"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
@@ -57,6 +58,13 @@ func newAssistantHandler(appCtx context.Context, cfg *config.Config, store *tele
 	// the same service resolves them for the analyze tools and reads inspect_file.
 	files := handlers.NewAssistantFiles(cfg)
 	engine.Files, engine.Inspect = files, files
+	// MM116b: submit_job proposals are priced from the tier registry, today's counters and the
+	// shared GPU queue's snapshot. The estimator is read-only; Medi never starts a job.
+	jobs := &handlers.AssistantJobs{Registry: registry, GPUQueue: services.SharedGPUScheduler().Snapshot}
+	if st != nil {
+		jobs.Usage = store
+	}
+	engine.Jobs = jobs
 	h := handlers.NewAssistantHandler(ac, engine, st, registry, logger)
 	h.SetFiles(files)
 	h.SetDeletion(deleter)

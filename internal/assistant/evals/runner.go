@@ -127,7 +127,7 @@ func Filter(cases []Case, surface, id string, schemas map[string]bool) (run []Ca
 }
 
 // SuiteCases selects a suite: "adjust" (MM115) returns only the adjust cases,
-// "routing" and "options" (MM116a) the guide cases tagged with that suite, and
+// "routing", "options" (MM116a) and "jobs" (MM116b) the guide cases tagged with that suite, and
 // "" (the default) every other case, so the surface pass rates that --gate
 // compares never mix in a named suite.
 func SuiteCases(cases []Case, suite string) []Case {
@@ -137,7 +137,7 @@ func SuiteCases(cases []Case, suite string) []Case {
 		switch suite {
 		case "adjust":
 			in = c.Adjust != nil
-		case "routing", "options":
+		case "routing", "options", "jobs":
 			in = c.Suite == suite
 		default:
 			in = c.Adjust == nil && c.Suite == ""

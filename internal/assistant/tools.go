@@ -25,6 +25,10 @@ const (
 	ToolAnalyzeVideo   = "analyze_video"
 	// MM116a: the metadata of the file the user dropped into the guide.
 	ToolInspectFile = "inspect_file"
+	// MM116b: a client tool. It never starts anything: the server validates the
+	// options, prices the job and streams a confirm_job action; only the user's
+	// click on the card starts it, through the tool's own submit path.
+	ToolSubmitJob = "submit_job"
 )
 
 // serverTools run on the API inside the upstream loop; every other tool is a
@@ -113,7 +117,9 @@ type ClientAction struct {
 	Summary string
 	Reason  string
 	Ops     json.RawMessage
-	// navigate / open_tool / suggest_action
+	// Family is the option-schema family of a submit_job tool (it picks the quota metric and queue).
+	Family string
+	// navigate / open_tool / suggest_action / submit_job
 	Kind   string
 	Label  string
 	Params map[string]any
@@ -222,6 +228,40 @@ func validateClientCall(call ToolCall, surface string, tools []ToolDef, ops *Ops
 			if to == nil {
 				return a, fmt.Errorf("tool %q has no option schema: open it without options", args.Slug)
 			}
+			if err := to.Validate(args.Options); err != nil {
+				return a, err
+			}
+			var parsed map[string]any
+			_ = json.Unmarshal(args.Options, &parsed)
+			a.Params["options"] = parsed
+		}
+	case ToolSubmitJob:
+		var args struct {
+			Slug, Label string
+			Options     json.RawMessage
+		}
+		_ = json.Unmarshal([]byte(call.Arguments), &args)
+		entry, ok := routes.Tool(args.Slug)
+		if !ok {
+			return a, fmt.Errorf("unknown tool %q: use a tool slug from the help documents", args.Slug)
+		}
+		var to *ToolOptions
+		if opts != nil {
+			to, _ = opts.ToolOptions(args.Slug)
+		}
+		if to == nil {
+			return a, fmt.Errorf("tool %q has no option schema: use open_tool instead", args.Slug)
+		}
+		if to.None {
+			return a, fmt.Errorf("tool %q cannot be run from the guide (%s): use open_tool instead", args.Slug, to.Reason)
+		}
+		a.Kind, a.Family, a.Label = "confirm_job", to.Family, clip(firstNonEmpty(args.Label, args.Slug), maxLabelChars)
+		a.Params = map[string]any{"tool": args.Slug}
+		if entry.Route != "" {
+			a.Params["route"] = entry.Route
+		}
+		if len(args.Options) > 0 && string(args.Options) != "null" {
+			// The same check as open_tool.options, so a proposal can never carry values the page would refuse.
 			if err := to.Validate(args.Options); err != nil {
 				return a, err
 			}
@@ -352,4 +392,12 @@ func FileToolsFor() []ToolDef {
 		{Name: ToolAnalyzeAudio, Description: "Measure the user's uploaded audio: integrated and short-term loudness (LUFS), true peak, loudness range, noise floor, clipping.", Parameters: arg},
 		{Name: ToolAnalyzeVideo, Description: "Measure the user's uploaded video: size, duration, frame rate, scene brightness, black frames and the audio loudness.", Parameters: arg},
 	}
+}
+
+// SubmitJobTool is the submit_job tool definition (MM116b). The guide offers it
+// only when the engine has a JobEstimator. It proposes; it cannot run anything.
+func SubmitJobTool() ToolDef {
+	return ToolDef{Name: ToolSubmitJob,
+		Description: "Prepare a job on ONE tool for the user to confirm. It shows a confirmation card with the settings, the queue and the daily allowance it would use; nothing runs until the user presses the card's button, and you can never start a job yourself. Use it when the user asks you to run, start or do the job (\"just run it\"). Options follow the same rules as open_tool.",
+		Parameters:  schema(`{"type":"object","properties":{"slug":{"type":"string","pattern":"^[a-z0-9\\-]+$","maxLength":120},"options":{"type":"object","description":"Form values for this tool, from its Options list."},"label":{"type":"string","maxLength":60}},"required":["slug"],"additionalProperties":false}`)}
 }

@@ -239,6 +239,9 @@ type asstRig struct {
 
 const asstSchema = `{"type":"array","minItems":1,"items":{"type":"object","required":["op"],"properties":{"op":{"enum":["grey_except"]},"ranges":{"type":"array"}},"additionalProperties":false}}`
 
+// asstEngineHook lets one test adjust the engine before the handler is built (MM116b).
+var asstEngineHook func(*assistant.Engine, *asstStore)
+
 func newAsstRig(t *testing.T, mutate func(*config.Config), rounds ...asstRound) *asstRig {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -256,6 +259,9 @@ func newAsstRig(t *testing.T, mutate func(*config.Config), rounds ...asstRound) 
 		Ops: assistant.NewOpsValidatorFrom(map[string][]byte{"photo": []byte(asstSchema)}), Store: st,
 		Spend: assistant.NewSpendCap(cfg.Assistant.DailySpendCapUSD, st, nil), Cfg: cfg.Assistant,
 		Background: func(f func()) { f() }}
+	if asstEngineHook != nil {
+		asstEngineHook(engine, st)
+	}
 	h := NewAssistantHandler(cfg.Assistant, engine, st, registry, quiet)
 	rig := &asstRig{st: st, p: p, cfg: cfg.Assistant, ledg: installFakeLedger(t, nil)}
 	r := gin.New()
