@@ -131,7 +131,7 @@ func TestMetricsInLiveBlockAndPersona(t *testing.T) {
 	if !strings.Contains(sys, "Meters of the current preview") || !strings.Contains(sys, "meanLuma 0.2") {
 		t.Errorf("block 2 lacks the meters:\n%s", sys)
 	}
-	if !strings.Contains(persona, "Numbers first") || !strings.Contains(persona, "Never adjust without citing a figure") {
+	if !strings.Contains(persona, "Numbers first") || !strings.Contains(persona, "never adjust without citing a figure") {
 		t.Error("persona lacks the cite-a-metric rule")
 	}
 }

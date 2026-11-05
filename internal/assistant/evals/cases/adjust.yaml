@@ -123,7 +123,7 @@
   requires: photo
   fixture_doc: photo/blank.json
   frame: photo/flat-dull.jpg
-  message: "Make it dark and moody"
+  message: "Make it dark and moody, aim for a mean luma around 0.3"
   adjust:
     before: {meanLuma: 0.5, shadowsClipped: 0.0, highlightsClipped: 0.01}
     after:
@@ -215,7 +215,7 @@
   surface: studio
   requires: studio
   fixture_doc: studio/two-clips.txt
-  message: "Make the whole video warmer"
+  message: "Make the whole video clearly warmer, around 0.15 on the warmth meter"
   adjust:
     before: {warmth: 0.0, meanLuma: 0.45}
     after:
