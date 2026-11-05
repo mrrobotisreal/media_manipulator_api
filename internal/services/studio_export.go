@@ -18,10 +18,11 @@ import (
 // already in range.
 //
 // SHARED TRANSFORM SPEC (mirrors lib/studio/glCompositor.ts verbatim):
-//   crop → fit (force_original_aspect_ratio=decrease into W*scale × H*scale) →
-//   center at (W/2 + x*W, H/2 + y*H) → rotate clockwise by rotationDeg.
-//   Fragment order: eq(legacy) → lumetri → lut3d → format=yuva → chromakey →
-//   opacity → drawtext → fade → rotate, then overlay/blend.
+//
+//	crop → fit (force_original_aspect_ratio=decrease into W*scale × H*scale) →
+//	center at (W/2 + x*W, H/2 + y*H) → rotate clockwise by rotationDeg.
+//	Fragment order: eq(legacy) → lumetri → lut3d → format=yuva → chromakey →
+//	opacity → drawtext → fade → rotate, then overlay/blend.
 //
 // StudioExportService renders an EDL to a single MP4 via NVENC on the Content
 // Studio GPU. The arg slice is built by hand (no Go ffmpeg binding), mirroring
@@ -221,7 +222,7 @@ type StudioExportPlan struct {
 	FPS      float64
 	Duration float64
 	// EDL v2.
-	Ducking  *StudioDucking
+	Ducking *StudioDucking
 	// AudioTracks (part 19): the tracks with an active mixer stage. MasterGain
 	// is the project master fader (nil = unity), applied after ducking and
 	// before loudnorm.
@@ -236,8 +237,13 @@ type StudioExportPlan struct {
 	CaptionsASSPath string
 	// Format (part 20) selects the output: "" / "h264" (MP4), "hevc" (MP4), or
 	// the audio-only "mp3" / "wav". The video graph is skipped entirely for the
-	// audio formats (see IsAudioFormat).
+	// audio formats (see IsAudioFormat). Superseded by Output when that is set.
 	Format string
+	// Output (MM118) is the resolved container × video × audio choice from the
+	// output table (studio_outputs.go). nil = derive it from the legacy Format
+	// (cmd/parity-render and every pre-MM118 caller), which yields the exact
+	// pre-MM118 args (TestStudioExportLegacyArgsGolden).
+	Output *StudioOutput
 	// OutHeight (part 20) is the requested OUTPUT height in pixels; 0 = the
 	// canvas (Height). Applied as the LAST video filter, after caption burn-in,
 	// so the composed frame is scaled as a whole (aspect preserved).
@@ -255,8 +261,13 @@ type StudioExportPlan struct {
 type StudioRenderStats struct {
 	// Encoder in the analytics vocabulary: "nvenc" | "x264" | "x265" | "audio".
 	Encoder string
-	// Format is the plan's output format (part 20): h264 | hevc | mp3 | wav.
+	// Format is the plan's derived output label (part 20, MM118): the legacy
+	// h264 | hevc | mp3 | wav, else <container>_<video>_<audio>.
 	Format string
+	// Container / VideoCodec / AudioCodec are the label's parts (MM118).
+	Container  string
+	VideoCodec string
+	AudioCodec string
 	// OutHeight is the requested output height (0 = canvas).
 	OutHeight int
 	// FilterCount is the number of statements in the -filter_complex graph,
@@ -269,13 +280,13 @@ type StudioRenderStats struct {
 // telemetry wants the same encoder/complexity dimensions as success.
 func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan StudioExportPlan, quality, outputPath string) (StudioRenderStats, error) {
 	assertStudioSendCmdSupport() // one-time ffmpeg ≥ 4.4 check, log-only (part 15)
-	format := NormalizeExportFormat(plan.Format)
-	stats := StudioRenderStats{Format: format, OutHeight: plan.OutHeight}
+	out := plan.output()
+	stats := StudioRenderStats{Format: out.Label(), Container: out.Container, VideoCodec: out.VideoCodec, AudioCodec: out.AudioCodec, OutHeight: plan.OutHeight}
 	var encoder string
 	switch {
-	case IsAudioFormat(format):
+	case out.AudioOnly():
 		encoder = "audio"
-	case format == "hevc":
+	case out.VideoCodec == StudioVideoHEVC:
 		enc, err := studioHEVCEncoder(s.cfg)
 		if err != nil {
 			stats.Encoder = "x265"
@@ -288,7 +299,7 @@ func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan 
 	args := buildMultiTrackExportArgs(plan, encoder, quality, s.cfg.ContentStudioFontFile, s.cfg.ContentStudioFontsDir, outputPath)
 	stats.Encoder = encoderAnalyticsName(encoder)
 	stats.FilterCount = countFilterStatements(args)
-	if IsAudioFormat(format) && !argsHaveAudioMap(args) {
+	if out.AudioOnly() && !argsHaveAudioMap(args) {
 		return stats, fmt.Errorf("project has no audio to export")
 	}
 	return stats, runStudioFFmpeg(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, plan.Duration, args...)
@@ -381,8 +392,8 @@ func buildAudioMixArgs(plan StudioExportPlan, outputPath string) (args []string,
 // (title font resolution consults the fonts directory on disk, falling back to
 // fontFile — pass a fixed fontsDir in tests).
 func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile, fontsDir, outputPath string) []string {
-	format := NormalizeExportFormat(plan.Format)
-	audioOnly := IsAudioFormat(format)
+	out := plan.output()
+	audioOnly := out.AudioOnly()
 	if audioOnly {
 		// No video graph at all: drop every video seg and the blank canvas so
 		// buildExportGraph produces the audio section only (and the keyframe
@@ -409,27 +420,32 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 		args = append(args, "-map", "["+audioOut+"]")
 	}
 	if videoOut != "" {
-		if format == StudioFormatHEVC {
-			args = append(args, hevcEncodeArgs(encoder, quality)...)
-		} else {
-			args = append(args, h264EncodeArgs(encoder, quality)...)
-		}
+		args = append(args, videoEncodeArgs(out, encoder, quality)...)
 	}
 	if audioOnly {
-		switch format {
-		case StudioFormatWAV:
-			args = append(args, "-vn", "-c:a", "pcm_s16le")
-		default: // mp3
-			args = append(args, "-vn", "-c:a", "libmp3lame", "-b:a", "192k")
-		}
+		args = append(args, "-vn")
+		args = append(args, audioEncodeArgs(out)...)
 		args = append(args, "-t", durStr, outputPath)
 		return args
 	}
 	if audioOut != "" {
-		args = append(args, "-c:a", "aac", "-b:a", "192k")
+		args = append(args, audioEncodeArgs(out)...)
 	}
-	args = append(args, "-t", durStr, "-movflags", "+faststart", outputPath)
+	args = append(args, "-t", durStr)
+	if out.Faststart() {
+		args = append(args, "-movflags", "+faststart")
+	}
+	args = append(args, outputPath)
 	return args
+}
+
+// output is the plan's resolved output: Output when the handler set it, else
+// the legacy Format's row.
+func (p StudioExportPlan) output() StudioOutput {
+	if p.Output != nil {
+		return *p.Output
+	}
+	return LegacyStudioOutput(p.Format)
 }
 
 // buildFrameExportArgs builds the single-frame PNG render: the same graph as
@@ -1779,23 +1795,27 @@ const (
 )
 
 // NormalizeExportFormat maps "" (the pre-part-20 request) and anything unknown
-// to h264. The handler rejects unknown values before they get here.
+// to h264. The handler rejects unknown values before they get here. MM118: the
+// legacy names are the output table's LegacyFormats keys; a derived label of
+// a legacy combination normalizes to it, anything else to h264 as before.
 func NormalizeExportFormat(f string) string {
-	switch strings.ToLower(strings.TrimSpace(f)) {
-	case StudioFormatHEVC:
-		return StudioFormatHEVC
-	case StudioFormatMP3:
-		return StudioFormatMP3
-	case StudioFormatWAV:
-		return StudioFormatWAV
+	f = strings.ToLower(strings.TrimSpace(f))
+	if _, ok := studioOutputTable.LegacyFormats[f]; ok {
+		return f
 	}
 	return StudioFormatH264
 }
 
-// IsAudioFormat reports the audio-only formats (no video graph).
+// IsAudioFormat reports the audio-only formats (no video graph): a legacy
+// format or derived label whose container is audio-only in the output table.
 func IsAudioFormat(f string) bool {
-	f = NormalizeExportFormat(f)
-	return f == StudioFormatMP3 || f == StudioFormatWAV
+	f = strings.ToLower(strings.TrimSpace(f))
+	for _, c := range studioOutputTable.Containers {
+		if c.AudioOnly && (f == c.Key || strings.HasPrefix(f, c.Key+"_")) {
+			return true
+		}
+	}
+	return false
 }
 
 // OutputDimensions resolves the rendered frame size for a requested output

@@ -70,6 +70,13 @@ type Limits struct {
 	MaxLadderHeight int `json:"maxLadderHeight"`
 	// StudioProjects is the saved-project cap; -1 means unlimited.
 	StudioProjects int `json:"studioProjects"`
+	// StudioFormats (MM118) is the Darkroom output token capability set
+	// (containers + codecs, TIER_<T>_STUDIO_FORMATS), cumulative up the ladder
+	// like VectorFormats. StudioAdvanced (TIER_<T>_STUDIO_ADVANCED) unlocks the
+	// Advanced picker: a combination no preset names, a non-default audio
+	// bitrate or mono.
+	StudioFormats  StudioFormatSet `json:"studioFormats"`
+	StudioAdvanced bool            `json:"studioAdvanced"`
 	// StudioVersionAutoKeep is how many automatic version-history checkpoints
 	// are retained per project (manual versions are never pruned). Uniform
 	// across tiers today; a possible future monetization lever (ADR ws/0001).
@@ -299,6 +306,31 @@ func New(cfg *config.Config) *Registry {
 	pro.VectorFormats = pro.VectorFormats.Union(premium.VectorFormats)
 	r.limits[TierPro] = pro
 
+	// Darkroom outputs (MM118): the same cumulative ladder as Motion's formats,
+	// and Advanced once granted stays granted up the ladder.
+	for t, row := range map[Tier]struct {
+		formats  []string
+		advanced bool
+	}{
+		TierAnonymous: {cfg.TierAnonStudioFormats, cfg.TierAnonStudioAdvanced},
+		TierFree:      {cfg.TierFreeStudioFormats, cfg.TierFreeStudioAdvanced},
+		TierPremium:   {cfg.TierPremiumStudioFormats, cfg.TierPremiumStudioAdvanced},
+		TierPro:       {cfg.TierProStudioFormats, cfg.TierProStudioAdvanced},
+	} {
+		l := r.limits[t]
+		l.StudioFormats = NewStudioFormatSet(row.formats...)
+		l.StudioAdvanced = row.advanced
+		r.limits[t] = l
+	}
+	prev := r.limits[TierAnonymous]
+	for _, t := range []Tier{TierFree, TierPremium, TierPro} {
+		l := r.limits[t]
+		l.StudioFormats = l.StudioFormats.Union(prev.StudioFormats)
+		l.StudioAdvanced = l.StudioAdvanced || prev.StudioAdvanced
+		r.limits[t] = l
+		prev = l
+	}
+
 	// Video summary (MM74): frame budgets per tier, deep synthesis for Pro.
 	// Operator inherits Pro's row below.
 	for t, frames := range map[Tier]int{
@@ -353,6 +385,9 @@ func New(cfg *config.Config) *Registry {
 	// deployment ceilings only.
 	operator.VectorExportsPerDay = Unlimited
 	operator.VectorFormats = NewFormatSet(AllVectorFormats()...)
+	// Darkroom outputs (MM118): every token and the Advanced picker.
+	operator.StudioFormats = NewStudioFormatSet(AllStudioFormats()...)
+	operator.StudioAdvanced = true
 	operator.VectorProjects = Unlimited
 	// Aperture (MM95): derived from Pro, no cap on saved projects.
 	operator.PhotoProjects = Unlimited
