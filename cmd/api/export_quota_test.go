@@ -11,6 +11,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/handlers"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
 
@@ -98,6 +99,57 @@ func TestRefusedExportDoesNotSpendQuota(t *testing.T) {
 	height = 1080
 	if w := post(); w.Code != http.StatusOK {
 		t.Fatalf("allowed export: got %d", w.Code)
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.counts) != 1 {
+		t.Fatalf("allowed export must count once: %v", store.counts)
+	}
+}
+
+// MM118: an export whose output the plan lacks (anonymous asking for HEVC) is a
+// 403 format_not_in_plan through the real StudioExportGate and does NOT spend
+// the export allowance; the same caller's H.264 export does.
+func TestFormatNotInPlanDoesNotSpendQuota(t *testing.T) {
+	cfg := config.Load()
+	store := &stubQuotaStore{}
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := r.Group("/api")
+	reg := tiers.New(cfg)
+	api.Use(middleware.TierContext(middleware.TierConfig{Store: store, Registry: reg}, true))
+	api.Use(quotaDispatcher(middleware.QuotaConfig{
+		Store: store, Registry: reg, Enabled: true, IPHashSecret: quotaIPSalt[:],
+	}, map[string]gin.HandlerFunc{
+		"export": handlers.StudioExportGate(reg, func(c *gin.Context) (handlers.StudioExportFacts, bool) {
+			var body struct{ Format string }
+			_ = c.ShouldBindJSON(&body)
+			out, err := services.ResolveStudioOutput(services.StudioOutputRequest{Format: body.Format})
+			return handlers.StudioExportFacts{Height: 1080, Output: out, OutputOK: err == nil}, true
+		}),
+	}))
+	api.POST("/studio/projects/:id/export", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	post := func(body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/studio/projects/p1/export", strings.NewReader(body))
+		req.Header.Set("X-MM-Session-ID", "s-format")
+		r.ServeHTTP(w, req)
+		return w
+	}
+	w := post(`{"format":"hevc"}`)
+	for _, want := range []string{`"error":"format_not_in_plan"`, `"limitKey":"studio_format"`, `"required":"free"`, `"option":"hevc"`, `"upgradePath":"signup"`} {
+		if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), want) {
+			t.Fatalf("want 403 with %s, got %d %s", want, w.Code, w.Body.String())
+		}
+	}
+	store.mu.Lock()
+	n := len(store.counts)
+	store.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("refused export spent quota: %v", store.counts)
+	}
+	if w := post(`{"format":"h264"}`); w.Code != http.StatusOK {
+		t.Fatalf("allowed export: got %d %s", w.Code, w.Body.String())
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()

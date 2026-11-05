@@ -1,6 +1,7 @@
 package services
 
 import (
+	"math"
 	"path/filepath"
 	"strings"
 	"time"
@@ -135,9 +136,20 @@ func (jm *JobManager) EmitStudioRender(
 		"encoder":           stats.Encoder,
 		"filterCountBucket": analyticsemit.FilterCountBucket(stats.FilterCount),
 	}
-	// Part 20: the output format (h264|hevc|mp3|wav), a closed enum.
+	// Part 20 / MM118: the derived output label (h264|hevc|mp3|wav or
+	// <container>_<video>_<audio>) and its parts, closed enums from the output
+	// table, plus the wall-clock render time so per-format cost can be weighed
+	// from data (design §3.5).
 	if stats.Format != "" {
 		props["format"] = stats.Format
+	}
+	if stats.Container != "" {
+		props["container"] = stats.Container
+		props["videoCodec"] = stats.VideoCodec
+		props["audioCodec"] = stats.AudioCodec
+	}
+	if renderSeconds >= 0 {
+		props["renderSeconds"] = int(math.Round(renderSeconds))
 	}
 	if timelineSeconds > 0 && renderSeconds >= 0 {
 		props["durationRatioBucket"] = analyticsemit.RatioBucket(renderSeconds / timelineSeconds)

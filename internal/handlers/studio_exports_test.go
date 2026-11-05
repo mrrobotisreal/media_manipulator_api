@@ -23,7 +23,7 @@ func TestValidateExportRequest(t *testing.T) {
 	}
 	for _, r := range ok {
 		r := r
-		if msg := validateExportRequest(&r); msg != "" {
+		if _, msg := validateExportRequest(&r); msg != "" {
 			t.Errorf("%+v rejected: %s", r, msg)
 		}
 	}
@@ -32,12 +32,12 @@ func TestValidateExportRequest(t *testing.T) {
 	}
 	for _, r := range bad {
 		r := r
-		if msg := validateExportRequest(&r); msg == "" {
+		if _, msg := validateExportRequest(&r); msg == "" {
 			t.Errorf("%+v should be rejected", r)
 		}
 	}
 	r := models.StudioExportRequest{Format: " HEVC ", CaptionsMode: " SIDECAR "}
-	_ = validateExportRequest(&r)
+	_, _ = validateExportRequest(&r)
 	if r.Format != "hevc" || r.CaptionsMode != "sidecar" {
 		t.Errorf("not normalized: %+v", r)
 	}

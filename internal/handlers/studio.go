@@ -26,6 +26,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/retention"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
 
 // StudioHandler owns the Content Studio endpoints (/api/studio/*). It embeds
@@ -53,7 +54,13 @@ type StudioHandler struct {
 	onDelete     func(scope string)
 	// MM71: proxy rebuilds in flight, one per asset.
 	rebuilds proxyRebuildRegistry
+	// MM118: the tier registry for the output plan gate's `required` and the
+	// export-options route (SetTierRegistry). nil = the table's default ladder.
+	tierRegistry *tiers.Registry
 }
+
+// SetTierRegistry attaches the tier registry (MM118 output gating).
+func (h *StudioHandler) SetTierRegistry(r *tiers.Registry) { h.tierRegistry = r }
 
 // NewStudioHandler mirrors NewConversionHandler's construction: it derives the
 // presign client + the studio sub-services from the shared deps so callers only
@@ -123,7 +130,9 @@ func RegisterStudioRoutes(r gin.IRouter, h *StudioHandler) {
 	studio.GET("/assets/:id/peaks", h.ServePeaks)
 	// Raw original passthrough (used to fetch .cube LUT assets for the compositor).
 	studio.GET("/assets/:id/file", h.ServeFile)
-	// Export the EDL to MP4 via NVENC on the dedicated GPU.
+	// Export the EDL via NVENC on the dedicated GPU (MM118: MP4, MOV, MKV,
+	// MP3 or WAV from the output table; GET /export-options describes it).
+	studio.GET("/export-options", h.ExportOptions)
 	studio.POST("/projects/:id/export", h.ExportProject)
 	// Export depth (part 20): persistent history, render-again with the stored
 	// options, and a synchronous single-frame PNG.
@@ -170,33 +179,48 @@ func (h *StudioHandler) owner(c *gin.Context) services.StudioOwner {
 // tier cap applies to. Audio formats render no video, so they are never
 // refused. A render-again request takes its options from the stored export row.
 func (h *StudioHandler) ExportHeightLookup(c *gin.Context) (int, bool) {
+	facts, ok := h.ExportFactsLookup(c)
+	return facts.Height, ok
+}
+
+// ExportFactsLookup is ExportHeightLookup plus the request's resolved output
+// (MM118), for StudioExportGate. A render-again request takes both from the
+// stored export row (its output parts as explicit fields).
+func (h *StudioHandler) ExportFactsLookup(c *gin.Context) (StudioExportFacts, bool) {
 	if h == nil || h.repo == nil || !h.repo.Enabled() {
-		return 0, false
+		return StudioExportFacts{}, false
 	}
 	projectID := strings.TrimSpace(c.Param("id"))
 	if projectID == "" {
-		return 0, false
+		return StudioExportFacts{}, false
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 	if ok, err := h.repo.OwnsProject(ctx, projectID, h.owner(c)); err != nil || !ok {
-		return 0, false
+		return StudioExportFacts{}, false
 	}
 	project, err := h.repo.GetProject(ctx, projectID)
 	if err != nil || project == nil {
-		return 0, false
+		return StudioExportFacts{}, false
 	}
 	var req models.StudioExportRequest
 	if exportID := strings.TrimSpace(c.Param("exportId")); exportID != "" {
 		stored, err := h.repo.GetExport(ctx, projectID, exportID)
 		if err != nil {
-			return 0, false
+			return StudioExportFacts{}, false
 		}
-		req = models.StudioExportRequest{Format: stored.Format, Resolution: stored.Resolution}
+		req = storedExportRequest(stored)
 	} else {
 		req = peekExportRequest(c)
 	}
-	return effectiveExportHeight(req, project.Height), true
+	facts := StudioExportFacts{Height: effectiveExportHeight(req, project.Height)}
+	facts.Output, facts.OutputOK = resolveOutputOK(req)
+	return facts, true
+}
+
+func resolveOutputOK(req models.StudioExportRequest) (services.StudioOutput, bool) {
+	out, err := services.ResolveStudioOutput(exportOutputRequest(req))
+	return out, err == nil
 }
 
 // requireProjectAccess is the gate on every project-scoped endpoint. It answers
@@ -1280,8 +1304,15 @@ func (h *StudioHandler) launchExport(c *gin.Context, projectID string, req model
 	if !h.requireProjectAccess(c, projectID) {
 		return
 	}
-	if msg := validateExportRequest(&req); msg != "" {
+	output, msg := validateExportRequest(&req)
+	if msg != "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+	// MM118 output plan: the quota dispatcher already ran StudioExportGate;
+	// this is the authoritative check (render-again replays land here too, so a
+	// downgraded account cannot replay an output its plan lost).
+	if refuseStudioFormat(c, h.tierRegistry, output) {
 		return
 	}
 	project, err := h.repo.GetProject(loadCtx, projectID)
@@ -1315,8 +1346,8 @@ func (h *StudioHandler) launchExport(c *gin.Context, projectID string, req model
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no clip to export"})
 		return
 	}
-	format := services.NormalizeExportFormat(req.Format)
-	if services.IsAudioFormat(format) {
+	format := output.Label()
+	if output.AudioOnly() {
 		refs = services.AudioOnlyRefs(refs)
 		if len(refs) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no audio to export"})
@@ -1333,7 +1364,7 @@ func (h *StudioHandler) launchExport(c *gin.Context, projectID string, req model
 
 	exportCfg := buildStudioExportConfig(project, assetByID, req)
 	quality := normalizeExportQuality(req.Preset)
-	ext, mime, mediaKind := exportContainer(format)
+	ext, mime, mediaKind := output.File()
 	baseName := safeFilename(firstNonEmpty(req.FileName, project.Name, "export")) + ext
 
 	job := h.jobManager.CreateJob(
@@ -1365,16 +1396,24 @@ func (h *StudioHandler) launchExport(c *gin.Context, projectID string, req model
 	// History row, inserted before the job runs so a page leave (or an API
 	// restart) can never lose track of a render. Best-effort: the render must
 	// not fail because bookkeeping did.
-	exportCaptions := effectiveCaptionsMode(req.CaptionsMode, len(exportCfg.captions) > 0 && !services.IsAudioFormat(format))
-	if _, iErr := h.repo.InsertExport(loadCtx, models.StudioExport{
+	exportCaptions := effectiveCaptionsMode(req.CaptionsMode, len(exportCfg.captions) > 0 && !output.AudioOnly())
+	row := models.StudioExport{
 		ProjectID: projectID, JobID: job.ID, FileName: strings.TrimSuffix(baseName, ext), Preset: quality,
 		Format: format, Resolution: req.Resolution, CaptionsMode: exportCaptions, Loudness: exportCfg.loudness,
-	}); iErr != nil {
+		Container: output.Container, VideoCodec: output.VideoCodec, AudioCodec: output.AudioCodec,
+	}
+	if output.AudioBitrate > 0 {
+		b := output.AudioBitrate
+		row.AudioBitrate = &b
+	}
+	ch := output.AudioChannels
+	row.AudioChannels = &ch
+	if _, iErr := h.repo.InsertExport(loadCtx, row); iErr != nil {
 		log.Printf("studio export: history row failed for job %s: %v", job.ID, iErr)
 	}
 
 	spec := studioRenderSpec{
-		format: format, outHeight: req.Resolution,
+		format: format, output: output, outHeight: req.Resolution,
 		width: project.Width, height: project.Height, fps: project.FPS, duration: duration, quality: quality,
 	}
 	go h.runExportJob(job.ID, refs, exportCfg, spec, outputPath)
@@ -1384,8 +1423,9 @@ func (h *StudioHandler) launchExport(c *gin.Context, projectID string, req model
 
 // studioRenderSpec is the geometry + format a render job needs beyond the refs.
 type studioRenderSpec struct {
-	format    string
-	outHeight int // requested output height; 0 = canvas
+	format    string                // the derived label (history, analytics)
+	output    services.StudioOutput // MM118: what the args builder renders
+	outHeight int                   // requested output height; 0 = canvas
 	width     int
 	height    int
 	fps       float64
@@ -1467,6 +1507,8 @@ func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef
 		LocalByKey: localByKey, LutPaths: lutLocalByAssetID,
 	})
 	plan.Format = spec.format
+	output := spec.output
+	plan.Output = &output
 	plan.OutHeight = spec.outHeight
 
 	// Caption burn-in: write the .ass into the job output dir and point the plan
@@ -1474,7 +1516,7 @@ func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef
 	// Authored at the CANVAS size; the output-resolution scale is applied after
 	// the burn, so captions scale with the frame. Audio-only formats and the
 	// none/sidecar modes have exportCfg.captions empty.
-	if len(exportCfg.captions) > 0 && !services.IsAudioFormat(spec.format) {
+	if len(exportCfg.captions) > 0 && !spec.output.AudioOnly() {
 		assPath := filepath.Join(filepath.Dir(outputPath), "captions.ass")
 		ass := services.BuildASS(exportCfg.captions, exportCfg.captionStyle, width, height, "")
 		if err := os.WriteFile(assPath, []byte(ass), 0o644); err != nil {

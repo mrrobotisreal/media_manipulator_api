@@ -591,10 +591,23 @@ const (
 // enabled), which is also what the CreaTV embed sends.
 type StudioExportRequest struct {
 	FileName string `json:"fileName,omitempty"`
-	Preset   string `json:"preset,omitempty"`   // quality preset key
+	Preset   string `json:"preset,omitempty"`   // QUALITY preset key: low | medium | high
 	Loudness string `json:"loudness,omitempty"` // '' | streaming | podcast | broadcast
-	// Format: '' (= h264) | h264 | hevc | mp3 | wav.
+	// Format: '' (= h264) | h264 | hevc | mp3 | wav. Since MM118 an ALIAS for
+	// the output fields below (the CreaTV embed keeps sending it or nothing);
+	// an alias plus a conflicting explicit field is a 400.
 	Format string `json:"format,omitempty"`
+	// MM118 output model (the table in services/studio_outputs.go). OutputPreset is
+	// an output preset key (mp4_h264, mov_hevc, ...; distinct from the quality
+	// `preset` above). Container / VideoCodec / AudioCodec choose the
+	// combination; AudioBitrate (kbps, from the codec's closed list, 0 = its
+	// default) and AudioChannels (1 | 2, 0 = stereo) are Advanced settings.
+	OutputPreset  string `json:"outputPreset,omitempty"`
+	Container     string `json:"container,omitempty"`
+	VideoCodec    string `json:"videoCodec,omitempty"`
+	AudioCodec    string `json:"audioCodec,omitempty"`
+	AudioBitrate  int    `json:"audioBitrate,omitempty"`
+	AudioChannels int    `json:"audioChannels,omitempty"`
 	// Resolution is the OUTPUT height in pixels: 0 (= the project's canvas) or
 	// one of the ladder rungs 720 | 1080 | 1440 | 2160. Gated by the tier's
 	// MaxOutputHeight exactly like the canvas height (tiers.EnforceOutputHeight).
@@ -605,19 +618,26 @@ type StudioExportRequest struct {
 
 // StudioExport is one studio_exports row as the Exports panel sees it.
 type StudioExport struct {
-	ID           string     `json:"id"`
-	ProjectID    string     `json:"projectId"`
-	JobID        string     `json:"jobId"`
-	FileName     string     `json:"fileName,omitempty"`
-	Preset       string     `json:"preset,omitempty"`
-	Format       string     `json:"format"`
-	Resolution   int        `json:"resolution"`
-	CaptionsMode string     `json:"captionsMode"`
-	Loudness     string     `json:"loudness,omitempty"`
-	Status       string     `json:"status"`
-	Error        string     `json:"error,omitempty"` // coarse error class
-	CreatedAt    time.Time  `json:"createdAt"`
-	CompletedAt  *time.Time `json:"completedAt,omitempty"`
+	ID        string `json:"id"`
+	ProjectID string `json:"projectId"`
+	JobID     string `json:"jobId"`
+	FileName  string `json:"fileName,omitempty"`
+	Preset    string `json:"preset,omitempty"`
+	Format    string `json:"format"`
+	// MM118: the output parts of `format` (the derived label). Empty on rows
+	// written before the migration; the API fills them from `format` on read.
+	Container     string     `json:"container"`
+	VideoCodec    string     `json:"videoCodec"`
+	AudioCodec    string     `json:"audioCodec"`
+	AudioBitrate  *int       `json:"audioBitrate,omitempty"`
+	AudioChannels *int       `json:"audioChannels,omitempty"`
+	Resolution    int        `json:"resolution"`
+	CaptionsMode  string     `json:"captionsMode"`
+	Loudness      string     `json:"loudness,omitempty"`
+	Status        string     `json:"status"`
+	Error         string     `json:"error,omitempty"` // coarse error class
+	CreatedAt     time.Time  `json:"createdAt"`
+	CompletedAt   *time.Time `json:"completedAt,omitempty"`
 	// Available is true while the rendered artifact is still on disk (i.e.
 	// inside its retention window). Computed on read, never stored.
 	Available bool `json:"available"`
