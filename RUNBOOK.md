@@ -746,6 +746,39 @@ raster caps at the deployment ceilings (4320 px, 240 fps, `MAX_VIDEO_DURATION_SE
 | `TIER_PRO_VECTOR_VIDEO_MAX_HEIGHT` / `_MAX_FPS` / `_MAX_SECONDS` | `2160` / `60` / `60` | Pro raster caps (MM49): every raster format, incl. MP4/WebM/PNG sequence. A 61 s, 2161 px or 61 fps request answers 422 `vector_cap_exceeded`. |
 | `VECTOR_MAX_DOC_BYTES` | `4194304` (4 MiB) | Largest saved Motion document; the sanitizer refuses anything bigger (422). |
 
+#### Darkroom export formats (MM118)
+
+A Darkroom export is container × video codec × audio codec from the output table
+(`internal/services/studio_outputs.go`; `GET /api/studio/export-options` serves it with
+the live plan per token and the caller's own set). The plan gate is tokens: a request
+whose container, video codec or audio codec is not in the caller's `StudioFormats`, or
+that needs the Advanced picker (a combination no preset names, a non-default audio
+bitrate, mono) without `StudioAdvanced`, is **403 `format_not_in_plan`**
+`{error, message, limitKey: "studio_format", required, option, upgradePath}`, refused
+before the export allowance is charged (the same pre-quota gate as the height rule) and
+re-checked on render-again. Tokens: `mp4, mov, mkv, mp3, wav, h264, hevc, aac, pcm_s16le`.
+Cumulative like Motion's formats: each tier also gets every token of the tier below, and
+Advanced once on stays on up the ladder, so the defaults list only what a tier adds.
+Operator: every token and Advanced. Every export still costs one `exportsPerDay` unit.
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `TIER_ANON_STUDIO_FORMATS` | `mp4,h264,aac,mp3,wav,pcm_s16le` | Output tokens anonymous can export (MP4 H.264, MP3, WAV). Anonymous has no H.265 since MM118. |
+| `TIER_FREE_STUDIO_FORMATS` | `hevc` (+ anonymous's) | Free adds H.265 MP4. |
+| `TIER_PREMIUM_STUDIO_FORMATS` | `mov,mkv` (+ free's) | Premium adds MOV and MKV. |
+| `TIER_PRO_STUDIO_FORMATS` | empty (+ Premium's) | Pro = Premium until MM119/MM120 add Opus, WebM, AV1, ProRes, FLAC. |
+| `TIER_ANON_STUDIO_ADVANCED` / `TIER_FREE_STUDIO_ADVANCED` | `false` / `false` | The Advanced picker (combinations, audio bitrate 128/192/256/320, mono). |
+| `TIER_PREMIUM_STUDIO_ADVANCED` / `TIER_PRO_STUDIO_ADVANCED` | `true` / `true` | Same, Premium and Pro. |
+
+Migration `20261105002_studio_export_outputs` must run **before** the MM118 binary serves:
+it adds `container, video_codec, audio_codec, audio_bitrate, audio_channels` to
+`studio_exports` (backfilled from `format`) and widens the `format` CHECK to the derived
+labels (`h264, hevc, mp3, wav` and `<container>_<video>_<audio>`). Rows a pre-MM118
+binary writes after it (no container) read back with the parts their `format` means.
+Verify a MOV/MKV export on the host with `ffprobe -v error -show_entries
+format=format_name:stream=codec_name,codec_tag_string outputs/<jobId>/converted.mov`
+(HEVC in MOV/MP4 must show `hvc1`; MKV carries no tag and no faststart).
+
 #### Video summary frame budgets and deep synthesis (MM74)
 
 `/api/tiers` exposes `summaryMaxFrames` (frames sampled for one summary) and
