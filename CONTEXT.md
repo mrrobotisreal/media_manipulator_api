@@ -124,6 +124,9 @@ _Avoid_: "medi" in Go identifiers, routes or tables; "chatbot".
 **Guide / copilot** (MM104):
 The two Medi surfaces. The **guide** (`surface: guide`) answers on public pages, is free for everyone (rate-limited) and can only show buttons (`navigate`, `open_tool`). A **copilot** (`surface: studio | vector | photo`) runs inside an editor, needs an account, spends `assistant_turns`, and can edit (`apply_edits`) or offer a button (`suggest_action`).
 
+**Reasons** (MM114):
+`apply_edits` requires `reason` (4-140 chars) beside `summary` and `ops`; each op may carry its own optional `reason` (it is in the op schema files, so it moves `PromptVersion()`). The validated batch reason is clipped to 140 and rides the `edits` SSE event as `reason`. `evals.ReasonProblems` (`reason_present`, `reason_cites`) grades every copilot answer that edited. The op schemas' "at least one field" rules are `anyOf required` lists so a `reason` alone does not satisfy them.
+
 **Prompt version** (MM113):
 `assistant.PromptVersion()`, the first 12 hex of a SHA-256 over the persona, surface intros, capsules, `knowledge/index.json` and every op schema file; stored on every assistant message and usage row, returned by capabilities and the `meta` event, and recorded with every eval run (`assistant_eval_runs`). MM114/MM115/MM116 must keep any new model-facing text inside those inputs so the version moves with it.
 
