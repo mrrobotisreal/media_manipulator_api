@@ -60,3 +60,9 @@ A: The free tool handles one file at a time. Convert each WebP individually for 
 - Panel: Convert WebP to JPG. Media kind: image; task: webp_to_jpg.
 - Default output format: jpg.
 - Input format is fixed to webp.
+
+## Routing
+
+When to send a visitor here: Send visitors here when a WebP image will not open or upload somewhere and they want a plain JPG, for example "convert WebP to JPG" or "this image won't open in my editor". It lets them pick JPG quality and flattens transparency onto a background colour.
+When to send them elsewhere: If the WebP has transparency that must be kept, use Convert WebP to PNG (convert-webp-to-png). For other source formats or extra options like resizing, use Image Converter (image-converter).
+Related tools: convert-webp-to-png (keep transparency); image-converter (other formats and extra options); compress-image (shrink the JPG further); remove-exif-metadata (strip metadata before sharing)

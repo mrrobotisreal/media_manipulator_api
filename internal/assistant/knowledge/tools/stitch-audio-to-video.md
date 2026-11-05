@@ -64,3 +64,9 @@ A: Yes — each added track has its own volume scalar (0–4×) and a start offs
 ## Opens
 
 - Panel: Add or replace the audio track of a video. Media kind: video; task: stitch_audio_to_video.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want to add music, a voiceover or narration to a video, with up to three audio tracks, per-track volume, offset and loop, either mixed with or replacing the original sound.
+When to send them elsewhere: To simply mute a video use Remove Audio from Video (remove-audio-from-video). Multi-clip timeline editing belongs in Darkroom (content-studio).
+Related tools: extract-audio-from-video (grab audio from another video); extract-video-only-from-video (start from a silent copy); remove-audio-from-video (just mute); content-studio (full timeline editing)

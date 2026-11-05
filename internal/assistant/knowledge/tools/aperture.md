@@ -75,3 +75,9 @@ A: Within a documented tolerance. Color adjustments match to within a few 8-bit 
 
 - Opens the Aperture editor with the basic panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Send visitors here for full, non-destructive photo editing in the browser: layered exposure, curves, levels, HSL, colour balance, LUTs and effects, masks (gradient, radial, brush, colour or luminosity range, AI subject), healing and presets, exported at full resolution.
+When to send them elsewhere: It edits one photo with adjustment layers, so not for text overlays, compositing or drawing. For a smaller file use Compress Image (compress-image), for a transparent cutout Remove Background from Image (remove-background-from-image), and to strip location data Remove EXIF Metadata from Images (remove-exif-metadata).
+Related tools: brighten-image (focused exposure page); photo-curves (focused curves page); remove-blemishes (heal spots with AI); compress-image (just shrink the file)

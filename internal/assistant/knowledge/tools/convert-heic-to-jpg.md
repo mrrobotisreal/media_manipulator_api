@@ -63,3 +63,9 @@ A: Naive converters ignore EXIF orientation. We auto-orient the image, so your p
 - Panel: Convert HEIC to JPG. Media kind: image; task: heic_to_jpg.
 - Output format is fixed to jpg.
 - Input format is fixed to heic.
+
+## Routing
+
+When to send a visitor here: Send visitors here when an iPhone HEIC or HEIF photo will not open on Windows, a website or an older app and they want a normal JPG: "HEIC to JPG", "iPhone photo won't upload". Orientation is corrected and quality is selectable.
+When to send them elsewhere: For AVIF files use Convert AVIF to JPG (convert-avif-to-jpg). For other target formats or resizing, use Image Converter (image-converter). To strip location data from the photo, use Remove EXIF Metadata from Images (remove-exif-metadata).
+Related tools: image-converter (other target formats and options); convert-avif-to-jpg (same job for AVIF files); compress-image (shrink the JPG further); remove-exif-metadata (strip location before sharing)

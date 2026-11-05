@@ -64,3 +64,9 @@ A: This tool creates one PDF per image. Convert each PNG and merge the PDFs in a
 - Panel: Convert PNG to PDF. Media kind: image; task: png_to_pdf.
 - Output format is fixed to pdf.
 - Input format is fixed to png.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want a PNG screenshot, diagram or graphic as a one-page PDF to send or print: "PNG to PDF", "turn this screenshot into a PDF". The image is embedded losslessly.
+When to send them elsewhere: Transparency is flattened onto white, so it is wrong when alpha must survive. For JPG photos use Convert JPG to PDF (convert-jpg-to-pdf). To extract images from a PDF, use PDF to PNG (pdf-to-png).
+Related tools: convert-jpg-to-pdf (same for JPG photos); image-to-pdf (any image format to PDF); pdf-to-png (go the other way); pdf-converter (both directions in one place)

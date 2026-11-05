@@ -40,6 +40,8 @@ type LiveContext struct {
 	Metrics string
 	// HasFrame says a preview image is attached to the user message.
 	HasFrame bool
+	// File is the fileRef of the file the user dropped into the guide (MM116a), "" = none.
+	File string
 }
 
 // surfaceIntro is the one surface-specific sentence in block 1 (stable).
@@ -139,6 +141,9 @@ func VolatileBlock(lc LiveContext) Block {
 		b.WriteString("- A downscaled preview image of the current document is attached to the user's message.\n")
 	} else if lc.Surface != SurfaceGuide {
 		b.WriteString("- No preview image is attached to this message.\n")
+	}
+	if lc.File != "" {
+		fmt.Fprintf(&b, "- The user dropped a file into this chat (fileRef %q). Pass that fileRef to inspect_file and the analyze tools.\n", lc.File)
 	}
 	if lc.Metrics != "" {
 		fmt.Fprintf(&b, "- Meters of the current preview (shares are 0..1; measured in the browser): %s.\n", lc.Metrics)

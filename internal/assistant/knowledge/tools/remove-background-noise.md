@@ -74,3 +74,9 @@ A: The model still runs and will remove whatever residual floor it finds, but th
 
 - Panel: Remove background noise. Media kind: audio; task: audio_converter.
 - The form opens already set up for this task (AI operation remove_background_noise).
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want steady background noise such as hiss, hum, fans or constant traffic lowered in a recording, with nothing else changed so they can mix it themselves: "remove background noise", "get rid of hum".
+When to send them elsewhere: For a ready-to-publish voice track at standard loudness, use Clean Voice Audio (clean-voice-audio). It does not remove intermittent noise or other voices, works in mono, and is wrong for finished music.
+Related tools: clean-voice-audio (denoise plus loudness polish); extract-audio-from-video (get the audio from a video first); normalize-audio (set loudness afterwards); audio-equalizer (shape tone afterwards)

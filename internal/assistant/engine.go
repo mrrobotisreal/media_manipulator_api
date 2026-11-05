@@ -38,6 +38,8 @@ type Engine struct {
 	// Files resolves a turn's file ref for analyze_image|audio|video (MM116
 	// wires it); nil = the file tools are never offered.
 	Files FileResolver
+	// Inspect reads a resolved file's metadata for inspect_file (MM116a); nil = the tool is not offered.
+	Inspect FileInspector
 	// OnTurnCounted is told once per completed upstream request (MM107 turns it
 	// into the server analytics event).
 	OnTurnCounted func(t TurnReport)
@@ -56,6 +58,8 @@ type Turn struct {
 	// FileRef names a file the user already uploaded for a job (MM116); the
 	// file tools are offered only when it is set and Engine.Files is not nil.
 	FileRef string
+	// FileOwner is who the file belongs to: the user id, else the guest session ("s:<id>").
+	FileOwner string
 	// UserID is the mm_users id ("" = guest: nothing is stored).
 	UserID      string
 	VisitorHash string
@@ -518,6 +522,9 @@ func (r *run) exec(prep *Prepared) {
 	live.Locale, live.LocaleName = b.Locale, LocaleName(b.Locale)
 	live.PagePath, live.PageTitle = b.Page.Path, b.Page.Title
 	live.HasFrame = r.t.FrameURL != ""
+	if e.Files != nil && r.t.FileRef != "" {
+		live.File = r.t.FileRef
+	}
 	if r.conv != nil {
 		live.Summary = r.conv.Summary
 	}
@@ -551,6 +558,9 @@ func (r *run) exec(prep *Prepared) {
 	tools := ToolsFor(b.Surface, e.Ops)
 	if e.Files != nil && r.t.FileRef != "" {
 		tools = append(tools, FileToolsFor()...)
+		if e.Inspect != nil {
+			tools = append(tools, InspectFileTool())
+		}
 	}
 	if prep != nil && prep.EditCount >= e.Cfg.MaxEditRounds {
 		// The last edit round's result: the model may only confirm in words.
@@ -623,7 +633,7 @@ func (r *run) exec(prep *Prepared) {
 		var errs []string
 		invalid := map[string]string{}
 		for _, c := range client {
-			a, err := validateClientCall(c, r.surface, tools, e.Ops, e.Knowledge.Routes())
+			a, err := validateClientCall(c, r.surface, tools, e.Ops, e.Knowledge.Routes(), e.Knowledge)
 			if err != nil {
 				invalid[c.ID] = err.Error()
 				errs = append(errs, err.Error())

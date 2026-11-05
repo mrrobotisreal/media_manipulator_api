@@ -62,3 +62,9 @@ A: Yes — Vorbis/Opus audio is re-encoded to AAC and stays in sync.
 - Panel: Convert WebM to MP4. Media kind: video; task: webm_to_mp4.
 - Output format is fixed to mp4.
 - Input format is fixed to webm.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they have a .webm file, such as a browser download or screen recording, that their editor, phone, TV or messaging app will not open. Fits requests like "my editor won't import this webm" or "turn this webm into an mp4".
+When to send them elsewhere: For the reverse direction, MP4 to WebM, use Convert MP4 to WebM (convert-mp4-to-webm). For other source or target formats use Video Converter (video-converter), and if the goal is a smaller file rather than a new format, use Compress Video (compress-video).
+Related tools: video-converter (any other container or codec); convert-mp4-to-webm (the reverse direction); compress-video (shrink the MP4 afterwards)

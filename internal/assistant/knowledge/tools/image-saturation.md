@@ -74,3 +74,9 @@ A: Yes, identically: the server applies the same two formulas per pixel to the o
 
 - Opens the Aperture editor with the basic panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone wants colours stronger or weaker across the whole photo: Vibrance boosts muted colours while protecting skin and vivid ones, Saturation scales all evenly, and -100 gives a grey conversion. Typical asks: "make colours pop", "tone down colours".
+When to send them elsewhere: For one colour only (bluer sky, less red face) use Adjust image hue (adjust-image-hue) with its per-range sliders. To keep one colour and grey the rest use Color pop (color-pop). If the colours look wrong rather than weak use White balance (white-balance-photo).
+Related tools: color-pop (keep one colour only); adjust-image-hue (per-colour hue and saturation); white-balance-photo (fix a cast first); black-and-white-photo (full monochrome)

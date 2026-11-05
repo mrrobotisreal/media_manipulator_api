@@ -56,3 +56,9 @@ A: Yes — FLAC compresses without throwing away any data. Decoding gives a bit-
 ## Opens
 
 - Panel: Convert an audio file. Media kind: audio; task: audio_converter.
+
+## Routing
+
+When to send a visitor here: Send visitors here for general audio format changes between MP3, WAV, M4A/AAC, OGG, FLAC, ALAC, OPUS, AC3 and DTS, especially when they want to choose bitrate, sample rate or channels, or trim, EQ or clean up in the same job.
+When to send them elsewhere: Pulling the soundtrack out of a video is Extract Audio from Video (extract-audio-from-video). Separating vocals from music belongs in Isolate Vocals from a Song (isolate-vocals-from-song) or Remove Vocals from a Song (remove-vocals-from-song).
+Related tools: convert-wav-to-mp3 (quick WAV to MP3); isolate-vocals-from-song (pull out the vocal); extract-audio-from-video (audio from a video file); normalize-audio (even out loudness)

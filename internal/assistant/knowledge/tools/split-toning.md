@@ -74,3 +74,9 @@ A: It is one of the best uses. Put a Black & white layer below the Split toning 
 
 - Opens the Aperture editor with the splitTone panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone wants a creative grade with one hue in the shadows and another in the highlights, with a balance slider between them. Typical asks: "cool shadows, warm highlights", "cinematic toning".
+When to send them elsewhere: To remove a cast use White balance (white-balance-photo) or Color balance (color-balance-photo). For a single colour everywhere use Tint a photo (tint-photo). If the look exists as a .cube file use Apply a LUT (apply-lut-to-photo).
+Related tools: color-balance-photo (per-tone RGB control); tint-photo (single-colour wash); apply-lut-to-photo (exact grade from a file); black-and-white-photo (toned monochrome)

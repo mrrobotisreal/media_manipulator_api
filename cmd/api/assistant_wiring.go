@@ -53,7 +53,12 @@ func newAssistantHandler(appCtx context.Context, cfg *config.Config, store *tele
 		Logger:    logger,
 		Shutdown:  appCtx.Done(),
 	}
+	// MM116a: files dropped into the guide (uploads route, ledgered like a job upload);
+	// the same service resolves them for the analyze tools and reads inspect_file.
+	files := handlers.NewAssistantFiles(cfg)
+	engine.Files, engine.Inspect = files, files
 	h := handlers.NewAssistantHandler(ac, engine, st, registry, logger)
+	h.SetFiles(files)
 	h.SetDeletion(deleter)
 	if ac.Enabled && !ac.Configured() {
 		logger.Warn("assistant: ASSISTANT_ENABLED is set but ASSISTANT_OPENROUTER_API_KEY is not; Medi stays off")

@@ -67,3 +67,9 @@ A: x265 does far more work per frame than x264. It is the price of the smaller f
 - Output format is fixed to mp4.
 - Compression level preselected: balanced.
 - The form opens already set up for this task (panel video_compressor).
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want a video re-encoded as H.265 (HEVC) in MP4 for roughly half the size of H.264 at similar quality, for storage, 4K footage or modern devices, optionally downsizing 4K to 1080p.
+When to send them elsewhere: If the file must play on the widest range of devices and browsers, keep H.264 with Compress Video (compress-video) or Video Converter (video-converter). Only to lower resolution, use Resize Video (resize-video).
+Related tools: compress-video (H.264 size reduction); video-converter (other formats); resize-video (lower resolution only); video-trimmer (cut before encoding)

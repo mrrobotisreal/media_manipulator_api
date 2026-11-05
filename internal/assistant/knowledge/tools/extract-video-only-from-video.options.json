@@ -1,0 +1,1 @@
+{"slug":"extract-video-only-from-video","family":"video:extract-video-only","options":{"type":"object","properties":{"format":{"x-uiLabel":"Output format","default":"mp4","type":"string","enum":["mp4","webm"]}},"additionalProperties":false}}

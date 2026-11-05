@@ -57,3 +57,9 @@ A: Use the "Remove Vocals" AI mode in the audio converter — same upload, diffe
 
 - Panel: Isolate vocals. Media kind: audio; task: isolate_vocals.
 - The form opens already set up for this task (AI operation isolate_vocals).
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want the singing pulled out of a music track as a single vocal stem for remixes, covers, lyric transcription or analysis: "extract vocals", "acapella from a song". Only for music they have the right to use.
+When to send them elsewhere: If they want the music without the singer, use Remove Vocals from a Song (remove-vocals-from-song). For cleaning up speech recordings rather than songs, use Clean Voice Audio (clean-voice-audio).
+Related tools: remove-vocals-from-song (keep the instrumental instead); audio-converter (change the stem's format); transcribe-audio (turn the vocal into text); clean-voice-audio (clean speech, not music)

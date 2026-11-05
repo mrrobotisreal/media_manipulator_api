@@ -63,3 +63,9 @@ A: At quality 85–90 the JPG looks essentially identical to the AVIF for most i
 - Panel: Convert AVIF to JPG. Media kind: image; task: avif_to_jpg.
 - Output format is fixed to jpg.
 - Input format is fixed to avif.
+
+## Routing
+
+When to send a visitor here: Send visitors here when an AVIF image is not accepted by an app, editor or upload form and they want a JPG: "AVIF to JPG", "can't open this AVIF". Transparency is flattened onto a background and quality is selectable.
+When to send them elsewhere: If the AVIF has transparency to keep, use Convert AVIF to PNG (convert-avif-to-png). For iPhone HEIC photos, use Convert HEIC to JPG (convert-heic-to-jpg).
+Related tools: convert-avif-to-png (keep transparency); convert-heic-to-jpg (same job for iPhone photos); image-converter (other formats and options); compress-image (shrink the JPG further)

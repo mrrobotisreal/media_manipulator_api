@@ -33,6 +33,10 @@ type CorpusDoc struct {
 	Summary  string
 	Details  string
 	Opens    string
+	// Routing is the MM116a sidecar copy (when to send a visitor here or elsewhere, related tools).
+	Routing string
+	// Options is the tool's option schema (MM116a); nil for non-tool docs.
+	Options  *ToolOptions
 	Links    string
 	Keywords []string
 	// Names are the doc's localized names (every locale), for retrieval.
@@ -83,7 +87,7 @@ func parseCorpusDoc(id, text string) (CorpusDoc, error) {
 		}
 		return ""
 	}
-	d.Summary, d.Details, d.Opens, d.Links = get("Summary"), get("Details"), get("Opens"), get("Links")
+	d.Summary, d.Details, d.Opens, d.Links, d.Routing = get("Summary"), get("Details"), get("Opens"), get("Links"), get("Routing")
 	for _, k := range strings.Split(get("Search keywords"), ",") {
 		if k = strings.Trim(strings.TrimSpace(k), "`"); k != "" {
 			d.Keywords = append(d.Keywords, k)
@@ -98,16 +102,28 @@ func parseCorpusDoc(id, text string) (CorpusDoc, error) {
 	if d.Title == "" || d.Kind == "" {
 		return d, fmt.Errorf("knowledge doc %s: missing title or kind", id)
 	}
-	// Body is what the model reads: the summary, what the page opens with, then the details.
+	d.buildBody()
+	return d, nil
+}
+
+// buildBody is what the model reads: the summary, what the page opens with, the
+// routing copy and option fields (MM116a; ahead of the long details so the
+// 6000-character cut of a retrieved doc never drops them), then the details.
+func (d *CorpusDoc) buildBody() {
 	body := []string{d.Summary}
 	if d.Opens != "" {
 		body = append(body, "Opens:\n"+d.Opens)
+	}
+	if d.Routing != "" {
+		body = append(body, "Routing:\n"+d.Routing)
+	}
+	if d.Options != nil {
+		body = append(body, d.Options.Render())
 	}
 	if d.Details != "" {
 		body = append(body, d.Details)
 	}
 	d.Body = strings.Join(body, "\n\n")
-	return d, nil
 }
 
 func bulletValue(line, key string) (string, bool) {
@@ -124,12 +140,14 @@ type Corpus struct {
 	byID   map[string]int
 	names  map[string]map[string]LocalName // locale code (lowercase) → doc id → name
 	routes *Routes
+	// options are the MM116a per-tool option schemas, by tool slug.
+	options map[string]*ToolOptions
 }
 
 // LoadCorpus parses a knowledge tree (the embedded one, or a test fixture).
 // root is the directory inside fsys that holds tools/, pages/, editors/ ….
 func LoadCorpus(fsys fs.FS, root string) (*Corpus, error) {
-	c := &Corpus{byID: map[string]int{}, names: map[string]map[string]LocalName{}}
+	c := &Corpus{byID: map[string]int{}, names: map[string]map[string]LocalName{}, options: map[string]*ToolOptions{}}
 	err := fs.WalkDir(fsys, root, func(p string, de fs.DirEntry, err error) error {
 		if err != nil || de.IsDir() {
 			return err
@@ -154,6 +172,15 @@ func LoadCorpus(fsys fs.FS, root string) (*Corpus, error) {
 				return fmt.Errorf("%s: %w", rel, err)
 			}
 			c.names[strings.ToLower(strings.TrimSuffix(path.Base(rel), ".json"))] = m
+		case strings.HasPrefix(rel, "tools/") && strings.HasSuffix(rel, ".options.json"):
+			o, err := parseOptionsFile(b)
+			if err != nil {
+				return fmt.Errorf("%s: %w", rel, err)
+			}
+			if want := strings.TrimSuffix(path.Base(rel), ".options.json"); o.Slug != want {
+				return fmt.Errorf("%s: slug %q does not match the file name", rel, o.Slug)
+			}
+			c.options[o.Slug] = o
 		case strings.HasSuffix(rel, ".md"):
 			d, err := parseCorpusDoc(strings.TrimSuffix(rel, ".md"), string(b))
 			if err != nil {
@@ -167,6 +194,14 @@ func LoadCorpus(fsys fs.FS, root string) (*Corpus, error) {
 		return nil, err
 	}
 	sort.Slice(c.Docs, func(i, j int) bool { return c.Docs[i].ID < c.Docs[j].ID })
+	for i := range c.Docs {
+		if d := &c.Docs[i]; d.Kind == "tool" && d.Slug != "" {
+			if o, ok := c.options[d.Slug]; ok {
+				d.Options = o
+				d.buildBody()
+			}
+		}
+	}
 	locs := make([]string, 0, len(c.names))
 	for l := range c.names {
 		locs = append(locs, l)
@@ -236,4 +271,10 @@ func (c *Corpus) namesFor(locale string) map[string]LocalName {
 		return c.names["pt-br"]
 	}
 	return nil
+}
+
+// ToolOptions returns a tool's option schema by slug (MM116a).
+func (c *Corpus) ToolOptions(slug string) (*ToolOptions, bool) {
+	o, ok := c.options[slug]
+	return o, ok
 }

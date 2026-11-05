@@ -84,3 +84,9 @@ A: Daily limits and file caps depend on the plan; quote them only from the live 
 ## Opens
 
 - Panel: AI image restoration & upscaling. Media kind: image; task: image_converter.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want to restore or upscale a damaged, blurry, noisy or heavily compressed photo, optionally enhance faces, and compare model results against the original. Fits "fix this old photo".
+When to send them elsewhere: For just a bigger copy of a clean image use AI Image Upscaler (ai-image-upscaler). Images already large and sharp gain little, faces it reconstructs are not proof of identity, and video goes to AI Video Restoration (ai-video-restoration).
+Related tools: ai-image-upscaler (simple upscale); ai-video-restoration (restore video); remove-background-from-image (cut out the subject); compress-image (shrink the result); remove-exif-metadata (strip metadata)

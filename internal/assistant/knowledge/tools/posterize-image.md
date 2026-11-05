@@ -73,3 +73,9 @@ A: PNG, since it is lossless; JPG smooths the hard band edges with compression r
 
 - Opens the Aperture editor with the effects panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone wants a flat, poster-style graphic look by reducing each colour channel to a few levels with hard tonal steps. Typical asks: "posterize this photo", "pop-art style flat colours".
+When to send them elsewhere: It is an effect, not a correction: to remove banding use Reduce image noise (reduce-image-noise) or Curves (photo-curves). For a smaller file use Compress Image (compress-image) instead of cutting colours.
+Related tools: invert-image-colors (another graphic effect); black-and-white-photo (monochrome base); color-pop (selective colour look); compress-image (smaller file without banding)

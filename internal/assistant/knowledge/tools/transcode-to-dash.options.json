@@ -1,0 +1,1 @@
+{"slug":"transcode-to-dash","family":"transcode","options":{"type":"object","properties":{"dashCodec":{"x-uiLabel":"DASH codec","description":"Only used for DASH.","default":"av1","type":"string","enum":["av1","vp9"]}},"additionalProperties":false}}

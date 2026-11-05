@@ -76,3 +76,9 @@ A: Yes. Daily limits and file caps depend on the plan; quote them only from the 
 
 - Panel: Redact text in an image. Media kind: image; task: image_converter.
 - AI image operation preselected: redact_text.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want personal details in a screenshot or photo covered before sharing: emails, phone numbers, card-like numbers, addresses, or all readable text, with a black box, blur or mosaic. Phrasings like "hide my email in this screenshot" fit.
+When to send them elsewhere: Faces and logos are not text: use Blur Faces in Photo (blur-faces-in-photo) or Remove Object from Photo (remove-object-from-photo). For hidden file metadata, use Remove EXIF Metadata from Images (remove-exif-metadata). OCR is best effort and English print only.
+Related tools: blur-faces-in-photo (hide faces); remove-exif-metadata (strip hidden metadata); remove-object-from-photo (erase non-text objects); ai-document-scan (clean a photographed document)

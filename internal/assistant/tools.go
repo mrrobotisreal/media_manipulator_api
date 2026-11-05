@@ -23,12 +23,14 @@ const (
 	ToolAnalyzeImage   = "analyze_image"
 	ToolAnalyzeAudio   = "analyze_audio"
 	ToolAnalyzeVideo   = "analyze_video"
+	// MM116a: the metadata of the file the user dropped into the guide.
+	ToolInspectFile = "inspect_file"
 )
 
 // serverTools run on the API inside the upstream loop; every other tool is a
 // client tool that ends the upstream stream.
 var serverTools = map[string]bool{ToolSearchHelp: true, ToolGetRecipe: true, ToolGetToolPage: true,
-	ToolAnalyzeCompare: true, ToolAnalyzeImage: true, ToolAnalyzeAudio: true, ToolAnalyzeVideo: true}
+	ToolAnalyzeCompare: true, ToolAnalyzeImage: true, ToolAnalyzeAudio: true, ToolAnalyzeVideo: true, ToolInspectFile: true}
 
 // IsServerTool reports whether the API executes the tool itself.
 func IsServerTool(name string) bool { return serverTools[name] }
@@ -72,8 +74,8 @@ func ToolsFor(surface string, ops *OpsValidator) []ToolDef {
 		tools = append(tools,
 			ToolDef{Name: ToolNavigate, Description: "Show the user a button that opens a site page. target must be a site-relative route from the help documents, e.g. /pricing.",
 				Parameters: schema(`{"type":"object","properties":{"target":{"type":"string","pattern":"^/[A-Za-z0-9/_\\-]*$","maxLength":200},"label":{"type":"string","maxLength":60}},"required":["target"],"additionalProperties":false}`)},
-			ToolDef{Name: ToolOpenTool, Description: "Show the user a button that opens a tool, optionally with one of its presets.",
-				Parameters: schema(`{"type":"object","properties":{"slug":{"type":"string","pattern":"^[a-z0-9\\-]+$","maxLength":120},"preset":{"type":"string","maxLength":80},"label":{"type":"string","maxLength":60}},"required":["slug"],"additionalProperties":false}`)},
+			ToolDef{Name: ToolOpenTool, Description: "Show the user a button that opens a tool, optionally with one of its presets and optionally with options that prefill the tool's form (only the fields and ranges listed in that tool's help document; the server checks them).",
+				Parameters: schema(`{"type":"object","properties":{"slug":{"type":"string","pattern":"^[a-z0-9\\-]+$","maxLength":120},"preset":{"type":"string","maxLength":80},"options":{"type":"object","description":"Form values for this tool, from its Options list."},"label":{"type":"string","maxLength":60}},"required":["slug"],"additionalProperties":false}`)},
 		)
 	} else {
 		tools = append(tools, ToolDef{Name: ToolAnalyzeCompare,
@@ -148,10 +150,15 @@ func applyEditsParameters(opsSchema json.RawMessage) json.RawMessage {
 	return json.RawMessage(b.String())
 }
 
+// ToolOptionsSource looks up a tool's option schema (Knowledge implements it).
+type ToolOptionsSource interface {
+	ToolOptions(slug string) (*ToolOptions, bool)
+}
+
 // validateClientCall checks one client tool call: the offered tool's schema,
 // then the semantic rules (op schema, routes.json allowlist). The error text
 // goes back to the model as the tool result of its one retry.
-func validateClientCall(call ToolCall, surface string, tools []ToolDef, ops *OpsValidator, routes *Routes) (ClientAction, error) {
+func validateClientCall(call ToolCall, surface string, tools []ToolDef, ops *OpsValidator, routes *Routes, opts ToolOptionsSource) (ClientAction, error) {
 	sch, offered := toolSchema(tools, call.Name)
 	if !offered {
 		return ClientAction{}, fmt.Errorf("tool %q is not available here", call.Name)
@@ -184,7 +191,10 @@ func validateClientCall(call ToolCall, surface string, tools []ToolDef, ops *Ops
 		a.Kind, a.Label = "navigate", clip(firstNonEmpty(args.Label, args.Target), maxLabelChars)
 		a.Params = map[string]any{"target": args.Target}
 	case ToolOpenTool:
-		var args struct{ Slug, Preset, Label string }
+		var args struct {
+			Slug, Preset, Label string
+			Options             json.RawMessage
+		}
 		_ = json.Unmarshal([]byte(call.Arguments), &args)
 		entry, ok := routes.Tool(args.Slug)
 		if !ok {
@@ -200,6 +210,24 @@ func validateClientCall(call ToolCall, surface string, tools []ToolDef, ops *Ops
 		}
 		if args.Preset != "" {
 			a.Params["preset"] = args.Preset
+		}
+		if len(args.Options) > 0 && string(args.Options) != "null" {
+			// MM116a: options are checked against the tool's own manifest schema before
+			// anything is emitted; an unknown tool, a "none" tool, an unknown field, a
+			// value out of range and an oversized object are all sent back to the model.
+			var to *ToolOptions
+			if opts != nil {
+				to, _ = opts.ToolOptions(args.Slug)
+			}
+			if to == nil {
+				return a, fmt.Errorf("tool %q has no option schema: open it without options", args.Slug)
+			}
+			if err := to.Validate(args.Options); err != nil {
+				return a, err
+			}
+			var parsed map[string]any
+			_ = json.Unmarshal(args.Options, &parsed)
+			a.Params["options"] = parsed
 		}
 	case ToolSuggestAction:
 		var args struct {

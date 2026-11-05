@@ -46,7 +46,7 @@ type EditsEvent struct {
 
 // ActionEvent is a button: kind navigate | open_tool | generate_captions |
 // subject_mask | heal | voiceover | derive_audio | export. params: navigate
-// {target}; open_tool {slug, route?, preset?}; suggest_action kinds pass the
+// {target}; open_tool {slug, route?, preset?, options?}; suggest_action kinds pass the
 // model's params through.
 type ActionEvent struct {
 	Type   string         `json:"type"` // "action"

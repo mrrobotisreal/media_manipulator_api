@@ -64,3 +64,9 @@ A: No. The art stream is identified as a picture, not as video, and the AAC enco
 
 - Panel: Convert audio to M4A / AAC. Media kind: audio; task: audio_to_m4a.
 - Output format is fixed to aac.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want an audio file as M4A / AAC at a chosen bitrate, sample rate and channels, for example for iPhone, iTunes or a podcast feed. Trim, gain, normalisation and EQ go into the same encode.
+When to send them elsewhere: For lossless output use Convert Audio to FLAC (convert-audio-to-flac) or Convert Audio to WAV (convert-audio-to-wav). For a soundtrack inside a video use Extract Audio from Video (extract-audio-from-video).
+Related tools: audio-converter (other formats); convert-audio-to-flac (lossless instead); extract-audio-from-video (audio from a video); normalize-audio (even out loudness)

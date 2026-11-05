@@ -1,0 +1,1 @@
+{"slug":"ai-frame-interpolation","family":"video:interpolate","options":{"type":"object","properties":{"aiTargetFps":{"x-uiLabel":"Target frame rate","description":"Frames per second after AI interpolation: 48, 60 or 120.","unit":"fps","default":60,"anyOf":[{"type":"number","const":48},{"type":"number","const":60},{"type":"number","const":120}]}},"additionalProperties":false}}

@@ -919,6 +919,8 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 	}
 	rules := []rule{
 		{path: "/api/upload", routeKey: "upload", tool: "upload", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
+		// MM116a: a file dropped into the Medi guide shares the uploads bucket.
+		{path: handlers.AssistantFilesPath, routeKey: "upload", tool: "upload", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
 		{path: "/api/video-upload/presign", routeKey: "video_upload_presign", tool: "video_upload", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
 		{path: "/api/video-upload/complete", routeKey: "video_upload_complete", tool: "video_upload", sessionLimit: cfg.RateLimitUploadsPerSessionPerHour, ipLimit: cfg.RateLimitUploadsPerIPPerHour},
 		{path: "/api/video-transcode/start", routeKey: "video_transcode_start", tool: "video_transcode", sessionLimit: cfg.RateLimitTranscodesPerSessionPerHour, ipLimit: cfg.RateLimitTranscodesPerIPPerHour},

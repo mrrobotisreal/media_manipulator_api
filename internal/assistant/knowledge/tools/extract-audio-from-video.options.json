@@ -1,0 +1,1 @@
+{"slug":"extract-audio-from-video","family":"video:extract-audio","options":{"type":"object","properties":{"format":{"x-uiLabel":"Audio format","default":"mp3","type":"string","enum":["mp3","wav","m4a","aac","flac","ogg"]}},"additionalProperties":false}}

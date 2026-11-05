@@ -73,3 +73,9 @@ A: Daily limits and file caps depend on the plan; quote them only from the live 
 
 - Panel: Clean up a voice recording. Media kind: audio; task: audio_converter.
 - The form opens already set up for this task (AI operation clean_voice).
+
+## Routing
+
+When to send a visitor here: Send visitors here when they have speech (a podcast, interview, lecture or voice memo) buried under hiss, room tone or rumble and want a clearer, publish-ready voice track at consistent loudness: "clean up my voice recording", "make my podcast audio clearer".
+When to send them elsewhere: It is speech only, mono, and changes tone and level. For music use Remove Vocals from a Song (remove-vocals-from-song) or Isolate Vocals from a Song (isolate-vocals-from-song). For denoising with no level or tone changes, use Remove Background Noise (remove-background-noise).
+Related tools: remove-background-noise (denoise without polish); extract-audio-from-video (get the voice track from a video); transcribe-audio (transcribe the cleaned speech); normalize-audio (loudness only, no denoise)

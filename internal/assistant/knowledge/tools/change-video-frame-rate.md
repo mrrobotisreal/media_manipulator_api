@@ -66,3 +66,9 @@ A: No. The audio stream is copied or re-encoded at the same timing.
 - Panel: Change the frame rate of a video. Media kind: video; task: change_video_frame_rate.
 - Default output format: mp4.
 - The form opens already set up for this task (effect frameRate).
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want a video at a specific frame rate: convert to 24, 25, 30 or 60 fps, drop 60 fps to 30 for a smaller file, or match an editor project's rate.
+When to send them elsewhere: For smoother motion with AI-generated in-between frames use AI Frame Interpolation (ai-frame-interpolation). To make a clip play faster or slower, use Change Video Speed (change-video-speed).
+Related tools: ai-frame-interpolation (AI-smoothed higher fps); change-video-speed (speed instead of fps); compress-video (shrink further); video-converter (change format too)

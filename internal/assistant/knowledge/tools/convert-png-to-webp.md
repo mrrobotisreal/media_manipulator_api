@@ -65,3 +65,9 @@ A: Every modern browser supports WebP. A few older or niche programs do not — 
 - Panel: Convert PNG to WebP. Media kind: image; task: png_to_webp.
 - Output format is fixed to webp.
 - Input format is fixed to png.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want PNG graphics or screenshots as smaller WebP files for a website while keeping transparency: "PNG to WebP", "make my site images load faster".
+When to send them elsewhere: If the destination does not accept WebP, use Convert PNG to JPG (convert-png-to-jpg) for photos or keep the PNG. For JPG sources use Convert JPG to WebP (convert-jpg-to-webp).
+Related tools: convert-jpg-to-webp (same for JPG photos); convert-webp-to-png (go back to PNG); compress-image (tune quality further); image-resizer (shrink dimensions too)

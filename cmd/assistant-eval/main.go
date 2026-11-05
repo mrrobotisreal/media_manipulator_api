@@ -8,6 +8,8 @@
 //	go run ./cmd/assistant-eval --surface guide --i-know-this-costs-money
 //	go run ./cmd/assistant-eval --case guide-gif-from-video --repeat 3 --i-know-this-costs-money
 //	go run ./cmd/assistant-eval --suite adjust --i-know-this-costs-money   # MM115: the multi-round adjust suite
+//	go run ./cmd/assistant-eval --suite routing --i-know-this-costs-money  # MM116a: the which-tool suite
+//	go run ./cmd/assistant-eval --suite options --i-know-this-costs-money  # MM116a: the tool-options suite
 //	go run ./cmd/assistant-eval --gate --i-know-this-costs-money     # fail when a surface's pass rate drops
 //	go run ./cmd/assistant-eval --record --i-know-this-costs-money   # write assistant_eval_runs rows
 //
@@ -49,7 +51,7 @@ import (
 
 func main() {
 	surface := flag.String("surface", "", "only cases of this surface (guide|photo|studio|vector)")
-	suite := flag.String("suite", "", "\"adjust\" runs the multi-round numbers-first suite (MM115); default runs the single-turn suites")
+	suite := flag.String("suite", "", "\"adjust\" (MM115), \"routing\" or \"options\" (MM116a) run a named suite; default runs the single-turn suites")
 	caseID := flag.String("case", "", "only this case id")
 	repeat := flag.Int("repeat", 1, "run each case N times")
 	estimateOnly := flag.Bool("estimate", false, "print the cost estimate and exit (no model calls)")
@@ -75,11 +77,11 @@ func main() {
 	if err != nil {
 		fail("cases: %v", err)
 	}
-	if *suite != "" && *suite != "adjust" {
-		fail("--suite must be adjust (or empty)")
+	if *suite != "" && *suite != "adjust" && *suite != "routing" && *suite != "options" {
+		fail("--suite must be adjust, routing or options (or empty)")
 	}
 	if *suite != "" && (*record || *gate) {
-		fail("--record and --gate compare per-surface pass rates of the single-turn suites; the adjust suite is reported in its evidence file")
+		fail("--record and --gate compare per-surface pass rates of the single-turn suites; the named suites are reported in their evidence files")
 	}
 	cases = evals.SuiteCases(cases, *suite)
 	cfg := config.Load().Assistant

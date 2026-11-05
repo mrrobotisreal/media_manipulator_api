@@ -65,3 +65,9 @@ A: Each VTT file is one AI job, taken from the AI allowance and never from the e
 - Panel: Generate VTT captions. Media kind: video; task: generate_vtt_captions.
 - Default output format: vtt.
 - Opens in transcription mode.
+
+## Routing
+
+When to send a visitor here: Use when someone needs a .vtt caption file for an HTML5 video player or YouTube, transcribed by AI from the speech with timed cues and automatic language detection. Typical asks: "make WebVTT subtitles for my video".
+When to send them elsewhere: If they need .srt instead use SRT Generator (srt-generator). For a plain text transcript use Transcribe Video (transcribe-video). To translate existing captions use Caption Translator (caption-translator).
+Related tools: srt-generator (SRT format captions); transcribe-video (plain text transcript of a video); caption-translator (translate the captions); content-studio (edit video with captions in Darkroom)

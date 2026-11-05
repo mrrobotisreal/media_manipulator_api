@@ -1,0 +1,886 @@
+# Medi routing eval suite (MM116a): which tool does the guide send a visitor to?
+# >= 120 guide cases, >= 3 in every one of the 18 locales; run with `assistant-eval --suite routing`.
+# Never counts toward the per-surface pass rates of the default run (suite: routing).
+
+- id: route-compress-video
+  surface: guide
+  suite: routing
+  message: "My phone video is 400 MB and I need to email it. Can you make it smaller?"
+  expect:
+    actions: [tool:compress-video]
+- id: route-convert-video-to-animated-gif
+  surface: guide
+  suite: routing
+  message: "Turn this short clip into a looping GIF I can post in Slack"
+  expect:
+    actions: [tool:convert-video-to-animated-gif]
+- id: route-remove-background-from-image
+  surface: guide
+  suite: routing
+  message: "cut the background out of my product photo so it is transparent"
+  expect:
+    actions: [tool:remove-background-from-image]
+- id: route-transcribe-video
+  surface: guide
+  suite: routing
+  message: "I have an MP4 of a lecture and I want the words as text"
+  expect:
+    actions: [tool:transcribe-video]
+- id: route-transcribe-audio
+  surface: guide
+  suite: routing
+  message: "Convert my podcast mp3 into a written transcript"
+  expect:
+    actions: [tool:transcribe-audio]
+- id: route-srt-generator
+  surface: guide
+  suite: routing
+  message: "make an SRT subtitle file from my video"
+  expect:
+    actions: [tool:srt-generator]
+- id: route-caption-translator
+  surface: guide
+  suite: routing
+  message: "translate my .srt subtitle file from English into German"
+  expect:
+    actions: [tool:caption-translator]
+- id: route-convert-heic-to-jpg
+  surface: guide
+  suite: routing
+  message: "my iPhone photos are .heic and my Windows laptop can't open them"
+  expect:
+    actions: [tool:convert-heic-to-jpg]
+- id: route-convert-webp-to-jpg
+  surface: guide
+  suite: routing
+  message: "I downloaded a WebP image and I need a regular JPG"
+  expect:
+    actions: [tool:convert-webp-to-jpg]
+- id: route-convert-png-to-jpg
+  surface: guide
+  suite: routing
+  message: "make this PNG a JPG so the file is lighter"
+  expect:
+    actions: [tool:convert-png-to-jpg]
+- id: route-convert-jpg-to-png
+  surface: guide
+  suite: routing
+  message: "I need a PNG version of my JPG logo"
+  expect:
+    actions: [tool:convert-jpg-to-png]
+- id: route-pdf-to-jpg
+  surface: guide
+  suite: routing
+  message: "export every page of this PDF as a JPG picture"
+  expect:
+    actions: [tool:pdf-to-jpg]
+- id: route-pdf-to-png
+  surface: guide
+  suite: routing
+  message: "turn my PDF pages into PNG images"
+  expect:
+    actions: [tool:pdf-to-png]
+- id: route-convert-wav-to-mp3
+  surface: guide
+  suite: routing
+  message: "shrink my big WAV recording into an MP3"
+  expect:
+    actions: [tool:convert-wav-to-mp3]
+- id: route-isolate-vocals-from-song
+  surface: guide
+  suite: routing
+  message: "pull just the singing out of this song"
+  expect:
+    actions: [tool:isolate-vocals-from-song]
+- id: route-remove-vocals-from-song
+  surface: guide
+  suite: routing
+  message: "I want the instrumental version of a track, with no vocals"
+  expect:
+    actions: [tool:remove-vocals-from-song]
+- id: route-clean-voice-audio
+  surface: guide
+  suite: routing
+  message: "my voice recording sounds rough, clean it up so the speech is clearer"
+  expect:
+    actions: [tool:clean-voice-audio]
+- id: route-remove-background-noise
+  surface: guide
+  suite: routing
+  message: "get rid of the hiss and room noise in my recording"
+  expect:
+    actions: [tool:remove-background-noise]
+- id: route-ai-image-upscaler
+  surface: guide
+  suite: routing
+  message: "make my small low-resolution image bigger without it getting blurry"
+  expect:
+    actions: [tool:ai-image-upscaler]
+- id: route-blur-faces-in-photo
+  surface: guide
+  suite: routing
+  message: "blur the faces of the people in my photo before I share it"
+  expect:
+    actions: [tool:blur-faces-in-photo]
+- id: route-redact-text-in-image
+  surface: guide
+  suite: routing
+  message: "hide the phone number and email address visible in this screenshot"
+  expect:
+    actions: [tool:redact-text-in-image]
+- id: route-remove-object-from-photo
+  surface: guide
+  suite: routing
+  message: "erase a power line from my landscape photo"
+  expect:
+    actions: [tool:remove-object-from-photo]
+- id: route-video-converter
+  surface: guide
+  suite: routing
+  message: "I need to change my video into another format"
+  expect:
+    actions: [tool:video-converter]
+- id: route-convert-mov-to-mp4
+  surface: guide
+  suite: routing
+  message: "my iPhone .mov will not play on my TV, make it an mp4"
+  expect:
+    actions: [tool:convert-mov-to-mp4]
+- id: route-convert-webm-to-mp4
+  surface: guide
+  suite: routing
+  message: "I have a WebM screen recording that needs to become MP4"
+  expect:
+    actions: [tool:convert-webm-to-mp4]
+- id: route-convert-avi-to-mp4
+  surface: guide
+  suite: routing
+  message: "convert an old AVI file to MP4"
+  expect:
+    actions: [tool:convert-avi-to-mp4]
+- id: route-convert-mkv-to-mp4
+  surface: guide
+  suite: routing
+  message: "my MKV does not open in my editor, turn it into MP4"
+  expect:
+    actions: [tool:convert-mkv-to-mp4]
+- id: route-convert-mp4-to-webm
+  surface: guide
+  suite: routing
+  message: "I want a WebM version of my MP4 for my website"
+  expect:
+    actions: [tool:convert-mp4-to-webm]
+- id: route-video-trimmer
+  surface: guide
+  suite: routing
+  message: "cut the first ten seconds off my video"
+  expect:
+    actions: [tool:video-trimmer]
+- id: route-crop-video
+  surface: guide
+  suite: routing
+  message: "crop my video down to a square"
+  expect:
+    actions: [tool:crop-video]
+- id: route-resize-video
+  surface: guide
+  suite: routing
+  message: "change the dimensions of my video to 1280 by 720"
+  expect:
+    actions: [tool:resize-video]
+- id: route-rotate-video
+  surface: guide
+  suite: routing
+  message: "my video came out sideways, rotate it"
+  expect:
+    actions: [tool:rotate-video]
+- id: route-remove-audio-from-video
+  surface: guide
+  suite: routing
+  message: "mute my video, I want it without any sound"
+  expect:
+    actions: [tool:remove-audio-from-video]
+- id: route-audio-waveform-generator
+  surface: guide
+  suite: routing
+  message: "make an audiogram waveform video out of my podcast clip"
+  expect:
+    actions: [tool:audio-waveform-generator]
+- id: route-extract-audio-from-video
+  surface: guide
+  suite: routing
+  message: "rip the audio track out of my video"
+  expect:
+    actions: [tool:extract-audio-from-video]
+- id: route-extract-frames-from-video
+  surface: guide
+  suite: routing
+  message: "save a still picture every few seconds of my video"
+  expect:
+    actions: [tool:extract-frames-from-video]
+- id: route-stitch-audio-to-video
+  surface: guide
+  suite: routing
+  message: "add a music track to my video"
+  expect:
+    actions: [tool:stitch-audio-to-video]
+- id: route-ai-frame-interpolation
+  surface: guide
+  suite: routing
+  message: "make my 30 fps footage smooth 60 fps with AI"
+  expect:
+    actions: [tool:ai-frame-interpolation]
+- id: route-ai-video-restoration
+  surface: guide
+  suite: routing
+  message: "restore my old blurry family video"
+  expect:
+    actions: [tool:ai-video-restoration]
+- id: route-ai-image-restoration
+  surface: guide
+  suite: routing
+  message: "restore an old scratched family photograph"
+  expect:
+    actions: [tool:ai-image-restoration]
+- id: route-ai-document-scan
+  surface: guide
+  suite: routing
+  message: "scan a paper document into a clean PDF"
+  expect:
+    actions: [tool:ai-document-scan]
+- id: route-inspect-metadata
+  surface: guide
+  suite: routing
+  message: "show me every piece of metadata hidden in this file"
+  expect:
+    actions: [tool:inspect-metadata]
+- id: route-remove-exif-metadata
+  surface: guide
+  suite: routing
+  message: "strip the EXIF data from my picture"
+  expect:
+    actions: [tool:remove-exif-metadata]
+- id: route-edit-image-metadata
+  surface: guide
+  suite: routing
+  message: "change the author and copyright fields of my photo"
+  expect:
+    actions: [tool:edit-image-metadata]
+- id: route-change-video-speed
+  surface: guide
+  suite: routing
+  message: "slow my video down to half speed"
+  expect:
+    actions: [tool:change-video-speed]
+- id: route-reverse-video
+  surface: guide
+  suite: routing
+  message: "play my video backwards"
+  expect:
+    actions: [tool:reverse-video]
+- id: route-flip-video
+  surface: guide
+  suite: routing
+  message: "mirror my video horizontally"
+  expect:
+    actions: [tool:flip-video]
+- id: route-stabilize-video
+  surface: guide
+  suite: routing
+  message: "my handheld footage is really shaky, steady it"
+  expect:
+    actions: [tool:stabilize-video]
+- id: route-change-video-frame-rate
+  surface: guide
+  suite: routing
+  message: "change my video from 60 fps to 30 fps"
+  expect:
+    actions: [tool:change-video-frame-rate]
+- id: route-adjust-video-color
+  surface: guide
+  suite: routing
+  message: "make my video brighter with stronger colours"
+  expect:
+    actions: [tool:adjust-video-color]
+- id: route-convert-video-to-hevc
+  surface: guide
+  suite: routing
+  message: "re-encode my video as H.265 HEVC"
+  expect:
+    actions: [tool:convert-video-to-hevc]
+- id: route-convert-audio-to-flac
+  surface: guide
+  suite: routing
+  message: "convert my music files to lossless FLAC"
+  expect:
+    actions: [tool:convert-audio-to-flac]
+- id: route-convert-audio-to-ogg
+  surface: guide
+  suite: routing
+  message: "I need an OGG version of my sound effect"
+  expect:
+    actions: [tool:convert-audio-to-ogg]
+- id: route-convert-audio-to-m4a
+  surface: guide
+  suite: routing
+  message: "turn my audio into an M4A file"
+  expect:
+    actions: [tool:convert-audio-to-m4a]
+- id: route-convert-mp3-to-wav
+  surface: guide
+  suite: routing
+  message: "I need my MP3 as an uncompressed WAV"
+  expect:
+    actions: [tool:convert-mp3-to-wav]
+- id: route-change-audio-speed
+  surface: guide
+  suite: routing
+  message: "speed my podcast episode up to 1.5x"
+  expect:
+    actions: [tool:change-audio-speed]
+- id: route-change-audio-pitch
+  surface: guide
+  suite: routing
+  message: "raise the pitch of this audio by two semitones"
+  expect:
+    actions: [tool:change-audio-pitch]
+- id: route-normalize-audio
+  surface: guide
+  suite: routing
+  message: "the volume jumps around, even it out by normalizing the audio"
+  expect:
+    actions: [tool:normalize-audio]
+- id: route-adjust-audio-volume
+  surface: guide
+  suite: routing
+  message: "make this recording louder"
+  expect:
+    actions: [tool:adjust-audio-volume]
+- id: route-audio-equalizer
+  surface: guide
+  suite: routing
+  message: "I want more bass in my track, add an equalizer"
+  expect:
+    actions: [tool:audio-equalizer]
+- id: route-add-reverb-to-audio
+  surface: guide
+  suite: routing
+  message: "add reverb so my voice sounds like it is in a big hall"
+  expect:
+    actions: [tool:add-reverb-to-audio]
+- id: route-trim-audio
+  surface: guide
+  suite: routing
+  message: "cut the silence at the start of my audio file"
+  expect:
+    actions: [tool:trim-audio]
+- id: route-add-text-to-image
+  surface: guide
+  suite: routing
+  message: "put a caption on my picture"
+  expect:
+    actions: [tool:add-text-to-image]
+- id: route-crop-image
+  surface: guide
+  suite: routing
+  message: "crop my photo to a square"
+  expect:
+    actions: [tool:crop-image]
+- id: route-rotate-image
+  surface: guide
+  suite: routing
+  message: "rotate my picture ninety degrees"
+  expect:
+    actions: [tool:rotate-image]
+- id: route-sharpen-image
+  surface: guide
+  suite: routing
+  message: "my photo is a little soft, sharpen it"
+  expect:
+    actions: [tool:sharpen-image]
+- id: route-blur-image
+  surface: guide
+  suite: routing
+  message: "blur the whole image for a background"
+  expect:
+    actions: [tool:blur-image]
+- id: route-compress-image
+  surface: guide
+  suite: routing
+  message: "make my JPEG file size smaller"
+  expect:
+    actions: [tool:compress-image]
+- id: route-image-resizer
+  surface: guide
+  suite: routing
+  message: "resize my image to 800 pixels wide"
+  expect:
+    actions: [tool:image-resizer]
+- id: route-summarize-video
+  surface: guide
+  suite: routing
+  message: "summarize this video for me"
+  expect:
+    actions: [tool:summarize-video]
+- id: route-voice-cloning
+  surface: guide
+  suite: routing
+  message: "make an AI copy of my own voice"
+  expect:
+    actions: [tool:voice-cloning]
+- id: route-voice-changer
+  surface: guide
+  suite: routing
+  message: "change my voice so it sounds deeper"
+  expect:
+    actions: [tool:voice-changer]
+- id: route-transcode-to-hls
+  surface: guide
+  suite: routing
+  message: "prepare my video for adaptive streaming with HLS"
+  expect:
+    actions: [tool:transcode-to-hls]
+- id: route-transcode-to-dash
+  surface: guide
+  suite: routing
+  message: "package my video as MPEG-DASH"
+  expect:
+    actions: [tool:transcode-to-dash]
+- id: route-png-to-ico
+  surface: guide
+  suite: routing
+  message: "make a favicon .ico out of my PNG logo"
+  expect:
+    actions: [tool:png-to-ico]
+- id: route-convert-png-to-svg
+  surface: guide
+  suite: routing
+  message: "turn my PNG logo into a vector SVG"
+  expect:
+    actions: [tool:convert-png-to-svg]
+- id: route-convert-svg-to-png
+  surface: guide
+  suite: routing
+  message: "I need a PNG of my SVG file"
+  expect:
+    actions: [tool:convert-svg-to-png]
+- id: route-content-studio
+  surface: guide
+  suite: routing
+  message: "I want to edit a video on a timeline with several tracks"
+  expect:
+    actions: [tool:content-studio]
+- id: route-motion
+  surface: guide
+  suite: routing
+  message: "I want to animate my SVG logo with keyframes"
+  expect:
+    actions: [tool:motion]
+- id: route-uk-ua-1-compress-video
+  surface: guide
+  locale: uk-UA
+  suite: routing
+  message: "Як зменшити розмір відео, щоб відправити його електронною поштою?"
+  expect:
+    actions: [tool:compress-video]
+    language: uk
+- id: route-uk-ua-2-convert-heic-to-jpg
+  surface: guide
+  locale: uk-UA
+  suite: routing
+  message: "Мої фото з айфона у форматі HEIC, як зробити з них JPG?"
+  expect:
+    actions: [tool:convert-heic-to-jpg]
+    language: uk
+- id: route-uk-ua-3-transcribe-audio
+  surface: guide
+  locale: uk-UA
+  suite: routing
+  message: "Потрібно перетворити запис розмови на текст"
+  expect:
+    actions: [tool:transcribe-audio]
+    language: uk
+- id: route-ru-ru-1-remove-background-from-image
+  surface: guide
+  locale: ru-RU
+  suite: routing
+  message: "Как убрать фон с фотографии товара?"
+  expect:
+    actions: [tool:remove-background-from-image]
+    language: ru
+- id: route-ru-ru-2-convert-video-to-animated-gif
+  surface: guide
+  locale: ru-RU
+  suite: routing
+  message: "Хочу сделать GIF из короткого видео"
+  expect:
+    actions: [tool:convert-video-to-animated-gif]
+    language: ru
+- id: route-ru-ru-3-remove-background-noise
+  surface: guide
+  locale: ru-RU
+  suite: routing
+  message: "Как убрать шум на фоне в аудиозаписи?"
+  expect:
+    actions: [tool:remove-background-noise]
+    language: ru
+- id: route-he-il-1-compress-video
+  surface: guide
+  locale: he-IL
+  suite: routing
+  message: "איך אפשר להקטין את גודל הסרטון שלי כדי לשלוח אותו במייל?"
+  expect:
+    actions: [tool:compress-video]
+    language: he
+- id: route-he-il-2-remove-background-from-image
+  surface: guide
+  locale: he-IL
+  suite: routing
+  message: "אני רוצה להסיר את הרקע מתמונה של מוצר"
+  expect:
+    actions: [tool:remove-background-from-image]
+    language: he
+- id: route-he-il-3-transcribe-audio
+  surface: guide
+  locale: he-IL
+  suite: routing
+  message: "אני צריך לתמלל הקלטה של פודקאסט לטקסט"
+  expect:
+    actions: [tool:transcribe-audio]
+    language: he
+- id: route-de-de-1-compress-video
+  surface: guide
+  locale: de-DE
+  suite: routing
+  message: "Wie kann ich mein Video kleiner machen, damit ich es per E-Mail verschicken kann?"
+  expect:
+    actions: [tool:compress-video]
+    language: de
+- id: route-de-de-2-convert-heic-to-jpg
+  surface: guide
+  locale: de-DE
+  suite: routing
+  message: "Meine iPhone-Fotos sind HEIC, wie wandle ich sie in JPG um?"
+  expect:
+    actions: [tool:convert-heic-to-jpg]
+    language: de
+- id: route-de-de-3-blur-faces-in-photo
+  surface: guide
+  locale: de-DE
+  suite: routing
+  message: "Ich möchte die Gesichter auf einem Foto unkenntlich machen"
+  expect:
+    actions: [tool:blur-faces-in-photo]
+    language: de
+- id: route-es-es-1-compress-video
+  surface: guide
+  locale: es-ES
+  suite: routing
+  message: "¿Cómo puedo reducir el tamaño de mi vídeo para enviarlo por correo?"
+  expect:
+    actions: [tool:compress-video]
+    language: es
+- id: route-es-es-2-remove-background-from-image
+  surface: guide
+  locale: es-ES
+  suite: routing
+  message: "Quiero quitar el fondo de una foto de un producto"
+  expect:
+    actions: [tool:remove-background-from-image]
+    language: es
+- id: route-es-es-3-transcribe-audio
+  surface: guide
+  locale: es-ES
+  suite: routing
+  message: "Necesito pasar la grabación de mi podcast a texto"
+  expect:
+    actions: [tool:transcribe-audio]
+    language: es
+- id: route-es-mx-1-convert-heic-to-jpg
+  surface: guide
+  locale: es-MX
+  suite: routing
+  message: "Mis fotos del iPhone están en HEIC, ¿cómo las paso a JPG?"
+  expect:
+    actions: [tool:convert-heic-to-jpg]
+    language: es
+- id: route-es-mx-2-convert-video-to-animated-gif
+  surface: guide
+  locale: es-MX
+  suite: routing
+  message: "Quiero convertir un video corto en un GIF"
+  expect:
+    actions: [tool:convert-video-to-animated-gif]
+    language: es
+- id: route-es-mx-3-remove-background-noise
+  surface: guide
+  locale: es-MX
+  suite: routing
+  message: "¿Cómo le quito el ruido de fondo a mi grabación?"
+  expect:
+    actions: [tool:remove-background-noise]
+    language: es
+- id: route-fr-fr-1-compress-video
+  surface: guide
+  locale: fr-FR
+  suite: routing
+  message: "Comment réduire la taille de ma vidéo pour l'envoyer par e-mail ?"
+  expect:
+    actions: [tool:compress-video]
+    language: fr
+- id: route-fr-fr-2-remove-background-from-image
+  surface: guide
+  locale: fr-FR
+  suite: routing
+  message: "Je voudrais supprimer l'arrière-plan d'une photo de produit"
+  expect:
+    actions: [tool:remove-background-from-image]
+    language: fr
+- id: route-fr-fr-3-convert-heic-to-jpg
+  surface: guide
+  locale: fr-FR
+  suite: routing
+  message: "Mes photos d'iPhone sont en HEIC, comment les convertir en JPG ?"
+  expect:
+    actions: [tool:convert-heic-to-jpg]
+    language: fr
+- id: route-it-it-1-compress-video
+  surface: guide
+  locale: it-IT
+  suite: routing
+  message: "Come posso ridurre le dimensioni del mio video per inviarlo via email?"
+  expect:
+    actions: [tool:compress-video]
+    language: it
+- id: route-it-it-2-convert-video-to-animated-gif
+  surface: guide
+  locale: it-IT
+  suite: routing
+  message: "Voglio trasformare un breve video in una GIF"
+  expect:
+    actions: [tool:convert-video-to-animated-gif]
+    language: it
+- id: route-it-it-3-transcribe-audio
+  surface: guide
+  locale: it-IT
+  suite: routing
+  message: "Devo trascrivere la registrazione del mio podcast in testo"
+  expect:
+    actions: [tool:transcribe-audio]
+    language: it
+- id: route-ja-jp-1-compress-video
+  surface: guide
+  locale: ja-JP
+  suite: routing
+  message: "メールで送れるように動画のサイズを小さくするにはどうすればいいですか？"
+  expect:
+    actions: [tool:compress-video]
+    language: ja
+- id: route-ja-jp-2-remove-background-from-image
+  surface: guide
+  locale: ja-JP
+  suite: routing
+  message: "商品写真の背景を削除したいです"
+  expect:
+    actions: [tool:remove-background-from-image]
+    language: ja
+- id: route-ja-jp-3-convert-heic-to-jpg
+  surface: guide
+  locale: ja-JP
+  suite: routing
+  message: "iPhoneで撮ったHEIC写真をJPGに変換したいです"
+  expect:
+    actions: [tool:convert-heic-to-jpg]
+    language: ja
+- id: route-zh-cn-1-compress-video
+  surface: guide
+  locale: zh-CN
+  suite: routing
+  message: "怎样把视频压缩得小一点，方便通过邮件发送？"
+  expect:
+    actions: [tool:compress-video]
+    language: zh
+- id: route-zh-cn-2-remove-background-from-image
+  surface: guide
+  locale: zh-CN
+  suite: routing
+  message: "我想去掉产品照片的背景"
+  expect:
+    actions: [tool:remove-background-from-image]
+    language: zh
+- id: route-zh-cn-3-convert-heic-to-jpg
+  surface: guide
+  locale: zh-CN
+  suite: routing
+  message: "我的苹果手机照片是HEIC格式，怎么转成JPG？"
+  expect:
+    actions: [tool:convert-heic-to-jpg]
+    language: zh
+- id: route-zh-tw-1-compress-video
+  surface: guide
+  locale: zh-TW
+  suite: routing
+  message: "要怎麼把影片壓縮小一點，才能用電子郵件寄出？"
+  expect:
+    actions: [tool:compress-video]
+    language: zh
+- id: route-zh-tw-2-convert-video-to-animated-gif
+  surface: guide
+  locale: zh-TW
+  suite: routing
+  message: "我想把一小段影片轉成 GIF 動圖"
+  expect:
+    actions: [tool:convert-video-to-animated-gif]
+    language: zh
+- id: route-zh-tw-3-transcribe-audio
+  surface: guide
+  locale: zh-TW
+  suite: routing
+  message: "我需要把播客錄音轉成文字"
+  expect:
+    actions: [tool:transcribe-audio]
+    language: zh
+- id: route-ko-kr-1-compress-video
+  surface: guide
+  locale: ko-KR
+  suite: routing
+  message: "이메일로 보내려면 동영상 크기를 어떻게 줄이나요?"
+  expect:
+    actions: [tool:compress-video]
+    language: ko
+- id: route-ko-kr-2-remove-background-from-image
+  surface: guide
+  locale: ko-KR
+  suite: routing
+  message: "제품 사진에서 배경을 지우고 싶어요"
+  expect:
+    actions: [tool:remove-background-from-image]
+    language: ko
+- id: route-ko-kr-3-convert-heic-to-jpg
+  surface: guide
+  locale: ko-KR
+  suite: routing
+  message: "아이폰 HEIC 사진을 JPG로 바꾸고 싶어요"
+  expect:
+    actions: [tool:convert-heic-to-jpg]
+    language: ko
+- id: route-ar-sa-1-compress-video
+  surface: guide
+  locale: ar-SA
+  suite: routing
+  message: "كيف أقلل حجم الفيديو لأرسله بالبريد الإلكتروني؟"
+  expect:
+    actions: [tool:compress-video]
+    language: ar
+- id: route-ar-sa-2-remove-background-from-image
+  surface: guide
+  locale: ar-SA
+  suite: routing
+  message: "أريد إزالة الخلفية من صورة منتج"
+  expect:
+    actions: [tool:remove-background-from-image]
+    language: ar
+- id: route-ar-sa-3-transcribe-audio
+  surface: guide
+  locale: ar-SA
+  suite: routing
+  message: "أحتاج إلى تحويل تسجيل البودكاست إلى نص"
+  expect:
+    actions: [tool:transcribe-audio]
+    language: ar
+- id: route-hi-in-1-compress-video
+  surface: guide
+  locale: hi-IN
+  suite: routing
+  message: "ईमेल से भेजने के लिए मैं अपने वीडियो का साइज़ कैसे छोटा करूँ?"
+  expect:
+    actions: [tool:compress-video]
+    language: hi
+- id: route-hi-in-2-remove-background-from-image
+  surface: guide
+  locale: hi-IN
+  suite: routing
+  message: "मुझे प्रोडक्ट की फ़ोटो का बैकग्राउंड हटाना है"
+  expect:
+    actions: [tool:remove-background-from-image]
+    language: hi
+- id: route-hi-in-3-convert-heic-to-jpg
+  surface: guide
+  locale: hi-IN
+  suite: routing
+  message: "मेरे iPhone की HEIC फ़ोटो को JPG में कैसे बदलूँ?"
+  expect:
+    actions: [tool:convert-heic-to-jpg]
+    language: hi
+- id: route-pt-pt-1-compress-video
+  surface: guide
+  locale: pt-PT
+  suite: routing
+  message: "Como posso reduzir o tamanho do meu vídeo para o enviar por e-mail?"
+  expect:
+    actions: [tool:compress-video]
+    language: pt
+- id: route-pt-pt-2-remove-background-from-image
+  surface: guide
+  locale: pt-PT
+  suite: routing
+  message: "Quero remover o fundo de uma fotografia de um produto"
+  expect:
+    actions: [tool:remove-background-from-image]
+    language: pt
+- id: route-pt-pt-3-convert-heic-to-jpg
+  surface: guide
+  locale: pt-PT
+  suite: routing
+  message: "As minhas fotografias do iPhone estão em HEIC, como as converto para JPG?"
+  expect:
+    actions: [tool:convert-heic-to-jpg]
+    language: pt
+- id: route-pt-br-1-compress-video
+  surface: guide
+  locale: pt-BR
+  suite: routing
+  message: "Como posso diminuir o tamanho do meu vídeo para mandar por e-mail?"
+  expect:
+    actions: [tool:compress-video]
+    language: pt
+- id: route-pt-br-2-convert-video-to-animated-gif
+  surface: guide
+  locale: pt-BR
+  suite: routing
+  message: "Quero transformar um vídeo curto em um GIF"
+  expect:
+    actions: [tool:convert-video-to-animated-gif]
+    language: pt
+- id: route-pt-br-3-remove-background-noise
+  surface: guide
+  locale: pt-BR
+  suite: routing
+  message: "Como tiro o ruído de fundo da minha gravação?"
+  expect:
+    actions: [tool:remove-background-noise]
+    language: pt
+- id: route-vi-vn-1-compress-video
+  surface: guide
+  locale: vi-VN
+  suite: routing
+  message: "Làm thế nào để giảm dung lượng video của tôi để gửi qua email?"
+  expect:
+    actions: [tool:compress-video]
+    language: vi
+- id: route-vi-vn-2-remove-background-from-image
+  surface: guide
+  locale: vi-VN
+  suite: routing
+  message: "Tôi muốn xóa nền khỏi ảnh sản phẩm"
+  expect:
+    actions: [tool:remove-background-from-image]
+    language: vi
+- id: route-vi-vn-3-convert-heic-to-jpg
+  surface: guide
+  locale: vi-VN
+  suite: routing
+  message: "Ảnh iPhone của tôi ở định dạng HEIC, làm sao chuyển sang JPG?"
+  expect:
+    actions: [tool:convert-heic-to-jpg]
+    language: vi

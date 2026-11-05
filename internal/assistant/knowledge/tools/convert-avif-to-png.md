@@ -63,3 +63,9 @@ A: AVIF is a highly efficient compressed format, while PNG is lossless, so the P
 - Panel: Convert AVIF to PNG. Media kind: image; task: avif_to_png.
 - Output format is fixed to png.
 - Input format is fixed to avif.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they need an AVIF image as a lossless PNG that keeps transparency, such as a logo or cutout: "AVIF to PNG", "convert AVIF and keep transparent background".
+When to send them elsewhere: If transparency does not matter and a widely accepted photo file is the goal, use Convert AVIF to JPG (convert-avif-to-jpg). For iPhone HEIC photos, use Convert HEIC to JPG (convert-heic-to-jpg).
+Related tools: convert-avif-to-jpg (smaller file without transparency); image-converter (other formats and options); remove-background-from-image (create transparency on a photo); convert-png-to-webp (web-friendly file that keeps alpha)

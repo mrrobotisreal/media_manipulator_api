@@ -61,3 +61,9 @@ A: Yes — iPhone HEIC photos convert cleanly to JPG, PNG, or WebP.
 ## Opens
 
 - Panel: Convert an image. Media kind: image; task: image_converter.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want to convert an image between formats such as JPG, PNG, WebP, AVIF, GIF or HEIC with control over quality, resizing, cropping, rotation, filters or metadata, or when the format pair has no dedicated page: "convert this image".
+When to send them elsewhere: For one common job, the focused pages are simpler: Image Resizer (image-resizer), Compress Image (compress-image), Convert HEIC to JPG (convert-heic-to-jpg) or Image to PDF (image-to-pdf). For a transparent cutout, use Remove Background from Image (remove-background-from-image).
+Related tools: image-resizer (just change dimensions); compress-image (just shrink the file); image-to-pdf (wrap an image in a PDF); remove-exif-metadata (strip all metadata)

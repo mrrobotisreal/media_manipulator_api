@@ -62,3 +62,9 @@ A: You can scale up to a larger size, but upscaling cannot add detail that was n
 
 - Panel: Resize a video. Media kind: video; task: resize_video.
 - Default output format: mp4.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want a different resolution, such as "make this 720p", "scale 4K down to 1080p" or a custom width and height, keeping the aspect ratio by default.
+When to send them elsewhere: Cutting away edges or bars is Crop Video (crop-video). To shrink the file while keeping the resolution use Compress Video (compress-video); to restore detail in a short low-resolution clip with AI use AI Video Restoration (ai-video-restoration).
+Related tools: crop-video (change framing instead of scale); compress-video (smaller file at same resolution); rotate-video (fix orientation); ai-video-restoration (AI upscaling of a short clip)

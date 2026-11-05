@@ -73,3 +73,9 @@ A: Stretched regions are interpolated and lose a little sharpness, roughly in pr
 
 - Opens the Aperture editor with the geometry panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when vertical lines converge, as with a building shot from below, or a document was photographed at an angle, and someone wants it squared by dragging four corners, then auto-cropped.
+When to send them elsewhere: A simple tilt belongs in Straighten a photo (straighten-photo). Curved lines from a wide-angle lens are not corrected. To get a clean flat scan of a paper document use AI Document Scan (ai-document-scan).
+Related tools: straighten-photo (simple tilt correction); ai-document-scan (scan a photographed document); crop-image (custom crop afterwards); sharpen-photo-online (recover detail after correcting)

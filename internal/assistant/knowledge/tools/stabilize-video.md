@@ -65,3 +65,9 @@ A: Yes, but processing takes longer. Consider resizing to 1080p in the same pass
 - Panel: Stabilize a video. Media kind: video; task: stabilize_video.
 - Default output format: mp4.
 - The form opens already set up for this task (effect stabilize).
+
+## Routing
+
+When to send a visitor here: Send visitors here when handheld footage is shaky or bouncy and they want it smoothed without a tripod or desktop editor. It crops slightly to hide the correction.
+When to send them elsewhere: Blurry or low-resolution footage needs AI Video Restoration (ai-video-restoration), not stabilizing. For reframing use Crop Video (crop-video), and to shrink the file use Compress Video (compress-video).
+Related tools: ai-video-restoration (improve detail); crop-video (reframe); change-video-speed (hyperlapse after smoothing); video-trimmer (cut first); compress-video (shrink the result)

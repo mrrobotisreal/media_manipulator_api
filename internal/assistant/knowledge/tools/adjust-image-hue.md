@@ -74,3 +74,9 @@ A: Not in the HSL model the editor uses: lightness is held constant while the an
 
 - Opens the Aperture editor with the hsl panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone wants to shift colours around the colour wheel: rotate all hues, or move only reds, greens, blues or a custom eyedropper colour, with per-range saturation and lightness. Typical asks: "make the green leaves more yellow".
+When to send them elsewhere: A cast from the lighting belongs in White balance (white-balance-photo). To recolour one object while same-coloured things elsewhere stay put, use Change object color (change-image-color) with a mask. For desaturation use Image saturation (image-saturation).
+Related tools: change-image-color (recolour one object); image-saturation (overall colour strength); color-pop (keep one hue, grey the rest); white-balance-photo (remove a lighting cast)

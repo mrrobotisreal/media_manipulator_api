@@ -122,6 +122,11 @@ func (k *EmbeddedKnowledge) Get(id string) (Doc, bool) {
 	return d.Doc, ok
 }
 
+// ToolOptions is a tool's option schema (MM116a).
+func (k *EmbeddedKnowledge) ToolOptions(slug string) (*ToolOptions, bool) {
+	return k.corpus.ToolOptions(slug)
+}
+
 // Capsule is the byte-stable block for a surface (decision 6).
 func (k *EmbeddedKnowledge) Capsule(surface string) string { return k.capsules[surface] }
 

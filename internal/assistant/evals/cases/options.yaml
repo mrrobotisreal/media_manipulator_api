@@ -1,0 +1,404 @@
+# Medi options eval suite (MM116a): does open_tool carry the right form values, from the tool's own schema?
+# >= 40 guide cases; run with `assistant-eval --suite options`. Option checks: internal/assistant/evals/options_check.go.
+
+- id: opt-compress-email-smallest
+  surface: guide
+  suite: options
+  message: "compress this video as small as you can, it is for email"
+  expect:
+    actions: [tool:compress-video]
+    options:
+      - "compress-video.level = smallest || compress-video.crf in 30..40"
+- id: opt-compress-high-quality
+  surface: guide
+  suite: options
+  message: "shrink my video a little but keep the quality high"
+  expect:
+    actions: [tool:compress-video]
+    options:
+      - "compress-video.level = high_quality || compress-video.crf in 18..24"
+- id: opt-compress-720-h265
+  surface: guide
+  suite: options
+  message: "compress my video to 720p using H.265"
+  expect:
+    actions: [tool:compress-video]
+    options:
+      - "compress-video.resolution = 720"
+      - "compress-video.codec = h265"
+- id: opt-compress-no-audio
+  surface: guide
+  suite: options
+  message: "make my video file smaller and drop the audio track"
+  expect:
+    actions: [tool:compress-video]
+    options:
+      - "compress-video.stripAudio = true"
+- id: opt-image-resize-800
+  surface: guide
+  suite: options
+  message: "resize my image so it is 800 pixels wide"
+  expect:
+    actions: [tool:image-resizer]
+    options:
+      - "image-resizer.width = 800"
+- id: opt-image-compress-q60
+  surface: guide
+  suite: options
+  message: "compress my photo with JPEG quality around 60"
+  expect:
+    actions: [tool:compress-image]
+    options:
+      - "compress-image.quality in 55..65"
+- id: opt-image-compress-keep-detail
+  surface: guide
+  suite: options
+  message: "compress my photo but keep it sharp and high quality"
+  expect:
+    actions: [tool:compress-image]
+    options:
+      - "compress-image.quality in 80..95 || compress-image.options absent"
+- id: opt-gif-480-15fps
+  surface: guide
+  suite: options
+  message: "make a GIF from my video, 480 pixels wide at 15 frames per second"
+  expect:
+    actions: [tool:convert-video-to-animated-gif]
+    options:
+      - "convert-video-to-animated-gif.gifWidth = 480"
+      - "convert-video-to-animated-gif.gifFps = 15"
+- id: opt-gif-small-colors
+  surface: guide
+  suite: options
+  message: "make a tiny GIF from my video with only 64 colours"
+  expect:
+    actions: [tool:convert-video-to-animated-gif]
+    options:
+      - "convert-video-to-animated-gif.gifColors = 64"
+- id: opt-video-half-speed
+  surface: guide
+  suite: options
+  message: "slow my video down to half speed"
+  expect:
+    actions: [tool:change-video-speed]
+    options:
+      - "change-video-speed.speed = 0.5"
+- id: opt-video-double-speed
+  surface: guide
+  suite: options
+  message: "play my video at double speed"
+  expect:
+    actions: [tool:change-video-speed]
+    options:
+      - "change-video-speed.speed = 2"
+- id: opt-audio-speed-1-5
+  surface: guide
+  suite: options
+  message: "speed my audio up to 1.5 times"
+  expect:
+    actions: [tool:change-audio-speed]
+    options:
+      - "change-audio-speed.speed = 1.5"
+- id: opt-pitch-up-3
+  surface: guide
+  suite: options
+  message: "raise my audio by three semitones"
+  expect:
+    actions: [tool:change-audio-pitch]
+    options:
+      - "change-audio-pitch.pitchSemitones = 3"
+- id: opt-pitch-down-2
+  surface: guide
+  suite: options
+  message: "lower the pitch of my voice recording by two semitones"
+  expect:
+    actions: [tool:change-audio-pitch]
+    options:
+      - "change-audio-pitch.pitchSemitones = -2"
+- id: opt-extract-audio-flac
+  surface: guide
+  suite: options
+  message: "pull the audio out of my video as FLAC"
+  expect:
+    actions: [tool:extract-audio-from-video]
+    options:
+      - "extract-audio-from-video.format = flac"
+- id: opt-wav-mp3-320
+  surface: guide
+  suite: options
+  message: "convert my WAV to a high quality 320 kbps MP3"
+  expect:
+    actions: [tool:convert-wav-to-mp3]
+    options:
+      - "convert-wav-to-mp3.bitrate = 320"
+- id: opt-audio-128-mono
+  surface: guide
+  suite: options
+  message: "convert my audio to a 128 kbps mono MP3 for a voice memo"
+  expect:
+    actions: [tool:audio-converter]
+    options:
+      - "audio-converter.bitrate = 128"
+      - "audio-converter.channels = mono"
+- id: opt-pdf-png-300dpi
+  surface: guide
+  suite: options
+  message: "turn my PDF into PNG images at 300 dpi"
+  expect:
+    actions: [tool:pdf-to-png]
+    options:
+      - "pdf-to-png.dpi = 300"
+- id: opt-pdf-first-page
+  surface: guide
+  suite: options
+  message: "I only need the first page of my PDF as a JPG"
+  expect:
+    actions: [tool:pdf-to-jpg]
+    options:
+      - "pdf-to-jpg.pageSelection = first"
+- id: opt-frames-every-10s
+  surface: guide
+  suite: options
+  message: "save a picture from my video every 10 seconds"
+  expect:
+    actions: [tool:extract-frames-from-video]
+    options:
+      - "extract-frames-from-video.frameMode = every_n_seconds"
+      - "extract-frames-from-video.intervalSeconds = 10"
+- id: opt-frames-png
+  surface: guide
+  suite: options
+  message: "extract frames from my video as PNG files"
+  expect:
+    actions: [tool:extract-frames-from-video]
+    options:
+      - "extract-frames-from-video.format = png"
+- id: opt-upscale-2x
+  surface: guide
+  suite: options
+  message: "upscale my image to twice the size with AI"
+  expect:
+    actions: [tool:ai-image-upscaler]
+    options:
+      - "ai-image-upscaler.upscaleScale = 2"
+- id: opt-faces-pixelate
+  surface: guide
+  suite: options
+  message: "pixelate the faces in my photo instead of blurring"
+  expect:
+    actions: [tool:blur-faces-in-photo]
+    options:
+      - "blur-faces-in-photo.faceMode = pixelate"
+- id: opt-redact-all-text
+  surface: guide
+  suite: options
+  message: "hide every piece of text in my screenshot, not only personal details"
+  expect:
+    actions: [tool:redact-text-in-image]
+    options:
+      - "redact-text-in-image.textDetect = all-text"
+- id: opt-rotate-180
+  surface: guide
+  suite: options
+  message: "my video is upside down, turn it around"
+  expect:
+    actions: [tool:rotate-video]
+    options:
+      - "rotate-video.rotation = 180"
+- id: opt-trim-10-45
+  surface: guide
+  suite: options
+  message: "keep only the part of my video from 10 seconds to 45 seconds"
+  expect:
+    actions: [tool:video-trimmer]
+    options:
+      - "video-trimmer.startTime = 10"
+      - "video-trimmer.endTime = 45"
+- id: opt-text-hello
+  surface: guide
+  suite: options
+  message: "write the word Hello on my picture"
+  expect:
+    actions: [tool:add-text-to-image]
+    options:
+      - "add-text-to-image.overlayText = Hello"
+- id: opt-text-big
+  surface: guide
+  suite: options
+  message: "put a very large title on my photo that says SALE"
+  expect:
+    actions: [tool:add-text-to-image]
+    options:
+      - "add-text-to-image.overlayText = SALE"
+      - "add-text-to-image.textSize in 96..400"
+- id: opt-eq-bass
+  surface: guide
+  suite: options
+  message: "boost the bass in my song"
+  expect:
+    actions: [tool:audio-equalizer]
+    options:
+      - "audio-equalizer.equalizerPreset = bass-boost"
+- id: opt-reverb-hall
+  surface: guide
+  suite: options
+  message: "add a big hall reverb to my vocal recording"
+  expect:
+    actions: [tool:add-reverb-to-audio]
+    options:
+      - "add-reverb-to-audio.reverbType = hall"
+- id: opt-normalize
+  surface: guide
+  suite: options
+  message: "normalize the loudness of my audio"
+  expect:
+    actions: [tool:normalize-audio]
+    options:
+      - "normalize-audio.normalize = true || normalize-audio.options absent"
+- id: opt-volume-150
+  surface: guide
+  suite: options
+  message: "make my audio one and a half times louder"
+  expect:
+    actions: [tool:adjust-audio-volume]
+    options:
+      - "adjust-audio-volume.volume = 1.5"
+- id: opt-stabilize
+  surface: guide
+  suite: options
+  message: "steady my shaky video"
+  expect:
+    actions: [tool:stabilize-video]
+    options:
+      - "stabilize-video.stabilize = true || stabilize-video.options absent"
+- id: opt-fps-30
+  surface: guide
+  suite: options
+  message: "convert my video to 30 frames per second"
+  expect:
+    actions: [tool:change-video-frame-rate]
+    options:
+      - "change-video-frame-rate.targetFps = 30"
+- id: opt-interpolate-120
+  surface: guide
+  suite: options
+  message: "use AI to smooth my video up to 120 fps"
+  expect:
+    actions: [tool:ai-frame-interpolation]
+    options:
+      - "ai-frame-interpolation.aiTargetFps = 120"
+- id: opt-vocals-wav
+  surface: guide
+  suite: options
+  message: "isolate the vocals of this song and give me a WAV"
+  expect:
+    actions: [tool:isolate-vocals-from-song]
+    options:
+      - "isolate-vocals-from-song.stemFormat = wav"
+- id: opt-transcribe-es-srt
+  surface: guide
+  suite: options
+  message: "transcribe my Spanish recording into an SRT file"
+  expect:
+    actions: [tool:transcribe-audio]
+    options:
+      - "transcribe-audio.format = srt"
+      - "transcribe-audio.language in [es|spanish|Spanish|es-ES]"
+- id: opt-translate-french
+  surface: guide
+  suite: options
+  message: "translate my subtitles into French"
+  expect:
+    actions: [tool:caption-translator]
+    options:
+      - "caption-translator.targetLanguage in [fr|fr-FR|french|French]"
+- id: opt-waveform-image
+  surface: guide
+  suite: options
+  message: "make a wide waveform picture of my audio as a PNG, 1920 pixels wide"
+  expect:
+    actions: [tool:audio-waveform-generator]
+    options:
+      - "audio-waveform-generator.output = image"
+      - "audio-waveform-generator.width = 1920"
+- id: opt-crop-square
+  surface: guide
+  suite: options
+  message: "crop my video to a 1080 by 1080 square"
+  expect:
+    actions: [tool:crop-video]
+    options:
+      - "crop-video.cropWidth = 1080"
+      - "crop-video.cropHeight = 1080"
+- id: opt-resize-1280
+  surface: guide
+  suite: options
+  message: "resize my video to 1280 pixels wide"
+  expect:
+    actions: [tool:resize-video]
+    options:
+      - "resize-video.width = 1280"
+- id: opt-strip-metadata
+  surface: guide
+  suite: options
+  message: "strip all the metadata from my picture"
+  expect:
+    actions: [tool:remove-exif-metadata]
+    options:
+      - "remove-exif-metadata.metadataMode = strip || remove-exif-metadata.options absent"
+- id: opt-summary-deep
+  surface: guide
+  suite: options
+  message: "give me a deep, detailed summary of my video"
+  expect:
+    actions: [tool:summarize-video]
+    options:
+      - "summarize-video.depth = deep"
+- id: opt-dash-vp9
+  surface: guide
+  suite: options
+  message: "package my video as DASH using the VP9 codec"
+  expect:
+    actions: [tool:transcode-to-dash]
+    options:
+      - "transcode-to-dash.dashCodec = vp9"
+- id: opt-brighten-video
+  surface: guide
+  suite: options
+  message: "brighten my video a bit"
+  expect:
+    actions: [tool:adjust-video-color]
+    options:
+      - "adjust-video-color.brightness in 5..50"
+- id: opt-mirror
+  surface: guide
+  suite: options
+  message: "mirror my video left to right"
+  expect:
+    actions: [tool:flip-video]
+    options:
+      - "flip-video.flipHorizontal = true || flip-video.options absent"
+- id: opt-editor-no-options
+  surface: guide
+  suite: options
+  message: "open the video editor and set it to my favourite settings"
+  expect:
+    actions: [tool:content-studio]
+    options:
+      - "content-studio.options absent"
+- id: opt-out-of-range
+  surface: guide
+  suite: options
+  message: "compress my photo to JPEG quality 250"
+  expect:
+    actions: [tool:compress-image]
+    options:
+      - "compress-image.quality in 1..100 || compress-image.options absent"
+- id: opt-invented-field
+  surface: guide
+  suite: options
+  message: "compress my video and add a watermark and a blue border"
+  expect:
+    actions: [tool:compress-video]
+    options:
+      - "compress-video.options absent || compress-video.level present || compress-video.crf present"

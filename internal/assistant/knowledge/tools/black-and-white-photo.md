@@ -74,3 +74,9 @@ A: Turn on Tint in the Black & white panel and set Tint hue to about 35 to 40 wi
 
 - Opens the Aperture editor with the blackWhite panel in front and the bw-film look applied.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone wants a quality black and white conversion with control over how bright each colour becomes, plus a gentle film curve and grain, or a high-contrast look with a dark sky.
+When to send them elsewhere: To keep one colour and grey the rest use Color pop (color-pop). For a quick one-click grayscale or sepia use Convert Image to Black & White (grayscale-image). For a photo already monochrome but flat use Curves (photo-curves) or Adjust contrast (adjust-image-contrast).
+Related tools: grayscale-image (one-click grayscale or sepia); color-pop (keep one colour); tint-photo (sepia or colour wash on top); split-toning (tone shadows and highlights)

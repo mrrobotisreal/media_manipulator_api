@@ -65,3 +65,9 @@ A: Boosts can. Turn on normalise, which includes a true-peak limiter.
 - Panel: Equalize an audio file. Media kind: audio; task: audio_equalizer.
 - Default output format: mp3.
 - The form opens already set up for this task (effect equalizer).
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want to change the tone of audio: bass boost, treble lift, vocal presence, a genre preset, or low-pass and high-pass filters.
+When to send them elsewhere: Hiss and background noise belong in Remove Background Noise (remove-background-noise), and muddy speech in Clean Voice Audio (clean-voice-audio). For consistent loudness use Normalize Audio (normalize-audio).
+Related tools: clean-voice-audio (clean up speech); remove-background-noise (reduce noise); normalize-audio (even out loudness); add-reverb-to-audio (add space)

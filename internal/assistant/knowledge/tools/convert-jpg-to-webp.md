@@ -65,3 +65,9 @@ A: Both formats are lossy. At quality 80–85 the result looks the same as the J
 - Panel: Convert JPG to WebP. Media kind: image; task: jpg_to_webp.
 - Output format is fixed to webp.
 - Input format is fixed to jpg.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want JPG photos as smaller WebP files for faster web pages at similar visual quality: "JPG to WebP", "optimise photos for my website".
+When to send them elsewhere: If the target app or form does not accept WebP, keep JPG and use Compress Image (compress-image) instead. For PNG sources with transparency use Convert PNG to WebP (convert-png-to-webp).
+Related tools: convert-png-to-webp (same for PNG graphics); convert-webp-to-jpg (go back to JPG); compress-image (shrink while staying JPG); image-resizer (reduce dimensions too)

@@ -73,3 +73,9 @@ A: Only the color channels. Alpha is never touched by any adjustment, so a produ
 
 - Opens the Aperture editor with the photoFilter panel in front.
 - Built-in looks that can be named as a preset: color-pop-red, color-pop-yellow, color-pop-green, color-pop-cyan, color-pop-blue, color-pop-magenta, bw-film, bw-high-contrast, warm, cool, matte, fade, vivid, punch, cross-process, vintage, portrait-soften, landscape, auto.
+
+## Routing
+
+When to send a visitor here: Use when someone wants to lay a colour over a photo like a lens filter: warming, cooling, sepia, red, green, blue or a custom colour, at a chosen density while keeping brightness. Typical asks: "give this photo a warm tone".
+When to send them elsewhere: To remove a cast rather than add one use White balance (white-balance-photo). For different colours in shadows and highlights use Split toning (split-toning). To apply an existing .cube grade use Apply a LUT (apply-lut-to-photo).
+Related tools: white-balance-photo (remove a colour cast); split-toning (two-colour toning); apply-lut-to-photo (apply a .cube grade); black-and-white-photo (monochrome base for sepia)

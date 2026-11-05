@@ -66,3 +66,9 @@ A: Yes — enable "Split stereo channels" in advanced settings and pick a differ
 ## Opens
 
 - Panel: Generate a waveform from an audio file. Media kind: audio; task: audio_waveform.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want a waveform visual from audio: an animated waveform video for a podcast or music clip on social media, or a still waveform image for a thumbnail or album art.
+When to send them elsewhere: If the audio is inside a video, extract it first with Extract Audio from Video (extract-audio-from-video). To put audio onto an existing video rather than generate visuals, use Add Audio to Video (stitch-audio-to-video).
+Related tools: extract-audio-from-video (get audio from a video); stitch-audio-to-video (combine audio with video); srt-generator (captions for the clip)

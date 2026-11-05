@@ -62,3 +62,9 @@ A: Yes — horizontal and vertical flip options are included.
 
 - Panel: Rotate a video. Media kind: video; task: rotate_video.
 - Default output format: mp4.
+
+## Routing
+
+When to send a visitor here: Send visitors here when a video plays sideways or upside down and needs a 90, 180 or 270 degree rotation baked into the frames, optionally with a mirror flip. Fits "my phone video is sideways".
+When to send them elsewhere: If the only problem is a mirrored image, Flip & Mirror Video (flip-video) is the more direct page. Reframing belongs in Crop Video (crop-video), and photos go to Rotate Image (rotate-image).
+Related tools: flip-video (mirror only); crop-video (reframe after rotating); resize-video (change resolution); rotate-image (rotate a photo instead)

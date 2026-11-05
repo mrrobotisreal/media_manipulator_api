@@ -64,6 +64,8 @@ type Knowledge interface {
 	Capsule(surface string) string
 	Routes() *Routes
 	InScope(q string) bool
+	// ToolOptions is a tool's option schema (MM116a); false when the corpus has none.
+	ToolOptions(slug string) (*ToolOptions, bool)
 }
 
 // RouteEntry is one navigable target in routes.json (design §7.1).
@@ -149,8 +151,9 @@ type stubKnowledge struct{ routes *Routes }
 // NewStubKnowledge is the MM104 knowledge base (MM105 replaces it).
 func NewStubKnowledge() Knowledge { return stubKnowledge{routes: EmbeddedRoutes()} }
 
-func (stubKnowledge) Search(string, string, int) []Hit { return nil }
-func (stubKnowledge) Get(string) (Doc, bool)           { return Doc{}, false }
-func (stubKnowledge) Capsule(string) string            { return "" }
-func (k stubKnowledge) Routes() *Routes                { return k.routes }
-func (stubKnowledge) InScope(string) bool              { return true }
+func (stubKnowledge) Search(string, string, int) []Hit        { return nil }
+func (stubKnowledge) Get(string) (Doc, bool)                  { return Doc{}, false }
+func (stubKnowledge) Capsule(string) string                   { return "" }
+func (k stubKnowledge) Routes() *Routes                       { return k.routes }
+func (stubKnowledge) InScope(string) bool                     { return true }
+func (stubKnowledge) ToolOptions(string) (*ToolOptions, bool) { return nil, false }

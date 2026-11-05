@@ -64,3 +64,9 @@ A: PNG is lossless and stores every pixel exactly, which is large for photos. JP
 - Panel: Convert PNG to JPG. Media kind: image; task: png_to_jpg.
 - Output format is fixed to jpg.
 - Input format is fixed to png.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want to turn a PNG, usually a photo or large screenshot, into a smaller JPG that works everywhere: "PNG to JPG", "make this PNG smaller as a JPG". They choose the quality, and transparency is flattened onto a solid background.
+When to send them elsewhere: If transparency must survive, keep PNG or use Convert PNG to WebP (convert-png-to-webp). For other source or target formats, use Image Converter (image-converter).
+Related tools: convert-png-to-webp (smaller file that keeps transparency); convert-jpg-to-png (go the other way); image-converter (other formats and options); compress-image (tune quality and size further)

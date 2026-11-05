@@ -64,3 +64,9 @@ A: No — PDF pages are opaque, so rendered pages have a white background. There
 
 - Panel: Convert PDF to PNG. Media kind: pdf; task: pdf_to_png.
 - Default output format: png.
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want PDF pages as lossless PNG images, especially pages with crisp text, diagrams or line art: "PDF to PNG", "export this slide as a PNG". All pages come as a ZIP, or just the first page as one PNG.
+When to send them elsewhere: For photo-heavy pages where smaller files matter more than sharp edges, use PDF to JPG (pdf-to-jpg). To go from images to a PDF, use Image to PDF (image-to-pdf).
+Related tools: pdf-to-jpg (smaller files for photo pages); pdf-converter (both directions in one place); image-to-pdf (images back into a PDF); image-converter (convert the PNGs further)

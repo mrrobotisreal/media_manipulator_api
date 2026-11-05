@@ -268,6 +268,7 @@ type fakeKnowledge struct {
 	docs   map[string]Doc
 	hits   []Hit
 	routes *Routes
+	opts   map[string]*ToolOptions
 }
 
 func (k fakeKnowledge) Search(string, string, int) []Hit { return k.hits }
@@ -275,6 +276,10 @@ func (k fakeKnowledge) Get(id string) (Doc, bool)        { d, ok := k.docs[id]; 
 func (fakeKnowledge) Capsule(s string) string            { return "CAPSULE:" + s }
 func (k fakeKnowledge) Routes() *Routes                  { return k.routes }
 func (fakeKnowledge) InScope(string) bool                { return true }
+func (k fakeKnowledge) ToolOptions(slug string) (*ToolOptions, bool) {
+	o, ok := k.opts[slug]
+	return o, ok
+}
 
 // ---- recording emitter -----------------------------------------------------------------
 

@@ -63,3 +63,9 @@ A: Yes. Use the Change audio pitch tool, which has a time-stretch control.
 - Panel: Change the speed of an audio file. Media kind: audio; task: change_audio_speed.
 - Default output format: mp3.
 - The form opens already set up for this task (effect speed).
+
+## Routing
+
+When to send a visitor here: Send visitors here when they want an audio file faster (1.1x to 4x) or slower (0.25x to 0.9x) without changing pitch. Fits "speed up this lecture to 1.5x" or "slow this song down to practise".
+When to send them elsewhere: To change the key without changing tempo use Change Audio Pitch (change-audio-pitch). For video files use Change Video Speed (change-video-speed).
+Related tools: change-audio-pitch (change key instead); change-video-speed (video files); audio-converter (change format); normalize-audio (even out loudness)
