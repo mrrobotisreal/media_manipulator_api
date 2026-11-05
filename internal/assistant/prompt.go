@@ -38,8 +38,15 @@ type LiveContext struct {
 
 // surfaceIntro is the one surface-specific sentence in block 1 (stable).
 var surfaceIntro = map[string]string{
-	SurfaceGuide:  "Surface: the site guide on public pages. Help visitors find pages and tools, explain plans and limits from the live block, and answer media craft questions. You cannot edit anything here; offer navigate/open_tool buttons.",
-	SurfaceStudio: "Surface: the Darkroom (video editor) copilot. The user's timeline is described in the document digest. Edit only with apply_edits using ids from the digest.",
+	SurfaceGuide: "Surface: the site guide on public pages. Help visitors find pages and tools, explain plans and limits from the live block, and answer media craft questions. You cannot edit anything here; offer navigate/open_tool buttons.",
+	SurfaceStudio: "Surface: the Darkroom (video editor) copilot. The user's timeline is described in the document digest. Edit only with apply_edits using ids from the digest. " +
+		"Clips are addressed by id and tracks by their digest label (V1, V2 for video, A1, A2 for audio); times are timeline seconds, keyframe t is seconds from the clip's start. " +
+		"Ops: apply_look applies a named look from the Looks catalog (prefer it for a mood: cinematic, teal-orange, warm-film, noir…), grade sets Lumetri values directly, " +
+		"add_title builds a designed lowerThird, title, endCard or caption with animateIn/animateOut, set_transition adds an entrance transition from the previous clip on the same track, " +
+		"set_keyframes animates scale/position/opacity/volume (Ken Burns, fades), audio_preset and set_ducking fix voice and music, set_speed, freeze_frame, split, trim, move_clip, " +
+		"set_volume (dB), add_marker, set_caption_style and set_canvas (16:9, 9:16, 1:1, 4:5). " +
+		"Ask with ask_user before delete_clip or a ripple. Captions, voiceover, voice cleanup, stem splits and export are not edits: offer them with suggest_action " +
+		"(generate_captions, voiceover, derive_audio with params.operation voice_clean | split_vocals | split_instrumental, export).",
 	SurfaceVector: "Surface: the Motion (SVG animation) copilot. The user's layer tree and tracks are in the document digest. Edit only with apply_edits using ids from the digest.",
 	SurfacePhoto: "Surface: the Aperture (photo editor) copilot. The user's layers and image stats are in the document digest. Edit only with apply_edits using ids from the digest. " +
 		"Ops: add_layer stacks a new adjustment on top (params default to neutral, so send only the ones you change); update_layer changes an existing layer from the digest (params merge); " +

@@ -125,7 +125,7 @@ _Avoid_: "medi" in Go identifiers, routes or tables; "chatbot".
 The two Medi surfaces. The **guide** (`surface: guide`) answers on public pages, is free for everyone (rate-limited) and can only show buttons (`navigate`, `open_tool`). A **copilot** (`surface: studio | vector | photo`) runs inside an editor, needs an account, spends `assistant_turns`, and can edit (`apply_edits`) or offer a button (`suggest_action`).
 
 **Op schema** (`internal/assistant/ops/schema/<surface>.json`, MM108):
-The JSON Schema of one editor's `apply_edits` op list, generated in the UI from the Zod vocabulary and committed byte for byte here (`TestPhotoOpsSchemaMatchesUI`). Its presence switches `apply_edits` on for that surface; it is compacted and its `$defs` hoisted when inlined into the tool (`applyEditsParameters`). Photo since MM108; studio MM109, vector MM110.
+The JSON Schema of one editor's `apply_edits` op list, generated in the UI from the Zod vocabulary and committed byte for byte here (`TestPhotoOpsSchemaMatchesUI`, `TestStudioOpsSchemaMatchesUI`; `photo.json` MM108, `studio.json` MM109). Its presence switches `apply_edits` on for that surface; it is compacted and its `$defs` hoisted when inlined into the tool (`applyEditsParameters`). Photo since MM108; studio MM109, vector MM110.
 
 **Turn** (MM104):
 One user message and everything the server streams for it, identified by a `turnId`. An **editResult continuation** (the client reporting an applied edit, optionally with an after-frame) continues the same turn and is never charged; at most `ASSISTANT_MAX_EDIT_ROUNDS` edits per turn. "Plan my edit" is a turn on the plan model that costs `ASSISTANT_PLAN_TURN_COST` units.
