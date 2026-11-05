@@ -20,6 +20,7 @@ Skin sits in the orange range and its opposite is teal, so pushing shadows towar
 ```json
 {
   "summary": "Teal and orange grade",
+  "reason": "You asked for a teal and orange grade: warm skin tones against cool shadows",
   "ops": [
     {"op": "add_layer", "type": "splitTone", "params": {"shadows": {"hue": 190, "saturation": 35}, "highlights": {"hue": 30, "saturation": 28}, "balance": 10}},
     {"op": "add_layer", "type": "colorBalance", "params": {"shadows": {"r": -8, "g": 0, "b": 10}, "highlights": {"r": 8, "g": 2, "b": -6}}},

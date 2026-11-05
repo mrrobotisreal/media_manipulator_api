@@ -20,6 +20,7 @@ A professional lifts exposure first, then protects what was already bright. Rais
 ```json
 {
   "summary": "Brighten and open the shadows",
+  "reason": "The photo reads dark, so I raise exposure and open the shadows",
   "ops": [
     {"op": "add_layer", "type": "exposure", "params": {"ev": 0.7}},
     {"op": "add_layer", "type": "tone", "params": {"highlights": -25, "shadows": 35, "whites": 10, "blacks": -5}}

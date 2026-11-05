@@ -20,6 +20,7 @@ Opacity 0 to 1 and a 16 to 24 px rise over 0.3 to 0.5 s with ease-out. Exits use
 ```json
 {
   "summary": "Fade and rise",
+  "reason": "You asked for an entrance: the layer fades in while rising a few pixels",
   "ops": [
     {"op": "animate", "layerId": "LAYER_ID", "property": "opacity", "keyframes": [{"t": 0, "value": 0, "easing": "easeOut"}, {"t": 400, "value": 1, "easing": "linear"}]},
     {"op": "animate", "layerId": "LAYER_ID", "property": "transform.y", "keyframes": [{"t": 0, "value": 20, "easing": "easeOut"}, {"t": 400, "value": 0, "easing": "linear"}]}

@@ -20,6 +20,7 @@ A spinner is a constant-speed rotation from 0 to 360 degrees with linear easing 
 ```json
 {
   "summary": "Looping spin",
+  "reason": "You asked for a loader: a looping rotation that repeats forever",
   "ops": [
     {"op": "animate", "layerId": "LAYER_ID", "property": "transform.rotation", "keyframes": [{"t": 0, "value": 0, "easing": "linear"}, {"t": 1000, "value": 360, "easing": "linear"}]},
     {"op": "set_duration", "ms": 1000},

@@ -20,6 +20,7 @@ A good conversion is not plain greyscale: each colour range gets its own brightn
 ```json
 {
   "summary": "Black and white (film)",
+  "reason": "You asked for black and white: a film-style conversion keeps the tones smooth",
   "ops": [
     {"op": "apply_preset", "presetId": "bw-film"}
   ]

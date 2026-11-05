@@ -20,6 +20,7 @@ The `motionPath` animator moves the layer along a guide path over the span; auto
 ```json
 {
   "summary": "Follow the path",
+  "reason": "You asked for movement along a path: the layer follows the path and turns with it",
   "ops": [
     {"op": "apply_animator", "layerIds": ["LAYER_ID"], "animator": "motionPath", "span": {"start": 0, "end": 2000, "easing": "easeBoth"}, "options": {"pathId": "GUIDE_PATH_ID", "autoOrient": true}}
   ]

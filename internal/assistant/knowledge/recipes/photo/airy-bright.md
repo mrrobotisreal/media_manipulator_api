@@ -20,6 +20,7 @@ Airy means bright midtones and open shadows with low contrast, gently lifted bla
 ```json
 {
   "summary": "Airy look",
+  "reason": "You asked for an airy look: lift the shadows and whites, soften the contrast",
   "ops": [
     {"op": "add_layer", "type": "exposure", "params": {"ev": 0.4}},
     {"op": "add_layer", "type": "tone", "params": {"shadows": 30, "blacks": 15, "highlights": -10}},

@@ -20,6 +20,7 @@ A named range is 60 degrees wide; an in-between hue needs a custom centre. Read 
 ```json
 {
   "summary": "Grey except one hue",
+  "reason": "You named one colour to keep, so every other hue range is desaturated",
   "ops": [
     {"op": "grey_except", "ranges": [{"hue": 185, "width": 40}]}
   ]

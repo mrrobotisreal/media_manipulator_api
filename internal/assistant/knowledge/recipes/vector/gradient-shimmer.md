@@ -20,6 +20,7 @@ Animate a gradient's stop offsets so a lighter band moves across, over 1.2 to 2 
 ```json
 {
   "summary": "Gradient shimmer",
+  "reason": "You asked for a shimmer: a highlight band travels across the gradient",
   "ops": [
     {"op": "apply_animator", "layerIds": ["LAYER_ID"], "animator": "gradient", "span": {"start": 0, "end": 1600, "easing": "easeBoth"}},
     {"op": "set_loop", "loop": true}

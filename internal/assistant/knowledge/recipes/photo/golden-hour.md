@@ -20,6 +20,7 @@ Real golden light is warm in the highlights and less warm in the shadows, so a p
 ```json
 {
   "summary": "Golden-hour warmth",
+  "reason": "You asked for golden-hour warmth: a warmer white balance and a soft glow in the highlights",
   "ops": [
     {"op": "add_layer", "type": "whiteBalance", "params": {"temperature": 25, "tint": 5}},
     {"op": "add_layer", "type": "splitTone", "params": {"highlights": {"hue": 40, "saturation": 30}, "shadows": {"hue": 20, "saturation": 10}}},

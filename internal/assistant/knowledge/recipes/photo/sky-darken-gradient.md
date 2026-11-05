@@ -20,6 +20,7 @@ A graduated neutral-density filter darkens only the top. A gradient mask from th
 ```json
 {
   "summary": "Darken the sky",
+  "reason": "The sky is brighter than the ground, so a gradient mask darkens only the top",
   "ops": [
     {"op": "add_layer", "type": "exposure", "params": {"ev": -0.8}, "name": "Sky", "mask": {"components": [{"kind": "gradient", "from": {"x": 0.5, "y": 0.55}, "to": {"x": 0.5, "y": 0.1}, "feather": 0.2}]}},
     {"op": "add_layer", "type": "dehaze", "params": {"amount": 15}, "mask": {"components": [{"kind": "gradient", "from": {"x": 0.5, "y": 0.55}, "to": {"x": 0.5, "y": 0.1}, "feather": 0.2}]}}

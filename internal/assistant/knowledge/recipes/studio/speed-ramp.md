@@ -20,6 +20,7 @@ Speed in Darkroom is set per clip, so a ramp is made by splitting at the moment 
 ```json
 {
   "summary": "Slow-motion moment",
+  "reason": "You asked for a slow-motion moment: I slow just that clip and keep its pitch",
   "ops": [
     {"op": "split", "clipId": "CLIP_ID", "at": 6.0},
     {"op": "split", "clipId": "NEW_CLIP_ID", "at": 8.0},

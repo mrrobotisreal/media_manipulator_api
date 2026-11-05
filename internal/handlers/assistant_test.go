@@ -451,7 +451,7 @@ func TestAssistantChargingMatrix(t *testing.T) {
 // Acceptance 2: an edits turn then its editResult continuation, not charged.
 func TestAssistantEditsAndContinuation(t *testing.T) {
 	g := newAsstRig(t, nil,
-		asstRound{text: "Done.", call: &assistant.ToolCall{ID: "e1", Name: "apply_edits", Arguments: `{"summary":"Grey except red","ops":[{"op":"grey_except","ranges":["red"]}]}`}},
+		asstRound{text: "Done.", call: &assistant.ToolCall{ID: "e1", Name: "apply_edits", Arguments: `{"summary":"Grey except red","reason":"You asked to keep only the red","ops":[{"op":"grey_except","ranges":["red"]}]}`}},
 		asstRound{text: "The jacket stays red."})
 	w := g.do("POST", "/api/assistant/chat", "free", asstPhotoBody)
 	evs := sse(t, w)
@@ -602,7 +602,7 @@ func TestAssistantAttributionTitle(t *testing.T) {
 // field names. (The ticket's sample transcript is this test's output.)
 func TestAssistantSSETranscript(t *testing.T) {
 	g := newAsstRig(t, nil, asstRound{text: "Open Compress video."},
-		asstRound{text: "Done.", call: &assistant.ToolCall{ID: "e1", Name: "apply_edits", Arguments: `{"summary":"Grey except red","ops":[{"op":"grey_except","ranges":["red"]}]}`}})
+		asstRound{text: "Done.", call: &assistant.ToolCall{ID: "e1", Name: "apply_edits", Arguments: `{"summary":"Grey except red","reason":"You asked to keep only the red","ops":[{"op":"grey_except","ranges":["red"]}]}`}})
 	text := g.do("POST", "/api/assistant/chat", "", asstGuideBody).Body.String()
 	edits := g.do("POST", "/api/assistant/chat", "free", asstPhotoBody).Body.String()
 	for _, want := range []string{
@@ -617,7 +617,7 @@ func TestAssistantSSETranscript(t *testing.T) {
 	}
 	for _, want := range []string{
 		`"model":"anthropic/claude-sonnet-5.5","promptVersion":"` + assistant.PromptVersion() + `"}`,
-		`data: {"type":"edits","callId":"e1","summary":"Grey except red","ops":[{"op":"grey_except","ranges":["red"]}]}` + "\n\n",
+		`data: {"type":"edits","callId":"e1","summary":"Grey except red","reason":"You asked to keep only the red","ops":[{"op":"grey_except","ranges":["red"]}]}` + "\n\n",
 		`data: {"type":"done","awaiting":"edit_result","messageId":"`,
 	} {
 		if !strings.Contains(edits, want) {

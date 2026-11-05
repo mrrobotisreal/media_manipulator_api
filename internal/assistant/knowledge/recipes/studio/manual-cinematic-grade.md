@@ -20,6 +20,7 @@ The Lumetri numbers behind a film look: contrast up about 10 %, saturation down 
 ```json
 {
   "summary": "Cinematic Lumetri grade",
+  "reason": "You asked for a cinematic grade: lifted blacks, cooler shadows and warmer highlights",
   "ops": [
     {"op": "grade", "clipIds": "all", "lumetri": {"contrast": 1.1, "saturation": 0.85, "temperature": 8, "vibrance": 0.15}}
   ]

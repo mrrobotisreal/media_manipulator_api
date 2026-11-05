@@ -20,6 +20,7 @@ Film photographers used a red filter to turn blue sky nearly black and make clou
 ```json
 {
   "summary": "Dramatic BW, dark sky",
+  "reason": "You want drama: black and white with the sky pulled darker for contrast",
   "ops": [
     {"op": "add_layer", "type": "blackWhite", "params": {"reds": 80, "yellows": 70, "greens": 30, "cyans": -20, "blues": -60, "magentas": 60}},
     {"op": "add_layer", "type": "brightnessContrast", "params": {"contrast": 30}},

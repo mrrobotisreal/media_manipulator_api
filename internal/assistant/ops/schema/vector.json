@@ -14,6 +14,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "rect"
@@ -130,6 +133,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "ellipse"
@@ -236,6 +242,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "line"
@@ -338,6 +347,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "polyline"
@@ -432,6 +444,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -528,6 +543,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "path"
@@ -619,6 +637,9 @@
               "op": {
                 "type": "string",
                 "const": "add_layer"
+              },
+              "reason": {
+                "$ref": "#/$defs/reason"
               },
               "type": {
                 "type": "string",
@@ -763,6 +784,9 @@
                 "type": "string",
                 "const": "add_layer"
               },
+              "reason": {
+                "$ref": "#/$defs/reason"
+              },
               "type": {
                 "type": "string",
                 "const": "group"
@@ -849,6 +873,9 @@
             "type": "string",
             "const": "add_text"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "text": {
             "type": "string",
             "minLength": 1,
@@ -913,6 +940,9 @@
             "type": "string",
             "const": "import_svg"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "markup": {
             "type": "string",
             "minLength": 10,
@@ -937,6 +967,9 @@
             "type": "string",
             "const": "update_layer"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "layerId": {
             "$ref": "#/$defs/layer_id"
           },
@@ -958,6 +991,9 @@
             "type": "string",
             "const": "delete_layer"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "layerId": {
             "$ref": "#/$defs/layer_id"
           }
@@ -974,6 +1010,9 @@
           "op": {
             "type": "string",
             "const": "animate"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "layerId": {
             "$ref": "#/$defs/layer_id"
@@ -1033,6 +1072,9 @@
           "op": {
             "type": "string",
             "const": "apply_animator"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "layerIds": {
             "minItems": 1,
@@ -1096,6 +1138,9 @@
           "op": {
             "type": "string",
             "const": "template"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "kind": {
             "type": "string",
@@ -1170,6 +1215,9 @@
             "type": "string",
             "const": "set_duration"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "ms": {
             "type": "integer",
             "minimum": 100,
@@ -1188,6 +1236,9 @@
           "op": {
             "type": "string",
             "const": "set_canvas"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "width": {
             "type": "number",
@@ -1220,6 +1271,9 @@
             "type": "string",
             "const": "set_loop"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "loop": {
             "type": "boolean"
           }
@@ -1233,6 +1287,11 @@
     ]
   },
   "$defs": {
+    "reason": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 140
+    },
     "coord": {
       "type": "number",
       "minimum": -100000,

@@ -20,6 +20,7 @@ The `landscape` look combines dehaze, vibrance, clarity and a highlight/shadow b
 ```json
 {
   "summary": "Landscape punch",
+  "reason": "The landscape reads flat, so I add clarity, contrast and vibrance",
   "ops": [
     {"op": "apply_preset", "presetId": "landscape"}
   ]

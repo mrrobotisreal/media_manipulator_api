@@ -20,6 +20,7 @@ The background must not get brighter with the face. A professional compresses th
 ```json
 {
   "summary": "Balance a backlit portrait",
+  "reason": "The face reads dark against a bright background, so I compress the range and lift only the subject",
   "ops": [
     {"op": "add_layer", "type": "tone", "params": {"highlights": -55, "shadows": 45, "whites": -10}},
     {"op": "add_layer", "type": "exposure", "params": {"ev": 0.6}, "name": "Subject lift", "mask": {"components": [{"kind": "radial", "center": {"x": 0.5, "y": 0.42}, "rx": 0.28, "ry": 0.38, "feather": 0.6}]}}

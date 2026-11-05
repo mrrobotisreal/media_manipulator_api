@@ -20,6 +20,7 @@ Skin sits in the orange band; pushing the rest of the image towards teal separat
 ```json
 {
   "summary": "Teal and orange",
+  "reason": "You asked for teal and orange: a built-in look gives warm skin against cool shadows",
   "ops": [
     {"op": "apply_look", "clipIds": "all", "lookId": "teal-orange", "intensity": 0.7}
   ]

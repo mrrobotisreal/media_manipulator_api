@@ -20,6 +20,7 @@ A cinematic grade is restrained: slightly lower saturation, a touch of extra con
 ```json
 {
   "summary": "Cinematic grade",
+  "reason": "You asked for a cinematic feel: a graded look with deeper contrast and a teal-leaning shadow tone",
   "ops": [
     {"op": "apply_look", "clipIds": "all", "lookId": "cinematic", "intensity": 0.8}
   ]

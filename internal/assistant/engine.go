@@ -641,7 +641,7 @@ func (r *run) exec(prep *Prepared) {
 			var ev any
 			switch a.Name {
 			case ToolApplyEdits:
-				ev, outcome = EditsEvent{Type: "edits", CallID: a.CallID, Summary: a.Summary, Ops: a.Ops}, "edits"
+				ev, outcome = EditsEvent{Type: "edits", CallID: a.CallID, Summary: a.Summary, Reason: a.Reason, Ops: a.Ops}, "edits"
 			case ToolAskUser:
 				ev = AskEvent{Type: "ask", CallID: a.CallID, Question: a.Question, Choices: a.Choices}
 				if outcome == "" {

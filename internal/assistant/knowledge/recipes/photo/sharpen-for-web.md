@@ -20,6 +20,7 @@ Screen sharpening uses a small radius (0.6 to 1.2 px) and moderate amount; a thr
 ```json
 {
   "summary": "Web sharpening",
+  "reason": "A web export loses crispness when scaled down, so I add light output sharpening",
   "ops": [
     {"op": "add_layer", "type": "sharpen", "params": {"amount": 80, "radius": 0.9, "threshold": 4}}
   ]

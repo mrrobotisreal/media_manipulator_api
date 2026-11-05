@@ -67,7 +67,7 @@ func photoMsg(text string) ChatBody {
 
 func call(id, name, args string) ToolCall { return ToolCall{ID: id, Name: name, Arguments: args} }
 
-const greyOps = `{"summary":"Grey except red","ops":[{"op":"grey_except","ranges":["red"]}]}`
+const greyOps = `{"summary":"Grey except red","reason":"Because the digest shows it","ops":[{"op":"grey_except","ranges":["red"]}]}`
 
 // Acceptance 2: SSE order for a plain text turn; meta first, done last.
 func TestEngineTextTurnEventOrder(t *testing.T) {
@@ -188,7 +188,7 @@ func TestEngineGuideNavigateAndOpenTool(t *testing.T) {
 
 // Acceptance 2: invalid tool args -> one retry with a tool error -> invalid_ops.
 func TestEngineInvalidOpsRetryThenFail(t *testing.T) {
-	bad := call("e1", ToolApplyEdits, `{"summary":"x","ops":[{"op":"delete_everything"}]}`)
+	bad := call("e1", ToolApplyEdits, `{"summary":"x","reason":"Because the digest shows it","ops":[{"op":"delete_everything"}]}`)
 	v := newEnv(t, round{calls: []ToolCall{bad}}, round{calls: []ToolCall{bad}})
 	v.run(v.turn(photoMsg("do it"), "user-1"), nil)
 	reqs := v.p.requests()
@@ -215,7 +215,7 @@ func TestEngineInvalidOpsRetryThenFail(t *testing.T) {
 
 func TestEngineInvalidThenValidRetry(t *testing.T) {
 	v := newEnv(t,
-		round{calls: []ToolCall{call("e1", ToolApplyEdits, `{"summary":"x","ops":[]}`)}},
+		round{calls: []ToolCall{call("e1", ToolApplyEdits, `{"summary":"x","reason":"Because the digest shows it","ops":[]}`)}},
 		round{calls: []ToolCall{call("e2", ToolApplyEdits, greyOps)}})
 	v.run(v.turn(photoMsg("grey except red"), "user-1"), nil)
 	if got := strings.Join(v.em.types(), ","); got != "meta,edits,usage,done" {

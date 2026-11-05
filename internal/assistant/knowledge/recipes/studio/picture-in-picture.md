@@ -20,6 +20,7 @@ The overlay clip goes on the upper video track, scaled to 25 to 35 % and placed 
 ```json
 {
   "summary": "Webcam bottom-right",
+  "reason": "You asked for the webcam in a corner: I scale it down and place it bottom-right",
   "ops": [
     {"op": "set_transform", "clipId": "OVERLAY_CLIP_ID", "scale": 0.3, "x": 0.32, "y": 0.3}
   ]

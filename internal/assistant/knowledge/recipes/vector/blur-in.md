@@ -20,6 +20,7 @@ Combine a short blur that clears (about 0.5 s) with an opacity fade; a slight sc
 ```json
 {
   "summary": "Blur-in",
+  "reason": "You asked for a blur-in: the layer starts blurred and sharpens as it appears",
   "ops": [
     {"op": "apply_animator", "layerIds": ["LAYER_ID"], "animator": "blur", "span": {"start": 0, "end": 500, "easing": "easeOut"}},
     {"op": "animate", "layerId": "LAYER_ID", "property": "opacity", "keyframes": [{"t": 0, "value": 0, "easing": "easeOut"}, {"t": 400, "value": 1, "easing": "linear"}]}

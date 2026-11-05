@@ -20,6 +20,7 @@ Pick the better clip as the reference and move the other towards it: exposure fi
 ```json
 {
   "summary": "Match clip to reference",
+  "reason": "The two clips differ in tone, so I grade the second one toward the first",
   "ops": [
     {"op": "grade", "clipIds": ["CLIP_B"], "lumetri": {"exposure": 0.3, "temperature": -12, "tint": 3, "saturation": 0.95}}
   ]

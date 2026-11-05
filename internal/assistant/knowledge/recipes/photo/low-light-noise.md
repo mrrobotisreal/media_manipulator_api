@@ -20,6 +20,7 @@ Colour noise (coloured blotches) can be removed strongly with little loss; lumin
 ```json
 {
   "summary": "Reduce noise",
+  "reason": "The shadows look grainy, so I reduce noise and keep detail",
   "ops": [
     {"op": "add_layer", "type": "noiseReduction", "params": {"luminance": 30, "color": 55}},
     {"op": "add_layer", "type": "sharpen", "params": {"amount": 40, "radius": 1, "threshold": 12}}

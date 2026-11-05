@@ -20,6 +20,7 @@ A 1 to 3 s fade at the start and 2 to 5 s at the end sounds deliberate. Volume k
 ```json
 {
   "summary": "Fade music out",
+  "reason": "The music ends abruptly, so a fade out lets it finish smoothly",
   "ops": [
     {"op": "set_keyframes", "clipId": "CLIP_ID", "property": "volume", "keyframes": [{"t": 0, "value": 0, "ease": "easeOut"}, {"t": 1.5, "value": 1, "ease": "linear"}, {"t": 55, "value": 1, "ease": "easeIn"}, {"t": 59, "value": 0, "ease": "linear"}]}
   ]
