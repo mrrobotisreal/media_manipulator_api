@@ -66,7 +66,7 @@ Related
 More pages for working with photos on Media Manipulator.
 The editor's tool page, with the full list of panels, export formats and what each plan allows.
 Darkroom video editor tutorial
-Edit video on a multi-track timeline and export an MP4.
+Edit video on a multi-track timeline and export MP4, MOV or MKV.
 Open-source licenses
 The open-source libraries and models behind the editor and the rest of Media Manipulator.
 

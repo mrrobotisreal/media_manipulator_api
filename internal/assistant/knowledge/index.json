@@ -724,7 +724,7 @@
    "remove ads",
    "billing"
   ],
-  "tokens": 1016
+  "tokens": 1024
  },
  "pages/privacy-policy": {
   "title": "Privacy Policy",
@@ -804,7 +804,7 @@
    "getting started",
    "guide"
   ],
-  "tokens": 729
+  "tokens": 733
  },
  "pages/tutorials/ai-frame-interpolation": {
   "title": "What Is AI Frame Interpolation? How Video FPS Smoothing Works",
@@ -838,7 +838,7 @@
    "photo masks",
    "heal blemishes online"
   ],
-  "tokens": 4017
+  "tokens": 4019
  },
  "pages/tutorials/audio/getting-started": {
   "title": "Getting Started with Audio Conversion | Media Manipulator Tutorial",
@@ -871,7 +871,7 @@
    "text overlay video",
    "export mp4"
   ],
-  "tokens": 1573
+  "tokens": 1618
  },
  "pages/tutorials/image/getting-started": {
   "title": "Getting Started with Image Conversion | Media Manipulator Tutorial",
@@ -903,7 +903,7 @@
    "keyframe animation",
    "easing curve"
   ],
-  "tokens": 1622
+  "tokens": 1626
  },
  "pages/tutorials/video/getting-started": {
   "title": "Getting Started with Video Conversion | Media Manipulator Tutorial",
