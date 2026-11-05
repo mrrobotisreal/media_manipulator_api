@@ -43,7 +43,7 @@ func TestVectorCasesPassableWithRealOps(t *testing.T) {
 	}
 	seen := 0
 	for _, c := range cases {
-		if c.Surface != "vector" {
+		if c.Surface != "vector" || c.Adjust != nil {
 			continue
 		}
 		seen++

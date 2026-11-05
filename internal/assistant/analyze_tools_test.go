@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -30,23 +31,16 @@ func TestMetricsBodyLimits(t *testing.T) {
 	if _, _, err := guide.Validate(300000); err == nil {
 		t.Error("the guide accepted metrics")
 	}
-	big := metricsBody("photo")
-	big.Context.Metrics = analyze.MetricSet{}
-	for i := 0; i < 60; i++ {
-		big.Context.Metrics["m"+strings.Repeat("a", i%20)+string(rune('a'+i%26))+string(rune('a'+i/26))] = 123456.789
-	}
-	if _, _, err := big.Validate(300000); err == nil {
-		t.Error("an oversized metric set was accepted")
-	}
-	// 4 KB boundary by size, not count: long names, few keys.
+	// The 4 KB limit binds by size: 100 long-named metrics are over it.
 	wide := metricsBody("photo")
 	wide.Context.Metrics = analyze.MetricSet{}
-	for i := 0; i < 40; i++ {
-		wide.Context.Metrics[strings.Repeat("k", 31)+string(rune('a' + i%26))[:0]+string(rune('A'+i%26))+string(rune('a'+i/26))] = 1234567
+	for i := 0; i < 100; i++ {
+		wide.Context.Metrics[fmt.Sprintf("%s%02d", strings.Repeat("k", 29), i)] = 1234.5678
 	}
 	if _, _, err := wide.Validate(300000); err == nil {
-		be, _ := AsBodyError(err)
-		t.Errorf("wide set accepted (%v)", be)
+		t.Error("a metric set over 4 KB was accepted")
+	} else if be, _ := AsBodyError(err); be == nil || be.Code != "metrics_too_large" {
+		t.Errorf("error = %v", err)
 	}
 	nan := metricsBody("photo")
 	nan.Context.Metrics = analyze.MetricSet{"bad key!": 1}

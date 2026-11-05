@@ -32,7 +32,7 @@ type MetricSet map[string]float64
 const (
 	// MaxMetricsBytes is the largest JSON a metric set may be on the wire.
 	MaxMetricsBytes = 4096
-	maxMetricKeys   = 48
+	maxMetricKeys   = 128
 	maxMetricValue  = 1e6
 )
 

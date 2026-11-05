@@ -29,6 +29,8 @@ Colour noise (coloured blotches) can be removed strongly with little loss; lumin
 ```
 ### How to adjust
 Looks plastic: luminance 15. Colour blotches remain: color 75. Leave a little texture rather than removing it all.
+### Success criteria
+- meanLuma 0.3 to 0.5
 
 ## Search keywords
 

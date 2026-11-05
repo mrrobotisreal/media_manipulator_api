@@ -28,6 +28,9 @@ The `landscape` look combines dehaze, vibrance, clarity and a highlight/shadow b
 ```
 ### How to adjust
 Too much: `intensity` 0.6. Haze remains: add `dehaze` 15. Oversaturated greens: hsl range greens saturation -20. Lighter touch: use `vivid`; for a social post use `punch`.
+### Success criteria
+- lumaStd at least 0.2
+- highlightsClipped at most 0.02
 
 ## Search keywords
 

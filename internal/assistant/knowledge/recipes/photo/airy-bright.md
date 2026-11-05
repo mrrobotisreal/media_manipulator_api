@@ -32,6 +32,9 @@ Airy means bright midtones and open shadows with low contrast, gently lifted bla
 ```
 ### How to adjust
 Too washed: remove the curves layer or lower its first point to y 0.02. Too warm: `temperature` 3. Brighter still: `ev` 0.6 while watching highlights.
+### Success criteria
+- meanLuma 0.55 to 0.7
+- highlightsClipped at most 0.03
 
 ## Search keywords
 

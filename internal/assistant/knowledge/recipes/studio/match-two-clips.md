@@ -29,6 +29,9 @@ Pick the better clip as the reference and move the other towards it: exposure fi
 The values come from comparing the two clips: the example warms down and brightens a clip that was darker and warmer than the reference.
 ### How to adjust
 Still different: move the playhead to each clip and send a frame of both. Overcorrected: halve the numbers.
+### Success criteria
+- meanLuma 0.35 to 0.55
+- warmth -0.08 to 0.12
 
 ## Search keywords
 

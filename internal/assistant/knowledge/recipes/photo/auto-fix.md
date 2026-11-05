@@ -29,6 +29,10 @@ Start from the image's own histogram: `auto_tone` runs the same analysis as the 
 ```
 ### How to adjust
 Too strong: lower the opacity of the auto layers to 0.6 with `update_layer`. Colours too loud: set `vibrance` to 5. Then ask what feels off (brightness, colour, sharpness) and use the matching recipe.
+### Success criteria
+- meanLuma 0.38 to 0.58
+- shadowsClipped at most 0.01
+- highlightsClipped at most 0.01
 
 ## Search keywords
 

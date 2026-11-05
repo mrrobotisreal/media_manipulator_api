@@ -331,10 +331,10 @@ func TestMetricSetValidate(t *testing.T) {
 		}
 	}
 	big := MetricSet{}
-	for i := 0; i < 49; i++ {
+	for i := 0; i < 129; i++ {
 		big["m"+strings.Repeat("x", 3)+string(rune('a'+i%26))+string(rune('a'+i/26))] = 1
 	}
 	if big.Validate() == nil {
-		t.Fatal("49 metrics accepted")
+		t.Fatal("129 metrics accepted")
 	}
 }

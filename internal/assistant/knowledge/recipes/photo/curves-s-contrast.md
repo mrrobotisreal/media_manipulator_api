@@ -28,6 +28,10 @@ An S-curve darkens shadows and brightens highlights while the midpoint stays put
 ```
 ### How to adjust
 Stronger: 0.25→0.17 and 0.75→0.83. Colours become too saturated: set the layer `blend` to `luminosity`. Faded film feel: raise the first point to y 0.06.
+### Success criteria
+- lumaStd at least 0.22
+- shadowsClipped at most 0.02
+- highlightsClipped at most 0.02
 
 ## Search keywords
 

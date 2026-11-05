@@ -45,7 +45,7 @@ func TestPhotoCasesPassableWithRealOps(t *testing.T) {
 	}
 	seen := 0
 	for _, c := range cases {
-		if c.Surface != "photo" {
+		if c.Surface != "photo" || c.Adjust != nil {
 			continue
 		}
 		seen++

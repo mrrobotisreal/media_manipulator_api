@@ -29,6 +29,9 @@ Skin sits in the orange band; pushing the rest of the image towards teal separat
 Clip ids come from the timeline digest; `"all"` grades every video and image clip.
 ### How to adjust
 Skin too orange: intensity 0.5. Subtler: try `cinematic`.
+### Success criteria
+- meanLuma 0.3 to 0.5
+- highlightsClipped at most 0.02
 
 ## Search keywords
 

@@ -57,6 +57,9 @@ type Case struct {
 	Frame      string `yaml:"frame"`
 	Message    string `yaml:"message"`
 	Expect     Expect `yaml:"expect"`
+	// Adjust (MM115) makes this a multi-round "numbers first" case: the runner
+	// plays the browser, answering each edit with the next canned meters.
+	Adjust *Adjust `yaml:"adjust"`
 	// Source is the file the case came from (set by the loader).
 	Source string `yaml:"-"`
 }
@@ -77,6 +80,34 @@ type Expect struct {
 	// OffTopic: answered by the scope gate, or a short decline from the model
 	// with no buttons or edits that steers back to the site.
 	OffTopic bool `yaml:"off_topic"`
+}
+
+// Adjust scripts the browser side of the adjust loop (MM115). The meters are
+// canned, not measured: After[i] is delivered with the result of the model's
+// (i+1)th edit (the last entry repeats), so a case says "after the first edit
+// the picture is still too dark; after the second it is right" and the grader
+// checks that the model reacted to the numbers.
+type Adjust struct {
+	// Before are the meters sent with the user's message.
+	Before map[string]float64   `yaml:"before"`
+	After  []map[string]float64 `yaml:"after"`
+	// Rounds bounds the number of apply_edits calls (Max defaults to 3).
+	Rounds struct {
+		Min int `yaml:"min"`
+		Max int `yaml:"max"`
+	} `yaml:"rounds"`
+	// Final are the ranges the last meters the model saw must satisfy (the
+	// model must have stopped on them, or the edit budget ran out).
+	Final []FinalMetric `yaml:"final"`
+	// CitesMetric: every adjusting edit and the closing words cite a figure.
+	CitesMetric bool `yaml:"cites_metric"`
+}
+
+// FinalMetric is one `final_metric(name) in range` check.
+type FinalMetric struct {
+	Metric string   `yaml:"metric"`
+	Min    *float64 `yaml:"min"`
+	Max    *float64 `yaml:"max"`
 }
 
 // Surfaces are the valid case surfaces.
@@ -142,6 +173,26 @@ func (c *Case) validate() error {
 	if c.Requires != "" && !contains(Surfaces[1:], c.Requires) {
 		return fmt.Errorf("%s: requires %q", c.ID, c.Requires)
 	}
+	if c.Adjust != nil {
+		a := c.Adjust
+		if c.Surface != "photo" && c.Surface != "studio" && c.Surface != "vector" {
+			return fmt.Errorf("%s: adjust cases are for the editors", c.ID)
+		}
+		if len(a.Before) == 0 || len(a.After) == 0 || len(a.Final) == 0 {
+			return fmt.Errorf("%s: adjust needs before, after and final", c.ID)
+		}
+		if a.Rounds.Max == 0 {
+			a.Rounds.Max = 3
+		}
+		if a.Rounds.Min < 1 || a.Rounds.Max < a.Rounds.Min || a.Rounds.Max > 3 {
+			return fmt.Errorf("%s: adjust rounds %d-%d (1..3)", c.ID, a.Rounds.Min, a.Rounds.Max)
+		}
+		for _, f := range a.Final {
+			if f.Metric == "" || (f.Min == nil && f.Max == nil) {
+				return fmt.Errorf("%s: adjust final needs a metric and a bound", c.ID)
+			}
+		}
+	}
 	if c.Surface != "guide" && c.Requires == "" && len(c.Expect.Ops) > 0 {
 		return fmt.Errorf("%s: op checks need `requires: <surface>`", c.ID)
 	}
@@ -196,6 +247,18 @@ type Output struct {
 	// Model is the meta event's model; "" means no model ran (scope gate or
 	// static answer).
 	Model string
+	// Rounds is the adjust trace (MM115): one entry per upstream request of
+	// the turn, in order. Empty for ordinary cases.
+	Rounds []RoundOut
+}
+
+// RoundOut is one request of an adjust case: what the model said and edited,
+// and the canned meters the browser answered the edit with (nil = no edit).
+type RoundOut struct {
+	Text   string
+	Edit   *Edit
+	Shown  map[string]float64
+	Failed string // the stream's error code, if any
 }
 
 // Action is one action button (navigate / open_tool / suggest_action).
@@ -208,6 +271,7 @@ type Action struct {
 // Edit is one apply_edits call.
 type Edit struct {
 	Summary string
+	Reason  string
 	Ops     []map[string]any
 }
 
@@ -294,6 +358,11 @@ func Grade(c Case, out Output) Result {
 	}
 	if e.Ask && len(out.Asks) == 0 && !strings.Contains(out.Text, "?") {
 		fail("expected a clarifying question")
+	}
+	if c.Adjust != nil {
+		for _, f := range gradeAdjust(c, out) {
+			fail("%s", f)
+		}
 	}
 	if len(e.Ops) > 0 {
 		var ops []map[string]any
