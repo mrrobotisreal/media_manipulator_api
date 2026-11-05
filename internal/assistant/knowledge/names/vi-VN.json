@@ -419,6 +419,10 @@
   "name": "Tách giọng hát khỏi bài hát",
   "path": "/vi/tools/isolate-vocals-from-song"
  },
+ "tools/medi": {
+  "name": "Medi",
+  "path": "/vi/tools/medi"
+ },
  "tools/motion": {
   "name": "Motion",
   "path": "/vi/tools/motion"

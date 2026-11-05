@@ -712,7 +712,7 @@
    "remove ads",
    "billing"
   ],
-  "tokens": 1001
+  "tokens": 1016
  },
  "pages/privacy-policy": {
   "title": "Privacy Policy",
@@ -792,7 +792,7 @@
    "getting started",
    "guide"
   ],
-  "tokens": 679
+  "tokens": 729
  },
  "pages/tutorials/ai-frame-interpolation": {
   "title": "What Is AI Frame Interpolation? How Video FPS Smoothing Works",
@@ -3310,6 +3310,22 @@
    "acapella maker"
   ],
   "tokens": 1198
+ },
+ "tools/medi": {
+  "title": "Medi",
+  "kind": "tool",
+  "keywords": [
+   "medi",
+   "Medi",
+   "AI assistant for media tools",
+   "AI photo editing assistant",
+   "ai video editing copilot",
+   "find the right media tool",
+   "edit photo with a prompt",
+   "ai guide for file converter",
+   "undoable ai edits"
+  ],
+  "tokens": 2628
  },
  "tools/motion": {
   "title": "Motion",

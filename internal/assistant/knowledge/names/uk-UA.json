@@ -419,6 +419,10 @@
   "name": "Виділення вокалу з пісні",
   "path": "/uk/tools/isolate-vocals-from-song"
  },
+ "tools/medi": {
+  "name": "Medi",
+  "path": "/uk/tools/medi"
+ },
  "tools/motion": {
   "name": "Motion",
   "path": "/uk/tools/motion"

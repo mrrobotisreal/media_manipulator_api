@@ -419,6 +419,10 @@
   "name": "分離歌曲人聲",
   "path": "/zh-tw/tools/isolate-vocals-from-song"
  },
+ "tools/medi": {
+  "name": "Medi",
+  "path": "/zh-tw/tools/medi"
+ },
  "tools/motion": {
   "name": "Motion",
   "path": "/zh-tw/tools/motion"

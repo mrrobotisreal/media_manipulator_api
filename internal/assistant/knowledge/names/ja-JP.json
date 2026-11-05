@@ -419,6 +419,10 @@
   "name": "曲からボーカルを抽出",
   "path": "/ja/tools/isolate-vocals-from-song"
  },
+ "tools/medi": {
+  "name": "Medi",
+  "path": "/ja/tools/medi"
+ },
  "tools/motion": {
   "name": "Motion",
   "path": "/ja/tools/motion"

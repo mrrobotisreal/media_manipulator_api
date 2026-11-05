@@ -419,6 +419,10 @@
   "name": "गाने से वोकल अलग करें",
   "path": "/hi/tools/isolate-vocals-from-song"
  },
+ "tools/medi": {
+  "name": "Medi",
+  "path": "/hi/tools/medi"
+ },
  "tools/motion": {
   "name": "Motion",
   "path": "/hi/tools/motion"

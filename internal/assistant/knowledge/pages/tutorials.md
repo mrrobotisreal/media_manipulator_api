@@ -19,6 +19,7 @@ Step-by-step guides for every Media Manipulator tool. Whether you're converting 
 - Getting Started: Converting Image Files: Complete tutorial on the image converter — picking a format, quality, dimensions, cropping, filters, tint, text overlays, EXIF / IPTC / GPS metadata, and the Face Privacy, Remove Background, AI Upscale, and Redact Text AI tools.
 - How to Animate an SVG with Motion: A five-step guide to Motion: import an SVG, animate it with keyframes, shape the timing with easing and holds, export it, and choose the right format.
 - How to edit a photo online with Aperture: An eight-step guide to Aperture: open a photo, fix light and color, make one color pop, mask part of the image, heal blemishes, export at full resolution, save looks, and apply the same edits to more photos.
+- How to use Aperture, the assistant: Three short workflows: find the right tool, let Aperture prepare a job you confirm, and edit a photo, video or animation by describing it.
 
 ## Search keywords
 

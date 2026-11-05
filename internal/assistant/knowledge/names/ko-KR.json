@@ -419,6 +419,10 @@
   "name": "노래에서 보컬 분리",
   "path": "/ko/tools/isolate-vocals-from-song"
  },
+ "tools/medi": {
+  "name": "Medi",
+  "path": "/ko/tools/medi"
+ },
  "tools/motion": {
   "name": "Motion",
   "path": "/ko/tools/motion"
