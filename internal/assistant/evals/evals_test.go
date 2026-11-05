@@ -208,6 +208,10 @@ func TestDetectLanguage(t *testing.T) {
 		"افتح أداة الضغط.":                                                  "ar",
 		"פתחו את הכלי.":                                                     "he",
 		"संपीड़न टूल खोलें।":                                                "hi",
+		// Undo labels with no function word (studio-de-grade, 2026-11-05).
+		"Farben kräftiger (Sättigung, Vibrance)": "de",
+		"Añadir título con animación":            "es",
+		"Warm white balance":                     "en",
 	} {
 		if got := DetectLanguage(text); got != want {
 			t.Errorf("DetectLanguage(%q) = %s, want %s", text, got, want)

@@ -464,6 +464,18 @@ var latinMarkers = map[string][]string{
 	"en": {" the ", " and ", " you ", " to ", " is ", " for ", " with ", " your "},
 }
 
+// latinLetters are letters that, among the site's Latin-script languages,
+// only that language uses (studio-de-grade, 2026-11-05: a German undo label
+// with no prose read as English).
+var latinLetters = map[string]string{
+	"de": "äöüß",
+	"es": "ñ¿¡",
+	"fr": "èêëœçû",
+	"it": "ì",
+	"pt": "ãõ",
+	"vi": "ăđơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ",
+}
+
 func latinLanguage(s string) string {
 	low := " " + strings.ToLower(strings.Join(strings.Fields(s), " ")) + " "
 	best, n := "en", 0
@@ -471,6 +483,13 @@ func latinLanguage(s string) string {
 		c := 0
 		for _, w := range latinMarkers[lang] {
 			c += strings.Count(low, w)
+		}
+		// Short texts (an undo label like "Farben kräftiger") rarely carry a
+		// function word; letters only one language uses decide them.
+		for _, r := range latinLetters[lang] {
+			if strings.ContainsRune(low, r) {
+				c++
+			}
 		}
 		if c > n {
 			best, n = lang, c
