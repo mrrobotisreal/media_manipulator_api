@@ -263,9 +263,14 @@
    "chroma key",
    "green screen",
    "blend mode",
-   "cinematic look"
+   "cinematic look",
+   "looks",
+   "look",
+   "teal and orange",
+   "noir",
+   "film look"
   ],
-  "tokens": 514
+  "tokens": 917
  },
  "editors/studio/motion-crop": {
   "title": "Darkroom motion, crop and keyframes",
