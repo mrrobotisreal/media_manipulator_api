@@ -20,6 +20,7 @@ Start from the image's own histogram: `auto_tone` runs the same analysis as the 
 ```json
 {
   "summary": "Auto tone and a little colour",
+  "reason": "The histogram is flat and slightly off-neutral, so I let auto tone set levels and balance",
   "ops": [
     {"op": "auto_tone"},
     {"op": "add_layer", "type": "vibranceSaturation", "params": {"vibrance": 15}}

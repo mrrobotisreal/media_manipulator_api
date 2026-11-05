@@ -20,6 +20,7 @@ Morph interpolates the path data. It looks best between shapes of similar size w
 ```json
 {
   "summary": "Morph to target",
+  "reason": "You asked for a morph: the shape animates its path toward the target shape",
   "ops": [
     {"op": "apply_animator", "layerIds": ["SOURCE_PATH_ID"], "animator": "morph", "span": {"start": 0, "end": 600, "easing": "easeBoth"}, "options": {"targetId": "TARGET_PATH_ID"}}
   ]

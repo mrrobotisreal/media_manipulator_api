@@ -20,6 +20,7 @@ Each line fades in and rises about 12 px over 0.3 s, staggered 0.1 to 0.15 s apa
 ```json
 {
   "summary": "Bullet reveal",
+  "reason": "You asked for bullets one by one: each line enters in sequence",
   "ops": [
     {"op": "template", "kind": "bulletReveal", "text": ["Fast export", "Works in the browser", "No install"], "at": 0}
   ]

@@ -63,10 +63,10 @@ func TestStudioOpsInApplyEdits(t *testing.T) {
 	v := NewOpsValidator()
 	for _, td := range ToolsFor("studio", v) {
 		if td.Name == ToolApplyEdits {
-			if err := validateArgs(td.Parameters, `{"summary":"Cinematic grade","ops":[{"op":"apply_look","clipIds":"all","lookId":"cinematic"}]}`); err != nil {
+			if err := validateArgs(td.Parameters, `{"summary":"Cinematic grade","reason":"Because the digest shows it","ops":[{"op":"apply_look","clipIds":"all","lookId":"cinematic"}]}`); err != nil {
 				t.Fatalf("apply_edits refuses a valid call: %v", err)
 			}
-			if err := validateArgs(td.Parameters, `{"summary":"x","ops":[{"op":"apply_look","clipIds":"all","lookId":"sepia"}]}`); err == nil {
+			if err := validateArgs(td.Parameters, `{"summary":"x","reason":"Because the digest shows it","ops":[{"op":"apply_look","clipIds":"all","lookId":"sepia"}]}`); err == nil {
 				t.Fatal("apply_edits accepts an invalid op")
 			}
 			return

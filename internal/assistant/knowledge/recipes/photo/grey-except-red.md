@@ -20,6 +20,7 @@ The cleanest result desaturates every hue range except the one to keep, with fea
 ```json
 {
   "summary": "Grey except red",
+  "reason": "You asked to keep only the red: everything else goes grey so red stands out",
   "ops": [
     {"op": "grey_except", "ranges": ["red"]}
   ]

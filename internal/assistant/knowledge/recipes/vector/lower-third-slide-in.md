@@ -20,6 +20,7 @@ A designed lower-third has an accent bar that wipes in first, then the text slid
 ```json
 {
   "summary": "Lower-third slide-in",
+  "reason": "You asked for a lower third: it slides in, holds, then slides out",
   "ops": [
     {"op": "template", "kind": "lowerThird", "text": ["Alex Morgan", "Producer"], "colors": ["#ff5a36", "#ffffff"], "at": 0}
   ]

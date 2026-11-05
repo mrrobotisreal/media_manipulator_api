@@ -20,6 +20,7 @@ Mood comes from dark, controlled highlights, deep but not crushed blacks, fewer 
 ```json
 {
   "summary": "Moody grade",
+  "reason": "You asked for a moody look: lower the exposure, deepen the shadows and mute the colour",
   "ops": [
     {"op": "add_layer", "type": "tone", "params": {"highlights": -30, "shadows": -10, "blacks": -20}},
     {"op": "add_layer", "type": "vibranceSaturation", "params": {"saturation": -25}},

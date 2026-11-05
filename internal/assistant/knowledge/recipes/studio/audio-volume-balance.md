@@ -20,6 +20,7 @@ Set clip gain so speech peaks feel similar, then use export loudness normalisati
 ```json
 {
   "summary": "Quiet clip +4 dB",
+  "reason": "This clip is quieter than the others, so I raise it by 4 dB to match",
   "ops": [
     {"op": "set_volume", "clipId": "CLIP_ID", "gainDb": 4}
   ]

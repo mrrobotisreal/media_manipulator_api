@@ -20,6 +20,7 @@ YouTube end screens need 5 to 20 s; leave the centre and right side clear for Yo
 ```json
 {
   "summary": "End card",
+  "reason": "You asked to finish with an end card: a title after the last clip holds the closing message",
   "ops": [
     {"op": "add_title", "template": "endCard", "lines": ["Thanks for watching", "Subscribe for more"], "start": 58, "duration": 8, "animateIn": "fade"}
   ]

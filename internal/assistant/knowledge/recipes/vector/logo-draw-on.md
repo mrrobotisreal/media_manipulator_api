@@ -20,6 +20,7 @@ The classic reveal draws the strokes over 1 to 1.5 s, then fades the fill in ove
 ```json
 {
   "summary": "Logo draw-on reveal",
+  "reason": "You asked for the logo to draw itself: a stroke animator reveals the outline over time",
   "ops": [
     {"op": "apply_animator", "layerIds": ["LOGO_PATH_ID"], "animator": "drawOn", "span": {"start": 0, "end": 1400, "easing": "easeBoth"}}
   ]

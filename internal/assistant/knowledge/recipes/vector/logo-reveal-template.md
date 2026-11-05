@@ -20,6 +20,7 @@ The template scales the logo from 85 % to 100 % with a soft overshoot while it f
 ```json
 {
   "summary": "Logo reveal",
+  "reason": "You asked for a logo reveal: the logo template handles timing and easing for you",
   "ops": [
     {"op": "template", "kind": "logoReveal", "at": 0, "duration": 1500}
   ]

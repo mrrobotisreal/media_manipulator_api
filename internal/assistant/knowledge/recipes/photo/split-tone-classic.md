@@ -20,6 +20,7 @@ Split toning colours shadows and highlights with two hues. Complementary pairs (
 ```json
 {
   "summary": "Split tone",
+  "reason": "You asked for a split tone: one hue in the shadows and another in the highlights",
   "ops": [
     {"op": "add_layer", "type": "splitTone", "params": {"shadows": {"hue": 220, "saturation": 22}, "highlights": {"hue": 45, "saturation": 25}, "balance": 0}}
   ]

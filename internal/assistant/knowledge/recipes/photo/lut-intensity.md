@@ -20,6 +20,7 @@ Most creative LUTs are designed for log footage and look harsh on normal photos.
 ```json
 {
   "summary": "LUT at 60 %",
+  "reason": "The LUT look is too strong, so I bring its intensity down to 60 percent",
   "ops": [
     {"op": "update_layer", "layerId": "LAYER_ID_FROM_DIGEST", "params": {"intensity": 0.6}}
   ]

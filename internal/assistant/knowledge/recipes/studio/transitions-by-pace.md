@@ -20,6 +20,7 @@ Most professional edits use straight cuts; transitions mark a change of time or 
 ```json
 {
   "summary": "Soft dissolve",
+  "reason": "The pace is calm, so a soft dissolve fits better than a hard cut",
   "ops": [
     {"op": "set_transition", "clipId": "CLIP_ID", "type": "crossDissolve", "durationSeconds": 0.8}
   ]

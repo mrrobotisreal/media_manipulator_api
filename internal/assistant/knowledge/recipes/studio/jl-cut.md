@@ -20,6 +20,7 @@ In a J-cut the next clip's sound starts before its picture; in an L-cut the prev
 ```json
 {
   "summary": "L-cut: audio trails 1 s",
+  "reason": "You asked for an L-cut: the audio trails one second so the cut feels natural",
   "ops": [
     {"op": "split", "clipId": "AUDIO_CLIP_ID", "at": 12.0},
     {"op": "trim", "clipId": "AUDIO_CLIP_ID", "sourceOut": 13.0}

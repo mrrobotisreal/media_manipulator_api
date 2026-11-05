@@ -20,6 +20,7 @@ An S-curve darkens shadows and brightens highlights while the midpoint stays put
 ```json
 {
   "summary": "S-curve contrast",
+  "reason": "The mids look flat, so a gentle S-curve adds contrast without clipping",
   "ops": [
     {"op": "add_layer", "type": "curves", "params": {"master": {"points": [{"x": 0, "y": 0}, {"x": 0.25, "y": 0.2}, {"x": 0.75, "y": 0.8}, {"x": 1, "y": 1}]}}}
   ]

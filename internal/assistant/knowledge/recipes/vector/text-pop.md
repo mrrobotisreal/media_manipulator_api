@@ -20,6 +20,7 @@ A pop scales from 0 to about 110 % and settles at 100 % (overshoot), with opacit
 ```json
 {
   "summary": "Text pop",
+  "reason": "You asked for text that pops: a quick scale overshoot with a fade",
   "ops": [
     {"op": "animate", "layerId": "LAYER_ID", "property": "transform.scaleX", "keyframes": [{"t": 0, "value": 0, "easing": "easeOut"}, {"t": 280, "value": 1.1, "easing": "easeBoth"}, {"t": 420, "value": 1, "easing": "linear"}]},
     {"op": "animate", "layerId": "LAYER_ID", "property": "transform.scaleY", "keyframes": [{"t": 0, "value": 0, "easing": "easeOut"}, {"t": 280, "value": 1.1, "easing": "easeBoth"}, {"t": 420, "value": 1, "easing": "linear"}]},

@@ -32,6 +32,7 @@ var SuggestKinds = []string{"generate_captions", "subject_mask", "heal", "voiceo
 
 const (
 	maxSummaryChars  = 60
+	maxReasonChars   = 140
 	maxQuestionChars = 300
 	maxChoiceChars   = 60
 	maxLabelChars    = 60
@@ -70,7 +71,7 @@ func ToolsFor(surface string, ops *OpsValidator) []ToolDef {
 	} else {
 		if ops.Has(surface) {
 			tools = append(tools, ToolDef{Name: ToolApplyEdits,
-				Description: "Apply edits to the open document as ONE undoable step. summary (<= 60 chars) becomes the undo label. ops use only ids from the document digest.",
+				Description: "Apply edits to the open document as ONE undoable step. summary (<= 60 chars) becomes the undo label. reason (4-140 chars) says why, citing what you saw in the digest or what the user asked; ops may carry their own optional reason. ops use only ids from the document digest.",
 				Parameters:  applyEditsParameters(ops.Schema(surface))})
 		}
 		tools = append(tools, ToolDef{Name: ToolSuggestAction,
@@ -98,6 +99,7 @@ type ClientAction struct {
 	Name   string
 	// apply_edits
 	Summary string
+	Reason  string
 	Ops     json.RawMessage
 	// navigate / open_tool / suggest_action
 	Kind   string
@@ -117,17 +119,17 @@ type ClientAction struct {
 func applyEditsParameters(opsSchema json.RawMessage) json.RawMessage {
 	var ops map[string]json.RawMessage
 	if err := json.Unmarshal(opsSchema, &ops); err != nil {
-		return json.RawMessage(`{"type":"object","properties":{"summary":{"type":"string","minLength":1,"maxLength":60},"ops":` +
-			string(opsSchema) + `},"required":["summary","ops"],"additionalProperties":false}`)
+		return json.RawMessage(`{"type":"object","properties":{"summary":{"type":"string","minLength":1,"maxLength":60},"reason":{"type":"string","minLength":4,"maxLength":140},"ops":` +
+			string(opsSchema) + `},"required":["summary","reason","ops"],"additionalProperties":false}`)
 	}
 	defs := ops["$defs"]
 	delete(ops, "$defs")
 	delete(ops, "$schema")
 	inner, _ := json.Marshal(ops)
 	var b strings.Builder
-	b.WriteString(`{"type":"object","properties":{"summary":{"type":"string","minLength":1,"maxLength":60},"ops":`)
+	b.WriteString(`{"type":"object","properties":{"summary":{"type":"string","minLength":1,"maxLength":60},"reason":{"type":"string","minLength":4,"maxLength":140},"ops":`)
 	b.Write(inner)
-	b.WriteString(`},"required":["summary","ops"],"additionalProperties":false`)
+	b.WriteString(`},"required":["summary","reason","ops"],"additionalProperties":false`)
 	if len(defs) > 0 {
 		b.WriteString(`,"$defs":`)
 		b.Write(defs)
@@ -152,6 +154,7 @@ func validateClientCall(call ToolCall, surface string, tools []ToolDef, ops *Ops
 	case ToolApplyEdits:
 		var args struct {
 			Summary string          `json:"summary"`
+			Reason  string          `json:"reason"`
 			Ops     json.RawMessage `json:"ops"`
 		}
 		if err := json.Unmarshal([]byte(call.Arguments), &args); err != nil {
@@ -160,7 +163,7 @@ func validateClientCall(call ToolCall, surface string, tools []ToolDef, ops *Ops
 		if err := ops.Validate(surface, args.Ops); err != nil {
 			return a, fmt.Errorf("ops do not match the %s op schema: %v", surface, err)
 		}
-		a.Summary, a.Ops, a.Awaits = clip(args.Summary, maxSummaryChars), args.Ops, true
+		a.Summary, a.Reason, a.Ops, a.Awaits = clip(args.Summary, maxSummaryChars), clip(args.Reason, maxReasonChars), args.Ops, true
 		a.Kind = ToolApplyEdits
 	case ToolNavigate:
 		var args struct{ Target, Label string }

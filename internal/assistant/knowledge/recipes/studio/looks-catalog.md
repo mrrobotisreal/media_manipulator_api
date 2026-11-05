@@ -20,6 +20,7 @@ Match the look to the story: `bleach-bypass` (gritty, low saturation, high contr
 ```json
 {
   "summary": "Warm film look",
+  "reason": "You asked for a warm film look: a built-in look at moderate intensity",
   "ops": [
     {"op": "apply_look", "clipIds": "all", "lookId": "warm-film", "intensity": 0.8}
   ]

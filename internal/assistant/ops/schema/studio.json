@@ -12,6 +12,9 @@
             "type": "string",
             "const": "split"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "clipId": {
             "$ref": "#/$defs/clip_id"
           },
@@ -32,6 +35,9 @@
           "op": {
             "type": "string",
             "const": "trim"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "clipId": {
             "$ref": "#/$defs/clip_id"
@@ -68,6 +74,9 @@
             "type": "string",
             "const": "move_clip"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "clipId": {
             "$ref": "#/$defs/clip_id"
           },
@@ -92,6 +101,9 @@
             "type": "string",
             "const": "delete_clip"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "clipId": {
             "$ref": "#/$defs/clip_id"
           },
@@ -111,6 +123,9 @@
           "op": {
             "type": "string",
             "const": "set_transition"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "clipId": {
             "$ref": "#/$defs/clip_id"
@@ -156,6 +171,9 @@
             "type": "string",
             "const": "grade"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "clipIds": {
             "$ref": "#/$defs/clip_ids"
           },
@@ -176,6 +194,9 @@
           "op": {
             "type": "string",
             "const": "apply_look"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "clipIds": {
             "$ref": "#/$defs/clip_ids"
@@ -217,6 +238,9 @@
             "type": "string",
             "const": "set_transform"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "clipId": {
             "$ref": "#/$defs/clip_id"
           },
@@ -253,6 +277,9 @@
           "op": {
             "type": "string",
             "const": "set_keyframes"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "clipId": {
             "$ref": "#/$defs/clip_id"
@@ -302,6 +329,9 @@
           "op": {
             "type": "string",
             "const": "add_title"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "template": {
             "type": "string",
@@ -371,6 +401,9 @@
             "type": "string",
             "const": "set_speed"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "clipId": {
             "$ref": "#/$defs/clip_id"
           },
@@ -396,6 +429,9 @@
           "op": {
             "type": "string",
             "const": "freeze_frame"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "clipId": {
             "$ref": "#/$defs/clip_id"
@@ -424,6 +460,9 @@
             "type": "string",
             "const": "audio_preset"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "track": {
             "$ref": "#/$defs/track_ref"
           },
@@ -449,6 +488,9 @@
           "op": {
             "type": "string",
             "const": "set_ducking"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "enabled": {
             "type": "boolean"
@@ -484,6 +526,9 @@
           "op": {
             "type": "string",
             "const": "set_volume"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "clipId": {
             "$ref": "#/$defs/clip_id"
@@ -522,6 +567,9 @@
             "type": "string",
             "const": "add_marker"
           },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
           "at": {
             "$ref": "#/$defs/time"
           },
@@ -544,6 +592,9 @@
           "op": {
             "type": "string",
             "const": "set_caption_style"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "fontSizePct": {
             "type": "number",
@@ -578,7 +629,38 @@
           "op"
         ],
         "additionalProperties": false,
-        "minProperties": 2
+        "anyOf": [
+          {
+            "required": [
+              "fontSizePct"
+            ]
+          },
+          {
+            "required": [
+              "color"
+            ]
+          },
+          {
+            "required": [
+              "backgroundColor"
+            ]
+          },
+          {
+            "required": [
+              "backgroundOpacity"
+            ]
+          },
+          {
+            "required": [
+              "position"
+            ]
+          },
+          {
+            "required": [
+              "maxWidthPct"
+            ]
+          }
+        ]
       },
       {
         "type": "object",
@@ -586,6 +668,9 @@
           "op": {
             "type": "string",
             "const": "set_canvas"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
           },
           "aspect": {
             "type": "string",
@@ -606,6 +691,11 @@
     ]
   },
   "$defs": {
+    "reason": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 140
+    },
     "clip_id": {
       "type": "string",
       "pattern": "^[A-Za-z0-9_-]{1,64}$"

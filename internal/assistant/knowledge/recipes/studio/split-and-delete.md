@@ -20,6 +20,7 @@ Split at both ends of the unwanted part and ripple-delete it so the rest closes 
 ```json
 {
   "summary": "Cut 10–14 s",
+  "reason": "You asked to remove seconds 10 to 14, so I split at both ends and ripple delete the middle",
   "ops": [
     {"op": "split", "clipId": "CLIP_ID", "at": 10},
     {"op": "split", "clipId": "NEW_CLIP_ID", "at": 14},

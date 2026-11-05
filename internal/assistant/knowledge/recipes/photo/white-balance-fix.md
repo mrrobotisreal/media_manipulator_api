@@ -20,6 +20,7 @@ Temperature moves blue to yellow, tint moves green to magenta. Correct in the op
 ```json
 {
   "summary": "Neutral white balance",
+  "reason": "The whites carry a colour cast, so I correct the white balance to neutral",
   "ops": [
     {"op": "add_layer", "type": "whiteBalance", "params": {"temperature": -20, "tint": 5}}
   ]

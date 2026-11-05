@@ -20,6 +20,7 @@ Posterize reduces each channel to a few levels; 4 to 8 levels reads as a poster.
 ```json
 {
   "summary": "Poster effect",
+  "reason": "You asked for a poster effect: posterize flattens the tones into bands",
   "ops": [
     {"op": "add_layer", "type": "brightnessContrast", "params": {"contrast": 25}},
     {"op": "add_layer", "type": "posterize", "params": {"levels": 5}}

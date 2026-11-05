@@ -20,6 +20,7 @@ A bounce drops in with a squash on landing and a small rotation wiggle. Keep it 
 ```json
 {
   "summary": "Badge bounce",
+  "reason": "You asked for a bounce: the badge overshoots its size and settles",
   "ops": [
     {"op": "template", "kind": "badgeBounce", "text": "NEW", "colors": ["#ffcc00", "#111111"], "at": 0}
   ]

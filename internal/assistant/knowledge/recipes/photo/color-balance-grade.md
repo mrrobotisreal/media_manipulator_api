@@ -20,6 +20,7 @@ Colour Balance shifts shadows, midtones and highlights separately. Classic gradi
 ```json
 {
   "summary": "Cool shadows, warm highlights",
+  "reason": "You asked for a graded look: cool shadows and warm highlights separate subject from background",
   "ops": [
     {"op": "add_layer", "type": "colorBalance", "params": {"shadows": {"r": -6, "g": 0, "b": 12}, "highlights": {"r": 8, "g": 3, "b": -6}, "preserveLuminosity": true}}
   ]

@@ -40,6 +40,7 @@ type EditsEvent struct {
 	Type    string          `json:"type"` // "edits"
 	CallID  string          `json:"callId"`
 	Summary string          `json:"summary"`
+	Reason  string          `json:"reason,omitempty"`
 	Ops     json.RawMessage `json:"ops"`
 }
 

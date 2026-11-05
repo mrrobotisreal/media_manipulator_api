@@ -20,6 +20,7 @@ Jump cuts remove silence so speech keeps moving. Without word timings Medi canno
 ```json
 {
   "summary": "Mark pauses to cut",
+  "reason": "The long pauses slow the pace, so I mark them as candidates to cut",
   "ops": [
     {"op": "add_marker", "at": 14.2, "label": "Pause start"},
     {"op": "add_marker", "at": 15.9, "label": "Pause end"}

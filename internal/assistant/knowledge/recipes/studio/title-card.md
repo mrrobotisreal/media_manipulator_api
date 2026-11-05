@@ -20,6 +20,7 @@ An opening title is short, centred and large, in a display or serif font, on scr
 ```json
 {
   "summary": "Opening title",
+  "reason": "You asked for an opening title: a title card at the start sets the topic",
   "ops": [
     {"op": "add_title", "template": "title", "lines": ["Summer in Lisbon"], "start": 0, "duration": 3, "style": {"fontFamily": "Playfair Display", "fontSizePx": 120, "fontWeight": 700, "fillColor": "#FFFFFF"}, "animateIn": "fade", "animateOut": "fade"}
   ]

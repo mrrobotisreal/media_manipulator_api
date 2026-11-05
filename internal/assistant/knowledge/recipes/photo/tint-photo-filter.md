@@ -20,6 +20,7 @@ The photo filter simulates a coloured glass filter while preserving luminosity, 
 ```json
 {
   "summary": "Blue filter",
+  "reason": "You asked for a blue filter: a photo filter layer tints the whole frame evenly",
   "ops": [
     {"op": "add_layer", "type": "photoFilter", "params": {"color": "#0f7fff", "density": 25, "preserveLuminosity": true}}
   ]
