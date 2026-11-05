@@ -74,6 +74,13 @@ func (r *run) confirmJob(a ClientAction) ActionEvent {
 	if a.Params == nil {
 		a.Params = map[string]any{}
 	}
+	// The tool's name in the visitor's language comes from the corpus, never from the model's label.
+	a.Params["family"] = a.Family
+	if ln, ok := r.e.Knowledge.(LocalNamer); ok {
+		if n, ok := ln.LocalName("tools/"+toString(a.Params["tool"]), r.t.Body.Locale); ok && n.Name != "" {
+			a.Params["toolName"] = n.Name
+		}
+	}
 	if j := r.e.Jobs; j != nil {
 		metric := j.QuotaMetric(a.Family)
 		a.Params["quota"] = toMap(j.Quota(r.ctx, r.t, metric))
@@ -88,3 +95,5 @@ func toMap(v any) map[string]any {
 	_ = json.Unmarshal(b, &m)
 	return m
 }
+
+func toString(v any) string { s, _ := v.(string); return s }

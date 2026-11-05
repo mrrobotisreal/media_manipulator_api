@@ -47,8 +47,8 @@ type EditsEvent struct {
 // ActionEvent is a button: kind navigate | open_tool | generate_captions |
 // subject_mask | heal | voiceover | derive_audio | export | confirm_job. params: navigate
 // {target}; open_tool {slug, route?, preset?, options?}; confirm_job (MM116b)
-// {tool, route?, options?, quota, queueEstimate} (the server computes quota and
-// queueEstimate; nothing has run); suggest_action kinds pass the model's params through.
+// {tool, toolName?, family, route?, options?, quota, queueEstimate} (the server computes
+// toolName, quota and queueEstimate; nothing has run); suggest_action kinds pass the model's params through.
 type ActionEvent struct {
 	Type   string         `json:"type"` // "action"
 	CallID string         `json:"callId"`
