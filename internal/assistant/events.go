@@ -17,6 +17,8 @@ type MetaEvent struct {
 	ConversationID *string `json:"conversationId"`
 	TurnID         string  `json:"turnId"`
 	Model          string  `json:"model"`
+	// PromptVersion is the build's content hash (MM113, PromptVersion()).
+	PromptVersion string `json:"promptVersion"`
 }
 
 // DeltaEvent is visible answer text (markdown).

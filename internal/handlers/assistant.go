@@ -177,6 +177,9 @@ func (h *AssistantHandler) Capabilities(c *gin.Context) {
 		"maxFrameBytes":   h.cfg.MaxFrameBytes,
 		"maxMessageChars": assistant.MaxMessageChars,
 		"spendCapReached": h.engine.Spend.Reached(c.Request.Context()),
+		// MM113: the build's content hash (persona + capsules + knowledge + op
+		// schemas); support quotes it from the panel's info menu.
+		"promptVersion": assistant.PromptVersion(),
 	})
 }
 

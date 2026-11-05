@@ -188,6 +188,11 @@ type Output struct {
 	// Error is the stream's error code ("" = none).
 	Error   string
 	CostUSD float64
+	// ToolCalls counts the server and client tool calls of the request
+	// (MM113: the median per surface is recorded with the run).
+	ToolCalls int
+	// PromptVersion is the meta event's build hash.
+	PromptVersion string
 	// Model is the meta event's model; "" means no model ran (scope gate or
 	// static answer).
 	Model string

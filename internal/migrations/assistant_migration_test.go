@@ -68,3 +68,33 @@ func TestAssistantMigration(t *testing.T) {
 		}
 	}
 }
+
+// MM113: the version/eval-runs migration (written, never run here).
+func TestAssistantVersionsMigration(t *testing.T) {
+	read := func(name string) string {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join("migrations", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	up := read("20261105001_assistant_versions.up.sql")
+	down := read("20261105001_assistant_versions.down.sql")
+	for _, want := range []string{
+		"ALTER TABLE assistant_messages ADD COLUMN IF NOT EXISTS prompt_version text",
+		"ALTER TABLE assistant_usage_events ADD COLUMN IF NOT EXISTS prompt_version text",
+		"ADD COLUMN IF NOT EXISTS summary_upto int NOT NULL DEFAULT 0",
+		"CREATE TABLE IF NOT EXISTS assistant_eval_runs",
+		"median_tool_calls", "evidence_path", "model_guide", "model_copilot", "cost_usd",
+	} {
+		if !strings.Contains(up, want) {
+			t.Errorf("up migration is missing %q", want)
+		}
+	}
+	for _, want := range []string{"DROP TABLE IF EXISTS assistant_eval_runs", "DROP COLUMN IF EXISTS prompt_version", "DROP COLUMN IF EXISTS summary_upto"} {
+		if !strings.Contains(down, want) {
+			t.Errorf("down is missing %q", want)
+		}
+	}
+}
