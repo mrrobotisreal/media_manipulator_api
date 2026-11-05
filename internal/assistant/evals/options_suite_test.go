@@ -167,3 +167,16 @@ func TestLoadCasesRejectsBadSuites(t *testing.T) {
 }
 
 func fstestMap(src string) fstest.MapFS { return fstest.MapFS{"c/x.yaml": {Data: []byte(src)}} }
+
+// A button with no prose has no language to judge (route-ar-sa-2, 2026-11-05).
+func TestGradeLanguageSkipsEmptyProse(t *testing.T) {
+	c := Case{ID: "x", Surface: "guide", Expect: Expect{Language: "ar", Actions: []string{"tool:compress-video"}}}
+	r := Grade(c, Output{Model: "m", Actions: []Action{openAct("compress-video", nil)}})
+	if !r.Pass {
+		t.Errorf("an action-only answer failed the language check: %v", r.Failures)
+	}
+	r = Grade(c, Output{Model: "m", Text: "Here is the tool.", Actions: []Action{openAct("compress-video", nil)}})
+	if r.Pass {
+		t.Error("English prose passed an Arabic expectation")
+	}
+}

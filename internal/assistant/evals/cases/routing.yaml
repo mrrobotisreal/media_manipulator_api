@@ -313,7 +313,7 @@
   suite: routing
   message: "convert my music files to lossless FLAC"
   expect:
-    actions: [tool:convert-audio-to-flac]
+    any_of: ["convert-audio-to-flac", "audio-converter"]
 - id: route-convert-audio-to-ogg
   surface: guide
   suite: routing

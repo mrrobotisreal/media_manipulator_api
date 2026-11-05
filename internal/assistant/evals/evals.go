@@ -371,8 +371,11 @@ func Grade(c Case, out Output) Result {
 			said += " " + ed.Summary
 		}
 		said += " " + strings.Join(out.Asks, " ")
-		if l := DetectLanguage(strings.TrimSpace(said)); l != e.Language {
-			fail("answer language %s, want %s", l, e.Language)
+		// A button with no words at all (MM116a, route-ar-sa-2) has no language to judge.
+		if said = strings.TrimSpace(said); said != "" {
+			if l := DetectLanguage(said); l != e.Language {
+				fail("answer language %s, want %s", l, e.Language)
+			}
 		}
 	}
 	if e.NoEdits && len(out.Edits) > 0 {
