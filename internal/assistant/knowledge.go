@@ -302,6 +302,25 @@ var pageScopedPhrases = []string{
 var genericScopeTokens = stemmedSet(`page pages online free best new make made use used using way ways thing things one two good better fast easy
 simple write writing tell know like look want help time work show give take find about guide guides tutorial picture`)
 
+// functionWords are the other site languages' articles, prepositions,
+// pronouns and question words. Localized tool names (names/<locale>.json)
+// contain them ("Просмотр … для …", "… und …"), and without this list any
+// sentence in that language passed the gate: "Расскажи анекдот про
+// программистов" did in the 2026-11-05 guide eval. Stems are enough.
+var functionWords = stemmedSet(`
+про для как что это без при или где все мне мой мою так его она они вам вас нас под над над из от до по на за
+для як що це без при або де все мені мій так його вона вони вам вас нас під над із від до по на за
+für mit und der die das den dem des ein eine einen von vom zum zur bei aus auf über unter wie was ich mir mein meine ist
+pour avec les des une dans sur sous par pas que qui quoi comment mon mes est aux
+una uno con por para los las del que como mis
+per che con una gli dei delle della come mio mia
+uma com por para dos das que como meu minha
+của cho với các những một như làm
+של עם את על אל מה איך זה
+في من على إلى عن مع هذا هذه كيف ماذا
+का की के में से को और है कैसे क्या
+`)
+
 // siteVocabulary is the core of the site's vocabulary in the 17 other site
 // languages (model-written, stems are enough): media nouns, editing verbs,
 // plans and accounts. Tool and page names come from names/<locale>.json; this
@@ -336,7 +355,7 @@ func (k *EmbeddedKnowledge) buildScope() {
 	for _, d := range k.corpus.Docs {
 		for _, field := range append(append([]string{d.Title}, d.Keywords...), d.Names...) {
 			for _, t := range tokenize(field) {
-				if len([]rune(t)) >= 3 && !genericScopeTokens[t] {
+				if len([]rune(t)) >= 3 && !genericScopeTokens[t] && !functionWords[t] {
 					k.scopeTerms[t] = true
 				}
 			}

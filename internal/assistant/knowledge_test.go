@@ -161,6 +161,12 @@ func TestScopeGate(t *testing.T) {
 		"how do I add a lower third":          true,
 		"teal and orange look":                true,
 		"is my data safe, do you store files": true,
+		// 2026-11-05 guide eval: function words from localized tool names let these through.
+		"Расскажи анекдот про программистов":          false,
+		"Erzähl mir einen Witz über Katzen und Hunde": false,
+		"Raconte-moi une blague pour les enfants":     false,
+		"Как сделать гифку из видео":                  true,
+		"Wie schneide ich ein Video":                  true,
 	}
 	for q, want := range cases {
 		if got := k.InScope(q); got != want {
