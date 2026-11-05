@@ -45,7 +45,7 @@ func TestStudioCasesPassableWithRealOps(t *testing.T) {
 	}
 	seen := 0
 	for _, c := range cases {
-		if c.Surface != "studio" {
+		if c.Surface != "studio" || c.Adjust != nil {
 			continue
 		}
 		seen++

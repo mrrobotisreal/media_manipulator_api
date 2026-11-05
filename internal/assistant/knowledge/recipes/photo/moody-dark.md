@@ -31,6 +31,9 @@ Mood comes from dark, controlled highlights, deep but not crushed blacks, fewer 
 ```
 ### How to adjust
 Too dark: raise `shadows` to 5. Too grey: saturation -15. Colder: shadow hue 220, saturation 30. Less obvious edges: vignette `amount` -15. Warmer overall: highlight saturation 20.
+### Success criteria
+- meanLuma 0.2 to 0.38
+- shadowsClipped at most 0.03
 
 ## Search keywords
 

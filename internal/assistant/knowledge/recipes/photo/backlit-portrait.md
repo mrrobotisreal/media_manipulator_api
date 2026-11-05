@@ -29,6 +29,10 @@ The background must not get brighter with the face. A professional compresses th
 ```
 ### How to adjust
 Face still dark: raise the masked `ev` to 0.9. A halo appears around the person: increase the radial `feather` to 0.8 or enlarge `rx`/`ry`. Sky looks grey: reduce `highlights` to -35. For a precise outline suggest `subject_mask` (it costs one operation) and reuse its mask.
+### Success criteria
+- meanLuma 0.35 to 0.55
+- shadowsClipped at most 0.02
+- highlightsClipped at most 0.03
 
 ## Search keywords
 

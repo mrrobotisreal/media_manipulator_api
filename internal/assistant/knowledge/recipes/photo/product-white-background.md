@@ -29,6 +29,9 @@ Marketplaces want a background at or very near pure white. Brighten only the bri
 ```
 ### How to adjust
 Product edges glow: raise luminosity `lo` to 0.8. Background still grey: `inWhite` 0.8. Many photos: see the bulk product workflow.
+### Success criteria
+- highlightsClipped at most 0.6
+- meanLuma 0.6 to 0.85
 
 ## Search keywords
 

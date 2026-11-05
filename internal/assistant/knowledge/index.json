@@ -934,7 +934,7 @@
    "make it feel fresh",
    "wedding style bright"
   ],
-  "tokens": 520
+  "tokens": 542
  },
  "recipes/photo/auto-fix": {
   "title": "One-click fix, then refine",
@@ -948,7 +948,7 @@
    "quick fix",
    "improve the photo"
   ],
-  "tokens": 437
+  "tokens": 468
  },
  "recipes/photo/backlit-portrait": {
   "title": "Fix a backlit portrait (dark face, bright sky)",
@@ -962,7 +962,7 @@
    "sun behind them",
    "subject is a silhouette"
   ],
-  "tokens": 547
+  "tokens": 578
  },
  "recipes/photo/bw-classic": {
   "title": "Classic black and white",
@@ -1014,7 +1014,7 @@
    "s curve",
    "deeper blacks and brighter whites"
   ],
-  "tokens": 390
+  "tokens": 421
  },
  "recipes/photo/dehaze-haze": {
   "title": "Cut haze and fog",
@@ -1027,7 +1027,7 @@
    "the view is milky",
    "foggy landscape fix"
   ],
-  "tokens": 370
+  "tokens": 391
  },
  "recipes/photo/exposure-rescue": {
   "title": "Rescue an underexposed photo",
@@ -1040,7 +1040,7 @@
    "it came out underexposed",
    "lift the shadows"
   ],
-  "tokens": 481
+  "tokens": 512
  },
  "recipes/photo/film-looks": {
   "title": "Film looks: vintage, faded, matte, cross-processed",
@@ -1082,7 +1082,7 @@
    "sunny glow",
    "evening light"
   ],
-  "tokens": 556
+  "tokens": 577
  },
  "recipes/photo/grey-except-red": {
   "title": "Everything grey except the reds",
@@ -1135,7 +1135,7 @@
    "clearer mountains",
    "enhance a travel photo"
   ],
-  "tokens": 395
+  "tokens": 417
  },
  "recipes/photo/levels-black-white": {
   "title": "Set black and white points with Levels",
@@ -1148,7 +1148,7 @@
    "foggy photo fix",
    "stretch the histogram"
   ],
-  "tokens": 390
+  "tokens": 421
  },
  "recipes/photo/low-light-noise": {
   "title": "Clean up a noisy low-light photo",
@@ -1161,7 +1161,7 @@
    "clean up the speckles",
    "phone photo in the dark"
   ],
-  "tokens": 420
+  "tokens": 432
  },
  "recipes/photo/lut-intensity": {
   "title": "Tame a LUT that is too strong",
@@ -1188,7 +1188,7 @@
    "muted colours",
    "cinematic and dark"
   ],
-  "tokens": 529
+  "tokens": 550
  },
  "recipes/photo/overexposed-recovery": {
   "title": "Recover a bright, washed-out photo",
@@ -1202,7 +1202,7 @@
    "the sky is blown out",
    "tone it down"
   ],
-  "tokens": 406
+  "tokens": 428
  },
  "recipes/photo/posterize-invert": {
   "title": "Graphic effects: posterize and invert",
@@ -1228,7 +1228,7 @@
    "ecommerce photo",
    "studio white background"
   ],
-  "tokens": 477
+  "tokens": 499
  },
  "recipes/photo/red-eye-fix": {
   "title": "Fix red eyes",
@@ -1346,7 +1346,7 @@
    "movie poster colours",
    "cinematic colour grade"
   ],
-  "tokens": 507
+  "tokens": 531
  },
  "recipes/photo/tint-photo-filter": {
   "title": "Tint a photo with a colour filter",
@@ -1386,7 +1386,7 @@
    "white balance",
    "the whites look orange"
   ],
-  "tokens": 425
+  "tokens": 444
  },
  "recipes/studio/audio-volume-balance": {
   "title": "Balance clip loudness",
@@ -1412,7 +1412,7 @@
    "cinematic colour grade",
    "make it look like a film"
   ],
-  "tokens": 472
+  "tokens": 503
  },
  "recipes/studio/end-card": {
   "title": "End card with a call to action",
@@ -1550,7 +1550,7 @@
    "subtle cinematic colour",
    "warm cinematic tone"
   ],
-  "tokens": 460
+  "tokens": 489
  },
  "recipes/studio/match-two-clips": {
   "title": "Match two clips that look different",
@@ -1563,7 +1563,7 @@
    "make the shots consistent",
    "two cameras look different"
   ],
-  "tokens": 448
+  "tokens": 467
  },
  "recipes/studio/music-ducking": {
   "title": "Duck music under speech",
@@ -1655,7 +1655,7 @@
    "action movie look",
    "hollywood grade"
   ],
-  "tokens": 362
+  "tokens": 384
  },
  "recipes/studio/tighten-pauses": {
   "title": "Tighten pauses with markers",

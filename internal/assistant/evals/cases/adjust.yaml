@@ -1,0 +1,241 @@
+# MM115: the adjust suite. Each case plays the browser: the user's message carries `before`, and each edit the model makes is answered with the next canned `after` meters. Graded: rounds in range (<= 3), the last meters the model saw satisfy `final`, and every adjusting edit and the closing message cite a figure.
+- id: adjust-photo-underexposed
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  frame: photo/flat-dull.jpg
+  message: "Fix the exposure, it is too dark"
+  adjust:
+    before: {meanLuma: 0.18, shadowsClipped: 0.09, highlightsClipped: 0.0}
+    after:
+      - {meanLuma: 0.3, shadowsClipped: 0.05, highlightsClipped: 0.0}
+      - {meanLuma: 0.43, shadowsClipped: 0.008, highlightsClipped: 0.004}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: meanLuma, min: 0.35, max: 0.55}
+      - {metric: shadowsClipped, max: 0.01}
+    cites_metric: true
+- id: adjust-photo-bright-enough-stop
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  frame: photo/flat-dull.jpg
+  message: "Brighten it a little"
+  adjust:
+    before: {meanLuma: 0.31, shadowsClipped: 0.01, highlightsClipped: 0.0}
+    after:
+      - {meanLuma: 0.43, shadowsClipped: 0.004, highlightsClipped: 0.01}
+    rounds: {min: 1, max: 1}
+    final:
+      - {metric: meanLuma, min: 0.35, max: 0.55}
+    cites_metric: true
+- id: adjust-photo-overexposed
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "This is too bright and the sky is blown out, recover it"
+  adjust:
+    before: {meanLuma: 0.78, highlightsClipped: 0.12, shadowsClipped: 0.0}
+    after:
+      - {meanLuma: 0.64, highlightsClipped: 0.06, shadowsClipped: 0.0}
+      - {meanLuma: 0.52, highlightsClipped: 0.008, shadowsClipped: 0.0}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: meanLuma, min: 0.4, max: 0.6}
+      - {metric: highlightsClipped, max: 0.01}
+    cites_metric: true
+- id: adjust-photo-overshoot
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "Expose it properly"
+  adjust:
+    before: {meanLuma: 0.25, shadowsClipped: 0.03, highlightsClipped: 0.0}
+    after:
+      - {meanLuma: 0.68, shadowsClipped: 0.0, highlightsClipped: 0.09}
+      - {meanLuma: 0.51, shadowsClipped: 0.0, highlightsClipped: 0.01}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: meanLuma, min: 0.4, max: 0.6}
+      - {metric: highlightsClipped, max: 0.02}
+    cites_metric: true
+- id: adjust-photo-yellow-cast
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "Fix the yellow colour cast"
+  adjust:
+    before: {warmth: 0.32, tint: 0.02, meanLuma: 0.5}
+    after:
+      - {warmth: 0.17, tint: 0.02, meanLuma: 0.49}
+      - {warmth: 0.04, tint: 0.01, meanLuma: 0.49}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: warmth, min: -0.06, max: 0.06}
+    cites_metric: true
+- id: adjust-photo-blue-cast
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  message: "Everything looks too blue, make the white balance neutral"
+  adjust:
+    before: {warmth: -0.26, tint: 0.0, meanLuma: 0.45}
+    after:
+      - {warmth: -0.12, tint: 0.0, meanLuma: 0.45}
+      - {warmth: -0.02, tint: 0.0, meanLuma: 0.46}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: warmth, min: -0.06, max: 0.06}
+    cites_metric: true
+- id: adjust-photo-flat-contrast
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  frame: photo/flat-dull.jpg
+  message: "It looks flat and dull, add contrast"
+  adjust:
+    before: {lumaStd: 0.09, shadowsClipped: 0.0, highlightsClipped: 0.0, meanLuma: 0.5}
+    after:
+      - {lumaStd: 0.14, shadowsClipped: 0.005, highlightsClipped: 0.004, meanLuma: 0.5}
+      - {lumaStd: 0.21, shadowsClipped: 0.012, highlightsClipped: 0.01, meanLuma: 0.5}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: lumaStd, min: 0.18}
+      - {metric: shadowsClipped, max: 0.02}
+    cites_metric: true
+- id: adjust-photo-dehaze-one-pass
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  frame: photo/flat-dull.jpg
+  message: "Remove the haze"
+  adjust:
+    before: {lumaStd: 0.08, meanLuma: 0.62, shadowsClipped: 0.0}
+    after:
+      - {lumaStd: 0.22, meanLuma: 0.55, shadowsClipped: 0.006}
+    rounds: {min: 1, max: 1}
+    final:
+      - {metric: lumaStd, min: 0.18}
+      - {metric: shadowsClipped, max: 0.02}
+    cites_metric: true
+- id: adjust-photo-moody
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  frame: photo/flat-dull.jpg
+  message: "Make it dark and moody"
+  adjust:
+    before: {meanLuma: 0.5, shadowsClipped: 0.0, highlightsClipped: 0.01}
+    after:
+      - {meanLuma: 0.42, shadowsClipped: 0.01, highlightsClipped: 0.0}
+      - {meanLuma: 0.33, shadowsClipped: 0.02, highlightsClipped: 0.0}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: meanLuma, min: 0.2, max: 0.38}
+      - {metric: shadowsClipped, max: 0.03}
+    cites_metric: true
+- id: adjust-photo-crushed-blacks
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  frame: photo/backlit.jpg
+  message: "The blacks are crushed, open up the shadows"
+  adjust:
+    before: {shadowsClipped: 0.18, meanLuma: 0.26, highlightsClipped: 0.0}
+    after:
+      - {shadowsClipped: 0.09, meanLuma: 0.31, highlightsClipped: 0.0}
+      - {shadowsClipped: 0.006, meanLuma: 0.37, highlightsClipped: 0.0}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: shadowsClipped, max: 0.01}
+    cites_metric: true
+- id: adjust-photo-edit-did-nothing
+  surface: photo
+  requires: photo
+  fixture_doc: photo/blank.json
+  frame: photo/flat-dull.jpg
+  message: "Make the photo brighter"
+  adjust:
+    before: {meanLuma: 0.2, shadowsClipped: 0.07, highlightsClipped: 0.0}
+    after:
+      - {meanLuma: 0.2, shadowsClipped: 0.07, highlightsClipped: 0.0}
+      - {meanLuma: 0.38, shadowsClipped: 0.01, highlightsClipped: 0.0}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: meanLuma, min: 0.3, max: 0.55}
+    cites_metric: true
+- id: adjust-photo-ru-brighter
+  surface: photo
+  requires: photo
+  locale: ru-RU
+  fixture_doc: photo/blank.json
+  frame: photo/flat-dull.jpg
+  message: "Сделай фото ярче, оно слишком тёмное"
+  expect:
+    language: ru
+  adjust:
+    before: {meanLuma: 0.2, shadowsClipped: 0.08, highlightsClipped: 0.0}
+    after:
+      - {meanLuma: 0.31, shadowsClipped: 0.04, highlightsClipped: 0.0}
+      - {meanLuma: 0.44, shadowsClipped: 0.007, highlightsClipped: 0.0}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: meanLuma, min: 0.35, max: 0.55}
+    cites_metric: true
+- id: adjust-studio-dark-footage
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips.txt
+  message: "The footage is too dark, brighten the grade"
+  adjust:
+    before: {meanLuma: 0.2, shadowsClipped: 0.08, highlightsClipped: 0.0}
+    after:
+      - {meanLuma: 0.31, shadowsClipped: 0.04, highlightsClipped: 0.0}
+      - {meanLuma: 0.42, shadowsClipped: 0.008, highlightsClipped: 0.003}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: meanLuma, min: 0.3, max: 0.55}
+      - {metric: shadowsClipped, max: 0.02}
+    cites_metric: true
+- id: adjust-studio-blown-highlights
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips.txt
+  message: "The highlights are blown out on both clips, fix them"
+  adjust:
+    before: {highlightsClipped: 0.15, meanLuma: 0.66}
+    after:
+      - {highlightsClipped: 0.07, meanLuma: 0.6}
+      - {highlightsClipped: 0.01, meanLuma: 0.55}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: highlightsClipped, max: 0.02}
+    cites_metric: true
+- id: adjust-studio-warmer
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips.txt
+  message: "Make the whole video warmer"
+  adjust:
+    before: {warmth: 0.0, meanLuma: 0.45}
+    after:
+      - {warmth: 0.06, meanLuma: 0.45}
+      - {warmth: 0.16, meanLuma: 0.45}
+    rounds: {min: 2, max: 3}
+    final:
+      - {metric: warmth, min: 0.1, max: 0.3}
+    cites_metric: true
+- id: adjust-studio-cinematic-one-pass
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips.txt
+  message: "Give it a cinematic grade"
+  adjust:
+    before: {meanLuma: 0.5, lumaStd: 0.18, highlightsClipped: 0.04, warmth: 0.0}
+    after:
+      - {meanLuma: 0.41, lumaStd: 0.2, highlightsClipped: 0.01, warmth: 0.07}
+    rounds: {min: 1, max: 1}
+    final:
+      - {metric: meanLuma, min: 0.3, max: 0.5}
+      - {metric: highlightsClipped, max: 0.02}
+    cites_metric: true

@@ -29,6 +29,9 @@ Temperature moves blue to yellow, tint moves green to magenta. Correct in the op
 Sign: a yellow/orange cast needs negative `temperature`, a blue cast positive; green needs positive `tint`, magenta negative.
 ### How to adjust
 Overcorrected: halve the values. Want a cosy feel afterwards: apply `warm`; a crisp winter feel: `cool`.
+### Success criteria
+- warmth -0.05 to 0.05
+- tint -0.04 to 0.04
 
 ## Search keywords
 

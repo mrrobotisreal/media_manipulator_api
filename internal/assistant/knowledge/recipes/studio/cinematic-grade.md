@@ -29,6 +29,10 @@ A cinematic grade is restrained: slightly lower saturation, a touch of extra con
 Clip ids come from the timeline digest; `"all"` grades every video and image clip. Letterbox: add a `title` with two full-width black rectangles, or crop with `set_canvas` only if the user wants a different frame.
 ### How to adjust
 Too strong: `intensity` 0.5. Want more colour: use the `teal-orange` look. Darker, heavier: `moody`.
+### Success criteria
+- meanLuma 0.3 to 0.5
+- shadowsClipped at most 0.03
+- highlightsClipped at most 0.02
 
 ## Search keywords
 

@@ -13,7 +13,11 @@ import (
 )
 
 // recorder is an assistant.Emitter that keeps every event of one request.
-type recorder struct{ out Output }
+type recorder struct {
+	out Output
+	// conversationID/turnID/lastEditCallID let an adjust case continue the turn.
+	conversationID, turnID, lastEditCallID string
+}
 
 func (r *recorder) Ping() error { return nil }
 
@@ -22,6 +26,10 @@ func (r *recorder) Send(ev any) error {
 	case assistant.MetaEvent:
 		r.out.Model = e.Model
 		r.out.PromptVersion = e.PromptVersion
+		r.turnID = e.TurnID
+		if e.ConversationID != nil {
+			r.conversationID = *e.ConversationID
+		}
 	case assistant.ToolEvent:
 		if e.Status == "running" {
 			r.out.ToolCalls++
@@ -38,7 +46,8 @@ func (r *recorder) Send(ev any) error {
 		var ops []map[string]any
 		_ = json.Unmarshal(e.Ops, &ops)
 		r.out.ToolCalls++
-		r.out.Edits = append(r.out.Edits, Edit{Summary: e.Summary, Ops: ops})
+		r.lastEditCallID = e.CallID
+		r.out.Edits = append(r.out.Edits, Edit{Summary: e.Summary, Reason: e.Reason, Ops: ops})
 	case assistant.UsageEvent:
 		r.out.CostUSD += e.CostUSD
 	case assistant.ErrorEvent:
@@ -62,6 +71,9 @@ type Runner struct {
 
 // Run executes one case and returns its output.
 func (r *Runner) Run(ctx context.Context, c Case) (Output, error) {
+	if c.Adjust != nil {
+		return r.runAdjust(ctx, c)
+	}
 	body := assistant.ChatBody{Surface: c.Surface, Locale: c.Locale, Page: assistant.PageRef{Path: c.Page},
 		Message: &assistant.MessageIn{Text: c.Message}}
 	if c.FixtureDoc != "" {
@@ -114,6 +126,19 @@ func Filter(cases []Case, surface, id string, schemas map[string]bool) (run []Ca
 	return run, skipped
 }
 
+// SuiteCases selects a suite (MM115): "adjust" returns only the adjust cases,
+// "" (the default) returns every other case, so the surface pass rates that
+// --gate compares never mix in the multi-round suite.
+func SuiteCases(cases []Case, suite string) []Case {
+	var out []Case
+	for _, c := range cases {
+		if (suite == "adjust") == (c.Adjust != nil) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // Estimate is the printed cost estimate of a run (design §16: the session
 // asks Mitch before spending).
 type Estimate struct {
@@ -149,6 +174,12 @@ func EstimateCost(cases []Case, repeat int, cfg assistantModels) Estimate {
 			model, maxTok = cfg.ModelGuide, cfg.MaxTokensGuide
 		}
 		t := typical[c.Surface]
+		if c.Adjust != nil {
+			// An adjust case is up to four requests (edit, edit, edit, confirm),
+			// each carrying the stored turn; the cached prefix is shared.
+			t.rounds *= 3
+			t.out *= 2
+		}
 		u := assistant.Usage{InputTokens: t.in * t.rounds, OutputTokens: t.out}
 		e.USD += float64(repeat) * assistant.EstimateUSD(model, u)
 		e.WorstUSD += float64(repeat) * float64(t.rounds) * assistant.WorstCaseUSD(model, t.in, maxTok)
@@ -250,4 +281,109 @@ func failureExcerpt(out Output) string {
 		parts = append(parts, "error: "+out.Error)
 	}
 	return strings.ReplaceAll(strings.Join(parts, "; "), "\n", " ")
+}
+
+// runAdjust plays the browser for an adjust case (MM115): the user's message
+// carries the case's meters; each edit the model makes is answered with the
+// next canned meters (editResult.metricsBefore/After) until the model stops
+// editing or the edit budget is spent. Every request of the turn is one entry
+// of Output.Rounds; the aggregate fields (Text, Edits, cost) cover them all.
+func (r *Runner) runAdjust(ctx context.Context, c Case) (Output, error) {
+	a := c.Adjust
+	st := newMemStore()
+	eng := *r.Engine // a copy: the case's store must not leak into the shared engine
+	eng.Store = st
+	eng.Background = func(func()) {} // no title or summary calls: they cost money and the eval stores nothing
+	maxRounds := eng.Cfg.MaxEditRounds
+	if maxRounds < 1 {
+		maxRounds = 1
+	}
+
+	body := assistant.ChatBody{Surface: c.Surface, Locale: c.Locale, Page: assistant.PageRef{Path: c.Page},
+		Message: &assistant.MessageIn{Text: c.Message}, Context: &assistant.ContextIn{Metrics: a.Before}}
+	if c.FixtureDoc != "" {
+		raw, err := Fixture(c.FixtureDoc)
+		if err != nil {
+			return Output{}, err
+		}
+		body.Context.Digest = string(raw)
+	}
+	var frameURL string
+	if c.Frame != "" {
+		raw, err := Frame(c.Frame)
+		if err != nil {
+			return Output{}, err
+		}
+		body.Frame = &assistant.FrameIn{JPEGBase64: base64.StdEncoding.EncodeToString(raw)}
+	}
+	frameURL, _, err := body.Validate(eng.Cfg.MaxFrameBytes)
+	if err != nil {
+		return Output{}, fmt.Errorf("%s: body: %w", c.ID, err)
+	}
+	timeout := r.Timeout
+	if timeout == 0 {
+		timeout = 120 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	total := Output{}
+	live := assistant.LiveContext{Tier: "operator", TurnsLimit: -1, TurnsRemaining: -1}
+	turn := &assistant.Turn{Body: body, FrameURL: frameURL, UserID: "eval", VisitorHash: "eval", Live: live}
+	prev := a.Before
+	edits := 0
+	var convID, turnID string
+	var prep *assistant.Prepared
+	for {
+		rec := &recorder{}
+		eng.Run(ctx, turn, rec, prep)
+		out := rec.out
+		round := RoundOut{Text: out.Text, Failed: out.Error}
+		if len(out.Edits) > 0 {
+			e := out.Edits[0]
+			round.Edit = &e
+			edits++
+		}
+		total.Text += out.Text
+		total.Actions = append(total.Actions, out.Actions...)
+		total.Edits = append(total.Edits, out.Edits...)
+		total.Asks = append(total.Asks, out.Asks...)
+		total.CostUSD += out.CostUSD
+		total.ToolCalls += out.ToolCalls
+		if total.Model == "" {
+			total.Model, total.PromptVersion = out.Model, out.PromptVersion
+		}
+		if out.Error != "" {
+			total.Error = out.Error
+		}
+		if round.Edit != nil {
+			after := a.After[min(edits-1, len(a.After)-1)]
+			round.Shown = after
+		}
+		total.Rounds = append(total.Rounds, round)
+		if round.Edit == nil || out.Error != "" || edits >= maxRounds+1 {
+			break
+		}
+		if convID == "" {
+			convID, turnID = rec.conversationID, rec.turnID
+		}
+		// The model's edit awaits its result; answer it with the canned meters.
+		callID := rec.lastEditCallID
+		conv, err := st.GetAssistantConversation(ctx, convID, "eval")
+		if err != nil {
+			return total, err
+		}
+		prep, err = eng.PrepareEditResult(ctx, conv, turnID, callID)
+		if err != nil {
+			break // edit budget spent or stale: the turn ends here
+		}
+		cont := assistant.ChatBody{Surface: c.Surface, Locale: c.Locale, Page: body.Page, ConversationID: convID, TurnID: turnID,
+			EditResult: &assistant.EditResult{CallID: callID, Applied: true, MetricsBefore: prev, MetricsAfter: round.Shown}}
+		if _, _, err := cont.Validate(eng.Cfg.MaxFrameBytes); err != nil {
+			return total, fmt.Errorf("%s: editResult: %w", c.ID, err)
+		}
+		prev = round.Shown
+		turn = &assistant.Turn{Body: cont, UserID: "eval", VisitorHash: "eval", Live: live, Conversation: conv}
+	}
+	return total, nil
 }

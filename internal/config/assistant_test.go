@@ -11,7 +11,7 @@ func TestAssistantConfigDefaults(t *testing.T) {
 		a.ModelPlan != "anthropic/claude-opus-5.5" || a.ModelTitle != "anthropic/claude-haiku-5.5" {
 		t.Errorf("model defaults = %+v", a)
 	}
-	if a.DailySpendCapUSD != 10 || a.ToolMaxRounds != 4 || a.MaxEditRounds != 2 || a.PlanTurnCost != 3 || a.MaxFrameBytes != 307200 {
+	if a.DailySpendCapUSD != 10 || a.ToolMaxRounds != 4 || a.MaxEditRounds != 3 || a.PlanTurnCost != 3 || a.MaxFrameBytes != 307200 {
 		t.Errorf("limits = %+v", a)
 	}
 	if a.TierAnonTurns != 0 || a.TierFreeTurns != 5 || a.TierPremiumTurns != 50 || a.TierProTurns != 150 {

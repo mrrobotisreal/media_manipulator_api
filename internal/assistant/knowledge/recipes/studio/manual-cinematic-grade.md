@@ -29,6 +29,10 @@ The Lumetri numbers behind a film look: contrast up about 10 %, saturation down 
 Clip ids come from the timeline digest; `"all"` grades every video and image clip.
 ### How to adjust
 Too muted: saturation 0.95. Too warm: temperature 3. Flat: contrast 1.2. Cooler night feel: temperature -12, tint 4.
+### Success criteria
+- meanLuma 0.3 to 0.5
+- lumaStd at least 0.15
+- highlightsClipped at most 0.02
 
 ## Search keywords
 
