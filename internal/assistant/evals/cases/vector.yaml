@@ -1,4 +1,4 @@
-# Motion copilot cases. `requires: vector` until MM110 lands the vector op schema.
+# Motion copilot cases (MM110: the vector op schema is merged, so these run). `requires: vector` keeps them off until a build has the schema.
 - id: vector-lower-third
   surface: vector
   requires: vector

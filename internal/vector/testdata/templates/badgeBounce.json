@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 512,
+    "height": 512,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 512,
+      "height": 512
+    },
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "type": "group",
+      "id": "badge-1",
+      "name": "Badge",
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "rotation": 0,
+        "skewX": 0,
+        "skewY": 0,
+        "anchorX": 419.84,
+        "anchorY": 102.4
+      },
+      "children": [
+        {
+          "type": "ellipse",
+          "id": "badge-circle-1",
+          "cx": 419.84,
+          "cy": 102.4,
+          "rx": 56.32,
+          "ry": 56.32,
+          "fill": "#ffcc00"
+        },
+        {
+          "type": "text",
+          "id": "badge-text-1",
+          "x": 419.84,
+          "y": 113.528,
+          "text": "SALE",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 31.794,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "fill": "#111111"
+        }
+      ]
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": [
+    {
+      "layerId": "badge-1",
+      "property": "transform.scaleX",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "easeOut"
+        },
+        {
+          "t": 360,
+          "value": 1.15,
+          "easing": "easeBoth"
+        },
+        {
+          "t": 540,
+          "value": 0.92,
+          "easing": "easeBoth"
+        },
+        {
+          "t": 720,
+          "value": 1.04,
+          "easing": "easeBoth"
+        },
+        {
+          "t": 900,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "badge-1",
+      "property": "transform.scaleY",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "easeOut"
+        },
+        {
+          "t": 360,
+          "value": 1.15,
+          "easing": "easeBoth"
+        },
+        {
+          "t": 540,
+          "value": 0.92,
+          "easing": "easeBoth"
+        },
+        {
+          "t": 720,
+          "value": 1.04,
+          "easing": "easeBoth"
+        },
+        {
+          "t": 900,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "badge-1",
+      "property": "transform.y",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": -33.792,
+          "easing": "easeIn"
+        },
+        {
+          "t": 360,
+          "value": 0,
+          "easing": "easeOut"
+        },
+        {
+          "t": 540,
+          "value": -8.448,
+          "easing": "easeIn"
+        },
+        {
+          "t": 720,
+          "value": 0,
+          "easing": "linear"
+        }
+      ]
+    }
+  ]
+}

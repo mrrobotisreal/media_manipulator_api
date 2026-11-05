@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 512,
+    "height": 512,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 512,
+      "height": 512
+    },
+    "background": "transparent"
+  },
+  "duration": 3000,
+  "fps": 24,
+  "layers": [
+    {
+      "type": "text",
+      "id": "title-1",
+      "name": "Title",
+      "x": 256,
+      "y": 275.2,
+      "text": "New collection",
+      "fontFamily": "Inter, sans-serif",
+      "fontSize": 54.857,
+      "fontWeight": "800",
+      "textAnchor": "middle",
+      "fill": "#ffffff",
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "rotation": 0,
+        "skewX": 0,
+        "skewY": 0,
+        "anchorX": 256,
+        "anchorY": 256
+      }
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": [
+    {
+      "layerId": "title-1",
+      "property": "transform.scaleX",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 200,
+          "value": 0,
+          "easing": "easeOut"
+        },
+        {
+          "t": 525,
+          "value": 1.1,
+          "easing": "easeBoth"
+        },
+        {
+          "t": 700,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "title-1",
+      "property": "transform.scaleY",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 200,
+          "value": 0,
+          "easing": "easeOut"
+        },
+        {
+          "t": 525,
+          "value": 1.1,
+          "easing": "easeBoth"
+        },
+        {
+          "t": 700,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    },
+    {
+      "layerId": "title-1",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 200,
+          "value": 0,
+          "easing": "linear"
+        },
+        {
+          "t": 300,
+          "value": 1,
+          "easing": "linear"
+        }
+      ]
+    }
+  ]
+}

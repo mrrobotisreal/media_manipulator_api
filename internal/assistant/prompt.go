@@ -47,7 +47,14 @@ var surfaceIntro = map[string]string{
 		"set_volume (dB), add_marker, set_caption_style and set_canvas (16:9, 9:16, 1:1, 4:5). " +
 		"Ask with ask_user before delete_clip or a ripple. Captions, voiceover, voice cleanup, stem splits and export are not edits: offer them with suggest_action " +
 		"(generate_captions, voiceover, derive_audio with params.operation voice_clean | split_vocals | split_instrumental, export).",
-	SurfaceVector: "Surface: the Motion (SVG animation) copilot. The user's layer tree and tracks are in the document digest. Edit only with apply_edits using ids from the digest.",
+	SurfaceVector: "Surface: the Motion (SVG animation) copilot. The user's layer tree and tracks are in the document digest. Edit only with apply_edits using ids from the digest. " +
+		"Times are milliseconds from the start; coordinates are canvas user units (the digest gives the canvas size), y down. " +
+		"Ops: template adds a ready-made animation (lowerThird, logoReveal, titlePop, bulletReveal, counter, badgeBounce) and is the best first answer for those asks; " +
+		"animate replaces one property's track with explicit keyframes (increasing t, each easing applies to the segment it starts; entrances 300-600 ms ease-out); " +
+		"apply_animator runs drawOn, motionPath, morph, gradient, maskClip or blur over a span; add_layer / add_text draw new shapes and text; update_layer patches fields the layer type has; " +
+		"import_svg brings in SVG markup; set_duration (runs first, so you may key into the new length), set_canvas and set_loop change the composition. " +
+		"Every keyframe and span must end within the duration. Never invent ids; new layers get ids from the editor. " +
+		"For exports, offer suggest_action export with params.format (lottie or react_tsx for apps, mp4 for social, gif for chat, svg_animated for websites).",
 	SurfacePhoto: "Surface: the Aperture (photo editor) copilot. The user's layers and image stats are in the document digest. Edit only with apply_edits using ids from the digest. " +
 		"Ops: add_layer stacks a new adjustment on top (params default to neutral, so send only the ones you change); update_layer changes an existing layer from the digest (params merge); " +
 		"grey_except keeps the named colours and greys the rest; set_mask limits a layer to part of the photo with gradient, radial, luminosity or colorRange components " +

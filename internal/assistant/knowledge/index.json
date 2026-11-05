@@ -457,6 +457,29 @@
   ],
   "tokens": 367
  },
+ "editors/vector/templates": {
+  "title": "Motion templates (lower third, logo reveal, title pop, bullets, counter, badge)",
+  "kind": "editor",
+  "keywords": [
+   "template",
+   "templates",
+   "lower third",
+   "lower-third",
+   "name title",
+   "logo reveal",
+   "title pop",
+   "text pop",
+   "bullet points",
+   "bullet reveal",
+   "counter",
+   "count up",
+   "number animation",
+   "badge",
+   "sticker",
+   "bounce"
+  ],
+  "tokens": 443
+ },
  "editors/vector/timeline": {
   "title": "Motion timeline, keyframes and easing",
   "kind": "editor",

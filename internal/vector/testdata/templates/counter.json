@@ -1,0 +1,750 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 512,
+    "height": 512,
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "width": 512,
+      "height": 512
+    },
+    "background": "transparent"
+  },
+  "duration": 3300,
+  "fps": 24,
+  "layers": [
+    {
+      "type": "group",
+      "id": "counter-1",
+      "name": "Counter",
+      "children": [
+        {
+          "type": "text",
+          "id": "counter-step-1",
+          "x": 256,
+          "y": 284.672,
+          "text": "0",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 1,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-2",
+          "x": 256,
+          "y": 284.672,
+          "text": "1,426",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-3",
+          "x": 256,
+          "y": 284.672,
+          "text": "2,710",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-4",
+          "x": 256,
+          "y": 284.672,
+          "text": "3,859",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-5",
+          "x": 256,
+          "y": 284.672,
+          "text": "4,880",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-6",
+          "x": 256,
+          "y": 284.672,
+          "text": "5,781",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-7",
+          "x": 256,
+          "y": 284.672,
+          "text": "6,570",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-8",
+          "x": 256,
+          "y": 284.672,
+          "text": "7,254",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-9",
+          "x": 256,
+          "y": 284.672,
+          "text": "7,840",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-10",
+          "x": 256,
+          "y": 284.672,
+          "text": "8,336",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-11",
+          "x": 256,
+          "y": 284.672,
+          "text": "8,750",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-12",
+          "x": 256,
+          "y": 284.672,
+          "text": "9,089",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-13",
+          "x": 256,
+          "y": 284.672,
+          "text": "9,360",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-14",
+          "x": 256,
+          "y": 284.672,
+          "text": "9,571",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-15",
+          "x": 256,
+          "y": 284.672,
+          "text": "9,730",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-16",
+          "x": 256,
+          "y": 284.672,
+          "text": "9,844",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-17",
+          "x": 256,
+          "y": 284.672,
+          "text": "9,920",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-18",
+          "x": 256,
+          "y": 284.672,
+          "text": "9,966",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-19",
+          "x": 256,
+          "y": 284.672,
+          "text": "9,990",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-20",
+          "x": 256,
+          "y": 284.672,
+          "text": "9,999",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-step-21",
+          "x": 256,
+          "y": 284.672,
+          "text": "10,000",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 81.92,
+          "fontWeight": "800",
+          "textAnchor": "middle",
+          "opacity": 0,
+          "fill": "#ffffff"
+        },
+        {
+          "type": "text",
+          "id": "counter-label-1",
+          "x": 256,
+          "y": 342.016,
+          "text": "users",
+          "fontFamily": "Inter, sans-serif",
+          "fontSize": 26.214,
+          "textAnchor": "middle",
+          "opacity": 0.8,
+          "fill": "#ffffff"
+        }
+      ]
+    }
+  ],
+  "defs": {
+    "gradients": [],
+    "masks": [],
+    "clipPaths": [],
+    "filters": [],
+    "symbols": []
+  },
+  "animations": [
+    {
+      "layerId": "counter-step-1",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 90,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-2",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 90,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 180,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-3",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 180,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 270,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-4",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 270,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 360,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-5",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 360,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 450,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-6",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 450,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 540,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-7",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 540,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 630,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-8",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 630,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 720,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-9",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 720,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 810,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-10",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 810,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 900,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-11",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 900,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 990,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-12",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 990,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 1080,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-13",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 1080,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 1170,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-14",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 1170,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 1260,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-15",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 1260,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 1350,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-16",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 1350,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 1440,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-17",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 1440,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 1530,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-18",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 1530,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 1620,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-19",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 1620,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 1710,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-20",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 1710,
+          "value": 1,
+          "easing": "hold"
+        },
+        {
+          "t": 1800,
+          "value": 0,
+          "easing": "hold"
+        }
+      ]
+    },
+    {
+      "layerId": "counter-step-21",
+      "property": "opacity",
+      "keyframes": [
+        {
+          "t": 0,
+          "value": 0,
+          "easing": "hold"
+        },
+        {
+          "t": 1800,
+          "value": 1,
+          "easing": "hold"
+        }
+      ]
+    }
+  ]
+}
