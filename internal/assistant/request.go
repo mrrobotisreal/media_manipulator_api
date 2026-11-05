@@ -3,11 +3,14 @@ package assistant
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/mrrobotisreal/media_manipulator_api/internal/assistant/analyze"
 )
 
 // ChatBody is the POST /api/assistant/chat body (design §10). Exactly one of
@@ -40,6 +43,9 @@ type MessageIn struct {
 type ContextIn struct {
 	Digest    string `json:"digest,omitempty"`
 	ProjectID string `json:"projectId,omitempty"`
+	// Metrics are the browser's measurements of the current preview (MM115):
+	// luma, clipping, white balance. At most 4 KB, copilot surfaces only.
+	Metrics analyze.MetricSet `json:"metrics,omitempty"`
 }
 
 // FrameIn is a downscaled preview JPEG (request-only, never stored).
@@ -53,6 +59,10 @@ type EditResult struct {
 	Applied    bool     `json:"applied"`
 	Errors     []string `json:"errors,omitempty"`
 	FrameAfter *FrameIn `json:"frameAfter,omitempty"`
+	// MetricsBefore/MetricsAfter are the browser's measurements of the preview
+	// before and after the edit (MM115), 4 KB each.
+	MetricsBefore analyze.MetricSet `json:"metricsBefore,omitempty"`
+	MetricsAfter  analyze.MetricSet `json:"metricsAfter,omitempty"`
 }
 
 // Limits on the body (decision 9).
@@ -146,6 +156,9 @@ func (b *ChatBody) Validate(maxFrameBytes int) (frameURL, frameAfterURL string, 
 	if b.Context != nil && len(b.Context.Digest) > MaxDigestBytes {
 		return "", "", bad("digest_too_large", "context.digest is larger than %d bytes", MaxDigestBytes)
 	}
+	if err := b.validateMetrics(); err != nil {
+		return "", "", err
+	}
 	if b.Frame != nil {
 		if b.Surface == SurfaceGuide {
 			return "", "", bad("invalid_body", "frames are for copilot surfaces")
@@ -160,6 +173,38 @@ func (b *ChatBody) Validate(maxFrameBytes int) (frameURL, frameAfterURL string, 
 		}
 	}
 	return frameURL, frameAfterURL, nil
+}
+
+// validateMetrics enforces the MM115 limits: copilot surfaces only, each set a
+// short identifier → bounded number map within 4 KB on the wire.
+func (b *ChatBody) validateMetrics() error {
+	check := func(field string, m analyze.MetricSet) error {
+		if len(m) == 0 {
+			return nil
+		}
+		if b.Surface == SurfaceGuide {
+			return bad("invalid_body", "%s is for copilot surfaces", field)
+		}
+		if raw, err := json.Marshal(m); err != nil || len(raw) > analyze.MaxMetricsBytes {
+			return bad("metrics_too_large", "%s is larger than %d bytes", field, analyze.MaxMetricsBytes)
+		}
+		if err := m.Validate(); err != nil {
+			return bad("invalid_metrics", "%s: %v", field, err)
+		}
+		return nil
+	}
+	if b.Context != nil {
+		if err := check("context.metrics", b.Context.Metrics); err != nil {
+			return err
+		}
+	}
+	if b.EditResult != nil {
+		if err := check("editResult.metricsBefore", b.EditResult.MetricsBefore); err != nil {
+			return err
+		}
+		return check("editResult.metricsAfter", b.EditResult.MetricsAfter)
+	}
+	return nil
 }
 
 var jpegMagic = []byte{0xFF, 0xD8, 0xFF}

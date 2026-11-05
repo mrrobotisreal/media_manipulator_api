@@ -243,7 +243,7 @@ func TestApplyEditsOfferedOnlyWithSchema(t *testing.T) {
 		}
 		return strings.Join(n, ",")
 	}
-	if got := names(ToolsFor("photo", ops)); got != "search_help,get_recipe,get_tool_page,apply_edits,suggest_action,ask_user" {
+	if got := names(ToolsFor("photo", ops)); got != "search_help,get_recipe,get_tool_page,analyze_compare,apply_edits,suggest_action,ask_user" {
 		t.Errorf("photo tools = %s", got)
 	}
 	if got := names(ToolsFor("studio", ops)); strings.Contains(got, ToolApplyEdits) {

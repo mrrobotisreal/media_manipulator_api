@@ -17,11 +17,18 @@ const (
 	ToolApplyEdits    = "apply_edits"
 	ToolSuggestAction = "suggest_action"
 	ToolAskUser       = "ask_user"
+	// MM115: Medi's eyes. analyze_compare diffs the browser's before/after
+	// meters; the file tools measure an uploaded file (offered only with a ref).
+	ToolAnalyzeCompare = "analyze_compare"
+	ToolAnalyzeImage   = "analyze_image"
+	ToolAnalyzeAudio   = "analyze_audio"
+	ToolAnalyzeVideo   = "analyze_video"
 )
 
 // serverTools run on the API inside the upstream loop; every other tool is a
 // client tool that ends the upstream stream.
-var serverTools = map[string]bool{ToolSearchHelp: true, ToolGetRecipe: true, ToolGetToolPage: true}
+var serverTools = map[string]bool{ToolSearchHelp: true, ToolGetRecipe: true, ToolGetToolPage: true,
+	ToolAnalyzeCompare: true, ToolAnalyzeImage: true, ToolAnalyzeAudio: true, ToolAnalyzeVideo: true}
 
 // IsServerTool reports whether the API executes the tool itself.
 func IsServerTool(name string) bool { return serverTools[name] }
@@ -69,6 +76,9 @@ func ToolsFor(surface string, ops *OpsValidator) []ToolDef {
 				Parameters: schema(`{"type":"object","properties":{"slug":{"type":"string","pattern":"^[a-z0-9\\-]+$","maxLength":120},"preset":{"type":"string","maxLength":80},"label":{"type":"string","maxLength":60}},"required":["slug"],"additionalProperties":false}`)},
 		)
 	} else {
+		tools = append(tools, ToolDef{Name: ToolAnalyzeCompare,
+			Description: "Compare the preview's meters before and after your last edit (mean luma, contrast, shadows and highlights clipped, warmth, tint). Call it after a visual edit, before you decide to stop or adjust once more. Returns each figure's before, after and change.",
+			Parameters:  schema(`{"type":"object","properties":{},"additionalProperties":false}`)})
 		if ops.Has(surface) {
 			tools = append(tools, ToolDef{Name: ToolApplyEdits,
 				Description: "Apply edits to the open document as ONE undoable step. summary (<= 60 chars) becomes the undo label. reason (4-140 chars) says why, citing what you saw in the digest or what the user asked; ops may carry their own optional reason. ops use only ids from the document digest.",
@@ -301,4 +311,17 @@ func contains(xs []string, x string) bool {
 		}
 	}
 	return false
+}
+
+// FileToolsFor lists the analyze_image / analyze_audio / analyze_video tools.
+// They measure a file the user already uploaded for a job, so they are
+// offered only when the turn carries a file ref (MM116 wires it); the model
+// passes that ref back and it is checked against the turn's own.
+func FileToolsFor() []ToolDef {
+	arg := schema(`{"type":"object","properties":{"fileRef":{"type":"string","minLength":1,"maxLength":200}},"required":["fileRef"],"additionalProperties":false}`)
+	return []ToolDef{
+		{Name: ToolAnalyzeImage, Description: "Measure the user's uploaded picture: histogram, clipped shadows and highlights, mean luma, white balance, sharpness, noise, dominant hues.", Parameters: arg},
+		{Name: ToolAnalyzeAudio, Description: "Measure the user's uploaded audio: integrated and short-term loudness (LUFS), true peak, loudness range, noise floor, clipping.", Parameters: arg},
+		{Name: ToolAnalyzeVideo, Description: "Measure the user's uploaded video: size, duration, frame rate, scene brightness, black frames and the audio loudness.", Parameters: arg},
+	}
 }

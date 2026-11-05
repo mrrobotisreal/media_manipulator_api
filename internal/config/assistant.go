@@ -47,7 +47,7 @@ type AssistantConfig struct {
 	// ToolMaxRounds is ASSISTANT_TOOL_MAX_ROUNDS (default 4): server tool
 	// rounds per request.
 	ToolMaxRounds int
-	// MaxEditRounds is ASSISTANT_MAX_EDIT_ROUNDS (default 2): editResult
+	// MaxEditRounds is ASSISTANT_MAX_EDIT_ROUNDS (default 3, MM115): editResult
 	// continuations per turn.
 	MaxEditRounds int
 	// PlanTurnCost is ASSISTANT_PLAN_TURN_COST (default 3).
@@ -97,7 +97,7 @@ func loadAssistantConfig() AssistantConfig {
 		ProviderOrder:    splitCSVLower(getEnv("ASSISTANT_PROVIDER_ORDER", "anthropic")),
 		DailySpendCapUSD: getEnvFloat("ASSISTANT_DAILY_SPEND_CAP_USD", 10),
 		ToolMaxRounds:    getEnvInt("ASSISTANT_TOOL_MAX_ROUNDS", 4),
-		MaxEditRounds:    getEnvInt("ASSISTANT_MAX_EDIT_ROUNDS", 2),
+		MaxEditRounds:    getEnvInt("ASSISTANT_MAX_EDIT_ROUNDS", 3),
 		PlanTurnCost:     getEnvInt("ASSISTANT_PLAN_TURN_COST", 3),
 		MaxFrameBytes:    getEnvInt("ASSISTANT_MAX_FRAME_BYTES", 307200),
 

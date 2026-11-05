@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/assistant/analyze"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/telemetry"
 )
@@ -34,6 +35,9 @@ type Engine struct {
 	Keepalive time.Duration
 	// Background runs fire-and-forget work (titles); tests run it inline.
 	Background func(func())
+	// Files resolves a turn's file ref for analyze_image|audio|video (MM116
+	// wires it); nil = the file tools are never offered.
+	Files FileResolver
 	// OnTurnCounted is told once per completed upstream request (MM107 turns it
 	// into the server analytics event).
 	OnTurnCounted func(t TurnReport)
@@ -49,6 +53,9 @@ type Turn struct {
 	Body          ChatBody
 	FrameURL      string
 	FrameAfterURL string
+	// FileRef names a file the user already uploaded for a job (MM116); the
+	// file tools are offered only when it is set and Engine.Files is not nil.
+	FileRef string
 	// UserID is the mm_users id ("" = guest: nothing is stored).
 	UserID      string
 	VisitorHash string
@@ -251,6 +258,16 @@ func editResultText(r *EditResult, hasFrame bool) string {
 	}
 	if hasFrame {
 		b.WriteString(" The preview after the edit is attached in the next message.")
+	}
+	switch {
+	case len(r.MetricsBefore) > 0 && len(r.MetricsAfter) > 0:
+		if brief := analyze.Brief(r.MetricsBefore, r.MetricsAfter, 5); brief != "" {
+			b.WriteString(" Meters before to after: " + brief + ". Call analyze_compare for every figure.")
+		} else {
+			b.WriteString(" The meters did not change. Call analyze_compare to see them.")
+		}
+	case len(r.MetricsAfter) > 0:
+		b.WriteString(" Meters after the edit: " + r.MetricsAfter.String() + ".")
 	}
 	return b.String()
 }
@@ -506,6 +523,7 @@ func (r *run) exec(prep *Prepared) {
 	}
 	if b.Context != nil {
 		live.Digest = b.Context.Digest
+		live.Metrics = b.Context.Metrics.String()
 	}
 	if b.Message != nil {
 		k := 3
@@ -531,6 +549,9 @@ func (r *run) exec(prep *Prepared) {
 	}
 
 	tools := ToolsFor(b.Surface, e.Ops)
+	if e.Files != nil && r.t.FileRef != "" {
+		tools = append(tools, FileToolsFor()...)
+	}
 	if prep != nil && prep.EditCount >= e.Cfg.MaxEditRounds {
 		// The last edit round's result: the model may only confirm in words.
 		tools = withoutTool(tools, ToolApplyEdits)
@@ -587,7 +608,7 @@ func (r *run) exec(prep *Prepared) {
 					r.finish("interrupted", "")
 					return
 				}
-				result, _ := executeServerTool(c, r.surface, e.Knowledge)
+				result := r.serverTool(c)
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: c.ID, Text: result})
 				if !r.send(ToolEvent{Type: "tool", Name: c.Name, Status: "ok"}) {
 					r.finish("interrupted", "")
@@ -623,7 +644,7 @@ func (r *run) exec(prep *Prepared) {
 				case invalid[c.ID] != "":
 					text = "Error: " + invalid[c.ID] + ". Fix the arguments and call again."
 				case IsServerTool(c.Name):
-					text, _ = executeServerTool(c, r.surface, e.Knowledge)
+					text = r.serverTool(c)
 				}
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: c.ID, Text: text})
 			}
@@ -633,7 +654,7 @@ func (r *run) exec(prep *Prepared) {
 		// so the history stays well-formed.
 		var serverResults []Message
 		for _, c := range server {
-			result, _ := executeServerTool(c, r.surface, e.Knowledge)
+			result := r.serverTool(c)
 			serverResults = append(serverResults, Message{Role: "tool", ToolCallID: c.ID, Text: result})
 		}
 		outcome := ""
