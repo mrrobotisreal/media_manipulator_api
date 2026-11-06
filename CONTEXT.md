@@ -30,6 +30,13 @@ MM120 added the **Pro formats**: `av1` (MP4, WebM, MKV; `av1_nvenc`, `libsvtav1`
 Captions mode `embedded` (Premium+, token `subs_embedded`): the project's cues (when its captions toggle is on) muxed as a plain-text subtitle stream in the container's `subtitleCodec` (MKV `srt`, MP4/MOV `mov_text`, WebM `webvtt`), tagged with the ISO 639-2 language of the generated cues (`StudioProject.CaptionsLanguage`, kept in the project sidecar by the caption job) and title `Captions`. Audio-only outputs refuse it (400). Styling and animation only exist in **burn-in**; sidecar files are generated client-side.
 _Avoid_: calling it "soft subs" in UI copy (the dialog says "Embedded track").
 
+**Word timings** (MM121):
+A caption cue's optional `words` (`{text, startSeconds, endSeconds, emphasis?}`), one per caption unit of the text (`models.CaptionUnits`). Only the Darkroom caption job asks Whisper for them (`TranscribeOptions.WordTimestamps`); `SegmentsToCuesUntil` groups words into cues (sentence end or a gap >= 150 ms breaks; Han/kana spread per character) and drops words inside a trailing silence. The sanitizer keeps a list only when it is complete and valid.
+
+**Caption look** (MM121):
+A named, complete `StudioCaptionStyle` in `models.StudioCaptionLooks` (`bold_pop`, `karaoke_classic`, `clean_highlight`, `minimal`, `neon`, `podcast`); `lookId` records it. An anonymous save naming a non-allowlisted look or animation is rewritten to the nearest allowed one (`models.ApplyAnonCaptionAllowlist`). The burn-in `.ass` comes from `services.BuildASS` (karaoke `\kf`, highlight, pop, word box, per-cue script font fallback), held identical to the UI generator by `testdata/captions/*.{json,ass}`; ffmpeg's `subtitles=` gets `fontsdir` = `CONTENT_STUDIO_FONTS_DIR`, which holds every **caption font** (`models.StudioCaptionFonts`).
+_Avoid_: changing `BuildASS` without regenerating the goldens and porting the change to the UI.
+
 **CPU encode gate** (MM119):
 The server-wide semaphore (`services.StudioCPUEncodeGate`, `STUDIO_CPU_ENCODE_CONCURRENCY`, default 2) a CPU-bound export encoder (libvpx-vp9) takes inside the render job. The export is accepted and charged first; while it waits the job's `currentStage` is `queued` (the UI shows **Queued**) and the wait is added to `queueWaitMs` and the render event's `cpuQueueMs`. NVENC and audio-only exports never take it.
 
