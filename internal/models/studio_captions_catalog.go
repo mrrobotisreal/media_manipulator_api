@@ -280,3 +280,38 @@ func ApplyAnonCaptionAllowlist(st *StudioCaptionStyle) []string {
 	}
 	return changed
 }
+
+// StripCaptionEmphasis returns the cues with every word's emphasis cleared
+// (MM122 decision 3): an export whose owner lacks the per-word editor
+// (Limits.CaptionWordEdit) ignores emphasis. The stored project keeps the
+// flags, so they come back if the account upgrades again. The input is never
+// modified; cues without emphasis are returned as they are.
+func StripCaptionEmphasis(cues []StudioCaptionCue) []StudioCaptionCue {
+	var out []StudioCaptionCue
+	for i, c := range cues {
+		hit := false
+		for _, w := range c.Words {
+			hit = hit || w.Emphasis
+		}
+		if !hit {
+			if out != nil {
+				out = append(out, c)
+			}
+			continue
+		}
+		if out == nil {
+			out = append(make([]StudioCaptionCue, 0, len(cues)), cues[:i]...)
+		}
+		words := make([]StudioCaptionWord, len(c.Words))
+		for j, w := range c.Words {
+			w.Emphasis = false
+			words[j] = w
+		}
+		c.Words = words
+		out = append(out, c)
+	}
+	if out == nil {
+		return cues
+	}
+	return out
+}

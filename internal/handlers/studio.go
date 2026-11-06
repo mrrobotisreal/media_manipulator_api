@@ -1372,6 +1372,7 @@ func (h *StudioHandler) launchExport(c *gin.Context, projectID string, req model
 	}
 
 	exportCfg := buildStudioExportConfig(project, assetByID, req)
+	enforceCaptionWordEdit(c, &exportCfg)
 	quality := normalizeExportQuality(req.Preset)
 	ext, mime, mediaKind := output.File()
 	baseName := safeFilename(firstNonEmpty(req.FileName, project.Name, "export")) + ext
@@ -2028,6 +2029,23 @@ func (h *StudioHandler) registerRow(c *gin.Context, kind, id, projectID string, 
 // registerKey records a Darkroom source S3 object.
 func (h *StudioHandler) registerKey(c *gin.Context, sessionID, key, parent, projectID string, size int64) {
 	retention.Default().RegisterS3(detachedCtx(c), h.retentionOwner(c, sessionID), key, parent, "", projectID, size)
+}
+
+// enforceCaptionWordEdit (MM122 decision 3): emphasis is a Premium+ feature
+// (Limits.CaptionWordEdit). The sanitizer cannot tell a crafted flag from an
+// edited one, so the export enforces it: the burned-in cues of a caller
+// (always the project owner: exports need project access) whose plan lacks
+// the editor lose their emphasis. Retiming is UI-only (it changes nothing but
+// timing). A tier system that is off passes through.
+func enforceCaptionWordEdit(c *gin.Context, cfg *studioExportConfig) {
+	if len(cfg.captions) == 0 {
+		return
+	}
+	res, ok := middleware.ResolveTier(c)
+	if !ok || res.Limits.CaptionWordEdit {
+		return
+	}
+	cfg.captions = models.StripCaptionEmphasis(cfg.captions)
 }
 
 // applyAnonCaptionAllowlist (MM121, design §6.4): an anonymous caller gets
