@@ -17,22 +17,26 @@ import (
 
 // --- VP9 ---------------------------------------------------------------------
 
-// studioVP9Threads is libvpx's -threads for one export. With -row-mt 1 and
-// 2 tile columns the encoder scales to roughly this many threads; the timing
-// run on the 32-thread host (design §9, MM119) picked it so the default two
-// concurrent CPU encodes share the CPU without starving the API.
+// studioVP9Threads is libvpx's -threads for one export. The timing run on the
+// 32-thread host (design §9, MM119): 32 threads was only 11-16 % faster than
+// 16 for a lone encode, and two concurrent 16-thread encodes (the default
+// gate) each kept 86 % of a lone encode's fps, so 16 lets the two default
+// slots share the CPU without one encode taking every core.
 const studioVP9Threads = "16"
 
 // vp9EncodeArgs is libvpx-vp9 in constant-quality mode (-crf with -b:v 0),
-// ladder low/medium/high = cpu-used 5/3/2, crf 40/34/31 (tuned by the MM119
-// timing run, logged in design §9). 8-bit yuv420p like every other encoder.
+// ladder low/medium/high = cpu-used 4/3/2, crf 40/34/31. The MM119 timing run
+// on the server (design §9) moved low from the proposed cpu-used 5 to 4:
+// with -deadline good and -row-mt 1, libvpx's speed 5 encoded at HALF the
+// fps of speed 4 (1080p 25 vs 51 fps, 2160p 7 vs 17 fps) for the same size.
+// 8-bit yuv420p like every other encoder.
 func vp9EncodeArgs(quality string) []string {
 	cpu, crf := "3", "34"
 	switch strings.ToLower(strings.TrimSpace(quality)) {
 	case "high":
 		cpu, crf = "2", "31"
 	case "low":
-		cpu, crf = "5", "40"
+		cpu, crf = "4", "40"
 	}
 	return []string{
 		"-c:v", "libvpx-vp9",

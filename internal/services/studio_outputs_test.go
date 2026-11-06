@@ -319,7 +319,7 @@ func TestStudioOutputMM119Args(t *testing.T) {
 		tail          string
 	}{
 		{"webm vp9 opus low", "low", StudioOutputRequest{Preset: "webm_vp9_opus"}, StudioEncoderVP9,
-			vp9("5", "40") + " -c:a libopus -b:a 128k -vbr on -ar 48000 -application audio -t 5.000 /o.webm"},
+			vp9("4", "40") + " -c:a libopus -b:a 128k -vbr on -ar 48000 -application audio -t 5.000 /o.webm"},
 		{"webm vp9 opus medium", "medium", StudioOutputRequest{Preset: "webm_vp9_opus"}, StudioEncoderVP9,
 			vp9("3", "34") + " -c:a libopus -b:a 128k -vbr on -ar 48000 -application audio -t 5.000 /o.webm"},
 		{"webm vp9 opus high 96", "high", StudioOutputRequest{Preset: "webm_vp9_opus", AudioBitrate: 96}, StudioEncoderVP9,
