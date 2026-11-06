@@ -15,7 +15,7 @@ Darkroom recipe (intermediate). Professional mixes keep music 15 to 20 dB under 
 ### When to use
 Music and speech play together.
 ### What a pro does and why
-Professional mixes keep music 15 to 20 dB under speech while someone talks and bring it back in the gaps. Darkroom's auto-ducking pulls non-voice tracks down while the voice track plays: about 9 to 12 dB, fast attack, slower release so it does not pump.
+Darkroom's auto-ducking pulls non-voice tracks down while the voice track plays: about 9 to 12 dB, fast attack, slower release so it does not pump.
 ### Ops
 ```json
 {

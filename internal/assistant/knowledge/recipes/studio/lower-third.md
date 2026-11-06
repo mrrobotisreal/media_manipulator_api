@@ -15,7 +15,7 @@ Darkroom recipe (basic). A designed lower-third sits in the bottom 30 % of the f
 ### When to use
 Introducing a speaker, place or topic.
 ### What a pro does and why
-A designed lower-third sits in the bottom 30 % of the frame, left-aligned inside the safe margin, with a bold name line and a smaller role line on a subtle bar, slides in over about 0.4 s, stays 4 to 6 s and fades out. Keep to two lines and one accent colour.
+Keep to two lines and one accent colour.
 ### Ops
 ```json
 {

@@ -15,7 +15,7 @@ Darkroom recipe (basic). A 1 to 3 s fade at the start and 2 to 5 s at the end so
 ### When to use
 Music starts or stops abruptly.
 ### What a pro does and why
-A 1 to 3 s fade at the start and 2 to 5 s at the end sounds deliberate. Volume keyframes on the clip are linear gain (1 = unchanged).
+Volume keyframes on the clip are linear gain (1 = unchanged).
 ### Ops
 ```json
 {

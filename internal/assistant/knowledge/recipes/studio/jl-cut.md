@@ -15,7 +15,7 @@ Darkroom recipe (advanced). In a J-cut the next clip's sound starts before its p
 ### When to use
 Interviews, dialogue, documentaries: cuts feel smoother when sound and picture change at different moments.
 ### What a pro does and why
-In a J-cut the next clip's sound starts before its picture; in an L-cut the previous sound keeps playing over the new picture. In Darkroom this needs the audio on its own track: split the clip, then extend or move the audio part 0.5 to 1.5 s across the cut.
+In Darkroom this needs the audio on its own track: split the clip, then extend or move the audio part 0.5 to 1.5 s across the cut.
 ### Ops
 ```json
 {

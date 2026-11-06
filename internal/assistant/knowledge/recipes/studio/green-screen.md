@@ -15,7 +15,7 @@ Darkroom recipe (intermediate). Chroma key removes one colour.
 ### When to use
 Footage shot on a green or blue background.
 ### What a pro does and why
-Chroma key removes one colour. Pick the key colour from a typical background patch, raise similarity until the background disappears, add a little blend for soft edges and despill to remove green fringes. Even lighting matters more than settings.
+Pick the key colour from a typical background patch, raise similarity until the background disappears, add a little blend for soft edges and despill to remove green fringes. Even lighting matters more than settings.
 ### Ops
 The chroma key effect is added in the clip inspector (Effects → Chroma key); the op vocabulary has no effect-add op in v1, so guide the user: similarity about 0.15–0.25, blend 0.1, despill 0.5, key colour from the eyedropper.
 ### How to adjust

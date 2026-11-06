@@ -43,6 +43,8 @@ A red “This is my video!” text overlay drawn over the preview with the text 
 Text overlays are positioned and styled in the panel and drawn into the preview and the export.
 5. Preview your edit
 Use the transport controls under the preview to play/pause, step a frame at a time, or jump to the start/end. Drag on the timeline ruler to scrub — drag to the edge and the timeline auto-scrolls so you can reach any point. During playback the view follows the playhead automatically.
+Captions
+Click “Generate” on the caption lane to transcribe your audio into word-timed captions (one AI job). Select a cue to edit its text and timing, then pick one of twelve looks or set the font, colours, outline and animation yourself: karaoke fill, highlight, pop, bounce, word by word, box highlight, fade, typewriter or glow. With Premium or Pro you can drag the boundaries between words to retime them, click a word to emphasise it, use “Re-time from audio” to go back to the transcribed timing, and save your own looks to your account (Premium keeps 10, Pro unlimited). Styling and animation are burned into the video; SRT and VTT files are plain text.
 6. Export
 Click “Export”, choose a file name, a format and the quality, and Darkroom renders your full timeline on the server — compositing video tracks, mixing audio, and applying your effects — then gives you a download link. MP4 with H.264 plays everywhere; the format list also offers H.265, MOV, MKV and audio-only files, and shows which plan unlocks each. Rendering happens on a GPU, so larger projects finish quickly.
 Keyboard shortcuts

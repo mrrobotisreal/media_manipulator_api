@@ -54,6 +54,12 @@ var studioReference = map[string]struct {
 	"studio-captions-calm":                {"The Podcast look: calm lines in a soft box, no animation.", `[{"op":"set_caption_style","look":"podcast"}]`, false, nil},
 	"studio-captions-current-word-yellow": {"The word being spoken now turns yellow.", `[{"op":"set_caption_style","animation":"highlight","highlightColor":"#FFD400"}]`, false, nil},
 	"studio-captions-anon-locked-look":    {"Neon needs a free account: sign up and it unlocks. Meanwhile I applied Bold Pop, which guests can use.", `[{"op":"set_caption_style","look":"bold_pop"}]`, false, nil},
+	// MM122: new looks/animations and per-word emphasis (Premium+).
+	"studio-captions-bouncy-kids":      {"Bounce Kids: chunky words that bounce as they're spoken.", `[{"op":"set_caption_style","look":"bounce_kids"}]`, false, nil},
+	"studio-captions-typewriter":       {"Each word now types itself out.", `[{"op":"set_caption_style","look":"typewriter"}]`, false, nil},
+	"studio-captions-glow":             {"Glow Night: the spoken word lights up in cyan.", `[{"op":"set_caption_style","look":"glow_night"}]`, false, nil},
+	"studio-captions-emphasis-premium": {"Emphasised \"most important\" and \"safety check\".", `[{"op":"set_caption_words","cueId":"c1","emphasis":[3,4]},{"op":"set_caption_words","cueId":"c2","emphasis":[3,4]}]`, false, nil},
+	"studio-captions-emphasis-free":    {"Colouring chosen words is a Premium feature (per-word emphasis). On your plan I can highlight each word as it is spoken instead.", `[{"op":"set_caption_style","animation":"highlight"}]`, false, nil},
 }
 
 func TestStudioCasesPassableWithRealOps(t *testing.T) {

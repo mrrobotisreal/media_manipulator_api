@@ -604,7 +604,13 @@
               "clean_highlight",
               "minimal",
               "neon",
-              "podcast"
+              "podcast",
+              "cinema",
+              "comic",
+              "typewriter",
+              "box_pop",
+              "glow_night",
+              "bounce_kids"
             ]
           },
           "fontSizePct": {
@@ -709,7 +715,13 @@
               "none",
               "karaoke_fill",
               "highlight",
-              "pop"
+              "pop",
+              "bounce",
+              "word_by_word",
+              "box_highlight",
+              "fade",
+              "typewriter",
+              "glow"
             ]
           },
           "animationStrength": {
@@ -814,6 +826,36 @@
             ]
           }
         ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "set_caption_words"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
+          "cueId": {
+            "$ref": "#/$defs/cue_id"
+          },
+          "emphasis": {
+            "maxItems": 64,
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 63
+            }
+          }
+        },
+        "required": [
+          "op",
+          "cueId",
+          "emphasis"
+        ],
+        "additionalProperties": false
       },
       {
         "type": "object",
@@ -1029,6 +1071,10 @@
     "hex_color": {
       "type": "string",
       "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
+    "cue_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
     }
   }
 }

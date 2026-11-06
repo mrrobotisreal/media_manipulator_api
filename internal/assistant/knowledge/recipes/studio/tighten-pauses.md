@@ -15,7 +15,7 @@ Darkroom recipe (intermediate). Jump cuts remove silence so speech keeps moving.
 ### When to use
 Talking-head videos with long gaps.
 ### What a pro does and why
-Jump cuts remove silence so speech keeps moving. Without word timings Medi cannot hear the pauses; in v1 it marks the spots the user points out (or that are visible as gaps in the waveform) and splits there, and the user deletes the gap with ripple delete. Each cut should keep about 0.1 to 0.2 s of breath so speech does not sound clipped.
+Without word timings Medi cannot hear the pauses; in v1 it marks the spots the user points out (or that are visible as gaps in the waveform) and splits there, and the user deletes the gap with ripple delete. Each cut should keep about 0.1 to 0.2 s of breath so speech does not sound clipped.
 ### Ops
 ```json
 {

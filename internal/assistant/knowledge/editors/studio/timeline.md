@@ -17,7 +17,7 @@ Speed: 0.1× to 10×, default 1 (maintain pitch optional). A freeze frame holds 
 Markers: up to 500 per project, name up to 80 characters. Press M to add one at the playhead.
 ### Captions
 Auto-captions: Whisper with word timings (one AI job, a suggested action); cues are edited on the lane (timings re-spread); looks and animation: the studio-caption-styles recipe.
-Caption style: fontSizePct 1-15 (4.5); color (#FFFFFF); backgroundColor (#000000); backgroundOpacity 0-1 (0.55); position bottom|middle|top (bottom); maxWidthPct 40-100 (90); fontFamily; bold; uppercase; highlightColor; outlineColor; outlineWidth 0-12; shadow 0-1; backgroundMode box|none|word_box; wordsPerGroup 1-6; animation none|karaoke_fill|highlight|pop; animationStrength 0-1; lookId (a studio-caption-styles look).
+Caption style: fontSizePct 1-15 (4.5); color (#FFFFFF); backgroundColor (#000000); backgroundOpacity 0-1 (0.55); position bottom|middle|top (bottom); maxWidthPct 40-100 (90); fontFamily; bold; uppercase; highlightColor; outlineColor; outlineWidth 0-12; shadow 0-1; backgroundMode box|none|word_box; wordsPerGroup 1-6; animation none|karaoke_fill|highlight|pop|bounce|word_by_word|box_highlight|fade|typewriter|glow; animationStrength 0-1; lookId (a studio-caption-styles look).
 ### Export
 A Darkroom export is a container, a video codec and an audio codec, from one server table:
 - MP4: H.264, H.265, AV1; audio AAC, Opus.

@@ -127,3 +127,32 @@ func TestStudioRecipesMatchOpSchema(t *testing.T) {
 		t.Fatalf("only %d studio recipes with ops checked", n)
 	}
 }
+
+// MM122 decision 5: set_caption_words carries emphasis positions only (no
+// retiming by Medi in v1), and set_caption_style takes the new looks and
+// animations.
+func TestStudioOpsSchemaCaptionWordsMM122(t *testing.T) {
+	v := NewOpsValidator()
+	for name, ops := range map[string]string{
+		"emphasis":   `[{"op":"set_caption_words","cueId":"c1","emphasis":[3,4]}]`,
+		"clear":      `[{"op":"set_caption_words","cueId":"c1","emphasis":[]}]`,
+		"new look":   `[{"op":"set_caption_style","look":"bounce_kids"}]`,
+		"new anim":   `[{"op":"set_caption_style","animation":"typewriter","animationStrength":0.4}]`,
+		"glow night": `[{"op":"set_caption_style","look":"glow_night","animation":"glow"}]`,
+	} {
+		if err := v.Validate("studio", json.RawMessage(ops)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	for name, ops := range map[string]string{
+		"retime":       `[{"op":"set_caption_words","cueId":"c1","emphasis":[1],"startSeconds":1}]`,
+		"no cue":       `[{"op":"set_caption_words","emphasis":[1]}]`,
+		"bad index":    `[{"op":"set_caption_words","cueId":"c1","emphasis":[64]}]`,
+		"bad cue id":   `[{"op":"set_caption_words","cueId":"../x","emphasis":[1]}]`,
+		"unknown anim": `[{"op":"set_caption_style","animation":"wobble"}]`,
+	} {
+		if err := v.Validate("studio", json.RawMessage(ops)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

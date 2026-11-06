@@ -15,7 +15,7 @@ Darkroom recipe (basic). Skin sits in the orange band; pushing the rest of the i
 ### When to use
 Travel, action and city footage with people in it.
 ### What a pro does and why
-Skin sits in the orange band; pushing the rest of the image towards teal separates people from backgrounds. The `teal-orange` look does it with a strength control.
+The `teal-orange` look does it with a strength control.
 ### Ops
 ```json
 {

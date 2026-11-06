@@ -288,3 +288,43 @@
   expect:
     ops: ["value(set_caption_style, look, bold_pop|clean_highlight|minimal) || op_count == 0"]
     any_of: ["sign up", "free account", "account"]
+# --- MM122: the six new animations, the new looks, and per-word emphasis (Premium+;
+# set_caption_words never retimes). The word fixture lists word-timed cues with numbered words.
+- id: studio-captions-bouncy-kids
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips-captions.txt
+  message: "Bouncy captions for kids content"
+  expect:
+    ops: ["value(set_caption_style, look, bounce_kids) || value(set_caption_style, animation, bounce)"]
+- id: studio-captions-typewriter
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips-captions.txt
+  message: "Make the captions type out like a typewriter"
+  expect:
+    ops: ["value(set_caption_style, look, typewriter) || value(set_caption_style, animation, typewriter)"]
+- id: studio-captions-glow
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips-captions.txt
+  message: "Glowing neon captions for my night drive video"
+  expect:
+    ops: ["value(set_caption_style, look, glow_night|neon) || value(set_caption_style, animation, glow)"]
+- id: studio-captions-emphasis-premium
+  surface: studio
+  requires: studio
+  tier: premium
+  fixture_doc: studio/two-clips-word-captions.txt
+  message: "Highlight the important words in the captions"
+  expect:
+    ops: ["has_op(set_caption_words)"]
+- id: studio-captions-emphasis-free
+  surface: studio
+  requires: studio
+  tier: free
+  fixture_doc: studio/two-clips-word-captions.txt
+  message: "Highlight the important words in the captions"
+  expect:
+    ops: ["no_op(set_caption_words)"]
+    any_of: ["Premium"]

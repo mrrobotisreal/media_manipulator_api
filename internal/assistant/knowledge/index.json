@@ -361,7 +361,7 @@
    "tiktok",
    "canvas"
   ],
-  "tokens": 1560
+  "tokens": 1576
  },
  "editors/studio/titles": {
   "title": "Darkroom titles, lower-thirds and text",
@@ -731,7 +731,7 @@
    "remove ads",
    "billing"
   ],
-  "tokens": 1032
+  "tokens": 1045
  },
  "pages/privacy-policy": {
   "title": "Privacy Policy",
@@ -878,7 +878,7 @@
    "text overlay video",
    "export mp4"
   ],
-  "tokens": 1618
+  "tokens": 1807
  },
  "pages/tutorials/image/getting-started": {
   "title": "Getting Started with Image Conversion | Media Manipulator Tutorial",
@@ -1418,7 +1418,7 @@
    "make the voice louder",
    "volume is uneven"
   ],
-  "tokens": 345
+  "tokens": 315
  },
  "recipes/studio/cinematic-grade": {
   "title": "Cinematic grade",
@@ -1431,7 +1431,7 @@
    "cinematic colour grade",
    "make it look like a film"
   ],
-  "tokens": 503
+  "tokens": 458
  },
  "recipes/studio/end-card": {
   "title": "End card with a call to action",
@@ -1444,7 +1444,7 @@
    "thanks for watching screen",
    "outro text"
   ],
-  "tokens": 407
+  "tokens": 361
  },
  "recipes/studio/fade-from-black": {
   "title": "Fade in from black and out to black",
@@ -1470,7 +1470,7 @@
    "freeze here and add text",
    "still frame in the video"
   ],
-  "tokens": 310
+  "tokens": 284
  },
  "recipes/studio/green-screen": {
   "title": "Remove a green screen",
@@ -1483,7 +1483,7 @@
    "key out the green",
    "transparent background video"
   ],
-  "tokens": 348
+  "tokens": 339
  },
  "recipes/studio/jl-cut": {
   "title": "J-cut and L-cut (audio leads or trails the picture)",
@@ -1496,7 +1496,7 @@
    "smoother cut between interview shots",
    "audio overlap between clips"
   ],
-  "tokens": 471
+  "tokens": 434
  },
  "recipes/studio/ken-burns-still": {
   "title": "Ken Burns move on a still photo",
@@ -1509,7 +1509,7 @@
    "pan across the image",
    "make the still image move"
   ],
-  "tokens": 474
+  "tokens": 442
  },
  "recipes/studio/looks-catalog": {
   "title": "Choosing a look (bleach bypass, warm film, cool night, vintage, high-key, noir, pastel, punchy, golden hour)",
@@ -1530,7 +1530,7 @@
    "bright pastel video",
    "punchy social video colours"
   ],
-  "tokens": 788
+  "tokens": 673
  },
  "recipes/studio/lower-third": {
   "title": "Lower-third name title",
@@ -1543,7 +1543,7 @@
    "add a name caption",
    "interview name tag"
   ],
-  "tokens": 490
+  "tokens": 428
  },
  "recipes/studio/lut-intensity-video": {
   "title": "Use a LUT without overdoing it",
@@ -1556,7 +1556,7 @@
    "blend the lut",
    "lut looks harsh"
   ],
-  "tokens": 372
+  "tokens": 342
  },
  "recipes/studio/manual-cinematic-grade": {
   "title": "Hand-built cinematic grade with Lumetri",
@@ -1569,7 +1569,7 @@
    "subtle cinematic colour",
    "warm cinematic tone"
   ],
-  "tokens": 489
+  "tokens": 435
  },
  "recipes/studio/match-two-clips": {
   "title": "Match two clips that look different",
@@ -1582,7 +1582,7 @@
    "make the shots consistent",
    "two cameras look different"
   ],
-  "tokens": 467
+  "tokens": 430
  },
  "recipes/studio/music-ducking": {
   "title": "Duck music under speech",
@@ -1595,7 +1595,7 @@
    "background music balance",
    "voice over music mix"
   ],
-  "tokens": 400
+  "tokens": 370
  },
  "recipes/studio/picture-in-picture": {
   "title": "Picture in picture (webcam over screen)",
@@ -1608,7 +1608,7 @@
    "reaction video layout",
    "facecam"
   ],
-  "tokens": 383
+  "tokens": 353
  },
  "recipes/studio/podcast-voice-chain": {
   "title": "Podcast voice: clear and even",
@@ -1621,7 +1621,7 @@
    "even out the volume",
    "radio voice"
   ],
-  "tokens": 467
+  "tokens": 418
  },
  "recipes/studio/speed-ramp": {
   "title": "Speed ramp and slow motion",
@@ -1634,7 +1634,7 @@
    "speed ramp",
    "make this part slower"
   ],
-  "tokens": 466
+  "tokens": 430
  },
  "recipes/studio/split-and-delete": {
   "title": "Cut out a section",
@@ -1647,7 +1647,7 @@
    "trim the boring part",
    "remove a mistake"
   ],
-  "tokens": 378
+  "tokens": 353
  },
  "recipes/studio/studio-caption-styles": {
   "title": "Caption looks",
@@ -1658,9 +1658,11 @@
    "karaoke captions for a music video",
    "calm captions for an interview",
    "make the current word yellow",
-   "animated captions"
+   "animated captions",
+   "bouncy captions for kids",
+   "highlight the important words"
   ],
-  "tokens": 421
+  "tokens": 512
  },
  "recipes/studio/studio-export-by-destination": {
   "title": "Choose the Darkroom export for the destination",
@@ -1690,7 +1692,7 @@
    "export av1",
    "lossless audio"
   ],
-  "tokens": 1069
+  "tokens": 1034
  },
  "recipes/studio/teal-orange-video": {
   "title": "Teal and orange for video",
@@ -1703,7 +1705,7 @@
    "action movie look",
    "hollywood grade"
   ],
-  "tokens": 384
+  "tokens": 353
  },
  "recipes/studio/tighten-pauses": {
   "title": "Tighten pauses with markers",
@@ -1716,7 +1718,7 @@
    "make it faster paced",
    "jump cuts"
   ],
-  "tokens": 437
+  "tokens": 423
  },
  "recipes/studio/title-card": {
   "title": "Opening title card",
@@ -1729,7 +1731,7 @@
    "intro text",
    "video title screen"
   ],
-  "tokens": 398
+  "tokens": 365
  },
  "recipes/studio/transitions-by-pace": {
   "title": "Pick transitions by pace",
@@ -1742,7 +1744,7 @@
    "fade between clips",
    "make cuts less abrupt"
   ],
-  "tokens": 417
+  "tokens": 392
  },
  "recipes/studio/vertical-reframe": {
   "title": "Reframe a horizontal video for vertical",
@@ -1755,7 +1757,7 @@
    "shorts from a landscape video",
    "portrait version"
   ],
-  "tokens": 433
+  "tokens": 390
  },
  "recipes/studio/volume-fades": {
   "title": "Fade audio in and out",
@@ -1768,7 +1770,7 @@
    "smooth audio ending",
    "volume fade"
   ],
-  "tokens": 374
+  "tokens": 354
  },
  "recipes/studio/zoom-punch-in": {
   "title": "Punch-in zoom for emphasis",
@@ -1781,7 +1783,7 @@
    "zoom on the punchline",
    "quick zoom"
   ],
-  "tokens": 368
+  "tokens": 342
  },
  "recipes/vector/badge-bounce": {
   "title": "Bouncing badge or sticker",

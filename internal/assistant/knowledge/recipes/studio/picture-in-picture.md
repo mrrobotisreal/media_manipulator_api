@@ -15,7 +15,7 @@ Darkroom recipe (intermediate). The overlay clip goes on the upper video track, 
 ### When to use
 Tutorials, reactions, gaming: a second video small in a corner.
 ### What a pro does and why
-The overlay clip goes on the upper video track, scaled to 25 to 35 % and placed in a corner with a margin. Bottom-right is the convention; avoid where captions sit.
+Bottom-right is the convention; avoid where captions sit.
 ### Ops
 ```json
 {

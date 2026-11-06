@@ -15,7 +15,7 @@ Darkroom recipe (intermediate). The Lumetri numbers behind a film look: contrast
 ### When to use
 The user wants control over the grade, or a look adjusted to one clip.
 ### What a pro does and why
-The Lumetri numbers behind a film look: contrast up about 10 %, saturation down 10 to 20 %, a small warm temperature shift and a little vibrance so skin keeps life while the rest is muted. Exposure only if the clip is under or over.
+Exposure only if the clip is under or over.
 ### Ops
 ```json
 {

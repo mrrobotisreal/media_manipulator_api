@@ -15,7 +15,7 @@ Darkroom recipe (intermediate). Change the canvas to 9:16, then scale each clip 
 ### When to use
 Turning a 16:9 video into a 9:16 Short, Reel or TikTok.
 ### What a pro does and why
-Change the canvas to 9:16, then scale each clip up so it fills the height (about 3.2× for 16:9 into 9:16) and move it so the subject stays in frame. A slightly smaller scale with a blurred copy behind is an alternative for wide shots.
+A slightly smaller scale with a blurred copy behind is an alternative for wide shots.
 ### Ops
 ```json
 {
