@@ -174,6 +174,9 @@ _Avoid_: "preset" (an Aperture look applied by `apply_preset` is a preset; a rec
 **Eval case** (MM106):
 One YAML entry in `internal/assistant/evals/cases/`: a surface, locale, message, optional fixture document and preview frame, and code-graded expectations (action buttons, required/forbidden text, language, off-topic, ask-before-edit, and op checks like `has_op(grey_except)` or `title_in_region(lower30)`). Run by `cmd/assistant-eval` against the real models; never graded by a model.
 
+**Flywheel** (MM117):
+The weekly operator CLI `cmd/assistant-flywheel` (logic in `internal/assistant/flywheel`): reads the week's signed-in Medi turns read-only, flags the ones that went badly (thumbs-down, `invalid_ops`, a rephrased out-of-scope decline, a routeless guide answer; undo and no-click only via an analytics export), clusters them by surface plus retrieved doc ids and writes a scrubbed evidence report with a proposal per cluster. It proposes; a human commits.
+
 **Scope gate** (MM105):
 The guide's cheap pre-model check (`InScope`): a message passes when it names a doc keyword, an alias, a media-craft or site term (in any of the 18 languages), small talk, or the current page; otherwise the localized out-of-scope line is returned with no model call. Copilots are never gated.
 
