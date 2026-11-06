@@ -1,0 +1,231 @@
+{
+  "containers": [
+    {
+      "key": "mp4",
+      "ext": ".mp4",
+      "mime": "video/mp4",
+      "mediaKind": "video",
+      "audioOnly": false,
+      "videoCodecs": [
+        "h264",
+        "hevc"
+      ],
+      "audioCodecs": [
+        "aac"
+      ],
+      "faststart": true
+    },
+    {
+      "key": "mov",
+      "ext": ".mov",
+      "mime": "video/quicktime",
+      "mediaKind": "video",
+      "audioOnly": false,
+      "videoCodecs": [
+        "h264",
+        "hevc"
+      ],
+      "audioCodecs": [
+        "aac",
+        "pcm_s16le"
+      ],
+      "faststart": true
+    },
+    {
+      "key": "mkv",
+      "ext": ".mkv",
+      "mime": "video/x-matroska",
+      "mediaKind": "video",
+      "audioOnly": false,
+      "videoCodecs": [
+        "h264",
+        "hevc"
+      ],
+      "audioCodecs": [
+        "aac",
+        "pcm_s16le",
+        "mp3"
+      ],
+      "faststart": false
+    },
+    {
+      "key": "mp3",
+      "ext": ".mp3",
+      "mime": "audio/mpeg",
+      "mediaKind": "audio",
+      "audioOnly": true,
+      "videoCodecs": [
+        "none"
+      ],
+      "audioCodecs": [
+        "mp3"
+      ],
+      "faststart": false
+    },
+    {
+      "key": "wav",
+      "ext": ".wav",
+      "mime": "audio/wav",
+      "mediaKind": "audio",
+      "audioOnly": true,
+      "videoCodecs": [
+        "none"
+      ],
+      "audioCodecs": [
+        "pcm_s16le"
+      ],
+      "faststart": false
+    }
+  ],
+  "codecs": [
+    {
+      "key": "h264",
+      "kind": "video",
+      "bitrates": [],
+      "defaultBitrate": 0
+    },
+    {
+      "key": "hevc",
+      "kind": "video",
+      "bitrates": [],
+      "defaultBitrate": 0
+    },
+    {
+      "key": "aac",
+      "kind": "audio",
+      "bitrates": [
+        128,
+        192,
+        256,
+        320
+      ],
+      "defaultBitrate": 192
+    },
+    {
+      "key": "pcm_s16le",
+      "kind": "audio",
+      "bitrates": [],
+      "defaultBitrate": 0
+    },
+    {
+      "key": "mp3",
+      "kind": "audio",
+      "bitrates": [
+        128,
+        192,
+        256,
+        320
+      ],
+      "defaultBitrate": 192
+    }
+  ],
+  "warnings": [
+    {
+      "warning": "apple_incompatible",
+      "container": "mkv"
+    },
+    {
+      "warning": "no_browser_preview",
+      "container": "mkv"
+    },
+    {
+      "warning": "no_browser_preview",
+      "container": "mov",
+      "audioCodec": "pcm_s16le"
+    }
+  ],
+  "presets": [
+    {
+      "key": "mp4_h264",
+      "container": "mp4",
+      "videoCodec": "h264",
+      "audioCodec": "aac"
+    },
+    {
+      "key": "mp4_hevc",
+      "container": "mp4",
+      "videoCodec": "hevc",
+      "audioCodec": "aac"
+    },
+    {
+      "key": "mov_h264",
+      "container": "mov",
+      "videoCodec": "h264",
+      "audioCodec": "aac"
+    },
+    {
+      "key": "mov_hevc",
+      "container": "mov",
+      "videoCodec": "hevc",
+      "audioCodec": "aac"
+    },
+    {
+      "key": "mkv_hevc_aac",
+      "container": "mkv",
+      "videoCodec": "hevc",
+      "audioCodec": "aac"
+    },
+    {
+      "key": "audio_mp3",
+      "container": "mp3",
+      "videoCodec": "none",
+      "audioCodec": "mp3"
+    },
+    {
+      "key": "audio_wav",
+      "container": "wav",
+      "videoCodec": "none",
+      "audioCodec": "pcm_s16le"
+    }
+  ],
+  "legacyFormats": {
+    "h264": "mp4_h264",
+    "hevc": "mp4_hevc",
+    "mp3": "audio_mp3",
+    "wav": "audio_wav"
+  },
+  "formats": [
+    "h264",
+    "hevc",
+    "mp3",
+    "wav",
+    "mov_h264_aac",
+    "mov_h264_pcm_s16le",
+    "mov_hevc_aac",
+    "mov_hevc_pcm_s16le",
+    "mkv_h264_aac",
+    "mkv_h264_pcm_s16le",
+    "mkv_h264_mp3",
+    "mkv_hevc_aac",
+    "mkv_hevc_pcm_s16le",
+    "mkv_hevc_mp3"
+  ],
+  "tokens": [
+    "mp4",
+    "mov",
+    "mkv",
+    "mp3",
+    "wav",
+    "h264",
+    "hevc",
+    "aac",
+    "pcm_s16le"
+  ],
+  "minTier": {
+    "aac": "anonymous",
+    "h264": "anonymous",
+    "hevc": "free",
+    "mkv": "premium",
+    "mov": "premium",
+    "mp3": "anonymous",
+    "mp4": "anonymous",
+    "pcm_s16le": "anonymous",
+    "wav": "anonymous"
+  },
+  "advancedMinTier": "premium",
+  "defaultChannels": 2,
+  "channels": [
+    2,
+    1
+  ]
+}

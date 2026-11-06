@@ -108,3 +108,55 @@
   expect:
     language: de
     ops: ["field(grade, lumetri.saturation) > 1 || field(grade, lumetri.vibrance) > 0 || has_op(apply_look)"]
+# --- MM118: Darkroom exports (suggest_action export with params; the server validates them
+# against the output table and the case's plan, and swaps an above-plan choice for the
+# nearest allowed preset with upgrade.required). Medi never starts the export.
+- id: studio-export-reel
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips.txt
+  message: "Export this for an Instagram Reel"
+  expect:
+    actions: [suggest:export]
+    export: ["container=mp4", "videoCodec=h264|hevc", "audioCodec=aac"]
+    no_edits: true
+- id: studio-export-final-cut
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips.txt
+  message: "Export this so I can keep editing it in Final Cut"
+  expect:
+    actions: [suggest:export]
+    export: ["container=mov", "upgrade=none"]
+    no_edits: true
+- id: studio-export-smallest
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips.txt
+  message: "What's the smallest file that still looks good? Set up the export."
+  expect:
+    actions: [suggest:export]
+    export: ["videoCodec=hevc"]
+    no_edits: true
+- id: studio-export-anon-hevc
+  surface: studio
+  requires: studio
+  tier: anonymous
+  fixture_doc: studio/two-clips.txt
+  message: "Export it as H.265 please"
+  expect:
+    actions: [suggest:export]
+    export: ["videoCodec=h264", "upgrade=free"]
+    any_of: ["sign up", "free account", "account"]
+    no_edits: true
+- id: studio-export-free-mov
+  surface: studio
+  requires: studio
+  tier: free
+  fixture_doc: studio/two-clips.txt
+  message: "Export a MOV file"
+  expect:
+    actions: [suggest:export]
+    export: ["container=mp4", "upgrade=premium"]
+    any_of: ["Premium"]
+    no_edits: true

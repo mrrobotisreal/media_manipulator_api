@@ -63,6 +63,9 @@ type Case struct {
 	// Suite (MM116a) puts a guide case in a named suite ("routing" or "options"); such cases
 	// run only with --suite and never count toward the default per-surface pass rates.
 	Suite string `yaml:"suite"`
+	// Tier (MM118) is the caller's plan for the turn ("" = operator, every
+	// earlier case): the plan cases ask as anonymous or free.
+	Tier string `yaml:"tier"`
 	// Source is the file the case came from (set by the loader).
 	Source string `yaml:"-"`
 }
@@ -92,6 +95,10 @@ type Expect struct {
 	ConfirmJob []string `yaml:"confirm_job"`
 	// NoConfirmJob (MM116b): the answer must not propose a job card (a tool without options, a question).
 	NoConfirmJob bool `yaml:"no_confirm_job"`
+	// Export (MM118) grades the server-validated params of a studio
+	// suggest_action export: "<param>=<a|b>" (container=mov, videoCodec=hevc|h264,
+	// upgrade=premium reads upgrade.required, upgrade=none means no upgrade hint).
+	Export []string `yaml:"export"`
 }
 
 // Adjust scripts the browser side of the adjust loop (MM115). The meters are
@@ -207,6 +214,17 @@ func (c *Case) validate() error {
 	}
 	if c.Surface != "guide" && c.Requires == "" && len(c.Expect.Ops) > 0 {
 		return fmt.Errorf("%s: op checks need `requires: <surface>`", c.ID)
+	}
+	if c.Tier != "" && !contains([]string{"anonymous", "free", "premium", "pro", "operator"}, c.Tier) {
+		return fmt.Errorf("%s: tier %q", c.ID, c.Tier)
+	}
+	for _, x := range c.Expect.Export {
+		if _, _, err := parseExportExpect(x); err != nil {
+			return fmt.Errorf("%s: %w", c.ID, err)
+		}
+	}
+	if len(c.Expect.Export) > 0 && c.Surface != "studio" {
+		return fmt.Errorf("%s: export checks are for the studio surface", c.ID)
 	}
 	if c.Suite != "" && c.Suite != "routing" && c.Suite != "options" && c.Suite != "jobs" {
 		return fmt.Errorf("%s: suite %q (routing | options | jobs)", c.ID, c.Suite)
@@ -375,6 +393,11 @@ func Grade(c Case, out Output) Result {
 		chk, _ := ParseOptionCheck(src)
 		if ok, why := chk.Eval(out.Actions); !ok {
 			fail("option check %s: %s", src, why)
+		}
+	}
+	for _, x := range e.Export {
+		if ok, why := checkExport(out.Actions, x); !ok {
+			fail("export check %s: %s", x, why)
 		}
 	}
 	for _, slug := range e.ConfirmJob {
@@ -552,4 +575,49 @@ func contains(xs []string, x string) bool {
 		}
 	}
 	return false
+}
+
+// exportParams the export check may read.
+var exportCheckParams = map[string]bool{"preset": true, "container": true, "videoCodec": true, "audioCodec": true, "audioBitrate": true, "audioChannels": true, "resolution": true, "captionsMode": true, "upgrade": true}
+
+// parseExportExpect splits "<param>=<v1|v2>".
+func parseExportExpect(s string) (param string, values []string, err error) {
+	k, v, ok := strings.Cut(s, "=")
+	k, v = strings.TrimSpace(k), strings.TrimSpace(v)
+	if !ok || !exportCheckParams[k] || v == "" {
+		return "", nil, fmt.Errorf("export expectation %q: use <param>=<value|value> over %v", s, "preset container videoCodec audioCodec audioBitrate audioChannels resolution captionsMode upgrade")
+	}
+	for _, x := range strings.Split(v, "|") {
+		values = append(values, strings.TrimSpace(x))
+	}
+	return k, values, nil
+}
+
+// checkExport reads the first export suggestion's validated params.
+func checkExport(acts []Action, src string) (bool, string) {
+	param, values, _ := parseExportExpect(src)
+	var act *Action
+	for i := range acts {
+		if acts[i].Kind == "export" {
+			act = &acts[i]
+			break
+		}
+	}
+	if act == nil {
+		return false, "no export suggestion (got " + describeActions(acts) + ")"
+	}
+	got := "none"
+	if param == "upgrade" {
+		if up, ok := act.Params["upgrade"].(map[string]any); ok {
+			got = fmt.Sprint(up["required"])
+		}
+	} else if v, ok := act.Params[param]; ok {
+		got = fmt.Sprint(v)
+	}
+	for _, want := range values {
+		if got == want {
+			return true, ""
+		}
+	}
+	return false, fmt.Sprintf("%s = %s, want one of %v", param, got, values)
 }

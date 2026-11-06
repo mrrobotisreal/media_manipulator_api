@@ -335,6 +335,18 @@
    "export",
    "render",
    "mp4",
+   "mov",
+   "mkv",
+   "h.265",
+   "hevc",
+   "h.264",
+   "final cut",
+   "imovie",
+   "wav",
+   "mp3",
+   "export format",
+   "codec",
+   "container",
    "vertical video",
    "aspect ratio",
    "shorts",
@@ -342,7 +354,7 @@
    "tiktok",
    "canvas"
   ],
-  "tokens": 566
+  "tokens": 1159
  },
  "editors/studio/titles": {
   "title": "Darkroom titles, lower-thirds and text",
@@ -712,7 +724,7 @@
    "remove ads",
    "billing"
   ],
-  "tokens": 1016
+  "tokens": 1024
  },
  "pages/privacy-policy": {
   "title": "Privacy Policy",
@@ -792,7 +804,7 @@
    "getting started",
    "guide"
   ],
-  "tokens": 729
+  "tokens": 733
  },
  "pages/tutorials/ai-frame-interpolation": {
   "title": "What Is AI Frame Interpolation? How Video FPS Smoothing Works",
@@ -826,7 +838,7 @@
    "photo masks",
    "heal blemishes online"
   ],
-  "tokens": 4017
+  "tokens": 4019
  },
  "pages/tutorials/audio/getting-started": {
   "title": "Getting Started with Audio Conversion | Media Manipulator Tutorial",
@@ -859,7 +871,7 @@
    "text overlay video",
    "export mp4"
   ],
-  "tokens": 1573
+  "tokens": 1618
  },
  "pages/tutorials/image/getting-started": {
   "title": "Getting Started with Image Conversion | Media Manipulator Tutorial",
@@ -891,7 +903,7 @@
    "keyframe animation",
    "easing curve"
   ],
-  "tokens": 1622
+  "tokens": 1626
  },
  "pages/tutorials/video/getting-started": {
   "title": "Getting Started with Video Conversion | Media Manipulator Tutorial",
@@ -1643,6 +1655,27 @@
    "remove a mistake"
   ],
   "tokens": 378
+ },
+ "recipes/studio/studio-export-by-destination": {
+  "title": "Choose the Darkroom export for the destination",
+  "kind": "recipe",
+  "keywords": [
+   "Choose the Darkroom export for the destination",
+   "how should I export this",
+   "export for instagram",
+   "export for tiktok",
+   "export for youtube",
+   "export for final cut",
+   "export for imovie",
+   "smallest file that still looks good",
+   "export a podcast",
+   "export for whatsapp",
+   "archive my video",
+   "mov or mp4",
+   "h.265 or h.264",
+   "export as mkv"
+  ],
+  "tokens": 886
  },
  "recipes/studio/teal-orange-video": {
   "title": "Teal and orange for video",

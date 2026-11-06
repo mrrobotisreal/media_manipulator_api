@@ -65,6 +65,9 @@ func newAssistantHandler(appCtx context.Context, cfg *config.Config, store *tele
 		jobs.Usage = store
 	}
 	engine.Jobs = jobs
+	// MM118: a Darkroom export suggestion is checked against the output table
+	// and the caller's plan before it streams; Medi never starts an export.
+	engine.Exports = &handlers.AssistantExports{Registry: registry}
 	h := handlers.NewAssistantHandler(ac, engine, st, registry, logger)
 	h.SetFiles(files)
 	h.SetDeletion(deleter)

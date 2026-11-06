@@ -116,6 +116,8 @@ func main() {
 	// MM116b: submit_job is offered. The estimator is the real read-only one over the tier registry
 	// (no counters, no GPU probe): it prices a card, and nothing in the eval can start a job.
 	engine.Jobs = &handlers.AssistantJobs{Registry: tiers.New(config.Load())}
+	// MM118: export suggestions are validated (and downgraded for plan) like production.
+	engine.Exports = &handlers.AssistantExports{Registry: tiers.New(config.Load())}
 	engine.Provider = assistant.NewOpenRouterProvider(cfg.BaseURL, cfg.APIKey, cfg.AttributionURL, cfg.ProviderOrder)
 	// The eval's own budget: the shared daily cap is not consulted (no store),
 	// --max-usd is; the OpenRouter key's credit limit stays the hard backstop.

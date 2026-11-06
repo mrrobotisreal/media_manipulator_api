@@ -222,6 +222,7 @@ func main() {
 	// Postgres (the conversion handler is stateless). It shares the jobManager so
 	// ingest/export progress flows through the same /api/job/:jobId machinery.
 	studioHandler := handlers.NewStudioHandler(jobManager, cfg, inspector, s3Client, pool, transcription)
+	studioHandler.SetTierRegistry(tierRegistry)
 	// Motion (MM43): projects + export counter on the telemetry store; the
 	// vectorize route reuses the conversion handler's converter job.
 	vectorHandler := newVectorHandler(cfg, store, tierRegistry, s3Client, conversionHandler, analyticsEmitter, logging)
@@ -598,9 +599,10 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 			Analytics: analyticsEmitter,
 			// MM18: an export whose project is taller than the plan's
 			// MaxOutputHeight is refused (403 output_height_limited) before
-			// the export allowance is spent.
+			// the export allowance is spent. MM118: so is an output (container,
+			// codec or Advanced setting) the plan lacks (403 format_not_in_plan).
 		}, map[string]gin.HandlerFunc{
-			models.MetricExport: handlers.ExportHeightGate(studioHandler.ExportHeightLookup),
+			models.MetricExport: handlers.StudioExportGate(tierRegistry, studioHandler.ExportFactsLookup),
 			// MM74: /api/summarize/start needs sign-in, refused before the charge.
 			models.MetricAIOps: summarizeQuotaGate(),
 		}))

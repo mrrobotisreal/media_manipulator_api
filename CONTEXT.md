@@ -20,6 +20,13 @@ The persisted editor document — tracks, clips, effects, captions, audio config
 **Studio Project / Studio Asset**:
 A saved editor document (EDL + metadata), and an ingested media source (video/audio/LUT) with server-generated proxy, sprite, and peaks. Owned by an `mm_users` id or an anonymous `X-MM-Session-ID`.
 
+**Output table** (MM118, ADR-0019):
+The one Go table (`internal/services/studio_outputs.go`) that says which Darkroom exports exist: containers (`mp4`, `mov`, `mkv`, audio-only `mp3`, `wav`), the video and audio codecs each may carry, extension, MIME, media kind, `+faststart`, warnings (`apple_incompatible`, `no_browser_preview`), audio bitrates per codec, the **output presets** (`mp4_h264`, `mp4_hevc`, `mov_h264`, `mov_hevc`, `mkv_hevc_aac`, `audio_mp3`, `audio_wav`), the legacy `format` aliases and the default plan per **output token**. An export's **derived label** (`studio_exports.format`, analytics `format`) is the legacy name for the four combinations `format` always meant (`h264`, `hevc`, `mp3`, `wav`), else `<container>_<video>_<audio>`. The request's quality `preset` (low/medium/high) and its `outputPreset` are different fields. Served by `GET /api/studio/export-options`; committed as `internal/services/testdata/studio_outputs.json`, which the UI and the analytics rollup pin.
+_Avoid_: hard-coding a combination anywhere else (dialog, Medi prompt, analytics enum).
+
+**format_not_in_plan** (MM118):
+The 403 a Darkroom export or render-again gets when its output uses a token outside the caller's `StudioFormats` or needs `StudioAdvanced` (a combination no preset names, a non-default bitrate or mono): `{error, message, limitKey: "studio_format", required: free|premium|pro, option, upgradePath}`. Checked by `handlers.StudioExportGate` before the export allowance is charged (after the output-height rule) and again in `launchExport`. Medi's export suggestions are downgraded to the nearest allowed preset instead (`handlers.AssistantExports`, `upgrade {required, option}`).
+
 **Pro**:
 The fourth public tier (`tiers.TierPro`, `"pro"`), above Premium: `anonymous < free < premium < pro`, with the derived `operator` above it and inheriting from it (ADR-0011). Granted by the Stripe Price id through `billing.PriceTiers` (an unknown price id grants `premium`, never `pro`) or by `cmd/grant-tier -tier pro`. API bodies call it a **plan** (`plan`, `target`: `premium | pro`); the stored column is still `tier`.
 

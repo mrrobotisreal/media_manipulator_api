@@ -14,11 +14,17 @@ import (
 // started. The row is inserted before the job runs and settled by the job's
 // terminal path, so the Exports panel survives a page leave or API restart.
 
-const studioExportColumns = `id, project_id, job_id, coalesce(file_name, ''), coalesce(preset, ''), format, resolution, captions_mode, coalesce(loudness, ''), status, coalesce(error, ''), created_at, completed_at`
+// MM118 (migration 20261105002_studio_export_outputs): the output parts beside
+// the derived `format` label. A row written before the migration has them
+// backfilled; coalesce keeps the scan total even so.
+const studioExportColumns = `id, project_id, job_id, coalesce(file_name, ''), coalesce(preset, ''), format, ` +
+	`coalesce(container, ''), coalesce(video_codec, ''), coalesce(audio_codec, ''), audio_bitrate, audio_channels, ` +
+	`resolution, captions_mode, coalesce(loudness, ''), status, coalesce(error, ''), created_at, completed_at`
 
 const studioInsertExportSQL = `
-INSERT INTO studio_exports (project_id, job_id, file_name, preset, format, resolution, captions_mode, loudness)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO studio_exports (project_id, job_id, file_name, preset, format, resolution, captions_mode, loudness,
+    container, video_codec, audio_codec, audio_bitrate, audio_channels)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 RETURNING ` + studioExportColumns
 
 // Settling only moves a 'running' row: a late or duplicate callback can never
@@ -45,18 +51,39 @@ WHERE project_id = $1 AND id = $2`
 
 func scanStudioExport(row scannable) (*models.StudioExport, error) {
 	var e models.StudioExport
-	if err := row.Scan(&e.ID, &e.ProjectID, &e.JobID, &e.FileName, &e.Preset, &e.Format, &e.Resolution,
-		&e.CaptionsMode, &e.Loudness, &e.Status, &e.Error, &e.CreatedAt, &e.CompletedAt); err != nil {
+	if err := row.Scan(&e.ID, &e.ProjectID, &e.JobID, &e.FileName, &e.Preset, &e.Format,
+		&e.Container, &e.VideoCodec, &e.AudioCodec, &e.AudioBitrate, &e.AudioChannels,
+		&e.Resolution, &e.CaptionsMode, &e.Loudness, &e.Status, &e.Error, &e.CreatedAt, &e.CompletedAt); err != nil {
 		return nil, err
 	}
+	fillStudioExportOutput(&e)
 	return &e, nil
+}
+
+// fillStudioExportOutput gives a pre-MM118 row (no container) the output parts
+// its legacy `format` always meant, so every reader sees the same shape.
+func fillStudioExportOutput(e *models.StudioExport) {
+	if e.Container != "" {
+		return
+	}
+	o := LegacyStudioOutput(e.Format)
+	e.Container, e.VideoCodec, e.AudioCodec = o.Container, o.VideoCodec, o.AudioCodec
+}
+
+// nullablePositive stores 0 (unset / not applicable) as NULL.
+func nullablePositive(v *int) any {
+	if v == nil || *v <= 0 {
+		return nil
+	}
+	return *v
 }
 
 // InsertExport records a started export.
 func (r *StudioRepository) InsertExport(ctx context.Context, e models.StudioExport) (*models.StudioExport, error) {
 	return scanStudioExport(r.pool.QueryRow(ctx, studioInsertExportSQL,
 		e.ProjectID, e.JobID, nullableStr(e.FileName), nullableStr(e.Preset), e.Format, e.Resolution,
-		e.CaptionsMode, nullableStr(e.Loudness)))
+		e.CaptionsMode, nullableStr(e.Loudness),
+		e.Container, e.VideoCodec, e.AudioCodec, nullablePositive(e.AudioBitrate), nullablePositive(e.AudioChannels)))
 }
 
 // SettleExport marks a running export completed or failed. errClass is a coarse

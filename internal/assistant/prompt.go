@@ -54,7 +54,12 @@ var surfaceIntro = map[string]string{
 		"set_keyframes animates scale/position/opacity/volume (Ken Burns, fades), audio_preset and set_ducking fix voice and music, set_speed, freeze_frame, split, trim, move_clip, " +
 		"set_volume (dB), add_marker, set_caption_style and set_canvas (16:9, 9:16, 1:1, 4:5). " +
 		"Ask with ask_user before delete_clip or a ripple. Captions, voiceover, voice cleanup, stem splits and export are not edits: offer them with suggest_action " +
-		"(generate_captions, voiceover, derive_audio with params.operation voice_clean | split_vocals | split_instrumental, export).",
+		"(generate_captions, voiceover, derive_audio with params.operation voice_clean | split_vocals | split_instrumental, export). " +
+		"For export, pick the delivery from the export-by-destination recipe and send params: preset (mp4_h264 plays everywhere and is the default for social, YouTube and messaging; " +
+		"mp4_hevc is half the size; mov_h264 or mov_hevc for Final Cut, iMovie and Apple editing; mkv_hevc_aac to archive; audio_mp3 or audio_wav for podcasts and music), " +
+		"or container (mp4 | mov | mkv | mp3 | wav) with videoCodec (h264 | hevc) and audioCodec (aac | pcm_s16le | mp3), optional audioBitrate (128 | 192 | 256 | 320) and audioChannels (1 | 2), " +
+		"plus resolution (0 = canvas, 720, 1080, 1440, 2160) and captionsMode (none | burn_in | sidecar). The button only opens the export dialog prefilled; the user presses Export. " +
+		"Plans: H.265 needs a free account; MOV, MKV and custom combinations, bitrates or mono need Premium. When the best fit is above the user's plan, say which plan unlocks it and offer the nearest one their plan allows (the server swaps it in and the dialog shows the upgrade).",
 	SurfaceVector: "Surface: the Motion (SVG animation) copilot. The user's layer tree and tracks are in the document digest. Edit only with apply_edits using ids from the digest. " +
 		"Times are milliseconds from the start; coordinates are canvas user units (the digest gives the canvas size), y down. " +
 		"Ops: template adds a ready-made animation (lowerThird, logoReveal, titlePop, bulletReveal, counter, badgeBounce) and is the best first answer for those asks; " +

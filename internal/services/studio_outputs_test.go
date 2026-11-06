@@ -1,0 +1,283 @@
+package services
+
+import (
+	"bytes"
+	"os"
+	"strings"
+	"testing"
+)
+
+const studioOutputsFixture = "testdata/studio_outputs.json"
+
+// TestStudioOutputTableFixture writes (UPDATE_STUDIO_OUTPUTS=1) or checks the
+// committed static table. The UI keeps a byte-identical copy
+// (lib/studio/studioOutputs.json, its Vitest identity test) for SSR and
+// offline, and the analytics rollup pins its format vocabulary against it.
+func TestStudioOutputTableFixture(t *testing.T) {
+	got := StudioOutputTableJSON()
+	if os.Getenv("UPDATE_STUDIO_OUTPUTS") == "1" {
+		if err := os.WriteFile(studioOutputsFixture, got, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(studioOutputsFixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("%s is stale: run UPDATE_STUDIO_OUTPUTS=1 go test ./internal/services -run TestStudioOutputTableFixture, then copy it to the UI (lib/studio/studioOutputs.json)", studioOutputsFixture)
+	}
+}
+
+// Every legacy format resolves to the combination it always meant.
+func TestStudioOutputLegacyAliases(t *testing.T) {
+	for format, want := range map[string][3]string{
+		"":     {"mp4", "h264", "aac"},
+		"h264": {"mp4", "h264", "aac"},
+		"HEVC": {"mp4", "hevc", "aac"},
+		"mp3":  {"mp3", "none", "mp3"},
+		"wav":  {"wav", "none", "pcm_s16le"},
+	} {
+		o, err := ResolveStudioOutput(StudioOutputRequest{Format: format})
+		if err != nil {
+			t.Fatalf("%q: %v", format, err)
+		}
+		if o.Container != want[0] || o.VideoCodec != want[1] || o.AudioCodec != want[2] {
+			t.Errorf("%q -> %+v", format, o)
+		}
+		if o.Advanced {
+			t.Errorf("%q is a preset, not Advanced", format)
+		}
+		label := strings.ToLower(format)
+		if label == "" {
+			label = "h264"
+		}
+		if o.Label() != label {
+			t.Errorf("%q label = %q", format, o.Label())
+		}
+	}
+}
+
+func TestStudioOutputResolve(t *testing.T) {
+	ok := []struct {
+		req      StudioOutputRequest
+		label    string
+		advanced bool
+		bitrate  int
+	}{
+		{StudioOutputRequest{}, "h264", false, 192},
+		{StudioOutputRequest{Format: "hevc", Container: "mp4", VideoCodec: "hevc"}, "hevc", false, 192}, // explicit fields agreeing with the alias
+		{StudioOutputRequest{Preset: "mov_hevc"}, "mov_hevc_aac", false, 192},
+		{StudioOutputRequest{Container: "MOV"}, "mov_h264_aac", false, 192},
+		{StudioOutputRequest{Container: "mov", AudioCodec: "pcm_s16le"}, "mov_h264_pcm_s16le", true, 0},
+		{StudioOutputRequest{Container: "mkv", VideoCodec: "hevc", AudioCodec: "aac"}, "mkv_hevc_aac", false, 192},
+		{StudioOutputRequest{Container: "mkv", VideoCodec: "h264", AudioCodec: "mp3", AudioBitrate: 320}, "mkv_h264_mp3", true, 320},
+		{StudioOutputRequest{Preset: "mp4_h264", AudioBitrate: 256}, "h264", true, 256},
+		{StudioOutputRequest{Preset: "mp4_h264", AudioChannels: 1}, "h264", true, 192},
+		{StudioOutputRequest{Preset: "mp4_h264", AudioBitrate: 192, AudioChannels: 2}, "h264", false, 192},
+	}
+	for _, c := range ok {
+		o, err := ResolveStudioOutput(c.req)
+		if err != nil {
+			t.Errorf("%+v: %v", c.req, err)
+			continue
+		}
+		if o.Label() != c.label || o.Advanced != c.advanced || o.AudioBitrate != c.bitrate {
+			t.Errorf("%+v -> label %s advanced %v bitrate %d", c.req, o.Label(), o.Advanced, o.AudioBitrate)
+		}
+	}
+	bad := []StudioOutputRequest{
+		{Format: "gif"}, {Format: "webm"}, {Format: "mov"}, // the alias takes legacy values only
+		{Preset: "nope"},
+		{Format: "hevc", VideoCodec: "h264"},        // alias + conflicting explicit field
+		{Format: "mp3", Container: "mp4"},           // ditto
+		{Format: "h264", Preset: "mov_h264"},        // alias + conflicting preset
+		{Container: "mov", AudioCodec: "opus"},      // not a codec yet (MM119)
+		{Container: "mp4", AudioCodec: "pcm_s16le"}, // valid codec, not in MP4
+		{Container: "mp4", AudioCodec: "mp3"},       // not in MP4 either
+		{Container: "webm"},                         // not a container yet
+		{Container: "mp3", VideoCodec: "h264"},      // audio-only container
+		{Container: "mkv", VideoCodec: "vp9"},       // unknown video codec
+		{Container: "wav", AudioBitrate: 192},       // PCM has no bitrate
+		{AudioBitrate: 200},                         // not in the closed list
+		{AudioBitrate: -1},
+		{AudioChannels: 6},
+	}
+	for _, r := range bad {
+		if _, err := ResolveStudioOutput(r); err == nil {
+			t.Errorf("%+v should be rejected", r)
+		} else if _, ok := err.(*StudioOutputError); !ok {
+			t.Errorf("%+v: error type %T", r, err)
+		}
+	}
+}
+
+// Every combination of the table builds; the derived labels are the closed
+// vocabulary and every preset is a valid row.
+func TestStudioOutputTableIsConsistent(t *testing.T) {
+	tab := StudioOutputs()
+	labels := map[string]bool{}
+	for _, f := range tab.Formats {
+		if labels[f] {
+			t.Errorf("duplicate label %s", f)
+		}
+		labels[f] = true
+	}
+	for _, c := range tab.Containers {
+		for _, v := range c.VideoCodecs {
+			for _, a := range c.AudioCodecs {
+				o, err := ResolveStudioOutput(StudioOutputRequest{Container: c.Key, VideoCodec: v, AudioCodec: a})
+				if err != nil {
+					t.Errorf("%s/%s/%s: %v", c.Key, v, a, err)
+					continue
+				}
+				if !labels[o.Label()] {
+					t.Errorf("label %s missing from Formats", o.Label())
+				}
+				for _, tok := range o.Tokens() {
+					if _, ok := tab.MinTier[tok]; !ok {
+						t.Errorf("token %s of %s has no MinTier", tok, o.Label())
+					}
+				}
+			}
+		}
+	}
+	for _, p := range tab.Presets {
+		if _, err := ResolveStudioOutput(StudioOutputRequest{Preset: p.Key}); err != nil {
+			t.Errorf("preset %s: %v", p.Key, err)
+		}
+	}
+	for _, tok := range tab.Tokens {
+		if _, ok := tab.MinTier[tok]; !ok {
+			t.Errorf("token %s has no MinTier", tok)
+		}
+	}
+	if len(tab.Formats) != 14 {
+		t.Errorf("MM118 ships 14 labels, got %d: %v", len(tab.Formats), tab.Formats)
+	}
+}
+
+func TestStudioOutputWarnings(t *testing.T) {
+	cases := map[[3]string]string{
+		{"mp4", "hevc", "aac"}:       "",
+		{"mov", "h264", "aac"}:       "",
+		{"mov", "h264", "pcm_s16le"}: "no_browser_preview",
+		{"mkv", "hevc", "aac"}:       "apple_incompatible,no_browser_preview",
+	}
+	for k, want := range cases {
+		if got := strings.Join(StudioOutputWarnings(k[0], k[1], k[2]), ","); got != want {
+			t.Errorf("%v: %q want %q", k, got, want)
+		}
+	}
+}
+
+func outputPlan(t *testing.T, r StudioOutputRequest) StudioExportPlan {
+	t.Helper()
+	o, err := ResolveStudioOutput(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := depthPlan()
+	p.Output = &o
+	return p
+}
+
+// Golden args per new row (MOV H.264/H.265 with AAC and PCM, MKV with each
+// audio codec), plus Advanced bitrate and mono.
+func TestStudioOutputRowArgs(t *testing.T) {
+	cases := []struct {
+		name string
+		req  StudioOutputRequest
+		enc  string
+		tail string
+	}{
+		{"mov h264 aac", StudioOutputRequest{Preset: "mov_h264"}, "h264_nvenc",
+			"-c:v h264_nvenc -preset p5 -rc vbr -cq 19 -b:v 0 -pix_fmt yuv420p -c:a aac -b:a 192k -t 5.000 -movflags +faststart /o.mov"},
+		{"mov hevc aac", StudioOutputRequest{Preset: "mov_hevc"}, "hevc_nvenc",
+			"-c:v hevc_nvenc -preset p5 -rc vbr -cq 24 -b:v 0 -pix_fmt yuv420p -tag:v hvc1 -c:a aac -b:a 192k -t 5.000 -movflags +faststart /o.mov"},
+		{"mov hevc pcm", StudioOutputRequest{Container: "mov", VideoCodec: "hevc", AudioCodec: "pcm_s16le"}, "libx265",
+			"-c:v libx265 -preset slow -crf 24 -pix_fmt yuv420p -tag:v hvc1 -x265-params log-level=error -c:a pcm_s16le -t 5.000 -movflags +faststart /o.mov"},
+		{"mov h264 pcm", StudioOutputRequest{Container: "mov", AudioCodec: "pcm_s16le"}, "libx264",
+			"-c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -c:a pcm_s16le -t 5.000 -movflags +faststart /o.mov"},
+		{"mkv hevc aac", StudioOutputRequest{Preset: "mkv_hevc_aac"}, "hevc_nvenc",
+			"-c:v hevc_nvenc -preset p5 -rc vbr -cq 24 -b:v 0 -pix_fmt yuv420p -c:a aac -b:a 192k -t 5.000 /o.mkv"},
+		{"mkv h264 pcm", StudioOutputRequest{Container: "mkv", AudioCodec: "pcm_s16le"}, "h264_nvenc",
+			"-c:v h264_nvenc -preset p5 -rc vbr -cq 19 -b:v 0 -pix_fmt yuv420p -c:a pcm_s16le -t 5.000 /o.mkv"},
+		{"mkv h264 mp3 320", StudioOutputRequest{Container: "mkv", AudioCodec: "mp3", AudioBitrate: 320}, "h264_nvenc",
+			"-c:v h264_nvenc -preset p5 -rc vbr -cq 19 -b:v 0 -pix_fmt yuv420p -c:a libmp3lame -b:a 320k -t 5.000 /o.mkv"},
+		{"mp4 h264 aac 128 mono", StudioOutputRequest{Preset: "mp4_h264", AudioBitrate: 128, AudioChannels: 1}, "h264_nvenc",
+			"-c:v h264_nvenc -preset p5 -rc vbr -cq 19 -b:v 0 -pix_fmt yuv420p -c:a aac -b:a 128k -ac 1 -t 5.000 -movflags +faststart /o.mp4"},
+		{"mp3 320 mono", StudioOutputRequest{Format: "mp3", AudioBitrate: 320, AudioChannels: 1}, "audio",
+			"-vn -c:a libmp3lame -b:a 320k -ac 1 -t 5.000 /o.mp3"},
+	}
+	for _, c := range cases {
+		p := outputPlan(t, c.req)
+		ext, _, _ := p.Output.File()
+		args := joined(buildMultiTrackExportArgs(p, c.enc, "high", "/f.ttf", "/fd", "/o"+ext))
+		if !strings.HasSuffix(args, c.tail) {
+			t.Errorf("%s:\n got %s\nwant suffix %s", c.name, args, c.tail)
+		}
+		if p.Output.Container == "mkv" && (strings.Contains(args, "faststart") || strings.Contains(args, "hvc1")) {
+			t.Errorf("%s: MKV must drop +faststart and the hvc1 tag: %s", c.name, args)
+		}
+	}
+}
+
+// A legacy plan (Output nil) and the same legacy request resolved through the
+// table build identical args.
+func TestStudioOutputPlanEqualsLegacy(t *testing.T) {
+	for _, f := range []string{"", "h264", "hevc", "mp3", "wav"} {
+		legacy := depthPlan()
+		legacy.Format = f
+		viaTable := outputPlan(t, StudioOutputRequest{Format: f})
+		enc := "h264_nvenc"
+		switch f {
+		case "hevc":
+			enc = "hevc_nvenc"
+		case "mp3", "wav":
+			enc = "audio"
+		}
+		a := joined(buildMultiTrackExportArgs(legacy, enc, "medium", "/f.ttf", "/fd", "/o"))
+		b := joined(buildMultiTrackExportArgs(viaTable, enc, "medium", "/f.ttf", "/fd", "/o"))
+		if a != b {
+			t.Errorf("%q: legacy %s\n table %s", f, a, b)
+		}
+	}
+}
+
+func TestStudioOutputFileAndTokens(t *testing.T) {
+	cases := []struct {
+		req             StudioOutputRequest
+		ext, mime, kind string
+		tokens          string
+	}{
+		{StudioOutputRequest{}, ".mp4", "video/mp4", "video", "mp4,h264,aac"},
+		{StudioOutputRequest{Preset: "mov_hevc"}, ".mov", "video/quicktime", "video", "mov,hevc,aac"},
+		{StudioOutputRequest{Container: "mkv", AudioCodec: "mp3"}, ".mkv", "video/x-matroska", "video", "mkv,h264,mp3"},
+		{StudioOutputRequest{Format: "mp3"}, ".mp3", "audio/mpeg", "audio", "mp3"},
+		{StudioOutputRequest{Format: "wav"}, ".wav", "audio/wav", "audio", "wav,pcm_s16le"},
+	}
+	for _, c := range cases {
+		o, err := ResolveStudioOutput(c.req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ext, mime, kind := o.File()
+		if ext != c.ext || mime != c.mime || kind != c.kind || strings.Join(o.Tokens(), ",") != c.tokens {
+			t.Errorf("%+v -> %s %s %s %v", c.req, ext, mime, kind, o.Tokens())
+		}
+	}
+}
+
+func TestStoredStudioOutput(t *testing.T) {
+	// A pre-migration row: only `format`.
+	if o, err := StoredStudioOutput("hevc", "", "", "", nil, nil); err != nil || o.Label() != "hevc" {
+		t.Errorf("legacy row: %+v %v", o, err)
+	}
+	b, ch := 256, 1
+	o, err := StoredStudioOutput("mov_hevc_aac", "mov", "hevc", "aac", &b, &ch)
+	if err != nil || o.Label() != "mov_hevc_aac" || o.AudioBitrate != 256 || o.AudioChannels != 1 || !o.Advanced {
+		t.Errorf("new row: %+v %v", o, err)
+	}
+}

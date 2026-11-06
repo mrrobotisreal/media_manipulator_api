@@ -305,6 +305,22 @@ func TestPublishedMatrix(t *testing.T) {
 		},
 	}
 
+	// MM118 Darkroom output row (design DARKROOM_OUTPUTS_AND_CAPTIONS.md §3.4):
+	// anonymous loses HEVC; Premium adds MOV, MKV and Advanced; Pro = Premium.
+	for tier, row := range map[Tier]struct {
+		formats  StudioFormatSet
+		advanced bool
+	}{
+		TierAnonymous: {"mp4,mp3,wav,h264,aac,pcm_s16le", false},
+		TierFree:      {"mp4,mp3,wav,h264,hevc,aac,pcm_s16le", false},
+		TierPremium:   {"mp4,mov,mkv,mp3,wav,h264,hevc,aac,pcm_s16le", true},
+		TierPro:       {"mp4,mov,mkv,mp3,wav,h264,hevc,aac,pcm_s16le", true},
+	} {
+		l := want[tier]
+		l.StudioFormats, l.StudioAdvanced = row.formats, row.advanced
+		want[tier] = l
+	}
+
 	// MM77 voices row (design VOICES.md §4.3), overlaid so the literals above
 	// stay one per feature.
 	for tier, v := range wantVoices {

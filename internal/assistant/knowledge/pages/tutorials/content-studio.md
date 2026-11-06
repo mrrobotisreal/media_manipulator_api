@@ -13,7 +13,7 @@ Step-by-step Darkroom tutorial: import media, build a multi-track timeline, trim
 ## Details
 
 How to Use Darkroom
-Darkroom is a Premiere Pro–style, multi-track video editor that runs entirely in your browser. Upload video, images, and audio, arrange them on a timeline, layer and mix tracks, add effects, and export a finished MP4 — no software to install. This guide walks through the whole workflow.
+Darkroom is a Premiere Pro–style, multi-track video editor that runs entirely in your browser. Upload video, images, and audio, arrange them on a timeline, layer and mix tracks, add effects, and export a finished video (MP4, MOV or MKV) — no software to install. This guide walks through the whole workflow.
 The Darkroom editor showing the media bin, preview, clip effects panel, and a multi-track timeline.
 The Darkroom workspace: media bin (left), live preview (center), clip effects (right), and the multi-track timeline (bottom).
 1. Create a project
@@ -43,8 +43,8 @@ A red “This is my video!” text overlay drawn over the preview with the text 
 Text overlays are positioned and styled in the panel and drawn into the preview and the export.
 5. Preview your edit
 Use the transport controls under the preview to play/pause, step a frame at a time, or jump to the start/end. Drag on the timeline ruler to scrub — drag to the edge and the timeline auto-scrolls so you can reach any point. During playback the view follows the playhead automatically.
-6. Export to MP4
-Click “Export MP4”, choose a file name and quality, and Darkroom renders your full timeline on the server — compositing video tracks, mixing audio, and applying your effects — then gives you a download link. Rendering happens on a GPU, so larger projects finish quickly.
+6. Export
+Click “Export”, choose a file name, a format and the quality, and Darkroom renders your full timeline on the server — compositing video tracks, mixing audio, and applying your effects — then gives you a download link. MP4 with H.264 plays everywhere; the format list also offers H.265, MOV, MKV and audio-only files, and shows which plan unlocks each. Rendering happens on a GPU, so larger projects finish quickly.
 Keyboard shortcuts
 Space play/pause · ← / → step one frame · S split at playhead · Delete ripple-delete the selection · + / − zoom the timeline.
 Related tools & tutorials

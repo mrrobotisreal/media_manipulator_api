@@ -135,3 +135,27 @@ func TestEncoderAnalyticsName(t *testing.T) {
 		t.Errorf("libx264 → %q, want x264", got)
 	}
 }
+
+// MM118: the render event carries the derived label, its output parts and the
+// render seconds (whole seconds); a legacy plan keeps its legacy label.
+func TestEmitStudioRenderOutputProps(t *testing.T) {
+	jm, an := analyticsJobManager(t)
+	job := jm.CreateJob(models.OriginalFileInfo{Name: "export.mov", Size: 0, Type: "video/quicktime"}, nil)
+	jm.RecordJobCreated(t.Context(), job.ID, testOwner(), studioExportFacts())
+	o, err := ResolveStudioOutput(StudioOutputRequest{Preset: "mov_hevc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := depthPlan()
+	p.Output = &o
+	out := p.output()
+	stats := StudioRenderStats{Encoder: "nvenc", FilterCount: 4, Format: out.Label(), Container: out.Container, VideoCodec: out.VideoCodec, AudioCodec: out.AudioCodec}
+	jm.EmitStudioRender(job.ID, stats, 41.6, 60, nil)
+	ev := an.named(analyticsemit.StudioRenderCompleted)[0]
+	want := map[string]any{"format": "mov_hevc_aac", "container": "mov", "videoCodec": "hevc", "audioCodec": "aac", "renderSeconds": 42}
+	for k, v := range want {
+		if ev.Properties[k] != v {
+			t.Errorf("%s = %v (%T), want %v", k, ev.Properties[k], ev.Properties[k], v)
+		}
+	}
+}

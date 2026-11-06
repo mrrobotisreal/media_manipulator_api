@@ -17,8 +17,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/mrrobotisreal/media_manipulator_api/internal/middleware"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/services"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/tiers"
 )
 
 // Export depth (part 20): request validation, the effective-height rule shared
@@ -32,34 +34,66 @@ import (
 // downgrade.
 var studioExportResolutionRungs = map[int]bool{0: true, 720: true, 1080: true, 1440: true, 2160: true}
 
-// validateExportRequest normalizes req in place and returns a client-facing
-// message for an invalid value ("" when valid). Unknown formats / modes are a
-// 400 rather than a quiet fallback, so a typo never yields the wrong file.
-func validateExportRequest(req *models.StudioExportRequest) string {
+// validateExportRequest normalizes req in place, resolves its output against
+// the output table (MM118: container × video × audio, `format` as an alias)
+// and returns a client-facing message for an invalid value ("" when valid).
+// Unknown formats / modes / combinations are a 400 rather than a quiet
+// fallback, so a typo never yields the wrong file.
+func validateExportRequest(req *models.StudioExportRequest) (services.StudioOutput, string) {
 	req.Format = strings.ToLower(strings.TrimSpace(req.Format))
-	switch req.Format {
-	case "", models.StudioExportFormatH264, models.StudioExportFormatHEVC, models.StudioExportFormatMP3, models.StudioExportFormatWAV:
-	default:
-		return "Unsupported export format"
+	out, err := services.ResolveStudioOutput(exportOutputRequest(*req))
+	if err != nil {
+		return services.StudioOutput{}, err.Error()
 	}
 	req.CaptionsMode = strings.ToLower(strings.TrimSpace(req.CaptionsMode))
 	switch req.CaptionsMode {
 	case "", models.StudioCaptionsNone, models.StudioCaptionsBurnIn, models.StudioCaptionsSidecar:
 	default:
-		return "Unsupported captions mode"
+		return services.StudioOutput{}, "Unsupported captions mode"
 	}
 	if !studioExportResolutionRungs[req.Resolution] {
-		return "Unsupported export resolution"
+		return services.StudioOutput{}, "Unsupported export resolution"
 	}
-	return ""
+	return out, ""
+}
+
+// exportOutputRequest is the output half of an export body.
+func exportOutputRequest(req models.StudioExportRequest) services.StudioOutputRequest {
+	return services.StudioOutputRequest{
+		Format: req.Format, Preset: req.OutputPreset,
+		Container: req.Container, VideoCodec: req.VideoCodec, AudioCodec: req.AudioCodec,
+		AudioBitrate: req.AudioBitrate, AudioChannels: req.AudioChannels,
+	}
+}
+
+// storedExportRequest rebuilds the request of a history row for render-again
+// and its gates: the stored output parts (filled from `format` for a pre-MM118
+// row) as explicit fields, never the alias.
+func storedExportRequest(e *models.StudioExport) models.StudioExportRequest {
+	req := models.StudioExportRequest{
+		FileName: e.FileName, Preset: e.Preset, Loudness: e.Loudness,
+		Resolution: e.Resolution, CaptionsMode: e.CaptionsMode,
+		Container: e.Container, VideoCodec: e.VideoCodec, AudioCodec: e.AudioCodec,
+	}
+	if req.Container == "" {
+		req.Format = e.Format
+	}
+	if e.AudioBitrate != nil {
+		req.AudioBitrate = *e.AudioBitrate
+	}
+	if e.AudioChannels != nil {
+		req.AudioChannels = *e.AudioChannels
+	}
+	return req
 }
 
 // effectiveExportHeight is the height an export request will actually render:
-// 0 for audio formats (no video, nothing to cap), the picked rung when there is
-// one, else the persisted project's height. The ONE input to the tier gate for
-// every export path (ExportHeightGate, launchExport, render-again).
+// 0 for audio-only outputs (no video, nothing to cap), the picked rung when
+// there is one, else the persisted project's height. The ONE input to the tier
+// gate for every export path (ExportHeightGate, launchExport, render-again).
+// An unresolvable output is treated as video (the handler 400s it anyway).
 func effectiveExportHeight(req models.StudioExportRequest, projectHeight int) int {
-	if services.IsAudioFormat(req.Format) {
+	if out, err := services.ResolveStudioOutput(exportOutputRequest(req)); err == nil && out.AudioOnly() {
 		return 0
 	}
 	if req.Resolution > 0 {
@@ -68,7 +102,7 @@ func effectiveExportHeight(req models.StudioExportRequest, projectHeight int) in
 	return projectHeight
 }
 
-// peekExportRequest reads the JSON body for the pre-quota height gate without
+// peekExportRequest reads the JSON body for the pre-quota gates without
 // consuming it (the handler binds it again). A bad body yields the zero
 // request, i.e. the project's own height, exactly the pre-part-20 behavior.
 func peekExportRequest(c *gin.Context) models.StudioExportRequest {
@@ -86,20 +120,85 @@ func peekExportRequest(c *gin.Context) models.StudioExportRequest {
 	if jsonUnmarshalLoose(raw, &parsed) {
 		req = parsed
 	}
-	_ = validateExportRequest(&req) // normalize case; an invalid value is rejected later by the handler
+	_, _ = validateExportRequest(&req) // normalize case; an invalid value is rejected later by the handler
 	return req
 }
 
-// exportContainer maps a format onto the output extension, the MIME the job
-// records, and the analytics media kind.
+// exportContainer maps a legacy format (or derived label) onto the output
+// extension, the MIME the job records, and the analytics media kind. MM118:
+// a table lookup (StudioOutput.File); kept for callers holding only a label.
 func exportContainer(format string) (ext, mime, mediaKind string) {
-	switch services.NormalizeExportFormat(format) {
-	case services.StudioFormatMP3:
-		return ".mp3", "audio/mpeg", string(models.FileTypeAudio)
-	case services.StudioFormatWAV:
-		return ".wav", "audio/wav", string(models.FileTypeAudio)
+	return services.LegacyStudioOutput(format).File()
+}
+
+// --- Darkroom output plan gate (MM118) -------------------------------------
+
+// studioFormatRefusal is the handler-side entry to the output plan rule
+// (tiers.CheckStudioOutput): nil when the caller may render out, or when no
+// tier has been resolved (tier system off, or a route outside /api), the same
+// fallback as outputHeightRefusal. registry supplies `required`; nil falls
+// back to the output table's default ladder.
+func studioFormatRefusal(c *gin.Context, registry *tiers.Registry, out services.StudioOutput) *tiers.StudioFormatRefusal {
+	res, ok := middleware.ResolveTier(c)
+	if !ok {
+		return nil
 	}
-	return ".mp4", "video/mp4", string(models.FileTypeVideo)
+	return tiers.CheckStudioOutput(res.Tier, res.Limits, out.Tokens(), out.Advanced, studioRequiredFor(registry))
+}
+
+// studioRequiredFor resolves the lowest public plan for an output token or
+// "advanced": the live registry when there is one, else the table defaults.
+func studioRequiredFor(registry *tiers.Registry) func(string) tiers.Tier {
+	if registry != nil {
+		return registry.RequiredFor
+	}
+	tab := services.StudioOutputs()
+	return func(option string) tiers.Tier {
+		if option == tiers.StudioOptionAdvanced {
+			return tiers.Tier(tab.AdvancedMinTier)
+		}
+		return tiers.Tier(tab.MinTier[option])
+	}
+}
+
+// refuseStudioFormat writes the 403 format_not_in_plan body and reports
+// whether it did.
+func refuseStudioFormat(c *gin.Context, registry *tiers.Registry, out services.StudioOutput) bool {
+	ref := studioFormatRefusal(c, registry, out)
+	if ref == nil {
+		return false
+	}
+	c.AbortWithStatusJSON(http.StatusForbidden, ref)
+	return true
+}
+
+// StudioExportFacts is what the pre-quota export gate needs to know about one
+// export request: the height it renders and its resolved output.
+type StudioExportFacts struct {
+	Height   int
+	Output   services.StudioOutput
+	OutputOK bool // false: the output is invalid; the handler answers 400
+}
+
+// StudioExportGate is the pre-quota half of BOTH Studio export plan rules
+// (MM18 output height, MM118 output format). The quota dispatcher runs it
+// BEFORE RequireQuota, so a refused export never spends the allowance.
+// lookup returns ok=false when the facts cannot be determined (no DB, unknown
+// project, not the caller's); the gate then stays out of the way and the
+// handler decides (and a 4xx refunds the charge).
+func StudioExportGate(registry *tiers.Registry, lookup func(c *gin.Context) (StudioExportFacts, bool)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		facts, ok := lookup(c)
+		if !ok {
+			return
+		}
+		if refuseOutputHeight(c, facts.Height) {
+			return
+		}
+		if facts.OutputOK {
+			refuseStudioFormat(c, registry, facts.Output)
+		}
+	}
 }
 
 // effectiveCaptionsMode is the value stored on the history row: the explicit
@@ -187,11 +286,38 @@ func (h *StudioHandler) RenderExportAgain(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load export"})
 		return
 	}
-	loudness := stored.Loudness
-	h.launchExport(c, projectID, models.StudioExportRequest{
-		FileName: stored.FileName, Preset: stored.Preset, Loudness: loudness,
-		Format: stored.Format, Resolution: stored.Resolution, CaptionsMode: stored.CaptionsMode,
-	})
+	// MM118: the stored output parts replay as explicit fields, and
+	// launchExport re-runs both plan gates, so a downgraded account cannot
+	// replay an export its plan no longer includes.
+	h.launchExport(c, projectID, storedExportRequest(stored))
+}
+
+// ExportOptions handles GET /api/studio/export-options (MM118): the output
+// table, the live minimum plan of every output token (TIER_*_STUDIO_FORMATS
+// may move one from the table's defaults) and the caller's own allowed set, so
+// the export dialog never hard-codes a combination. Public (no sign-in) and
+// cacheable by the caller's browser only: the `caller` block is per request.
+//
+//	200 {"table": StudioOutputTable, "required": {"mp4": "anonymous", ...,
+//	     "advanced": "premium"}, "caller": {"tier", "formats", "advanced"}}
+func (h *StudioHandler) ExportOptions(c *gin.Context) {
+	tab := services.StudioOutputs()
+	req := studioRequiredFor(h.tierRegistry)
+	required := make(map[string]string, len(tab.Tokens)+1)
+	for _, tok := range tab.Tokens {
+		required[tok] = string(req(tok))
+	}
+	required[tiers.StudioOptionAdvanced] = string(req(tiers.StudioOptionAdvanced))
+	caller := gin.H{"tier": string(tiers.TierAnonymous), "formats": []string{}, "advanced": false}
+	if res, ok := middleware.ResolveTier(c); ok {
+		caller = gin.H{"tier": string(res.Tier), "formats": res.Limits.StudioFormats.List(), "advanced": res.Limits.StudioAdvanced}
+	} else if h.tierRegistry != nil {
+		l := h.tierRegistry.For(tiers.TierAnonymous)
+		caller["formats"], caller["advanced"] = l.StudioFormats.List(), l.StudioAdvanced
+	}
+	c.Header("Cache-Control", "private, max-age=300")
+	c.Header("Vary", "Authorization")
+	c.JSON(http.StatusOK, gin.H{"table": tab, "required": required, "caller": caller})
 }
 
 // frameSlots bounds concurrent synchronous frame renders (each is a full

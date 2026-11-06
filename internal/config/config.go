@@ -298,6 +298,20 @@ type Config struct {
 	TierProRetentionHours        int
 	TierProStudioVersionAutoKeep int
 
+	// Darkroom outputs (MM118, design DARKROOM_OUTPUTS_AND_CAPTIONS.md §3.4).
+	// *StudioFormats is a comma list of output tokens (containers + codecs:
+	// mp4, mov, mkv, mp3, wav, h264, hevc, aac, pcm_s16le), cumulative up the
+	// ladder; the defaults list what each tier ADDS. *StudioAdvanced unlocks
+	// the Advanced picker (combinations, audio bitrate, mono).
+	TierAnonStudioFormats     []string
+	TierFreeStudioFormats     []string
+	TierPremiumStudioFormats  []string
+	TierProStudioFormats      []string
+	TierAnonStudioAdvanced    bool
+	TierFreeStudioAdvanced    bool
+	TierPremiumStudioAdvanced bool
+	TierProStudioAdvanced     bool
+
 	// Motion (vector, MM43; Pro row MM49) allowances, per tier.
 	// *VectorFormats is a comma list of countable formats
 	// (cumulative: each tier also gets every format of the tier below).
@@ -1149,6 +1163,7 @@ func Load() *Config {
 	}
 	applyProTierDefaults(cfg)
 	applyVoicesConfig(cfg)
+	applyStudioOutputConfig(cfg)
 	return cfg
 }
 
@@ -1298,4 +1313,19 @@ func NormalizePublicAPIBaseURL(raw string) string {
 		return "https://api.media-manipulator.com"
 	}
 	return v
+}
+
+// applyStudioOutputConfig fills the Darkroom output rows (MM118). Decided
+// ladder (Mitch 2026-11-05): anonymous MP4 H.264 + AAC and MP3/WAV; free adds
+// H.265 (anonymous loses it); Premium adds MOV, MKV and Advanced; Pro equals
+// Premium until MM119/MM120 extend it.
+func applyStudioOutputConfig(c *Config) {
+	c.TierAnonStudioFormats = splitCSVLower(getEnv("TIER_ANON_STUDIO_FORMATS", "mp4,h264,aac,mp3,wav,pcm_s16le"))
+	c.TierFreeStudioFormats = splitCSVLower(getEnv("TIER_FREE_STUDIO_FORMATS", "hevc"))
+	c.TierPremiumStudioFormats = splitCSVLower(getEnv("TIER_PREMIUM_STUDIO_FORMATS", "mov,mkv"))
+	c.TierProStudioFormats = splitCSVLower(getEnv("TIER_PRO_STUDIO_FORMATS", ""))
+	c.TierAnonStudioAdvanced = getEnvBool("TIER_ANON_STUDIO_ADVANCED", false)
+	c.TierFreeStudioAdvanced = getEnvBool("TIER_FREE_STUDIO_ADVANCED", false)
+	c.TierPremiumStudioAdvanced = getEnvBool("TIER_PREMIUM_STUDIO_ADVANCED", true)
+	c.TierProStudioAdvanced = getEnvBool("TIER_PRO_STUDIO_ADVANCED", true)
 }

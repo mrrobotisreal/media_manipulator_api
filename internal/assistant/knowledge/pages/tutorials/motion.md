@@ -49,7 +49,7 @@ The tool page, with every plan's formats and allowances.
 Open-source licences
 The libraries the editor uses and writes into your exports.
 Darkroom tutorial
-Edit video on a multi-track timeline and export MP4.
+Edit video on a multi-track timeline and export MP4, MOV or MKV.
 
 ## Search keywords
 
