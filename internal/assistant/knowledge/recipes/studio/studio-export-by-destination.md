@@ -8,31 +8,35 @@
 
 ## Summary
 
-Darkroom recipe (basic). Pick the delivery by destination, not by habit.
+Darkroom recipe (basic). Pick by destination.
 
 ## Details
 
 ### When to use
-The user asks how to export, names where the video is going, or asks for a format (MOV, MKV, H.265, WAV).
+The user asks how to export, names a destination, a format (MOV, MKV, WebM, Opus, H.265, WAV) or captions viewers can switch off.
 ### What a pro does and why
-Pick the delivery by destination, not by habit. Social (Instagram Reels, TikTok, Shorts), YouTube, WhatsApp and the web take MP4 with H.264 and AAC: it plays everywhere and every app re-encodes uploads anyway, so a larger master buys nothing. When size matters (sending a file, storage, a long video) MP4 with H.265 is about half the size at the same quality and plays on phones and modern browsers. For editing in Final Cut Pro or iMovie, MOV is the native container (H.264, or H.265 for smaller files; PCM audio when the edit will be mixed further). For an archive or a media server (Plex, VLC), MKV with H.265 and AAC keeps quality in a small file, but Apple apps and browsers will not play it. For podcasts and music: MP3 for listeners, WAV when it goes on to editing or mastering. Pair the export with the right canvas (9:16 for vertical social) and burn captions in for muted feeds.
-Plans: H.265 needs a free account; MOV, MKV and custom combinations, bitrates or mono need Premium. When the best fit is above the user's plan, say which plan unlocks it and offer the nearest one their plan allows; the server swaps it in and the dialog shows the upgrade.
+Pick by destination. Social (Reels, TikTok, Shorts), YouTube and WhatsApp take MP4 with H.264 and AAC: it plays everywhere and apps re-encode uploads anyway. When size matters, MP4 with H.265 is about half the size at the same quality. For Final Cut Pro or iMovie, MOV is native (H.264, or H.265 for smaller files; PCM audio if it will be mixed further). For an archive or Plex/VLC, MKV with H.265 keeps quality small, but Apple apps and browsers will not play it. Website embed: WebM with VP9 and Opus at 96-128 kbps, the smallest file browsers play natively (MP4 H.264 for Safari). Podcasts and music: Opus 96 kbps mono (`.opus`) is the smallest good spoken file, MP3 for old apps, WAV for further editing. Opus fits MKV, WebM or MP4 (not Apple apps), never MOV: asked for Opus in a MOV, say so and offer MKV or MP4. Use the right canvas (9:16 for vertical social).
+Captions: burn in for muted feeds (the only mode that keeps style and animation). Captions viewers turn on and off: `captionsMode: "embedded"` in MP4, MOV, MKV or WebM, plain text only. YouTube uploads: sidecar `.srt`/`.vtt` instead. Audio-only files cannot carry captions.
+Plans: H.265 needs a free account; MOV, MKV, WebM, Opus/Vorbis, `.opus`, embedded captions and custom combinations, bitrates or mono need Premium. Above the user's plan, say which plan unlocks it and offer the nearest allowed one; the server swaps it in and the dialog shows the upgrade.
 ### Ops
 No op list. Answer with the recommendation and `suggest_action {kind: "export", params: {...}}`. Examples:
 - Instagram Reel or TikTok: `{"preset": "mp4_h264", "captionsMode": "burn_in"}`
 - YouTube: `{"preset": "mp4_h264"}` (`"resolution": 2160` for a 4K canvas)
 - Smallest file that still looks good: `{"preset": "mp4_hevc"}`
-- Final Cut Pro or iMovie: `{"preset": "mov_h264"}`, or `{"container": "mov", "videoCodec": "hevc", "audioCodec": "pcm_s16le"}` for a smaller file with editing-grade audio
-- Archive: `{"preset": "mkv_hevc_aac"}`
+- Final Cut Pro or iMovie: `{"preset": "mov_h264"}`; smaller with editing audio `{"container": "mov", "videoCodec": "hevc", "audioCodec": "pcm_s16le"}`
+- Archive: `{"preset": "mkv_hevc_aac"}`, or `{"preset": "mkv_hevc_opus"}` for smaller audio
+- Website embed: `{"preset": "webm_vp9_opus", "audioBitrate": 96}`
+- Opus in a MOV: `{"preset": "mkv_hevc_opus"}`
+- Toggleable captions: `{"preset": "mp4_h264", "captionsMode": "embedded"}`
+- Smallest audio: `{"container": "opus", "audioBitrate": 96, "audioChannels": 1}`
 - Podcast: `{"preset": "audio_mp3"}`; for further editing `{"preset": "audio_wav"}`
-- Voice-only podcast, smallest MP3: `{"container": "mp3", "audioBitrate": 128, "audioChannels": 1}`
 The dialog opens prefilled; the user presses Export.
 ### How to adjust
-File too big: H.265 instead of H.264, a lower resolution, or Low quality. Will not open on an iPhone or Mac: MP4 or MOV, never MKV. Needs mixing later: WAV, or MOV with PCM audio. Opus, WebM, AV1, ProRes and FLAC are not available yet.
+Too big: H.265, a lower resolution, or Low quality. Must open on iPhone/Mac: MP4 or MOV, never MKV or WebM. Mixing later: WAV, or MOV with PCM. WebM may wait briefly as Queued. AV1, ProRes and FLAC are not available yet.
 
 ## Search keywords
 
-`Choose the Darkroom export for the destination`, `how should I export this`, `export for instagram`, `export for tiktok`, `export for youtube`, `export for final cut`, `export for imovie`, `smallest file that still looks good`, `export a podcast`, `export for whatsapp`, `archive my video`, `mov or mp4`, `h.265 or h.264`, `export as mkv`
+`Choose the Darkroom export for the destination`, `how should I export this`, `export for instagram`, `export for tiktok`, `export for youtube`, `export for final cut`, `export for imovie`, `smallest file that still looks good`, `export a podcast`, `export for whatsapp`, `archive my video`, `mov or mp4`, `h.265 or h.264`, `export as mkv`, `embed on my website`, `export as webm`, `opus audio`, `small audio file`, `subtitles people can turn on and off`, `closed captions track`
 
 ## Links
 

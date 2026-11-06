@@ -347,6 +347,13 @@
    "export format",
    "codec",
    "container",
+   "webm",
+   "vp9",
+   "opus",
+   "vorbis",
+   "embedded subtitles",
+   "closed captions",
+   "subtitle track",
    "vertical video",
    "aspect ratio",
    "shorts",
@@ -354,7 +361,7 @@
    "tiktok",
    "canvas"
   ],
-  "tokens": 1159
+  "tokens": 1402
  },
  "editors/studio/titles": {
   "title": "Darkroom titles, lower-thirds and text",
@@ -1673,9 +1680,15 @@
    "archive my video",
    "mov or mp4",
    "h.265 or h.264",
-   "export as mkv"
+   "export as mkv",
+   "embed on my website",
+   "export as webm",
+   "opus audio",
+   "small audio file",
+   "subtitles people can turn on and off",
+   "closed captions track"
   ],
-  "tokens": 886
+  "tokens": 1056
  },
  "recipes/studio/teal-orange-video": {
   "title": "Teal and orange for video",
