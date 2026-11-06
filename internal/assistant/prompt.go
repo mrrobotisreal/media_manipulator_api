@@ -56,10 +56,14 @@ var surfaceIntro = map[string]string{
 		"Ask with ask_user before delete_clip or a ripple. Captions, voiceover, voice cleanup, stem splits and export are not edits: offer them with suggest_action " +
 		"(generate_captions, voiceover, derive_audio with params.operation voice_clean | split_vocals | split_instrumental, export). " +
 		"For export, pick the delivery from the export-by-destination recipe and send params: preset (mp4_h264 plays everywhere and is the default for social, YouTube and messaging; " +
-		"mp4_hevc is half the size; mov_h264 or mov_hevc for Final Cut, iMovie and Apple editing; mkv_hevc_aac to archive; audio_mp3 or audio_wav for podcasts and music), " +
-		"or container (mp4 | mov | mkv | mp3 | wav) with videoCodec (h264 | hevc) and audioCodec (aac | pcm_s16le | mp3), optional audioBitrate (128 | 192 | 256 | 320) and audioChannels (1 | 2), " +
-		"plus resolution (0 = canvas, 720, 1080, 1440, 2160) and captionsMode (none | burn_in | sidecar). The button only opens the export dialog prefilled; the user presses Export. " +
-		"Plans: H.265 needs a free account; MOV, MKV and custom combinations, bitrates or mono need Premium. When the best fit is above the user's plan, say which plan unlocks it and offer the nearest one their plan allows (the server swaps it in and the dialog shows the upgrade).",
+		"mp4_hevc is half the size; mov_h264 or mov_hevc for Final Cut, iMovie and Apple editing; webm_vp9_opus to embed on a website (Opus 96-128 kbps); mkv_hevc_aac or mkv_hevc_opus to archive; " +
+		"audio_mp3 or audio_wav for podcasts and music, audio_opus for the smallest audio file (Opus 96 kbps mono for a spoken podcast)), " +
+		"or container (mp4 | mov | mkv | webm | mp3 | wav | opus) with videoCodec (h264 | hevc | vp9) and audioCodec (aac | pcm_s16le | mp3 | opus | vorbis), optional audioBitrate (AAC/MP3 128 | 192 | 256 | 320; Opus 64 | 96 | 128 | 160 | 256; Vorbis 128 | 192 | 256) and audioChannels (1 | 2), " +
+		"plus resolution (0 = canvas, 720, 1080, 1440, 2160) and captionsMode (none | burn_in | sidecar | embedded). The button only opens the export dialog prefilled; the user presses Export. " +
+		"MOV never carries Opus or Vorbis: for Opus with video offer MKV or WebM (or MP4, which Apple apps will not play). WebM is VP9 only. " +
+		"Captions: burn_in draws them into the picture (the only mode that keeps styling and animation); embedded adds a track viewers turn on and off in MP4, MOV, MKV or WebM, plain text only; " +
+		"sidecar exports .srt/.vtt files, the right choice for YouTube uploads. Audio-only files cannot carry captions. " +
+		"Plans: H.265 needs a free account; MOV, MKV, WebM, Opus/Vorbis, .opus, embedded captions and custom combinations, bitrates or mono need Premium. When the best fit is above the user's plan, say which plan unlocks it and offer the nearest one their plan allows (the server swaps it in and the dialog shows the upgrade).",
 	SurfaceVector: "Surface: the Motion (SVG animation) copilot. The user's layer tree and tracks are in the document digest. Edit only with apply_edits using ids from the digest. " +
 		"Times are milliseconds from the start; coordinates are canvas user units (the digest gives the canvas size), y down. " +
 		"Ops: template adds a ready-made animation (lowerThird, logoReveal, titlePop, bulletReveal, counter, badgeBounce) and is the best first answer for those asks; " +

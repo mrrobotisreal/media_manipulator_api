@@ -100,7 +100,9 @@ func (f advisorFunc) AdviseExport(t string, p map[string]any) (map[string]any, e
 // The studio surface line teaches the export params and moves the prompt version.
 func TestStudioIntroTeachesExportParams(t *testing.T) {
 	intro := surfaceIntro[SurfaceStudio]
-	for _, want := range []string{"mov_h264", "mkv_hevc_aac", "audio_wav", "container (mp4 | mov | mkv | mp3 | wav)", "audioBitrate", "captionsMode", "the user presses Export", "Premium"} {
+	for _, want := range []string{"mov_h264", "mkv_hevc_aac", "audio_wav", "container (mp4 | mov | mkv | webm | mp3 | wav | opus)", "audioBitrate", "captionsMode", "the user presses Export", "Premium",
+		// MM119: the new rows, the MOV/Opus refusal and embedded vs burn-in.
+		"webm_vp9_opus", "audio_opus", "mkv_hevc_opus", "vp9", "vorbis", "embedded", "MOV never carries Opus", "plain text", "sidecar"} {
 		if !strings.Contains(intro, want) {
 			t.Errorf("studio intro lacks %q", want)
 		}

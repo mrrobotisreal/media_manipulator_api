@@ -48,6 +48,11 @@ func validateExportRequest(req *models.StudioExportRequest) (services.StudioOutp
 	req.CaptionsMode = strings.ToLower(strings.TrimSpace(req.CaptionsMode))
 	switch req.CaptionsMode {
 	case "", models.StudioCaptionsNone, models.StudioCaptionsBurnIn, models.StudioCaptionsSidecar:
+	case models.StudioCaptionsEmbedded:
+		// MM119: a subtitle stream needs a container that carries one.
+		if out.SubtitleCodec() == "" {
+			return services.StudioOutput{}, "Embedded captions need a video container (MP4, MOV, MKV or WebM); audio-only files cannot carry a subtitle track"
+		}
 	default:
 		return services.StudioOutput{}, "Unsupported captions mode"
 	}
@@ -138,12 +143,22 @@ func exportContainer(format string) (ext, mime, mediaKind string) {
 // tier has been resolved (tier system off, or a route outside /api), the same
 // fallback as outputHeightRefusal. registry supplies `required`; nil falls
 // back to the output table's default ladder.
-func studioFormatRefusal(c *gin.Context, registry *tiers.Registry, out services.StudioOutput) *tiers.StudioFormatRefusal {
+func studioFormatRefusal(c *gin.Context, registry *tiers.Registry, out services.StudioOutput, captionsMode string) *tiers.StudioFormatRefusal {
 	res, ok := middleware.ResolveTier(c)
 	if !ok {
 		return nil
 	}
-	return tiers.CheckStudioOutput(res.Tier, res.Limits, out.Tokens(), out.Advanced, studioRequiredFor(registry))
+	return tiers.CheckStudioOutput(res.Tier, res.Limits, exportTokens(out, captionsMode), out.Advanced, studioRequiredFor(registry))
+}
+
+// exportTokens are the gated tokens of an export: the output's, plus
+// subs_embedded for the embedded captions mode (MM119).
+func exportTokens(out services.StudioOutput, captionsMode string) []string {
+	toks := out.Tokens()
+	if strings.EqualFold(strings.TrimSpace(captionsMode), models.StudioCaptionsEmbedded) {
+		toks = append(toks, services.StudioTokenSubsEmbedded)
+	}
+	return toks
 }
 
 // studioRequiredFor resolves the lowest public plan for an output token or
@@ -163,8 +178,8 @@ func studioRequiredFor(registry *tiers.Registry) func(string) tiers.Tier {
 
 // refuseStudioFormat writes the 403 format_not_in_plan body and reports
 // whether it did.
-func refuseStudioFormat(c *gin.Context, registry *tiers.Registry, out services.StudioOutput) bool {
-	ref := studioFormatRefusal(c, registry, out)
+func refuseStudioFormat(c *gin.Context, registry *tiers.Registry, out services.StudioOutput, captionsMode string) bool {
+	ref := studioFormatRefusal(c, registry, out, captionsMode)
 	if ref == nil {
 		return false
 	}
@@ -178,6 +193,9 @@ type StudioExportFacts struct {
 	Height   int
 	Output   services.StudioOutput
 	OutputOK bool // false: the output is invalid; the handler answers 400
+	// CaptionsMode is the normalized requested mode (MM119: `embedded` is a
+	// gated token too).
+	CaptionsMode string
 }
 
 // StudioExportGate is the pre-quota half of BOTH Studio export plan rules
@@ -196,7 +214,7 @@ func StudioExportGate(registry *tiers.Registry, lookup func(c *gin.Context) (Stu
 			return
 		}
 		if facts.OutputOK {
-			refuseStudioFormat(c, registry, facts.Output)
+			refuseStudioFormat(c, registry, facts.Output, facts.CaptionsMode)
 		}
 	}
 }

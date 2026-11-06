@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -76,6 +77,15 @@ func TestStudioOutputResolve(t *testing.T) {
 		{StudioOutputRequest{Preset: "mp4_h264", AudioBitrate: 256}, "h264", true, 256},
 		{StudioOutputRequest{Preset: "mp4_h264", AudioChannels: 1}, "h264", true, 192},
 		{StudioOutputRequest{Preset: "mp4_h264", AudioBitrate: 192, AudioChannels: 2}, "h264", false, 192},
+		// MM119 rows.
+		{StudioOutputRequest{Preset: "webm_vp9_opus"}, "webm_vp9_opus", false, 128},
+		{StudioOutputRequest{Container: "webm"}, "webm_vp9_opus", false, 128},
+		{StudioOutputRequest{Container: "webm", AudioCodec: "vorbis"}, "webm_vp9_vorbis", true, 192},
+		{StudioOutputRequest{Preset: "audio_opus"}, "opus_none_opus", false, 128},
+		{StudioOutputRequest{Container: "opus", AudioBitrate: 64, AudioChannels: 1}, "opus_none_opus", true, 64},
+		{StudioOutputRequest{Preset: "mkv_hevc_opus"}, "mkv_hevc_opus", false, 128},
+		{StudioOutputRequest{Container: "mp4", AudioCodec: "opus"}, "mp4_h264_opus", true, 128},
+		{StudioOutputRequest{Container: "mkv", VideoCodec: "vp9", AudioCodec: "pcm_s16le"}, "mkv_vp9_pcm_s16le", true, 0},
 	}
 	for _, c := range ok {
 		o, err := ResolveStudioOutput(c.req)
@@ -90,17 +100,25 @@ func TestStudioOutputResolve(t *testing.T) {
 	bad := []StudioOutputRequest{
 		{Format: "gif"}, {Format: "webm"}, {Format: "mov"}, // the alias takes legacy values only
 		{Preset: "nope"},
-		{Format: "hevc", VideoCodec: "h264"},        // alias + conflicting explicit field
-		{Format: "mp3", Container: "mp4"},           // ditto
-		{Format: "h264", Preset: "mov_h264"},        // alias + conflicting preset
-		{Container: "mov", AudioCodec: "opus"},      // not a codec yet (MM119)
-		{Container: "mp4", AudioCodec: "pcm_s16le"}, // valid codec, not in MP4
-		{Container: "mp4", AudioCodec: "mp3"},       // not in MP4 either
-		{Container: "webm"},                         // not a container yet
-		{Container: "mp3", VideoCodec: "h264"},      // audio-only container
-		{Container: "mkv", VideoCodec: "vp9"},       // unknown video codec
-		{Container: "wav", AudioBitrate: 192},       // PCM has no bitrate
-		{AudioBitrate: 200},                         // not in the closed list
+		{Format: "hevc", VideoCodec: "h264"},                        // alias + conflicting explicit field
+		{Format: "mp3", Container: "mp4"},                           // ditto
+		{Format: "h264", Preset: "mov_h264"},                        // alias + conflicting preset
+		{Container: "mov", AudioCodec: "opus"},                      // MOV never carries Opus (MM119)
+		{Container: "mov", AudioCodec: "vorbis"},                    // nor Vorbis
+		{Container: "mp4", AudioCodec: "vorbis"},                    // Vorbis is WebM/MKV only
+		{Container: "mp4", VideoCodec: "vp9"},                       // VP9 is WebM/MKV only
+		{Container: "webm", VideoCodec: "h264"},                     // WebM is VP9 only (until AV1)
+		{Container: "webm", AudioCodec: "aac"},                      // and Opus/Vorbis only
+		{Container: "opus", VideoCodec: "vp9"},                      // .opus is audio-only
+		{Container: "opus", AudioCodec: "opus", AudioBitrate: 192},  // not in Opus's list
+		{Container: "webm", AudioCodec: "vorbis", AudioBitrate: 96}, // not in Vorbis's list
+		{Container: "mp4", AudioCodec: "pcm_s16le"},                 // valid codec, not in MP4
+		{Container: "mp4", AudioCodec: "mp3"},                       // not in MP4 either
+		{Container: "avi"},                                          // not a container
+		{Container: "mp3", VideoCodec: "h264"},                      // audio-only container
+		{Container: "mkv", VideoCodec: "av1"},                       // unknown video codec (MM120)
+		{Container: "wav", AudioBitrate: 192},                       // PCM has no bitrate
+		{AudioBitrate: 200},                                         // not in the closed list
 		{AudioBitrate: -1},
 		{AudioChannels: 6},
 	}
@@ -153,8 +171,8 @@ func TestStudioOutputTableIsConsistent(t *testing.T) {
 			t.Errorf("token %s has no MinTier", tok)
 		}
 	}
-	if len(tab.Formats) != 14 {
-		t.Errorf("MM118 ships 14 labels, got %d: %v", len(tab.Formats), tab.Formats)
+	if len(tab.Formats) != 28 {
+		t.Errorf("MM118 + MM119 ship 28 labels, got %d: %v", len(tab.Formats), tab.Formats)
 	}
 }
 
@@ -164,6 +182,11 @@ func TestStudioOutputWarnings(t *testing.T) {
 		{"mov", "h264", "aac"}:       "",
 		{"mov", "h264", "pcm_s16le"}: "no_browser_preview",
 		{"mkv", "hevc", "aac"}:       "apple_incompatible,no_browser_preview",
+		{"mp4", "h264", "opus"}:      "apple_incompatible",
+		{"mp4", "hevc", "aac"}:       "",
+		{"webm", "vp9", "opus"}:      "apple_incompatible",
+		{"opus", "none", "opus"}:     "apple_incompatible",
+		{"mkv", "vp9", "vorbis"}:     "apple_incompatible,no_browser_preview",
 	}
 	for k, want := range cases {
 		if got := strings.Join(StudioOutputWarnings(k[0], k[1], k[2]), ","); got != want {
@@ -279,5 +302,117 @@ func TestStoredStudioOutput(t *testing.T) {
 	o, err := StoredStudioOutput("mov_hevc_aac", "mov", "hevc", "aac", &b, &ch)
 	if err != nil || o.Label() != "mov_hevc_aac" || o.AudioBitrate != 256 || o.AudioChannels != 1 || !o.Advanced {
 		t.Errorf("new row: %+v %v", o, err)
+	}
+}
+
+// MM119 golden args: WebM VP9 + Opus per quality, WebM VP9 + Vorbis, MP4
+// H.264 + Opus, MKV HEVC + Opus mono 64k (voip), `.opus` audio-only. WebM,
+// MKV and .opus never take +faststart; MP4 keeps it.
+func TestStudioOutputMM119Args(t *testing.T) {
+	vp9 := func(cpu, crf string) string {
+		return "-c:v libvpx-vp9 -row-mt 1 -deadline good -cpu-used " + cpu + " -crf " + crf + " -b:v 0 -tile-columns 2 -threads 16 -pix_fmt yuv420p"
+	}
+	cases := []struct {
+		name, quality string
+		req           StudioOutputRequest
+		enc           string
+		tail          string
+	}{
+		{"webm vp9 opus low", "low", StudioOutputRequest{Preset: "webm_vp9_opus"}, StudioEncoderVP9,
+			vp9("5", "40") + " -c:a libopus -b:a 128k -vbr on -ar 48000 -application audio -t 5.000 /o.webm"},
+		{"webm vp9 opus medium", "medium", StudioOutputRequest{Preset: "webm_vp9_opus"}, StudioEncoderVP9,
+			vp9("3", "34") + " -c:a libopus -b:a 128k -vbr on -ar 48000 -application audio -t 5.000 /o.webm"},
+		{"webm vp9 opus high 96", "high", StudioOutputRequest{Preset: "webm_vp9_opus", AudioBitrate: 96}, StudioEncoderVP9,
+			vp9("2", "31") + " -c:a libopus -b:a 96k -vbr on -ar 48000 -application audio -t 5.000 /o.webm"},
+		{"webm vp9 vorbis", "medium", StudioOutputRequest{Container: "webm", AudioCodec: "vorbis"}, StudioEncoderVP9,
+			vp9("3", "34") + " -c:a libvorbis -b:a 192k -t 5.000 /o.webm"},
+		{"webm vp9 vorbis 256", "medium", StudioOutputRequest{Container: "webm", AudioCodec: "vorbis", AudioBitrate: 256}, StudioEncoderVP9,
+			vp9("3", "34") + " -c:a libvorbis -b:a 256k -t 5.000 /o.webm"},
+		{"mp4 h264 opus", "high", StudioOutputRequest{Container: "mp4", AudioCodec: "opus"}, "h264_nvenc",
+			"-c:v h264_nvenc -preset p5 -rc vbr -cq 19 -b:v 0 -pix_fmt yuv420p -c:a libopus -b:a 128k -vbr on -ar 48000 -application audio -t 5.000 -movflags +faststart /o.mp4"},
+		{"mkv hevc opus mono 64", "high", StudioOutputRequest{Preset: "mkv_hevc_opus", AudioBitrate: 64, AudioChannels: 1}, "hevc_nvenc",
+			"-c:v hevc_nvenc -preset p5 -rc vbr -cq 24 -b:v 0 -pix_fmt yuv420p -c:a libopus -b:a 64k -vbr on -ar 48000 -application voip -ac 1 -t 5.000 /o.mkv"},
+		{"mkv hevc opus mono 96 stays audio", "high", StudioOutputRequest{Preset: "mkv_hevc_opus", AudioBitrate: 96, AudioChannels: 1}, "hevc_nvenc",
+			"-c:a libopus -b:a 96k -vbr on -ar 48000 -application audio -ac 1 -t 5.000 /o.mkv"},
+		{"mkv vp9 opus", "medium", StudioOutputRequest{Container: "mkv", VideoCodec: "vp9", AudioCodec: "opus"}, StudioEncoderVP9,
+			vp9("3", "34") + " -c:a libopus -b:a 128k -vbr on -ar 48000 -application audio -t 5.000 /o.mkv"},
+		{"opus audio-only", "medium", StudioOutputRequest{Preset: "audio_opus"}, "audio",
+			"-vn -c:a libopus -b:a 128k -vbr on -ar 48000 -application audio -t 5.000 /o.opus"},
+		{"opus audio-only mono 64", "medium", StudioOutputRequest{Container: "opus", AudioBitrate: 64, AudioChannels: 1}, "audio",
+			"-vn -c:a libopus -b:a 64k -vbr on -ar 48000 -application voip -ac 1 -t 5.000 /o.opus"},
+	}
+	for _, c := range cases {
+		p := outputPlan(t, c.req)
+		ext, _, _ := p.Output.File()
+		args := joined(buildMultiTrackExportArgs(p, c.enc, c.quality, "/f.ttf", "/fd", "/o"+ext))
+		if !strings.HasSuffix(args, c.tail) {
+			t.Errorf("%s:\n got %s\nwant suffix %s", c.name, args, c.tail)
+		}
+		if p.Output.Container != "mp4" && strings.Contains(args, "faststart") {
+			t.Errorf("%s: only MP4/MOV take +faststart: %s", c.name, args)
+		}
+	}
+}
+
+// MM119 embedded subtitles: the SRT is the last input, mapped and encoded in
+// the container's subtitle codec with the language and title tags; every
+// earlier input index stays put.
+func TestStudioOutputEmbeddedSubsArgs(t *testing.T) {
+	cases := []struct {
+		req   StudioOutputRequest
+		enc   string
+		codec string
+	}{
+		{StudioOutputRequest{Preset: "mkv_hevc_aac"}, "hevc_nvenc", "srt"},
+		{StudioOutputRequest{Preset: "mp4_h264"}, "h264_nvenc", "mov_text"},
+		{StudioOutputRequest{Preset: "mov_hevc"}, "hevc_nvenc", "mov_text"},
+		{StudioOutputRequest{Preset: "webm_vp9_opus"}, StudioEncoderVP9, "webvtt"},
+	}
+	for _, c := range cases {
+		p := outputPlan(t, c.req)
+		withoutSubs := joined(buildMultiTrackExportArgs(p, c.enc, "medium", "/f.ttf", "/fd", "/o"))
+		p.EmbeddedSubs = &StudioEmbeddedSubs{Path: "/w/captions.srt", Language: "ger"}
+		args := joined(buildMultiTrackExportArgs(p, c.enc, "medium", "/f.ttf", "/fd", "/o"))
+		idx := len(p.Inputs)
+		want := fmt.Sprintf("-i /w/captions.srt -filter_complex")
+		if !strings.Contains(args, want) {
+			t.Errorf("%s: subtitle input must come after every media input: %s", c.codec, args)
+		}
+		mapped := fmt.Sprintf("-map %d:s:0 -c:s %s -metadata:s:s:0 language=ger -metadata:s:s:0 title=Captions", idx, c.codec)
+		if !strings.Contains(args, mapped) {
+			t.Errorf("%s: want %q in %s", c.codec, mapped, args)
+		}
+		stripped := strings.Replace(strings.Replace(args, " -i /w/captions.srt", "", 1), " "+mapped, "", 1)
+		if stripped != withoutSubs {
+			t.Errorf("%s: embedding must only add the input and the stream:\n%s\n%s", c.codec, stripped, withoutSubs)
+		}
+	}
+	// Untagged language: no language metadata, title still set.
+	p := outputPlan(t, StudioOutputRequest{Preset: "mkv_hevc_aac"})
+	p.EmbeddedSubs = &StudioEmbeddedSubs{Path: "/w/c.srt"}
+	if args := joined(buildMultiTrackExportArgs(p, "hevc_nvenc", "medium", "/f.ttf", "/fd", "/o")); strings.Contains(args, "language=") || !strings.Contains(args, "title=Captions") {
+		t.Errorf("untagged: %s", args)
+	}
+	// Audio-only outputs never carry a subtitle stream.
+	a := outputPlan(t, StudioOutputRequest{Preset: "audio_opus"})
+	a.EmbeddedSubs = &StudioEmbeddedSubs{Path: "/w/c.srt", Language: "eng"}
+	if args := joined(buildMultiTrackExportArgs(a, "audio", "medium", "/f.ttf", "/fd", "/o")); strings.Contains(args, "captions.srt") || strings.Contains(args, "-c:s") || strings.Contains(args, "c.srt") {
+		t.Errorf("audio-only must ignore embedded subs: %s", args)
+	}
+}
+
+func TestStudioOutputSubtitleCodecs(t *testing.T) {
+	for container, want := range map[string]string{"mp4": "mov_text", "mov": "mov_text", "mkv": "srt", "webm": "webvtt", "mp3": "", "wav": "", "opus": ""} {
+		if got := (StudioOutput{Container: container}).SubtitleCodec(); got != want {
+			t.Errorf("%s: %q want %q", container, got, want)
+		}
+	}
+	o, _ := ResolveStudioOutput(StudioOutputRequest{Preset: "audio_opus"})
+	if ext, mime, kind := o.File(); ext != ".opus" || mime != "audio/ogg" || kind != "audio" || strings.Join(o.Tokens(), ",") != "opus" {
+		t.Errorf(".opus file/tokens: %s %s %s %v", ext, mime, kind, o.Tokens())
+	}
+	w, _ := ResolveStudioOutput(StudioOutputRequest{Preset: "webm_vp9_opus"})
+	if ext, mime, kind := w.File(); ext != ".webm" || mime != "video/webm" || kind != "video" || strings.Join(w.Tokens(), ",") != "webm,vp9,opus" || w.Faststart() {
+		t.Errorf("webm file/tokens: %s %s %s %v", ext, mime, kind, w.Tokens())
 	}
 }

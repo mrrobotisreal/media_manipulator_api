@@ -11,9 +11,11 @@
         "hevc"
       ],
       "audioCodecs": [
-        "aac"
+        "aac",
+        "opus"
       ],
-      "faststart": true
+      "faststart": true,
+      "subtitleCodec": "mov_text"
     },
     {
       "key": "mov",
@@ -29,7 +31,8 @@
         "aac",
         "pcm_s16le"
       ],
-      "faststart": true
+      "faststart": true,
+      "subtitleCodec": "mov_text"
     },
     {
       "key": "mkv",
@@ -39,14 +42,34 @@
       "audioOnly": false,
       "videoCodecs": [
         "h264",
-        "hevc"
+        "hevc",
+        "vp9"
       ],
       "audioCodecs": [
         "aac",
         "pcm_s16le",
-        "mp3"
+        "mp3",
+        "opus",
+        "vorbis"
       ],
-      "faststart": false
+      "faststart": false,
+      "subtitleCodec": "srt"
+    },
+    {
+      "key": "webm",
+      "ext": ".webm",
+      "mime": "video/webm",
+      "mediaKind": "video",
+      "audioOnly": false,
+      "videoCodecs": [
+        "vp9"
+      ],
+      "audioCodecs": [
+        "opus",
+        "vorbis"
+      ],
+      "faststart": false,
+      "subtitleCodec": "webvtt"
     },
     {
       "key": "mp3",
@@ -75,6 +98,20 @@
         "pcm_s16le"
       ],
       "faststart": false
+    },
+    {
+      "key": "opus",
+      "ext": ".opus",
+      "mime": "audio/ogg",
+      "mediaKind": "audio",
+      "audioOnly": true,
+      "videoCodecs": [
+        "none"
+      ],
+      "audioCodecs": [
+        "opus"
+      ],
+      "faststart": false
     }
   ],
   "codecs": [
@@ -86,6 +123,12 @@
     },
     {
       "key": "hevc",
+      "kind": "video",
+      "bitrates": [],
+      "defaultBitrate": 0
+    },
+    {
+      "key": "vp9",
       "kind": "video",
       "bitrates": [],
       "defaultBitrate": 0
@@ -117,6 +160,28 @@
         320
       ],
       "defaultBitrate": 192
+    },
+    {
+      "key": "opus",
+      "kind": "audio",
+      "bitrates": [
+        64,
+        96,
+        128,
+        160,
+        256
+      ],
+      "defaultBitrate": 128
+    },
+    {
+      "key": "vorbis",
+      "kind": "audio",
+      "bitrates": [
+        128,
+        192,
+        256
+      ],
+      "defaultBitrate": 192
     }
   ],
   "warnings": [
@@ -132,6 +197,19 @@
       "warning": "no_browser_preview",
       "container": "mov",
       "audioCodec": "pcm_s16le"
+    },
+    {
+      "warning": "apple_incompatible",
+      "container": "mp4",
+      "audioCodec": "opus"
+    },
+    {
+      "warning": "apple_incompatible",
+      "container": "webm"
+    },
+    {
+      "warning": "apple_incompatible",
+      "container": "opus"
     }
   ],
   "presets": [
@@ -160,10 +238,22 @@
       "audioCodec": "aac"
     },
     {
+      "key": "webm_vp9_opus",
+      "container": "webm",
+      "videoCodec": "vp9",
+      "audioCodec": "opus"
+    },
+    {
       "key": "mkv_hevc_aac",
       "container": "mkv",
       "videoCodec": "hevc",
       "audioCodec": "aac"
+    },
+    {
+      "key": "mkv_hevc_opus",
+      "container": "mkv",
+      "videoCodec": "hevc",
+      "audioCodec": "opus"
     },
     {
       "key": "audio_mp3",
@@ -176,6 +266,12 @@
       "container": "wav",
       "videoCodec": "none",
       "audioCodec": "pcm_s16le"
+    },
+    {
+      "key": "audio_opus",
+      "container": "opus",
+      "videoCodec": "none",
+      "audioCodec": "opus"
     }
   ],
   "legacyFormats": {
@@ -189,6 +285,8 @@
     "hevc",
     "mp3",
     "wav",
+    "mp4_h264_opus",
+    "mp4_hevc_opus",
     "mov_h264_aac",
     "mov_h264_pcm_s16le",
     "mov_hevc_aac",
@@ -196,20 +294,37 @@
     "mkv_h264_aac",
     "mkv_h264_pcm_s16le",
     "mkv_h264_mp3",
+    "mkv_h264_opus",
+    "mkv_h264_vorbis",
     "mkv_hevc_aac",
     "mkv_hevc_pcm_s16le",
-    "mkv_hevc_mp3"
+    "mkv_hevc_mp3",
+    "mkv_hevc_opus",
+    "mkv_hevc_vorbis",
+    "mkv_vp9_aac",
+    "mkv_vp9_pcm_s16le",
+    "mkv_vp9_mp3",
+    "mkv_vp9_opus",
+    "mkv_vp9_vorbis",
+    "webm_vp9_opus",
+    "webm_vp9_vorbis",
+    "opus_none_opus"
   ],
   "tokens": [
     "mp4",
     "mov",
     "mkv",
+    "webm",
     "mp3",
     "wav",
+    "opus",
     "h264",
     "hevc",
+    "vp9",
     "aac",
-    "pcm_s16le"
+    "pcm_s16le",
+    "vorbis",
+    "subs_embedded"
   ],
   "minTier": {
     "aac": "anonymous",
@@ -219,8 +334,13 @@
     "mov": "premium",
     "mp3": "anonymous",
     "mp4": "anonymous",
+    "opus": "premium",
     "pcm_s16le": "anonymous",
-    "wav": "anonymous"
+    "subs_embedded": "premium",
+    "vorbis": "premium",
+    "vp9": "premium",
+    "wav": "anonymous",
+    "webm": "premium"
   },
   "advancedMinTier": "premium",
   "defaultChannels": 2,

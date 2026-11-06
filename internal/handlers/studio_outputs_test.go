@@ -41,6 +41,10 @@ func TestValidateExportRequestOutputs(t *testing.T) {
 		"mov_h264_aac":       {OutputPreset: "mov_h264"},
 		"hevc":               {Format: "hevc", Container: "mp4"},
 		"mov_hevc_pcm_s16le": {Container: "mov", VideoCodec: "hevc", AudioCodec: "pcm_s16le"},
+		"webm_vp9_opus":      {OutputPreset: "webm_vp9_opus", CaptionsMode: "embedded"},
+		"mkv_hevc_opus":      {OutputPreset: "mkv_hevc_opus", CaptionsMode: "embedded"},
+		"h264":               {CaptionsMode: "embedded"},
+		"opus_none_opus":     {OutputPreset: "audio_opus", CaptionsMode: "none"},
 	}
 	for label, r := range ok {
 		r := r
@@ -50,14 +54,18 @@ func TestValidateExportRequestOutputs(t *testing.T) {
 		}
 	}
 	for name, r := range map[string]models.StudioExportRequest{
-		"mov+opus":         {Container: "mov", AudioCodec: "opus"},
-		"mp4+pcm":          {Container: "mp4", AudioCodec: "pcm_s16le"},
-		"alias conflict":   {Format: "hevc", VideoCodec: "h264"},
-		"preset conflict":  {OutputPreset: "mov_hevc", Container: "mkv"},
-		"unknown preset":   {OutputPreset: "webm_vp9"},
-		"bitrate on pcm":   {Format: "wav", AudioBitrate: 192},
-		"bitrate off-list": {AudioBitrate: 160},
-		"channels":         {AudioChannels: 3},
+		"embedded on .opus": {OutputPreset: "audio_opus", CaptionsMode: "embedded"},
+		"embedded on mp3":   {Format: "mp3", CaptionsMode: "EMBEDDED"},
+		"embedded on wav":   {Format: "wav", CaptionsMode: "embedded"},
+		"mov+vorbis":        {Container: "mov", AudioCodec: "vorbis"},
+		"mov+opus":          {Container: "mov", AudioCodec: "opus"},
+		"mp4+pcm":           {Container: "mp4", AudioCodec: "pcm_s16le"},
+		"alias conflict":    {Format: "hevc", VideoCodec: "h264"},
+		"preset conflict":   {OutputPreset: "mov_hevc", Container: "mkv"},
+		"unknown preset":    {OutputPreset: "webm_vp9"},
+		"bitrate on pcm":    {Format: "wav", AudioBitrate: 192},
+		"bitrate off-list":  {AudioBitrate: 160},
+		"channels":          {AudioChannels: 3},
 	} {
 		r := r
 		if _, msg := validateExportRequest(&r); msg == "" {
@@ -85,7 +93,7 @@ func gateRouter(t *testing.T, reg *tiers.Registry, user *models.User, signed boo
 
 func peekFacts(g *gin.Context) (StudioExportFacts, bool) {
 	req := peekExportRequest(g)
-	f := StudioExportFacts{Height: effectiveExportHeight(req, 1080)}
+	f := StudioExportFacts{Height: effectiveExportHeight(req, 1080), CaptionsMode: req.CaptionsMode}
 	f.Output, f.OutputOK = resolveOutputOK(req)
 	return f, true
 }
@@ -124,6 +132,19 @@ func TestStudioFormatGateMatrix(t *testing.T) {
 		{"premium advanced bitrate", premium, true, `{"container":"mov","audioBitrate":256,"audioChannels":1}`, 200, "", ""},
 		{"pro mkv mp3", pro, true, `{"container":"mkv","videoCodec":"hevc","audioCodec":"mp3"}`, 200, "", ""},
 		{"invalid combination passes the gate (handler 400s)", free, true, `{"container":"mp4","audioCodec":"pcm_s16le"}`, 200, "", ""},
+		// MM119 (design §3.4, §4): WebM, VP9, Opus/Vorbis, .opus and the
+		// embedded captions mode are Premium+.
+		{"free webm", free, true, `{"container":"webm"}`, 403, "webm", "premium"},
+		{"free webm preset", free, true, `{"outputPreset":"webm_vp9_opus"}`, 403, "webm", "premium"},
+		{"anon webm (sign up first)", nil, false, `{"outputPreset":"webm_vp9_opus"}`, 403, "webm", "premium"},
+		{"free .opus", free, true, `{"outputPreset":"audio_opus"}`, 403, "opus", "premium"},
+		{"free embedded subs in mp4", free, true, `{"format":"h264","captionsMode":"embedded"}`, 403, "subs_embedded", "premium"},
+		{"free sidecar stays free", free, true, `{"format":"h264","captionsMode":"sidecar"}`, 200, "", ""},
+		{"premium webm vp9 opus", premium, true, `{"outputPreset":"webm_vp9_opus"}`, 200, "", ""},
+		{"premium webm vorbis", premium, true, `{"container":"webm","audioCodec":"vorbis"}`, 200, "", ""},
+		{"premium .opus mono 64", premium, true, `{"container":"opus","audioBitrate":64,"audioChannels":1}`, 200, "", ""},
+		{"premium mkv embedded", premium, true, `{"outputPreset":"mkv_hevc_opus","captionsMode":"embedded"}`, 200, "", ""},
+		{"pro mp4 opus", pro, true, `{"container":"mp4","audioCodec":"opus"}`, 200, "", ""},
 	}
 	for _, c := range cases {
 		r := gateRouter(t, reg, c.user, c.signed, peekFacts)
@@ -234,10 +255,11 @@ func TestExportOptionsRoute(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 			t.Fatal(err)
 		}
-		if len(body.Table.Containers) != 5 || len(body.Table.Presets) != 7 || len(body.Table.Formats) != 14 {
+		if len(body.Table.Containers) != 7 || len(body.Table.Presets) != 10 || len(body.Table.Formats) != 28 {
 			t.Errorf("table shape: %d containers %d presets %d formats", len(body.Table.Containers), len(body.Table.Presets), len(body.Table.Formats))
 		}
-		if body.Required["hevc"] != "free" || body.Required["mov"] != "premium" || body.Required["advanced"] != "premium" || body.Required["mp4"] != "anonymous" {
+		if body.Required["hevc"] != "free" || body.Required["mov"] != "premium" || body.Required["advanced"] != "premium" || body.Required["mp4"] != "anonymous" ||
+			body.Required["webm"] != "premium" || body.Required["vp9"] != "premium" || body.Required["opus"] != "premium" || body.Required["subs_embedded"] != "premium" {
 			t.Errorf("required = %v", body.Required)
 		}
 		has := strings.Contains(","+strings.Join(body.Caller.Formats, ",")+",", ",mov,")

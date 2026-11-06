@@ -802,6 +802,24 @@ func (jm *JobManager) AddQueueWait(jobID string, wait time.Duration) {
 	jm.notifySubscribers(jobID)
 }
 
+// SetCurrentStage sets the job's currentStage label without touching its
+// stage list ("" clears it). MM119: a Darkroom export waiting for a CPU
+// encode slot reports "queued" so the Exports panel can show Queued.
+func (jm *JobManager) SetCurrentStage(jobID, stage string) {
+	if jm == nil || jobID == "" {
+		return
+	}
+	jm.mu.Lock()
+	job, ok := jm.jobs[jobID]
+	if !ok {
+		jm.mu.Unlock()
+		return
+	}
+	job.CurrentStage = stage
+	jm.mu.Unlock()
+	jm.notifySubscribers(jobID)
+}
+
 // SetResultAsset records the Darkroom asset a job created (MM79 voiceover).
 func (jm *JobManager) SetResultAsset(jobID, assetID string) error {
 	jm.mu.Lock()

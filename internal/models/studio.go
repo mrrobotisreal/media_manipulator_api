@@ -52,7 +52,11 @@ type StudioProject struct {
 	Captions        []StudioCaptionCue  `json:"captions"`
 	CaptionStyle    *StudioCaptionStyle `json:"captionStyle,omitempty"`
 	CaptionsEnabled bool                `json:"captionsEnabled"`
-	Audio           *StudioAudioConfig  `json:"audio,omitempty"`
+	// CaptionsLanguage (MM119, read-only) is the language Whisper reported for
+	// the generated cues (ISO 639-1), "" when unknown. Tags the embedded
+	// subtitle stream; the client never sends it.
+	CaptionsLanguage string             `json:"captionsLanguage,omitempty"`
+	Audio            *StudioAudioConfig `json:"audio,omitempty"`
 
 	// EDL v3: timeline markers (≤500, sorted by t). Stored in the same sidecar.
 	Markers []StudioMarker `json:"markers,omitempty"`
@@ -576,6 +580,10 @@ const (
 	StudioCaptionsNone    = "none"
 	StudioCaptionsBurnIn  = "burn_in"
 	StudioCaptionsSidecar = "sidecar" // SRT/VTT generated client-side; the render has no captions
+	// StudioCaptionsEmbedded (MM119, Premium+, token subs_embedded) muxes the
+	// cues as a plain-text subtitle stream (MKV srt, MP4/MOV mov_text, WebM
+	// webvtt); the picture stays clean. Refused for audio-only outputs.
+	StudioCaptionsEmbedded = "embedded"
 )
 
 // studio_exports.status values.
@@ -612,7 +620,8 @@ type StudioExportRequest struct {
 	// one of the ladder rungs 720 | 1080 | 1440 | 2160. Gated by the tier's
 	// MaxOutputHeight exactly like the canvas height (tiers.EnforceOutputHeight).
 	Resolution int `json:"resolution,omitempty"`
-	// CaptionsMode: '' (= legacy: burn in when enabled) | none | burn_in | sidecar.
+	// CaptionsMode: '' (= legacy: burn in when enabled) | none | burn_in |
+	// sidecar | embedded (MM119).
 	CaptionsMode string `json:"captionsMode,omitempty"`
 }
 

@@ -67,6 +67,11 @@ type studioProjectSidecar struct {
 	// EDL v3: timeline markers ride the same sidecar (no migration needed);
 	// SaveCaptions only touches the `cues` key so markers survive it.
 	Markers []models.StudioMarker `json:"markers,omitempty"`
+	// Language (MM119) is the caption language Whisper reported for the last
+	// generated cue set (ISO 639-1). Server-owned: SetCaptionsLanguage writes
+	// it and both SaveProject statements carry the stored value over, since
+	// the client never sends it. It tags the embedded subtitle stream.
+	Language string `json:"language,omitempty"`
 }
 
 // StudioOwner identifies who a project belongs to.
@@ -265,16 +270,43 @@ func (r *StudioRepository) SaveProject(ctx context.Context, id string, req model
 const (
 	studioSaveProjectSQL = `
 UPDATE studio_projects
-SET name = $2, fps = $3, width = $4, height = $5, duration_seconds = $6, tracks = $7, captions = $8, revision = revision + 1, updated_at = now()
+SET name = $2, fps = $3, width = $4, height = $5, duration_seconds = $6, tracks = $7, captions = ` + studioKeepCaptionsLanguage + `, revision = revision + 1, updated_at = now()
 WHERE id = $1
 RETURNING ` + studioProjectColumns
 
 	studioSaveProjectCASSQL = `
 UPDATE studio_projects
-SET name = $2, fps = $3, width = $4, height = $5, duration_seconds = $6, tracks = $7, captions = $8, revision = revision + 1, updated_at = now()
+SET name = $2, fps = $3, width = $4, height = $5, duration_seconds = $6, tracks = $7, captions = ` + studioKeepCaptionsLanguage + `, revision = revision + 1, updated_at = now()
 WHERE id = $1 AND revision = $9
 RETURNING ` + studioProjectColumns
 )
+
+// studioKeepCaptionsLanguage is the SaveProject sidecar value: the client's
+// envelope ($8) plus the stored server-owned `language` key (MM119), which the
+// autosave never sends and must not erase.
+const studioKeepCaptionsLanguage = `($8::jsonb || CASE WHEN studio_projects.captions ? 'language' THEN jsonb_build_object('language', studio_projects.captions->'language') ELSE '{}'::jsonb END)`
+
+// SetCaptionsLanguage records the language of the project's generated cues
+// (MM119; "" removes it). Like SaveCaptions it touches only its own sidecar
+// key and never bumps `revision`.
+func (r *StudioRepository) SetCaptionsLanguage(ctx context.Context, id, language string) error {
+	tag, err := r.pool.Exec(ctx, studioSetCaptionsLanguageSQL, id, strings.TrimSpace(language))
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrStudioNotFound
+	}
+	return nil
+}
+
+const studioSetCaptionsLanguageSQL = `
+UPDATE studio_projects
+SET captions = CASE WHEN $2 = '' THEN coalesce(captions, '{}'::jsonb) - 'language'
+                    ELSE jsonb_set(coalesce(captions, '{}'::jsonb), '{language}', to_jsonb($2::text), true) END,
+    updated_at = now()
+WHERE id = $1
+`
 
 // SaveCaptions writes ONLY the cue list into the captions sidecar (via jsonb_set
 // with create_missing), preserving the style/enabled/audio keys. This is used by
@@ -458,6 +490,7 @@ func scanProject(row scannable) (*models.StudioProject, error) {
 		p.CaptionStyle = sc.Style
 		p.Audio = sc.Audio
 		p.Markers = sc.Markers
+		p.CaptionsLanguage = sc.Language
 		if sc.Enabled != nil {
 			p.CaptionsEnabled = *sc.Enabled
 		}
