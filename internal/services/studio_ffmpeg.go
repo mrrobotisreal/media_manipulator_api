@@ -288,6 +288,27 @@ func hevcEncodeArgs(encoder, quality string) []string {
 	}
 }
 
+// scanFFmpegLines splits ffmpeg stderr on '\n' OR '\r'. ffmpeg ends its
+// "frame=… time=… speed=…" stats line with a carriage return so a terminal can
+// redraw it in place; bufio.ScanLines only splits on '\n', so every stats line
+// piled up in one token until ffmpeg exited and the progress bar sat at 0 % and
+// then jumped to 100 % (2026-11-06). Splitting on '\r' too makes each stats
+// update its own line.
+func scanFFmpegLines(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	for i, b := range data {
+		if b == '\n' || b == '\r' {
+			return i + 1, data[:i], nil
+		}
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
 var (
 	studioDurationRegex = regexp.MustCompile(`Duration: (\d{2}):(\d{2}):(\d{2})\.(\d{2})`)
 	studioTimeRegex     = regexp.MustCompile(`time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})`)
@@ -318,6 +339,7 @@ func runStudioFFmpeg(ctx context.Context, jm *JobManager, jobID string, gpuIndex
 
 	scanner := bufio.NewScanner(stderr)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Split(scanFFmpegLines)
 	totalDuration := knownTotalSeconds
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -407,6 +429,7 @@ func runStudioFFmpegCapture(ctx context.Context, jm *JobManager, jobID string, g
 	var stderrBuf bytes.Buffer
 	scanner := bufio.NewScanner(stderr)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Split(scanFFmpegLines)
 	totalDuration := knownTotalSeconds
 	for scanner.Scan() {
 		line := scanner.Text()
