@@ -15,7 +15,7 @@ Darkroom recipe (basic). Set clip gain so speech peaks feel similar, then use ex
 ### When to use
 Clips recorded at different levels.
 ### What a pro does and why
-Set clip gain so speech peaks feel similar, then use export loudness normalisation for the final level. Small steps (3 to 6 dB) are usually enough; boosting a very quiet clip also boosts its noise.
+Small steps (3 to 6 dB) are usually enough; boosting a very quiet clip also boosts its noise.
 ### Ops
 ```json
 {

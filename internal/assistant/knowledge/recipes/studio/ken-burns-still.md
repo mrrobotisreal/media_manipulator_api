@@ -15,7 +15,7 @@ Darkroom recipe (intermediate). A slow push-in (scale 1.0 to about 1.15 over the
 ### When to use
 Photos in a video (slideshows, documentaries) that would otherwise sit still.
 ### What a pro does and why
-A slow push-in (scale 1.0 to about 1.15 over the clip) with a small drift in position feels like a camera move. Ease both ends. Keep the scale under 1.3 so the photo stays sharp, and move towards the subject.
+Ease both ends. Keep the scale under 1.3 so the photo stays sharp, and move towards the subject.
 ### Ops
 ```json
 {

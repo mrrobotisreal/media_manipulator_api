@@ -1,0 +1,18 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Playfair Display,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,0,0,0,0,100,100,0,0,1,1,4.8,2,96,96,54,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.50,0:00:01.60,Default,,0,0,0,,{\fad(210,116)}Welcome {\1c&H00D4FF&}back.{\1c&HFFFFFF&}
+Dialogue: 1,0:00:01.60,0:00:03.10,Default,,0,0,0,,{\fad(210,116)}Today we test {\1c&H00D4FF&}captions{\1c&HFFFFFF&} that
+Dialogue: 1,0:00:03.10,0:00:05.00,Default,,0,0,0,,{\fad(210,116)}move with every word

@@ -10,14 +10,24 @@ package models
 
 // Caption animations (MM121 ships the first four; MM122 adds the rest).
 const (
-	CaptionAnimationNone        = "none"
-	CaptionAnimationKaraokeFill = "karaoke_fill"
-	CaptionAnimationHighlight   = "highlight"
-	CaptionAnimationPop         = "pop"
+	CaptionAnimationNone         = "none"
+	CaptionAnimationKaraokeFill  = "karaoke_fill"
+	CaptionAnimationHighlight    = "highlight"
+	CaptionAnimationPop          = "pop"
+	CaptionAnimationBounce       = "bounce"
+	CaptionAnimationWordByWord   = "word_by_word"
+	CaptionAnimationBoxHighlight = "box_highlight"
+	CaptionAnimationFade         = "fade"
+	CaptionAnimationTypewriter   = "typewriter"
+	CaptionAnimationGlow         = "glow"
 )
 
 // CaptionAnimations is the closed animation vocabulary, in display order.
-var CaptionAnimations = []string{CaptionAnimationNone, CaptionAnimationKaraokeFill, CaptionAnimationHighlight, CaptionAnimationPop}
+var CaptionAnimations = []string{
+	CaptionAnimationNone, CaptionAnimationKaraokeFill, CaptionAnimationHighlight, CaptionAnimationPop,
+	CaptionAnimationBounce, CaptionAnimationWordByWord, CaptionAnimationBoxHighlight,
+	CaptionAnimationFade, CaptionAnimationTypewriter, CaptionAnimationGlow,
+}
 
 // Caption background modes.
 const (
@@ -136,7 +146,7 @@ const (
 )
 
 // StudioCaptionLook is a named, complete caption style (MM121 ships six; MM122
-// adds six more). Applying one sets every field and lookId.
+// adds six more, twelve in all). Applying one sets every field and lookId.
 type StudioCaptionLook struct {
 	ID    string             `json:"id"`
 	Anon  bool               `json:"anon"` // on the anonymous allowlist
@@ -178,6 +188,37 @@ var StudioCaptionLooks = []StudioCaptionLook{
 		FontFamily: "Inter", Bold: bptr(true), Uppercase: bptr(false), HighlightColor: "#FFD400", OutlineColor: "#000000",
 		OutlineWidth: fptr(0), Shadow: fptr(0), BackgroundMode: CaptionBackgroundBox, WordsPerGroup: 0,
 		Animation: CaptionAnimationNone, AnimationStrength: fptr(0.5), LookID: "podcast"}},
+	// MM122 looks (names proposed, logged in design §9).
+	{ID: "cinema", Style: StudioCaptionStyle{
+		FontSizePct: 4.8, Color: "#F7F3EA", BackgroundColor: "#000000", BackgroundOpacity: 0.6, Position: "bottom", MaxWidthPct: 80,
+		FontFamily: "Playfair Display", Bold: bptr(false), Uppercase: bptr(false), HighlightColor: "#E8C36A", OutlineColor: "#000000",
+		OutlineWidth: fptr(1), Shadow: fptr(0.6), BackgroundMode: CaptionBackgroundNone, WordsPerGroup: 0,
+		Animation: CaptionAnimationFade, AnimationStrength: fptr(0.5), LookID: "cinema"}},
+	{ID: "comic", Style: StudioCaptionStyle{
+		FontSizePct: 6.5, Color: "#FFE600", BackgroundColor: "#000000", BackgroundOpacity: 0.6, Position: "bottom", MaxWidthPct: 85,
+		FontFamily: "Bangers", Bold: bptr(false), Uppercase: bptr(true), HighlightColor: "#FF3B30", OutlineColor: "#000000",
+		OutlineWidth: fptr(6), Shadow: fptr(0.5), BackgroundMode: CaptionBackgroundNone, WordsPerGroup: 4,
+		Animation: CaptionAnimationWordByWord, AnimationStrength: fptr(0.5), LookID: "comic"}},
+	{ID: "typewriter", Style: StudioCaptionStyle{
+		FontSizePct: 4.8, Color: "#F5F0E6", BackgroundColor: "#1A1A1A", BackgroundOpacity: 0.8, Position: "bottom", MaxWidthPct: 85,
+		FontFamily: "JetBrains Mono", Bold: bptr(false), Uppercase: bptr(false), HighlightColor: "#FFB000", OutlineColor: "#000000",
+		OutlineWidth: fptr(0), Shadow: fptr(0), BackgroundMode: CaptionBackgroundBox, WordsPerGroup: 4,
+		Animation: CaptionAnimationTypewriter, AnimationStrength: fptr(0.4), LookID: "typewriter"}},
+	{ID: "box_pop", Style: StudioCaptionStyle{
+		FontSizePct: 6.5, Color: "#FFFFFF", BackgroundColor: "#000000", BackgroundOpacity: 0.6, Position: "bottom", MaxWidthPct: 85,
+		FontFamily: "Montserrat", Bold: bptr(true), Uppercase: bptr(true), HighlightColor: "#FF3B6B", OutlineColor: "#000000",
+		OutlineWidth: fptr(4), Shadow: fptr(0.3), BackgroundMode: CaptionBackgroundNone, WordsPerGroup: 3,
+		Animation: CaptionAnimationBoxHighlight, AnimationStrength: fptr(0.6), LookID: "box_pop"}},
+	{ID: "glow_night", Style: StudioCaptionStyle{
+		FontSizePct: 6.5, Color: "#EAFBFF", BackgroundColor: "#000000", BackgroundOpacity: 0.6, Position: "middle", MaxWidthPct: 85,
+		FontFamily: "Oswald", Bold: bptr(true), Uppercase: bptr(true), HighlightColor: "#00E5FF", OutlineColor: "#001018",
+		OutlineWidth: fptr(2), Shadow: fptr(0), BackgroundMode: CaptionBackgroundNone, WordsPerGroup: 3,
+		Animation: CaptionAnimationGlow, AnimationStrength: fptr(0.7), LookID: "glow_night"}},
+	{ID: "bounce_kids", Style: StudioCaptionStyle{
+		FontSizePct: 7, Color: "#FFFFFF", BackgroundColor: "#000000", BackgroundOpacity: 0.6, Position: "bottom", MaxWidthPct: 85,
+		FontFamily: "Titan One", Bold: bptr(false), Uppercase: bptr(false), HighlightColor: "#FF7A00", OutlineColor: "#2B0A3D",
+		OutlineWidth: fptr(5), Shadow: fptr(0.4), BackgroundMode: CaptionBackgroundNone, WordsPerGroup: 2,
+		Animation: CaptionAnimationBounce, AnimationStrength: fptr(0.8), LookID: "bounce_kids"}},
 }
 
 // CaptionLookByID returns a look by id.
@@ -196,9 +237,18 @@ func CaptionLookByID(id string) (StudioCaptionLook, bool) {
 var (
 	CaptionAnonAnimations = map[string]bool{CaptionAnimationNone: true, CaptionAnimationHighlight: true, CaptionAnimationPop: true}
 	// CaptionAnonNearestLook maps a locked look to the nearest anonymous one.
-	CaptionAnonNearestLook = map[string]string{"karaoke_classic": "clean_highlight", "neon": "bold_pop", "podcast": "minimal"}
+	CaptionAnonNearestLook = map[string]string{
+		"karaoke_classic": "clean_highlight", "neon": "bold_pop", "podcast": "minimal",
+		"cinema": "minimal", "comic": "bold_pop", "typewriter": "minimal", "box_pop": "bold_pop",
+		"glow_night": "bold_pop", "bounce_kids": "bold_pop",
+	}
 	// CaptionAnonNearestAnimation maps a locked animation to the nearest one.
-	CaptionAnonNearestAnimation = map[string]string{CaptionAnimationKaraokeFill: CaptionAnimationHighlight}
+	CaptionAnonNearestAnimation = map[string]string{
+		CaptionAnimationKaraokeFill: CaptionAnimationHighlight, CaptionAnimationBounce: CaptionAnimationPop,
+		CaptionAnimationWordByWord: CaptionAnimationHighlight, CaptionAnimationBoxHighlight: CaptionAnimationHighlight,
+		CaptionAnimationFade: CaptionAnimationNone, CaptionAnimationTypewriter: CaptionAnimationHighlight,
+		CaptionAnimationGlow: CaptionAnimationHighlight,
+	}
 )
 
 // ApplyAnonCaptionAllowlist replaces a non-allowlisted lookId / animation on an
@@ -229,4 +279,39 @@ func ApplyAnonCaptionAllowlist(st *StudioCaptionStyle) []string {
 		st.Animation = to
 	}
 	return changed
+}
+
+// StripCaptionEmphasis returns the cues with every word's emphasis cleared
+// (MM122 decision 3): an export whose owner lacks the per-word editor
+// (Limits.CaptionWordEdit) ignores emphasis. The stored project keeps the
+// flags, so they come back if the account upgrades again. The input is never
+// modified; cues without emphasis are returned as they are.
+func StripCaptionEmphasis(cues []StudioCaptionCue) []StudioCaptionCue {
+	var out []StudioCaptionCue
+	for i, c := range cues {
+		hit := false
+		for _, w := range c.Words {
+			hit = hit || w.Emphasis
+		}
+		if !hit {
+			if out != nil {
+				out = append(out, c)
+			}
+			continue
+		}
+		if out == nil {
+			out = append(make([]StudioCaptionCue, 0, len(cues)), cues[:i]...)
+		}
+		words := make([]StudioCaptionWord, len(c.Words))
+		for j, w := range c.Words {
+			w.Emphasis = false
+			words[j] = w
+		}
+		c.Words = words
+		out = append(out, c)
+	}
+	if out == nil {
+		return cues
+	}
+	return out
 }

@@ -453,6 +453,7 @@ func (h *StudioHandler) ExportFrame(c *gin.Context) {
 		localByKey[key] = local
 	}
 	exportCfg := buildStudioExportConfig(project, assetByID, models.StudioExportRequest{CaptionsMode: captionsModeForFrame(req.Captions)})
+	enforceCaptionWordEdit(c, &exportCfg)
 	lutLocal := map[string]string{}
 	for assetID, key := range exportCfg.lutKeys {
 		local := filepath.Join(workDir, "lut_"+sanitizeS3PathSegment(assetID)+".cube")

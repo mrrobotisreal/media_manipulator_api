@@ -15,7 +15,7 @@ Darkroom recipe (basic). Creative LUTs are often built for log footage; on norma
 ### When to use
 The user has a .cube LUT or wants one.
 ### What a pro does and why
-Creative LUTs are often built for log footage; on normal phone video they crush blacks and oversaturate. Mix them at 40 to 70 % with the LUT effect intensity and correct exposure before the LUT, not after.
+Mix them at 40 to 70 % with the LUT effect intensity and correct exposure before the LUT, not after.
 ### Ops
 The LUT itself must be uploaded to the media bin by the user (Medi cannot create one). Once a LUT effect exists, a keyframe op can lower it: `set_keyframes` on property `<lutEffectId>.intensity` (the LUT effect id from the digest), or ask the user to set the intensity slider to about 0.6.
 ### How to adjust

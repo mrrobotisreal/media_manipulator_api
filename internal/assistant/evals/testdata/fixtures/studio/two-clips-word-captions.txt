@@ -1,0 +1,14 @@
+Darkroom timeline (times in seconds; video tracks stack upward: V2 draws over V1; keyframe t is seconds from the clip start).
+canvas 1920x1080 @ 30 fps · duration 24s · playhead 0s
+captions: 3 cues on, animation none, word-timed
+  cue c1 · 0.4–2.6s · 0:This 1:is 2:the 3:most 4:important 5:part
+  cue c2 · 3–5.2s · 0:Never 1:skip 2:the 3:safety 4:check
+  cue c3 · 6–8s · 0:Thanks 1:for 2:watching
+selected: none
+track V1 (video) · 2 clips:
+  clipA · 0–12s · video "beach.mp4" · src 0–12
+  clipB · 12–24s · video "city.mp4" · src 3–15
+track A1 (audio "Voice") · 1 clip:
+  voice1 · 0–24s · audio "voiceover.wav" · src 0–24
+track A2 (audio "Music") · 1 clip:
+  music1 · 0–24s · audio "song.mp3" · src 0–24

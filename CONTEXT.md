@@ -1,5 +1,12 @@
 # Backend API (media_manipulator_api)
 
+**Caption look** (MM122): the catalog grows to twelve (`cinema`, `comic`, `typewriter`, `box_pop`, `glow_night`, `bounce_kids` join), and animations to ten (`bounce`, `word_by_word`, `box_highlight`, `fade`, `typewriter`, `glow` join, all in `BuildASS` and its goldens). The anonymous allowlist stays three looks; every locked look/animation has a nearest allowed one.
+
+**Saved caption look** (MM122):
+A signed-in user's own caption style on the account: a row of `studio_caption_looks` (`name` ≤ 60, `style` sanitized by `models.SanitizeCaptionStyle` with `lookId` dropped, `revision` for `If-Match`), served by `/api/studio/caption-looks`. Capped by `Limits.CaptionLooksSaved` (`TIER_*_CAPTION_LOOKS`, 0/0/10/-1; 403 `caption_looks_limit` with `upgradePath`). Ledger kind `studio_caption_look`, keep-with-account: it is swept only by a look delete (`ExpireNow` by project id = look id) or the account delete; listed in the data export as `caption-looks.json`. Not to be confused with a catalog **caption look** (`lookId`), which is never stored per user.
+
+**Per-word caption editor** (MM122): `Limits.CaptionWordEdit` (`TIER_*_CAPTION_WORD_EDIT`, Premium+). A word's hand retime keeps Whisper's times in `origStartSeconds` / `origEndSeconds` ("Re-time from audio"); retiming is enforced in the UI only. Emphasis is enforced at export: an owner without the editor exports with every `emphasis` flag cleared (`enforceCaptionWordEdit`, `models.StripCaptionEmphasis`), the stored cues keep them.
+
 The primary Go API for media-manipulator.com: media-processing tools, uploads, the shared job system, and the Content Studio (Darkroom) render pipeline.
 
 ## Language

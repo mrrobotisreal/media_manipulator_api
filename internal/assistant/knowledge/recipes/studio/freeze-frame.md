@@ -15,7 +15,7 @@ Darkroom recipe (basic). Hold one frame for 1 to 3 s at the exact moment, option
 ### When to use
 Emphasising a moment, often with a title over it ("that's me").
 ### What a pro does and why
-Hold one frame for 1 to 3 s at the exact moment, optionally with a slight zoom and a title. A freeze cannot also be sped up or reversed.
+A freeze cannot also be sped up or reversed.
 ### Ops
 ```json
 {

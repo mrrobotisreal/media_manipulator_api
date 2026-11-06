@@ -15,7 +15,7 @@ Darkroom recipe (basic). Most professional edits use straight cuts; transitions 
 ### When to use
 The user asks for transitions or the cuts feel abrupt.
 ### What a pro does and why
-Most professional edits use straight cuts; transitions mark a change of time or place. Cross dissolve (0.5 to 1 s) for calm time passing, dip to black for the end of a section, quick push or slide (0.3 s) for energetic social edits, wipes for retro or comic styles. Use one style per video.
+Cross dissolve (0.5 to 1 s) for calm time passing, dip to black for the end of a section, quick push or slide (0.3 s) for energetic social edits, wipes for retro or comic styles. Use one style per video.
 ### Ops
 ```json
 {

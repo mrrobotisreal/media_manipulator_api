@@ -3,7 +3,13 @@
     "none",
     "karaoke_fill",
     "highlight",
-    "pop"
+    "pop",
+    "bounce",
+    "word_by_word",
+    "box_highlight",
+    "fade",
+    "typewriter",
+    "glow"
   ],
   "anon": {
     "animations": {
@@ -12,12 +18,24 @@
       "pop": true
     },
     "nearestAnimation": {
-      "karaoke_fill": "highlight"
+      "bounce": "pop",
+      "box_highlight": "highlight",
+      "fade": "none",
+      "glow": "highlight",
+      "karaoke_fill": "highlight",
+      "typewriter": "highlight",
+      "word_by_word": "highlight"
     },
     "nearestLook": {
+      "bounce_kids": "bold_pop",
+      "box_pop": "bold_pop",
+      "cinema": "minimal",
+      "comic": "bold_pop",
+      "glow_night": "bold_pop",
       "karaoke_classic": "clean_highlight",
       "neon": "bold_pop",
-      "podcast": "minimal"
+      "podcast": "minimal",
+      "typewriter": "minimal"
     }
   },
   "backgroundModes": [
@@ -429,6 +447,149 @@
         "animation": "none",
         "animationStrength": 0.5,
         "lookId": "podcast"
+      }
+    },
+    {
+      "id": "cinema",
+      "anon": false,
+      "style": {
+        "fontSizePct": 4.8,
+        "color": "#F7F3EA",
+        "backgroundColor": "#000000",
+        "backgroundOpacity": 0.6,
+        "position": "bottom",
+        "maxWidthPct": 80,
+        "fontFamily": "Playfair Display",
+        "bold": false,
+        "uppercase": false,
+        "highlightColor": "#E8C36A",
+        "outlineColor": "#000000",
+        "outlineWidth": 1,
+        "shadow": 0.6,
+        "backgroundMode": "none",
+        "animation": "fade",
+        "animationStrength": 0.5,
+        "lookId": "cinema"
+      }
+    },
+    {
+      "id": "comic",
+      "anon": false,
+      "style": {
+        "fontSizePct": 6.5,
+        "color": "#FFE600",
+        "backgroundColor": "#000000",
+        "backgroundOpacity": 0.6,
+        "position": "bottom",
+        "maxWidthPct": 85,
+        "fontFamily": "Bangers",
+        "bold": false,
+        "uppercase": true,
+        "highlightColor": "#FF3B30",
+        "outlineColor": "#000000",
+        "outlineWidth": 6,
+        "shadow": 0.5,
+        "backgroundMode": "none",
+        "wordsPerGroup": 4,
+        "animation": "word_by_word",
+        "animationStrength": 0.5,
+        "lookId": "comic"
+      }
+    },
+    {
+      "id": "typewriter",
+      "anon": false,
+      "style": {
+        "fontSizePct": 4.8,
+        "color": "#F5F0E6",
+        "backgroundColor": "#1A1A1A",
+        "backgroundOpacity": 0.8,
+        "position": "bottom",
+        "maxWidthPct": 85,
+        "fontFamily": "JetBrains Mono",
+        "bold": false,
+        "uppercase": false,
+        "highlightColor": "#FFB000",
+        "outlineColor": "#000000",
+        "outlineWidth": 0,
+        "shadow": 0,
+        "backgroundMode": "box",
+        "wordsPerGroup": 4,
+        "animation": "typewriter",
+        "animationStrength": 0.4,
+        "lookId": "typewriter"
+      }
+    },
+    {
+      "id": "box_pop",
+      "anon": false,
+      "style": {
+        "fontSizePct": 6.5,
+        "color": "#FFFFFF",
+        "backgroundColor": "#000000",
+        "backgroundOpacity": 0.6,
+        "position": "bottom",
+        "maxWidthPct": 85,
+        "fontFamily": "Montserrat",
+        "bold": true,
+        "uppercase": true,
+        "highlightColor": "#FF3B6B",
+        "outlineColor": "#000000",
+        "outlineWidth": 4,
+        "shadow": 0.3,
+        "backgroundMode": "none",
+        "wordsPerGroup": 3,
+        "animation": "box_highlight",
+        "animationStrength": 0.6,
+        "lookId": "box_pop"
+      }
+    },
+    {
+      "id": "glow_night",
+      "anon": false,
+      "style": {
+        "fontSizePct": 6.5,
+        "color": "#EAFBFF",
+        "backgroundColor": "#000000",
+        "backgroundOpacity": 0.6,
+        "position": "middle",
+        "maxWidthPct": 85,
+        "fontFamily": "Oswald",
+        "bold": true,
+        "uppercase": true,
+        "highlightColor": "#00E5FF",
+        "outlineColor": "#001018",
+        "outlineWidth": 2,
+        "shadow": 0,
+        "backgroundMode": "none",
+        "wordsPerGroup": 3,
+        "animation": "glow",
+        "animationStrength": 0.7,
+        "lookId": "glow_night"
+      }
+    },
+    {
+      "id": "bounce_kids",
+      "anon": false,
+      "style": {
+        "fontSizePct": 7,
+        "color": "#FFFFFF",
+        "backgroundColor": "#000000",
+        "backgroundOpacity": 0.6,
+        "position": "bottom",
+        "maxWidthPct": 85,
+        "fontFamily": "Titan One",
+        "bold": false,
+        "uppercase": false,
+        "highlightColor": "#FF7A00",
+        "outlineColor": "#2B0A3D",
+        "outlineWidth": 5,
+        "shadow": 0.4,
+        "backgroundMode": "none",
+        "wordsPerGroup": 2,
+        "animation": "bounce",
+        "animationStrength": 0.8,
+        "lookId": "bounce_kids"
       }
     }
   ],

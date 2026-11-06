@@ -15,7 +15,7 @@ Darkroom recipe (basic). A cinematic grade is restrained: slightly lower saturat
 ### When to use
 Vlogs, travel, short films: anything that should feel like cinema rather than a phone video.
 ### What a pro does and why
-A cinematic grade is restrained: slightly lower saturation, a touch of extra contrast, warm skin against cooler surroundings, and often a 2.39:1 letterbox. The `cinematic` look bundles the grade; letterbox bars are two black rectangles on a title clip over the whole timeline.
+The `cinematic` look bundles the grade; letterbox bars are two black rectangles on a title clip over the whole timeline.
 ### Ops
 ```json
 {

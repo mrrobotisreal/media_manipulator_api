@@ -125,6 +125,15 @@ type Limits struct {
 	// no quota is charged.
 	PhotoPresets int `json:"photoPresets"`
 
+	// Darkroom caption depth (MM122, design DARKROOM_OUTPUTS_AND_CAPTIONS.md
+	// §6.4). CaptionWordEdit unlocks the per-word timing and emphasis editor
+	// (TIER_<T>_CAPTION_WORD_EDIT, false/false/true/true); an export of a
+	// project whose owner lacks it ignores emphasis. CaptionLooksSaved is the
+	// saved caption look cap per account (TIER_<T>_CAPTION_LOOKS, 0/0/10/-1;
+	// -1 unlimited). Looks are settings: no quota is charged.
+	CaptionWordEdit   bool `json:"captionWordEdit"`
+	CaptionLooksSaved int  `json:"captionLooksSaved"`
+
 	// AssistantTurns (MM104) is the daily Medi copilot allowance, metric
 	// assistant_turns (TIER_<T>_ASSISTANT_TURNS_PER_DAY; anonymous 0 = sign-in
 	// required, -1 unlimited). The guide is free and never counted.
@@ -214,6 +223,7 @@ func New(cfg *config.Config) *Registry {
 			VectorProjects:        cfg.TierAnonVectorProjects,
 			VectorMaxDurationMs:   cfg.TierAnonVectorMaxDurationMs,
 			PhotoProjects:         cfg.TierAnonPhotoProjects, PhotoMaxMegapixels: cfg.TierAnonPhotoMaxMegapixels, PhotoBatch: cfg.TierAnonPhotoBatch, PhotoPresets: cfg.TierAnonPhotoPresets,
+			CaptionWordEdit: cfg.TierAnonCaptionWordEdit, CaptionLooksSaved: cfg.TierAnonCaptionLooks,
 			VectorVideo: VectorVideo{
 				MaxHeight: cfg.TierAnonVectorVideoMaxHeight, MaxFps: cfg.TierAnonVectorVideoMaxFps, MaxSeconds: cfg.TierAnonVectorVideoMaxSeconds,
 			},
@@ -239,6 +249,7 @@ func New(cfg *config.Config) *Registry {
 			VectorProjects:      cfg.TierFreeVectorProjects,
 			VectorMaxDurationMs: cfg.TierFreeVectorMaxDurationMs,
 			PhotoProjects:       cfg.TierFreePhotoProjects, PhotoMaxMegapixels: cfg.TierFreePhotoMaxMegapixels, PhotoBatch: cfg.TierFreePhotoBatch, PhotoPresets: cfg.TierFreePhotoPresets,
+			CaptionWordEdit: cfg.TierFreeCaptionWordEdit, CaptionLooksSaved: cfg.TierFreeCaptionLooks,
 			VectorVideo: VectorVideo{
 				MaxHeight: cfg.TierFreeVectorVideoMaxHeight, MaxFps: cfg.TierFreeVectorVideoMaxFps, MaxSeconds: cfg.TierFreeVectorVideoMaxSeconds,
 			},
@@ -261,6 +272,7 @@ func New(cfg *config.Config) *Registry {
 			VectorProjects:        cfg.TierPremiumVectorProjects,
 			VectorMaxDurationMs:   cfg.TierPremiumVectorMaxDurationMs,
 			PhotoProjects:         cfg.TierPremiumPhotoProjects, PhotoMaxMegapixels: cfg.TierPremiumPhotoMaxMegapixels, PhotoBatch: cfg.TierPremiumPhotoBatch, PhotoPresets: cfg.TierPremiumPhotoPresets,
+			CaptionWordEdit: cfg.TierPremiumCaptionWordEdit, CaptionLooksSaved: cfg.TierPremiumCaptionLooks,
 			VectorVideo: VectorVideo{
 				MaxHeight: cfg.TierPremiumVectorVideoMaxHeight, MaxFps: cfg.TierPremiumVectorVideoMaxFps, MaxSeconds: cfg.TierPremiumVectorVideoMaxSeconds,
 			},
@@ -287,6 +299,7 @@ func New(cfg *config.Config) *Registry {
 			VectorProjects:      cfg.TierProVectorProjects,
 			VectorMaxDurationMs: cfg.TierProVectorMaxDurationMs,
 			PhotoProjects:       cfg.TierProPhotoProjects, PhotoMaxMegapixels: cfg.TierProPhotoMaxMegapixels, PhotoBatch: cfg.TierProPhotoBatch, PhotoPresets: cfg.TierProPhotoPresets,
+			CaptionWordEdit: cfg.TierProCaptionWordEdit, CaptionLooksSaved: cfg.TierProCaptionLooks,
 			VectorVideo: VectorVideo{
 				MaxHeight: cfg.TierProVectorVideoMaxHeight, MaxFps: cfg.TierProVectorVideoMaxFps, MaxSeconds: cfg.TierProVectorVideoMaxSeconds,
 			},
@@ -392,6 +405,9 @@ func New(cfg *config.Config) *Registry {
 	// Aperture (MM95): derived from Pro, no cap on saved projects.
 	operator.PhotoProjects = Unlimited
 	operator.PhotoPresets = Unlimited
+	// Darkroom captions (MM122): the editor, no cap on saved looks.
+	operator.CaptionWordEdit = true
+	operator.CaptionLooksSaved = Unlimited
 	// Medi (MM104): the operator is never counted.
 	operator.AssistantTurns = Unlimited
 	operator.VectorMaxDurationMs = 0

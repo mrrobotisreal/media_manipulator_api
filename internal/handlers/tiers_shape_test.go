@@ -74,7 +74,7 @@ func TestTiersResponseShape(t *testing.T) {
 		}
 		assertVectorShape(t, d["tier"], limits)
 		// MM95: the three Aperture fields are numbers on every tier.
-		for _, k := range []string{"photoProjects", "photoMaxMegapixels", "photoBatch", "photoPresets", "assistantTurns"} {
+		for _, k := range []string{"photoProjects", "photoMaxMegapixels", "photoBatch", "photoPresets", "assistantTurns", "captionLooksSaved"} {
 			if _, isNum := limits[k].(float64); !isNum {
 				t.Errorf("%v: %s must be a number, got %T", d["tier"], k, limits[k])
 			}
@@ -96,6 +96,9 @@ func TestTiersResponseShape(t *testing.T) {
 		// MM74: the summary frame budget and deep flag are on every tier.
 		if _, isNum := limits["summaryMaxFrames"].(float64); !isNum {
 			t.Errorf("%v: summaryMaxFrames must be a number", d["tier"])
+		}
+		if _, isBool := limits["captionWordEdit"].(bool); !isBool { // MM122
+			t.Errorf("%v: captionWordEdit must be a bool", d["tier"])
 		}
 		if _, isBool := limits["summaryDeep"].(bool); !isBool {
 			t.Errorf("%v: summaryDeep must be a bool", d["tier"])

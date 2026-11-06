@@ -1,0 +1,26 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Oswald,125,&H00FFFBEA,&H00FFFBEA,&H00181000,&H66000000,-1,0,0,0,100,100,0,0,1,3.56,0,5,54,54,96,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.50,0:00:00.90,Default,,0,0,0,,{\3c&HFFE500&\bord8.53\blur5.51\t(0,150,\blur11.02)\t(150,300,\blur5.51)}WELCOME{\3c&H181000&\bord3.56\blur0} {\1c&HFFE500&}BACK.{\1c&HFFFBEA&}
+Dialogue: 1,0:00:00.90,0:00:01.60,Default,,0,0,0,,WELCOME {\1c&HFFE500&\3c&HFFE500&\bord8.53\blur5.51\t(0,150,\blur11.02)\t(150,300,\blur5.51)}BACK.{\1c&HFFFBEA&\3c&H181000&\bord3.56\blur0}
+Dialogue: 1,0:00:01.60,0:00:01.90,Default,,0,0,0,,{\3c&HFFE500&\bord8.53\blur5.51\t(0,150,\blur11.02)\t(150,300,\blur5.51)}TODAY{\3c&H181000&\bord3.56\blur0} WE TEST
+Dialogue: 1,0:00:01.90,0:00:02.20,Default,,0,0,0,,TODAY {\3c&HFFE500&\bord8.53\blur5.51\t(0,150,\blur11.02)\t(150,300,\blur5.51)}WE{\3c&H181000&\bord3.56\blur0} TEST
+Dialogue: 1,0:00:02.20,0:00:02.50,Default,,0,0,0,,TODAY WE {\3c&HFFE500&\bord8.53\blur5.51\t(0,150,\blur11.02)\t(150,300,\blur5.51)}TEST{\3c&H181000&\bord3.56\blur0}
+Dialogue: 1,0:00:02.50,0:00:02.80,Default,,0,0,0,,{\1c&HFFE500&\3c&HFFE500&\bord8.53\blur5.51\t(0,150,\blur11.02)\t(150,300,\blur5.51)}CAPTIONS{\1c&HFFFBEA&\3c&H181000&\bord3.56\blur0} THAT MOVE
+Dialogue: 1,0:00:02.80,0:00:03.10,Default,,0,0,0,,{\1c&HFFE500&}CAPTIONS{\1c&HFFFBEA&} {\3c&HFFE500&\bord8.53\blur5.51\t(0,150,\blur11.02)\t(150,300,\blur5.51)}THAT{\3c&H181000&\bord3.56\blur0} MOVE
+Dialogue: 1,0:00:03.10,0:00:03.40,Default,,0,0,0,,{\1c&HFFE500&}CAPTIONS{\1c&HFFFBEA&} THAT {\3c&HFFE500&\bord8.53\blur5.51\t(0,150,\blur11.02)\t(150,300,\blur5.51)}MOVE{\3c&H181000&\bord3.56\blur0}
+Dialogue: 1,0:00:03.40,0:00:03.70,Default,,0,0,0,,{\3c&HFFE500&\bord8.53\blur5.51\t(0,150,\blur11.02)\t(150,300,\blur5.51)}WITH{\3c&H181000&\bord3.56\blur0} EVERY WORD
+Dialogue: 1,0:00:03.70,0:00:04.00,Default,,0,0,0,,WITH {\3c&HFFE500&\bord8.53\blur5.51\t(0,150,\blur11.02)\t(150,300,\blur5.51)}EVERY{\3c&H181000&\bord3.56\blur0} WORD
+Dialogue: 1,0:00:04.00,0:00:05.00,Default,,0,0,0,,WITH EVERY {\3c&HFFE500&\bord8.53\blur5.51\t(0,150,\blur11.02)\t(150,300,\blur5.51)}WORD{\3c&H181000&\bord3.56\blur0}

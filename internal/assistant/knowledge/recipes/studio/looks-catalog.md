@@ -15,7 +15,7 @@ Darkroom recipe (basic). Match the look to the story: `bleach-bypass` (gritty, l
 ### When to use
 The user names a mood rather than settings.
 ### What a pro does and why
-Match the look to the story: `bleach-bypass` (gritty, low saturation, high contrast: war, sport), `warm-film` (nostalgic), `cool-night` (blue night scenes), `vintage` (faded home movie), `high-key` (bright, clean: beauty, product), `noir` (black and white, hard contrast), `pastel` (soft, airy), `punchy-social` (bright saturated phone-screen pop), `golden-hour` (sunset warmth), `moody` (dark, muted). Apply to all clips so the edit feels consistent.
+Apply to all clips so the edit feels consistent.
 ### Ops
 ```json
 {

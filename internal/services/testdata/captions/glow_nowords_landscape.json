@@ -1,0 +1,34 @@
+{
+  "name": "glow_nowords_landscape",
+  "width": 1920,
+  "height": 1080,
+  "style": {
+    "fontSizePct": 6,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Inter",
+    "highlightColor": "#FF2BD6",
+    "outlineWidth": 0,
+    "backgroundMode": "box",
+    "wordsPerGroup": 4,
+    "animation": "glow",
+    "animationStrength": 0.3
+  },
+  "cues": [
+    {
+      "id": "n1",
+      "startSeconds": 1.0,
+      "endSeconds": 3.4,
+      "text": "No word timings on this line"
+    },
+    {
+      "id": "n2",
+      "startSeconds": 3.6,
+      "endSeconds": 5.2,
+      "text": "A second cue follows"
+    }
+  ]
+}

@@ -15,7 +15,7 @@ Darkroom recipe (basic). A punch-in is a fast scale change (1.0 to 1.2 within 0.
 ### When to use
 Talking videos: emphasise a line with a quick zoom, a classic YouTube technique.
 ### What a pro does and why
-A punch-in is a fast scale change (1.0 to 1.2 within 0.2 s) held for the line, then back. It works best on 4K or 1080p sources so the zoom stays sharp.
+It works best on 4K or 1080p sources so the zoom stays sharp.
 ### Ops
 ```json
 {

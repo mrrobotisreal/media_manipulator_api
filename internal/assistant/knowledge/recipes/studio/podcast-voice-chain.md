@@ -15,7 +15,7 @@ Darkroom recipe (intermediate). A broadcast voice chain cuts low rumble, adds pr
 ### When to use
 Talking-head videos, podcasts, voice-overs.
 ### What a pro does and why
-A broadcast voice chain cuts low rumble, adds presence around 2 to 5 kHz and compresses so quiet and loud words sit closer together, then loudness is normalised on export. The `podcast` and `voiceClarity` presets do the EQ and compression. Background noise is a separate job (clean voice / noise removal), suggested because it spends an operation.
+The `podcast` and `voiceClarity` presets do the EQ and compression. Background noise is a separate job (clean voice / noise removal), suggested because it spends an operation.
 ### Ops
 ```json
 {

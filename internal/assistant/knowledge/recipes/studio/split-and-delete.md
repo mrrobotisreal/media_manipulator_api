@@ -15,7 +15,7 @@ Darkroom recipe (basic). Split at both ends of the unwanted part and ripple-dele
 ### When to use
 A part of a clip should go.
 ### What a pro does and why
-Split at both ends of the unwanted part and ripple-delete it so the rest closes the gap. Always confirm the times before deleting.
+Always confirm the times before deleting.
 ### Ops
 ```json
 {

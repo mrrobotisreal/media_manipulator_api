@@ -15,7 +15,7 @@ Darkroom recipe (basic). An opening title is short, centred and large, in a disp
 ### When to use
 The first seconds of a video.
 ### What a pro does and why
-An opening title is short, centred and large, in a display or serif font, on screen 2 to 4 s with a fade in and out. Over footage it needs either a dark background bar or a shadow to stay readable.
+Over footage it needs either a dark background bar or a shadow to stay readable.
 ### Ops
 ```json
 {

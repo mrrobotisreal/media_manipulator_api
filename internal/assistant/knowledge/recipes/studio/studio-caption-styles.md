@@ -15,7 +15,7 @@ Darkroom recipe (basic). A `look`, then tweaks.
 ### When to use
 Styled or animated captions. None in the digest: first `suggest_action {kind: "generate_captions"}`.
 ### What a pro does and why
-A `look`, then tweaks. TikTok/Shorts: `bold_pop` (big uppercase words pop as spoken). Music video: `karaoke_classic` (words fill with `highlightColor` as sung). Interview: `podcast` (calm box) or `minimal`. Current word yellow: `animation: "highlight"`, `highlightColor: "#FFD400"`. Effects show only when burned in. Guests get bold_pop, clean_highlight, minimal; others and karaoke need a free account: say so, offer those.
+TikTok/Shorts: `bold_pop` (big uppercase words pop as spoken). Songs: `karaoke_classic` (words fill with `highlightColor` as sung). Interview: `podcast` (calm box) or `minimal`. Kids: `bounce_kids`. Film: `cinema` (fades). Also `comic` (words appear), `typewriter`, `box_pop` (box behind the word), `glow_night`. Current word yellow: `animation: "highlight"`, `highlightColor: "#FFD400"`. Key words: `set_caption_words` with the cue id and word positions from the digest (Premium+; on Free say so, offer highlight). Effects show only when burned in. Guests get bold_pop, clean_highlight, minimal; other looks and animations (karaoke too) need a free account: say so, offer those.
 ### Ops
 ```json
 {
@@ -27,11 +27,11 @@ A `look`, then tweaks. TikTok/Shorts: `bold_pop` (big uppercase words pop as spo
 }
 ```
 ### How to adjust
-Under app buttons: `position` middle (5-7 % height reads on phones). Too big: `fontSizePct` 5. Fewer words: `wordsPerGroup` 1-3. Softer pop: `animationStrength` 0.4.
+Under app buttons: `position` middle (5-7 % height reads on phones). Too big: `fontSizePct` 5. Fewer words: `wordsPerGroup` 1-3. Softer effect: `animationStrength` 0.4.
 
 ## Search keywords
 
-`Caption looks`, `tiktok style captions`, `karaoke captions for a music video`, `calm captions for an interview`, `make the current word yellow`, `animated captions`
+`Caption looks`, `tiktok style captions`, `karaoke captions for a music video`, `calm captions for an interview`, `make the current word yellow`, `animated captions`, `bouncy captions for kids`, `highlight the important words`
 
 ## Links
 

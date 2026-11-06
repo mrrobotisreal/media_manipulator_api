@@ -1,0 +1,33 @@
+{
+  "name": "word_by_word_nowords_vertical_box",
+  "width": 1080,
+  "height": 1920,
+  "style": {
+    "fontSizePct": 6,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Inter",
+    "bold": true,
+    "backgroundMode": "box",
+    "wordsPerGroup": 3,
+    "animation": "word_by_word",
+    "animationStrength": 1
+  },
+  "cues": [
+    {
+      "id": "n1",
+      "startSeconds": 1.0,
+      "endSeconds": 3.4,
+      "text": "No word timings on this line"
+    },
+    {
+      "id": "n2",
+      "startSeconds": 3.6,
+      "endSeconds": 5.2,
+      "text": "A second cue follows"
+    }
+  ]
+}

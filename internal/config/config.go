@@ -311,6 +311,14 @@ type Config struct {
 	TierFreeStudioAdvanced    bool
 	TierPremiumStudioAdvanced bool
 	TierProStudioAdvanced     bool
+	// Darkroom caption depth (MM122). *CaptionWordEdit unlocks the per-word
+	// caption timing / emphasis editor; *CaptionLooks is the saved caption
+	// look cap per account (-1 unlimited).
+	TierAnonCaptionWordEdit, TierFreeCaptionWordEdit, TierPremiumCaptionWordEdit, TierProCaptionWordEdit bool
+	TierAnonCaptionLooks, TierFreeCaptionLooks, TierPremiumCaptionLooks, TierProCaptionLooks             int
+	// RateLimitCaptionLooks*: the caption_looks bucket (POST /api/studio/caption-looks).
+	RateLimitCaptionLooksPerSessionPerHour int
+	RateLimitCaptionLooksPerIPPerHour      int
 
 	// Motion (vector, MM43; Pro row MM49) allowances, per tier.
 	// *VectorFormats is a comma list of countable formats
@@ -1334,4 +1342,16 @@ func applyStudioOutputConfig(c *Config) {
 	c.TierFreeStudioAdvanced = getEnvBool("TIER_FREE_STUDIO_ADVANCED", false)
 	c.TierPremiumStudioAdvanced = getEnvBool("TIER_PREMIUM_STUDIO_ADVANCED", true)
 	c.TierProStudioAdvanced = getEnvBool("TIER_PRO_STUDIO_ADVANCED", true)
+	// MM122 (decided Q10): the per-word caption editor is Premium+; saved
+	// caption looks Premium 10, Pro unlimited, none for anonymous or free.
+	c.TierAnonCaptionWordEdit = getEnvBool("TIER_ANON_CAPTION_WORD_EDIT", false)
+	c.TierFreeCaptionWordEdit = getEnvBool("TIER_FREE_CAPTION_WORD_EDIT", false)
+	c.TierPremiumCaptionWordEdit = getEnvBool("TIER_PREMIUM_CAPTION_WORD_EDIT", true)
+	c.TierProCaptionWordEdit = getEnvBool("TIER_PRO_CAPTION_WORD_EDIT", true)
+	c.TierAnonCaptionLooks = getEnvIntDefault("TIER_ANON_CAPTION_LOOKS", 0)
+	c.TierFreeCaptionLooks = getEnvIntDefault("TIER_FREE_CAPTION_LOOKS", 0)
+	c.TierPremiumCaptionLooks = getEnvIntDefault("TIER_PREMIUM_CAPTION_LOOKS", 10)
+	c.TierProCaptionLooks = getEnvIntDefault("TIER_PRO_CAPTION_LOOKS", -1)
+	c.RateLimitCaptionLooksPerSessionPerHour = getEnvInt("RATE_LIMIT_CAPTION_LOOKS_PER_SESSION_PER_HOUR", 200)
+	c.RateLimitCaptionLooksPerIPPerHour = getEnvInt("RATE_LIMIT_CAPTION_LOOKS_PER_IP_PER_HOUR", 400)
 }

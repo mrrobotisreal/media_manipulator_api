@@ -15,7 +15,7 @@ Darkroom recipe (intermediate). Speed in Darkroom is set per clip, so a ramp is 
 ### When to use
 Action moments, reveals, long boring stretches.
 ### What a pro does and why
-Speed in Darkroom is set per clip, so a ramp is made by splitting at the moment and slowing only the middle part (0.4 to 0.5×). Slow motion looks smooth only when the source has a high frame rate; otherwise suggest the AI frame interpolation tool. Speeding up 2 to 4× compresses boring parts; keep pitch for speech.
+Slow motion looks smooth only when the source has a high frame rate; otherwise suggest the AI frame interpolation tool. Speeding up 2 to 4× compresses boring parts; keep pitch for speech.
 ### Ops
 ```json
 {

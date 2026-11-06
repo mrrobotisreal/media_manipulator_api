@@ -15,7 +15,7 @@ Darkroom recipe (intermediate). Pick the better clip as the reference and move t
 ### When to use
 Two cameras or two lighting setups in one edit.
 ### What a pro does and why
-Pick the better clip as the reference and move the other towards it: exposure first, then temperature and tint, then saturation. Comparing preview frames side by side is the professional method; Medi sees one frame at a time, so it fixes the obvious difference and asks.
+Comparing preview frames side by side is the professional method; Medi sees one frame at a time, so it fixes the obvious difference and asks.
 ### Ops
 ```json
 {

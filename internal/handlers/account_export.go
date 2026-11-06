@@ -24,7 +24,8 @@ import (
 //	200 application/zip  attachment "mm-data-export-<YYYY-MM-DD>.zip"
 //	429 {"error":"export_rate_limited","retryAfterSeconds":N}   > 3 per hour per user
 //
-// Members: history.json, projects.json, files.json, assistant.json, account.json, README.txt, and
+// Members: history.json, projects.json, files.json, voices.json, presets.json,
+// caption-looks.json (MM122), assistant.json, account.json, README.txt, and
 // metadata-reports/<jobId>.json for each job whose cached metadata still exists.
 // The zip is written straight to the response (archive/zip over a streaming
 // writer, no temp file); only metadata is exported: never media bytes, storage
@@ -57,6 +58,13 @@ type VoiceExportStore interface {
 // Optional: a store that does not implement it exports an empty presets.json.
 type PresetExportStore interface {
 	ExportPhotoPresets(ctx context.Context, userID string) ([]telemetry.PhotoPreset, error)
+}
+
+// CaptionLookExportStore lists saved Darkroom caption looks for the export
+// (MM122). Optional: a store that does not implement it exports an empty
+// caption-looks.json.
+type CaptionLookExportStore interface {
+	ExportStudioCaptionLooks(ctx context.Context, userID string) ([]telemetry.StudioCaptionLook, error)
 }
 
 // AssistantExportStore lists Medi conversations for the export (MM104).
@@ -205,6 +213,12 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 							presets, serr = ps.ExportPhotoPresets(ctx, u.ID)
 						}
 					}
+					var looks []telemetry.StudioCaptionLook
+					if serr == nil {
+						if ls, ok := d.Store.(CaptionLookExportStore); ok {
+							looks, serr = ls.ExportStudioCaptionLooks(ctx, u.ID)
+						}
+					}
 					var convs []telemetry.AssistantExportConversation
 					if serr == nil {
 						if as, ok := d.Store.(AssistantExportStore); ok {
@@ -220,7 +234,7 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 					if serr != nil {
 						err = serr
 					} else {
-						h.writeExport(c, u, settings, jobs, projects, files, metaJobs, voices, presets, convs, pushMeta, now)
+						h.writeExport(c, u, settings, jobs, projects, files, metaJobs, voices, presets, looks, convs, pushMeta, now)
 						return
 					}
 				}
@@ -233,7 +247,7 @@ func (h *AccountDataHandler) Export(c *gin.Context) {
 
 func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *telemetry.UserSettings,
 	jobs []telemetry.ExportJob, projects []telemetry.ExportProject, files []telemetry.ExportFile, metaJobs []string,
-	voices []telemetry.ExportVoice, presets []telemetry.PhotoPreset, convs []telemetry.AssistantExportConversation,
+	voices []telemetry.ExportVoice, presets []telemetry.PhotoPreset, looks []telemetry.StudioCaptionLook, convs []telemetry.AssistantExportConversation,
 	pushMeta []telemetry.PushTokenMeta, now time.Time) {
 	d := h.export
 
@@ -295,6 +309,15 @@ func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *tel
 			entry["layers"] = json.RawMessage(p.Layers)
 		}
 		presetList = append(presetList, entry)
+	}
+	// MM122: saved Darkroom caption looks, with their styles (the user's own settings).
+	lookList := make([]map[string]any, 0, len(looks))
+	for _, l := range looks {
+		entry := map[string]any{"id": l.ID, "name": l.Name, "createdAt": rfc(l.CreatedAt), "updatedAt": rfc(l.UpdatedAt)}
+		if len(l.Style) > 0 && json.Valid(l.Style) {
+			entry["style"] = json.RawMessage(l.Style)
+		}
+		lookList = append(lookList, entry)
 	}
 	// MM104: Medi conversations with their messages (text, tool calls, op
 	// summaries). Frames were never stored, so none can be exported.
@@ -369,6 +392,9 @@ func (h *AccountDataHandler) writeExport(c *gin.Context, u *models.User, st *tel
 	}}, {"presets.json", map[string]any{
 		"note":    "Your saved Aperture presets: name, category, dates and the adjustment layers each one applies. Thumbnails are not included.",
 		"presets": presetList,
+	}}, {"caption-looks.json", map[string]any{
+		"note":  "Your saved Darkroom caption looks: name, dates and the caption style each one applies (font, colours, outline, position, animation).",
+		"looks": lookList,
 	}}, {"assistant.json", map[string]any{
 		"note":          "Your Medi conversations: every message you sent and every answer, with the edits Medi made. Preview images sent to Medi are never stored, so none are included.",
 		"conversations": convList,
@@ -457,6 +483,8 @@ voices.json      Your saved voices: name, kind (cloned | designed), language, th
                  gave and when. No audio is included.
 presets.json     Your saved Aperture presets: name, category, dates and the adjustments each
                  one applies. Thumbnails are not included.
+caption-looks.json  Your saved Darkroom caption looks: name, dates and the caption style each
+                 one applies (font, colours, outline, position, animation).
 assistant.json   Your Medi conversations: messages, answers and the edits Medi made. Preview
                  images sent to Medi are never stored, so none are included.
 metadata-reports Metadata reports we keep for you (one document per job), if you keep them.

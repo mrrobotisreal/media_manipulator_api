@@ -57,6 +57,8 @@ type StudioHandler struct {
 	// MM118: the tier registry for the output plan gate's `required` and the
 	// export-options route (SetTierRegistry). nil = the table's default ladder.
 	tierRegistry *tiers.Registry
+	// MM122: saved caption looks (SetCaptionLookStore); nil = 503.
+	captionLooks CaptionLookStore
 }
 
 // SetTierRegistry attaches the tier registry (MM118 output gating).
@@ -133,6 +135,12 @@ func RegisterStudioRoutes(r gin.IRouter, h *StudioHandler) {
 	// Export the EDL via NVENC on the dedicated GPU (MM118: MP4, MOV, MKV,
 	// MP3 or WAV from the output table; GET /export-options describes it).
 	studio.GET("/export-options", h.ExportOptions)
+	// MM122: saved caption looks on the account (studio_caption_looks.go).
+	studio.GET("/caption-looks", h.ListCaptionLooks)
+	studio.POST("/caption-looks", h.CreateCaptionLook)
+	studio.GET("/caption-looks/:id", h.GetCaptionLook)
+	studio.PUT("/caption-looks/:id", h.SaveCaptionLook)
+	studio.DELETE("/caption-looks/:id", h.DeleteCaptionLook)
 	studio.POST("/projects/:id/export", h.ExportProject)
 	// Export depth (part 20): persistent history, render-again with the stored
 	// options, and a synchronous single-frame PNG.
@@ -1372,6 +1380,7 @@ func (h *StudioHandler) launchExport(c *gin.Context, projectID string, req model
 	}
 
 	exportCfg := buildStudioExportConfig(project, assetByID, req)
+	enforceCaptionWordEdit(c, &exportCfg)
 	quality := normalizeExportQuality(req.Preset)
 	ext, mime, mediaKind := output.File()
 	baseName := safeFilename(firstNonEmpty(req.FileName, project.Name, "export")) + ext
@@ -2028,6 +2037,23 @@ func (h *StudioHandler) registerRow(c *gin.Context, kind, id, projectID string, 
 // registerKey records a Darkroom source S3 object.
 func (h *StudioHandler) registerKey(c *gin.Context, sessionID, key, parent, projectID string, size int64) {
 	retention.Default().RegisterS3(detachedCtx(c), h.retentionOwner(c, sessionID), key, parent, "", projectID, size)
+}
+
+// enforceCaptionWordEdit (MM122 decision 3): emphasis is a Premium+ feature
+// (Limits.CaptionWordEdit). The sanitizer cannot tell a crafted flag from an
+// edited one, so the export enforces it: the burned-in cues of a caller
+// (always the project owner: exports need project access) whose plan lacks
+// the editor lose their emphasis. Retiming is UI-only (it changes nothing but
+// timing). A tier system that is off passes through.
+func enforceCaptionWordEdit(c *gin.Context, cfg *studioExportConfig) {
+	if len(cfg.captions) == 0 {
+		return
+	}
+	res, ok := middleware.ResolveTier(c)
+	if !ok || res.Limits.CaptionWordEdit {
+		return
+	}
+	cfg.captions = models.StripCaptionEmphasis(cfg.captions)
 }
 
 // applyAnonCaptionAllowlist (MM121, design §6.4): an anonymous caller gets

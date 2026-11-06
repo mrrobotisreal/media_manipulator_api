@@ -198,8 +198,9 @@ func TestProRow(t *testing.T) {
 	same.VectorMaxDurationMs, same.VectorVideo = pro.VectorMaxDurationMs, pro.VectorVideo
 	// MM95: Pro's own Aperture row (unlimited projects, batch 25).
 	same.PhotoProjects, same.PhotoMaxMegapixels, same.PhotoBatch = pro.PhotoProjects, pro.PhotoMaxMegapixels, pro.PhotoBatch
-	same.PhotoPresets = pro.PhotoPresets     // MM103
-	same.AssistantTurns = pro.AssistantTurns // MM104: Medi 150 vs 50
+	same.PhotoPresets = pro.PhotoPresets           // MM103
+	same.CaptionLooksSaved = pro.CaptionLooksSaved // MM122: unlimited vs 10
+	same.AssistantTurns = pro.AssistantTurns       // MM104: Medi 150 vs 50
 	// MM74: Pro's own summary row (96 frames, deep synthesis).
 	same.SummaryMaxFrames, same.SummaryDeep = pro.SummaryMaxFrames, pro.SummaryDeep
 	// MM77: Pro has its own voices row (design VOICES.md §4.3).
@@ -290,6 +291,7 @@ func TestPublishedMatrix(t *testing.T) {
 			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,import_lottie,import_svg_vectorize",
 			VectorVideo:   VectorVideo{MaxHeight: 720, MaxSeconds: 15},
 			PhotoProjects: 50, PhotoMaxMegapixels: 120, PhotoBatch: 10, PhotoPresets: 100, AssistantTurns: 50, // MM95, MM103, MM104
+			CaptionWordEdit: true, CaptionLooksSaved: 10, // MM122
 		},
 		TierPro: {
 			OpsPerDay: 700, AIOpsPerDay: 200, ExportsPerDay: 700,
@@ -304,6 +306,7 @@ func TestPublishedMatrix(t *testing.T) {
 			VectorFormats: "svg_animated,lottie,react_tsx,js_ts,flutter,gif,png_sequence,mp4,webm,import_lottie,import_svg_vectorize",
 			VectorVideo:   VectorVideo{MaxHeight: 2160, MaxFps: 60, MaxSeconds: 60},
 			PhotoProjects: Unlimited, PhotoMaxMegapixels: 120, PhotoBatch: 25, PhotoPresets: Unlimited, AssistantTurns: 150, // MM95, MM103, MM104
+			CaptionWordEdit: true, CaptionLooksSaved: Unlimited, // MM122
 		},
 	}
 

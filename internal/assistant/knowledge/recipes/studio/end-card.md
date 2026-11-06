@@ -15,7 +15,7 @@ Darkroom recipe (basic). YouTube end screens need 5 to 20 s; leave the centre an
 ### When to use
 The last 5 to 20 seconds of a YouTube or social video.
 ### What a pro does and why
-YouTube end screens need 5 to 20 s; leave the centre and right side clear for YouTube's own elements and put a short line (subscribe, follow, link) on the left. For social, a 2 to 3 s card with one clear action is enough.
+For social, a 2 to 3 s card with one clear action is enough.
 ### Ops
 ```json
 {

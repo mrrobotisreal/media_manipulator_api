@@ -1,0 +1,26 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Bangers,70,&H0000E6FF,&H0000E6FF,&H00000000,&H66000000,0,0,0,0,100,100,0,0,1,6,4,2,96,96,54,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.50,0:00:00.90,Default,,0,0,0,,{\1a&HFF&\3a&HFF&\4a&HFF&\t(0,100,\1a&H00&\3a&H00&\4a&H66&)}WELCOME{\1a&HFF&\3a&HFF&\4a&HFF&} {\1c&H00D4FF&}BACK.{\1c&H00E6FF&}
+Dialogue: 1,0:00:00.90,0:00:01.60,Default,,0,0,0,,WELCOME {\1c&H00D4FF&\1a&HFF&\3a&HFF&\4a&HFF&\t(0,100,\1a&H00&\3a&H00&\4a&H66&)}BACK.{\1c&H00E6FF&}
+Dialogue: 1,0:00:01.60,0:00:01.90,Default,,0,0,0,,{\1a&HFF&\3a&HFF&\4a&HFF&\t(0,100,\1a&H00&\3a&H00&\4a&H66&)}TODAY{\1a&HFF&\3a&HFF&\4a&HFF&} WE TEST {\1c&H00D4FF&}CAPTIONS{\1c&H00E6FF&}
+Dialogue: 1,0:00:01.90,0:00:02.20,Default,,0,0,0,,TODAY {\1a&HFF&\3a&HFF&\4a&HFF&\t(0,100,\1a&H00&\3a&H00&\4a&H66&)}WE{\1a&HFF&\3a&HFF&\4a&HFF&} TEST {\1c&H00D4FF&}CAPTIONS{\1c&H00E6FF&}
+Dialogue: 1,0:00:02.20,0:00:02.50,Default,,0,0,0,,TODAY WE {\1a&HFF&\3a&HFF&\4a&HFF&\t(0,100,\1a&H00&\3a&H00&\4a&H66&)}TEST{\1a&HFF&\3a&HFF&\4a&HFF&} {\1c&H00D4FF&}CAPTIONS{\1c&H00E6FF&}
+Dialogue: 1,0:00:02.50,0:00:02.80,Default,,0,0,0,,TODAY WE TEST {\1c&H00D4FF&\1a&HFF&\3a&HFF&\4a&HFF&\t(0,100,\1a&H00&\3a&H00&\4a&H66&)}CAPTIONS{\1c&H00E6FF&}
+Dialogue: 1,0:00:02.80,0:00:03.10,Default,,0,0,0,,{\1a&HFF&\3a&HFF&\4a&HFF&\t(0,100,\1a&H00&\3a&H00&\4a&H66&)}THAT{\1a&HFF&\3a&HFF&\4a&HFF&} MOVE WITH EVERY
+Dialogue: 1,0:00:03.10,0:00:03.40,Default,,0,0,0,,THAT {\1a&HFF&\3a&HFF&\4a&HFF&\t(0,100,\1a&H00&\3a&H00&\4a&H66&)}MOVE{\1a&HFF&\3a&HFF&\4a&HFF&} WITH EVERY
+Dialogue: 1,0:00:03.40,0:00:03.70,Default,,0,0,0,,THAT MOVE {\1a&HFF&\3a&HFF&\4a&HFF&\t(0,100,\1a&H00&\3a&H00&\4a&H66&)}WITH{\1a&HFF&\3a&HFF&\4a&HFF&} EVERY
+Dialogue: 1,0:00:03.70,0:00:04.00,Default,,0,0,0,,THAT MOVE WITH {\1a&HFF&\3a&HFF&\4a&HFF&\t(0,100,\1a&H00&\3a&H00&\4a&H66&)}EVERY
+Dialogue: 1,0:00:04.00,0:00:05.00,Default,,0,0,0,,{\1a&HFF&\3a&HFF&\4a&HFF&\t(0,100,\1a&H00&\3a&H00&\4a&H66&)}WORD
