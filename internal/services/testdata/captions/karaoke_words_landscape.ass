@@ -1,0 +1,16 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Lilita One,54,&H00FFFFFF,&H00FFFFFF,&H004A2010,&H66000000,0,0,0,0,100,100,0,0,1,4,2.4,2,96,96,54,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:01.00,0:00:04.40,Default,,0,0,0,,{\1c&HFFC800&\2c&HFFFFFF&\k20}{\kf35}Sing{\k5} {\kf35}it{\k5} {\kf35}loud{\k5} {\kf35}tonight{\k5} {\kf35}we{\k5} {\kf35}are{\k5} {\kf35}alive

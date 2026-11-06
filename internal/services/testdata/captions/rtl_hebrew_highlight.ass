@@ -1,0 +1,21 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Montserrat,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,0,0,0,0,100,100,0,0,1,3,0,2,96,96,54,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:01.00,0:00:01.10,Default,,0,0,0,,{\fnNoto Sans Hebrew}שלום לכולם, ברוכים הבאים לערוץ
+Dialogue: 1,0:00:01.10,0:00:01.65,Default,,0,0,0,,{\fnNoto Sans Hebrew}{\1c&H00D4FF&}שלום{\1c&HFFFFFF&} לכולם, ברוכים הבאים לערוץ
+Dialogue: 1,0:00:01.65,0:00:02.20,Default,,0,0,0,,{\fnNoto Sans Hebrew}שלום {\1c&H00D4FF&}לכולם,{\1c&HFFFFFF&} ברוכים הבאים לערוץ
+Dialogue: 1,0:00:02.20,0:00:02.75,Default,,0,0,0,,{\fnNoto Sans Hebrew}שלום לכולם, {\1c&H00D4FF&}ברוכים{\1c&HFFFFFF&} הבאים לערוץ
+Dialogue: 1,0:00:02.75,0:00:03.30,Default,,0,0,0,,{\fnNoto Sans Hebrew}שלום לכולם, ברוכים {\1c&H00D4FF&}הבאים{\1c&HFFFFFF&} לערוץ
+Dialogue: 1,0:00:03.30,0:00:04.00,Default,,0,0,0,,{\fnNoto Sans Hebrew}שלום לכולם, ברוכים הבאים {\1c&H00D4FF&}לערוץ{\1c&HFFFFFF&}

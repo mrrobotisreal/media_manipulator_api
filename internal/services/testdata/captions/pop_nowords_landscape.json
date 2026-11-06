@@ -1,0 +1,30 @@
+{
+  "name": "pop_nowords_landscape",
+  "width": 1920,
+  "height": 1080,
+  "style": {
+    "fontSizePct": 5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Bangers",
+    "bold": true,
+    "uppercase": false,
+    "highlightColor": "#FFFFFF",
+    "outlineWidth": 5,
+    "backgroundMode": "none",
+    "wordsPerGroup": 3,
+    "animation": "pop",
+    "animationStrength": 1
+  },
+  "cues": [
+    {
+      "id": "c3",
+      "startSeconds": 5.5,
+      "endSeconds": 8.0,
+      "text": "No word timings on this line"
+    }
+  ]
+}

@@ -1,0 +1,469 @@
+{
+  "animations": [
+    "none",
+    "karaoke_fill",
+    "highlight",
+    "pop"
+  ],
+  "anon": {
+    "animations": {
+      "highlight": true,
+      "none": true,
+      "pop": true
+    },
+    "nearestAnimation": {
+      "karaoke_fill": "highlight"
+    },
+    "nearestLook": {
+      "karaoke_classic": "clean_highlight",
+      "neon": "bold_pop",
+      "podcast": "minimal"
+    }
+  },
+  "backgroundModes": [
+    "box",
+    "none",
+    "word_box"
+  ],
+  "defaults": {
+    "animation": "none",
+    "animationStrength": 0.6,
+    "backgroundMode": "box",
+    "bold": false,
+    "fontFamily": "DejaVu Sans",
+    "highlightColor": "#FFD400",
+    "outlineColor": "#000000",
+    "outlineWidth": 0,
+    "shadow": 0
+  },
+  "fallbackFonts": [
+    "Noto Sans",
+    "Noto Sans Hebrew",
+    "Noto Sans Arabic",
+    "Noto Sans SC",
+    "Noto Sans KR"
+  ],
+  "fonts": [
+    {
+      "family": "Inter",
+      "regular": "inter-400.ttf",
+      "bold": "inter-700.ttf",
+      "scripts": [
+        "latin_ext",
+        "cyrillic",
+        "greek"
+      ],
+      "category": "sans"
+    },
+    {
+      "family": "Noto Sans",
+      "regular": "noto-sans-400.ttf",
+      "bold": "noto-sans-700.ttf",
+      "scripts": [
+        "latin_ext",
+        "cyrillic",
+        "greek",
+        "devanagari"
+      ],
+      "category": "sans"
+    },
+    {
+      "family": "Open Sans",
+      "regular": "open-sans-400.ttf",
+      "bold": "open-sans-700.ttf",
+      "scripts": [
+        "latin_ext",
+        "cyrillic",
+        "greek",
+        "hebrew"
+      ],
+      "category": "sans"
+    },
+    {
+      "family": "Montserrat",
+      "regular": "montserrat-400.ttf",
+      "bold": "montserrat-700.ttf",
+      "scripts": [
+        "latin_ext",
+        "cyrillic"
+      ],
+      "category": "sans"
+    },
+    {
+      "family": "Poppins",
+      "regular": "poppins-400.ttf",
+      "bold": "poppins-700.ttf",
+      "scripts": [],
+      "category": "sans"
+    },
+    {
+      "family": "Raleway",
+      "regular": "raleway-400.ttf",
+      "bold": "raleway-700.ttf",
+      "scripts": [
+        "latin_ext",
+        "cyrillic"
+      ],
+      "category": "sans"
+    },
+    {
+      "family": "DejaVu Sans",
+      "regular": "dejavu-sans-400.ttf",
+      "bold": "dejavu-sans-700.ttf",
+      "scripts": [
+        "latin_ext",
+        "cyrillic",
+        "greek",
+        "hebrew"
+      ],
+      "category": "sans"
+    },
+    {
+      "family": "Oswald",
+      "regular": "oswald-400.ttf",
+      "bold": "oswald-700.ttf",
+      "scripts": [
+        "latin_ext",
+        "cyrillic"
+      ],
+      "category": "display"
+    },
+    {
+      "family": "Bebas Neue",
+      "regular": "bebas-neue-400.ttf",
+      "scripts": [],
+      "category": "display"
+    },
+    {
+      "family": "Anton",
+      "regular": "anton-400.ttf",
+      "scripts": [
+        "latin_ext"
+      ],
+      "category": "display"
+    },
+    {
+      "family": "Bangers",
+      "regular": "bangers-400.ttf",
+      "scripts": [
+        "latin_ext"
+      ],
+      "category": "display"
+    },
+    {
+      "family": "Titan One",
+      "regular": "titan-one-400.ttf",
+      "scripts": [],
+      "category": "display"
+    },
+    {
+      "family": "Lilita One",
+      "regular": "lilita-one-400.ttf",
+      "scripts": [],
+      "category": "display"
+    },
+    {
+      "family": "Bowlby One",
+      "regular": "bowlby-one-400.ttf",
+      "scripts": [],
+      "category": "display"
+    },
+    {
+      "family": "Rubik Mono One",
+      "regular": "rubik-mono-one-400.ttf",
+      "scripts": [
+        "cyrillic",
+        "hebrew"
+      ],
+      "category": "display"
+    },
+    {
+      "family": "Russo One",
+      "regular": "russo-one-400.ttf",
+      "scripts": [
+        "cyrillic"
+      ],
+      "category": "display"
+    },
+    {
+      "family": "Playfair Display",
+      "regular": "playfair-display-400.ttf",
+      "bold": "playfair-display-700.ttf",
+      "scripts": [
+        "latin_ext",
+        "cyrillic"
+      ],
+      "category": "serif"
+    },
+    {
+      "family": "Merriweather",
+      "regular": "merriweather-400.ttf",
+      "bold": "merriweather-700.ttf",
+      "scripts": [
+        "latin_ext",
+        "cyrillic"
+      ],
+      "category": "serif"
+    },
+    {
+      "family": "Lora",
+      "regular": "lora-400.ttf",
+      "bold": "lora-700.ttf",
+      "scripts": [
+        "latin_ext",
+        "cyrillic"
+      ],
+      "category": "serif"
+    },
+    {
+      "family": "JetBrains Mono",
+      "regular": "jetbrains-mono-400.ttf",
+      "bold": "jetbrains-mono-700.ttf",
+      "scripts": [
+        "latin_ext",
+        "cyrillic",
+        "greek"
+      ],
+      "category": "mono"
+    },
+    {
+      "family": "Space Mono",
+      "regular": "space-mono-400.ttf",
+      "bold": "space-mono-700.ttf",
+      "scripts": [
+        "latin_ext"
+      ],
+      "category": "mono"
+    },
+    {
+      "family": "Dancing Script",
+      "regular": "dancing-script-400.ttf",
+      "bold": "dancing-script-700.ttf",
+      "scripts": [
+        "latin_ext"
+      ],
+      "category": "script"
+    },
+    {
+      "family": "Pacifico",
+      "regular": "pacifico-400.ttf",
+      "scripts": [
+        "latin_ext",
+        "cyrillic"
+      ],
+      "category": "script"
+    },
+    {
+      "family": "Noto Sans Hebrew",
+      "regular": "noto-sans-hebrew-400.ttf",
+      "bold": "noto-sans-hebrew-700.ttf",
+      "scripts": [
+        "hebrew"
+      ],
+      "category": "fallback"
+    },
+    {
+      "family": "Noto Sans Arabic",
+      "regular": "noto-sans-arabic-400.ttf",
+      "bold": "noto-sans-arabic-700.ttf",
+      "scripts": [
+        "arabic"
+      ],
+      "category": "fallback"
+    },
+    {
+      "family": "Noto Sans SC",
+      "regular": "noto-sans-sc-400.ttf",
+      "scripts": [
+        "greek",
+        "han"
+      ],
+      "category": "fallback"
+    },
+    {
+      "family": "Noto Sans KR",
+      "regular": "noto-sans-kr-400.ttf",
+      "scripts": [
+        "hangul"
+      ],
+      "category": "fallback"
+    }
+  ],
+  "looks": [
+    {
+      "id": "bold_pop",
+      "anon": true,
+      "style": {
+        "fontSizePct": 7,
+        "color": "#FFFFFF",
+        "backgroundColor": "#000000",
+        "backgroundOpacity": 0.6,
+        "position": "bottom",
+        "maxWidthPct": 85,
+        "fontFamily": "Montserrat",
+        "bold": true,
+        "uppercase": true,
+        "highlightColor": "#FFE600",
+        "outlineColor": "#000000",
+        "outlineWidth": 6,
+        "shadow": 0.5,
+        "backgroundMode": "none",
+        "wordsPerGroup": 2,
+        "animation": "pop",
+        "animationStrength": 0.7,
+        "lookId": "bold_pop"
+      }
+    },
+    {
+      "id": "karaoke_classic",
+      "anon": false,
+      "style": {
+        "fontSizePct": 6,
+        "color": "#FFFFFF",
+        "backgroundColor": "#000000",
+        "backgroundOpacity": 0.6,
+        "position": "bottom",
+        "maxWidthPct": 90,
+        "fontFamily": "Lilita One",
+        "bold": false,
+        "uppercase": false,
+        "highlightColor": "#00C8FF",
+        "outlineColor": "#10204A",
+        "outlineWidth": 4,
+        "shadow": 0.3,
+        "backgroundMode": "none",
+        "animation": "karaoke_fill",
+        "animationStrength": 1,
+        "lookId": "karaoke_classic"
+      }
+    },
+    {
+      "id": "clean_highlight",
+      "anon": true,
+      "style": {
+        "fontSizePct": 5.2,
+        "color": "#FFFFFF",
+        "backgroundColor": "#000000",
+        "backgroundOpacity": 0.6,
+        "position": "bottom",
+        "maxWidthPct": 85,
+        "fontFamily": "Poppins",
+        "bold": true,
+        "uppercase": false,
+        "highlightColor": "#FFD400",
+        "outlineColor": "#000000",
+        "outlineWidth": 3,
+        "shadow": 0.3,
+        "backgroundMode": "none",
+        "wordsPerGroup": 4,
+        "animation": "highlight",
+        "animationStrength": 0.5,
+        "lookId": "clean_highlight"
+      }
+    },
+    {
+      "id": "minimal",
+      "anon": true,
+      "style": {
+        "fontSizePct": 4.5,
+        "color": "#FFFFFF",
+        "backgroundColor": "#000000",
+        "backgroundOpacity": 0.6,
+        "position": "bottom",
+        "maxWidthPct": 90,
+        "fontFamily": "Inter",
+        "bold": false,
+        "uppercase": false,
+        "highlightColor": "#FFD400",
+        "outlineColor": "#000000",
+        "outlineWidth": 2,
+        "shadow": 0.4,
+        "backgroundMode": "none",
+        "animation": "none",
+        "animationStrength": 0.6,
+        "lookId": "minimal"
+      }
+    },
+    {
+      "id": "neon",
+      "anon": false,
+      "style": {
+        "fontSizePct": 6,
+        "color": "#E9FFFB",
+        "backgroundColor": "#000000",
+        "backgroundOpacity": 0.6,
+        "position": "middle",
+        "maxWidthPct": 85,
+        "fontFamily": "Russo One",
+        "bold": false,
+        "uppercase": true,
+        "highlightColor": "#39FF14",
+        "outlineColor": "#FF2BD6",
+        "outlineWidth": 3,
+        "shadow": 0,
+        "backgroundMode": "none",
+        "wordsPerGroup": 3,
+        "animation": "highlight",
+        "animationStrength": 0.6,
+        "lookId": "neon"
+      }
+    },
+    {
+      "id": "podcast",
+      "anon": false,
+      "style": {
+        "fontSizePct": 4.6,
+        "color": "#FFFFFF",
+        "backgroundColor": "#111111",
+        "backgroundOpacity": 0.7,
+        "position": "bottom",
+        "maxWidthPct": 80,
+        "fontFamily": "Inter",
+        "bold": true,
+        "uppercase": false,
+        "highlightColor": "#FFD400",
+        "outlineColor": "#000000",
+        "outlineWidth": 0,
+        "shadow": 0,
+        "backgroundMode": "box",
+        "animation": "none",
+        "animationStrength": 0.5,
+        "lookId": "podcast"
+      }
+    }
+  ],
+  "scriptPriority": [
+    {
+      "script": "han",
+      "family": "Noto Sans SC"
+    },
+    {
+      "script": "hangul",
+      "family": "Noto Sans KR"
+    },
+    {
+      "script": "arabic",
+      "family": "Noto Sans Arabic"
+    },
+    {
+      "script": "hebrew",
+      "family": "Noto Sans Hebrew"
+    },
+    {
+      "script": "devanagari",
+      "family": "Noto Sans"
+    },
+    {
+      "script": "cyrillic",
+      "family": "Noto Sans"
+    },
+    {
+      "script": "greek",
+      "family": "Noto Sans"
+    },
+    {
+      "script": "latin_ext",
+      "family": "Noto Sans"
+    }
+  ]
+}

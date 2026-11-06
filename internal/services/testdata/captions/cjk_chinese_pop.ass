@@ -1,0 +1,24 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Bangers,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,0,0,0,0,100,100,0,0,1,4,0,2,96,96,54,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:01.00,0:00:01.25,Default,,0,0,0,,{\fnNoto Sans SC}{\1c&H00E6FF&\t(0,80,\fscx120\fscy120)\t(80,180,\fscx100\fscy100)}今{\1c&HFFFFFF&\fscx100\fscy100}天我们
+Dialogue: 1,0:00:01.25,0:00:01.50,Default,,0,0,0,,{\fnNoto Sans SC}今{\1c&H00E6FF&\t(0,80,\fscx120\fscy120)\t(80,180,\fscx100\fscy100)}天{\1c&HFFFFFF&\fscx100\fscy100}我们
+Dialogue: 1,0:00:01.50,0:00:01.75,Default,,0,0,0,,{\fnNoto Sans SC}今天{\1c&H00E6FF&\t(0,80,\fscx120\fscy120)\t(80,180,\fscx100\fscy100)}我{\1c&HFFFFFF&\fscx100\fscy100}们
+Dialogue: 1,0:00:01.75,0:00:02.00,Default,,0,0,0,,{\fnNoto Sans SC}今天我{\1c&H00E6FF&\t(0,80,\fscx120\fscy120)\t(80,180,\fscx100\fscy100)}们{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:02.00,0:00:02.25,Default,,0,0,0,,{\fnNoto Sans SC}{\1c&H00E6FF&\t(0,80,\fscx120\fscy120)\t(80,180,\fscx100\fscy100)}来{\1c&HFFFFFF&\fscx100\fscy100}测试字
+Dialogue: 1,0:00:02.25,0:00:02.50,Default,,0,0,0,,{\fnNoto Sans SC}来{\1c&H00E6FF&\t(0,80,\fscx120\fscy120)\t(80,180,\fscx100\fscy100)}测{\1c&HFFFFFF&\fscx100\fscy100}试字
+Dialogue: 1,0:00:02.50,0:00:02.75,Default,,0,0,0,,{\fnNoto Sans SC}来测{\1c&H00E6FF&\t(0,80,\fscx120\fscy120)\t(80,180,\fscx100\fscy100)}试{\1c&HFFFFFF&\fscx100\fscy100}字
+Dialogue: 1,0:00:02.75,0:00:03.00,Default,,0,0,0,,{\fnNoto Sans SC}来测试{\1c&H00E6FF&\t(0,80,\fscx120\fscy120)\t(80,180,\fscx100\fscy100)}字{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:03.00,0:00:03.50,Default,,0,0,0,,{\fnNoto Sans SC}{\1c&H00E6FF&\t(0,80,\fscx120\fscy120)\t(80,180,\fscx100\fscy100)}幕。{\1c&HFFFFFF&\fscx100\fscy100}

@@ -1,0 +1,79 @@
+{
+  "name": "cyrillic_display_fallback",
+  "width": 1920,
+  "height": 1080,
+  "style": {
+    "fontSizePct": 5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Bangers",
+    "bold": true,
+    "uppercase": true,
+    "highlightColor": "#FFE600",
+    "outlineWidth": 5,
+    "backgroundMode": "none",
+    "wordsPerGroup": 3,
+    "animation": "highlight"
+  },
+  "cues": [
+    {
+      "id": "y",
+      "startSeconds": 0.5,
+      "endSeconds": 3.5,
+      "text": "Привет, друзья! Это субтитры",
+      "words": [
+        {
+          "text": "Привет,",
+          "startSeconds": 0.6,
+          "endSeconds": 1.15
+        },
+        {
+          "text": "друзья!",
+          "startSeconds": 1.2,
+          "endSeconds": 1.75
+        },
+        {
+          "text": "Это",
+          "startSeconds": 1.8,
+          "endSeconds": 2.35
+        },
+        {
+          "text": "субтитры",
+          "startSeconds": 2.4,
+          "endSeconds": 2.95
+        }
+      ]
+    },
+    {
+      "id": "y2",
+      "startSeconds": 4,
+      "endSeconds": 6,
+      "text": "Straße Ǆemal ﬁne ὒ",
+      "words": [
+        {
+          "text": "Straße",
+          "startSeconds": 4.1,
+          "endSeconds": 4.5
+        },
+        {
+          "text": "Ǆemal",
+          "startSeconds": 4.55,
+          "endSeconds": 4.95
+        },
+        {
+          "text": "ﬁne",
+          "startSeconds": 5.0,
+          "endSeconds": 5.4
+        },
+        {
+          "text": "ὒ",
+          "startSeconds": 5.45,
+          "endSeconds": 5.85
+        }
+      ]
+    }
+  ]
+}

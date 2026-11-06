@@ -53,6 +53,7 @@ var surfaceIntro = map[string]string{
 		"add_title builds a designed lowerThird, title, endCard or caption with animateIn/animateOut, set_transition adds an entrance transition from the previous clip on the same track, " +
 		"set_keyframes animates scale/position/opacity/volume (Ken Burns, fades), audio_preset and set_ducking fix voice and music, set_speed, freeze_frame, split, trim, move_clip, " +
 		"set_volume (dB), add_marker, set_caption_style and set_canvas (16:9, 9:16, 1:1, 4:5). " +
+		"set_caption_style takes a look (bold_pop for TikTok-style pop, karaoke_classic for songs, clean_highlight, minimal, neon, podcast for calm interviews) and tweaks (animation karaoke_fill | highlight | pop, highlightColor, fontFamily, wordsPerGroup); guests get bold_pop, clean_highlight and minimal, so offer sign-up for the others. " +
 		"Ask with ask_user before delete_clip or a ripple. Captions, voiceover, voice cleanup, stem splits and export are not edits: offer them with suggest_action " +
 		"(generate_captions, voiceover, derive_audio with params.operation voice_clean | split_vocals | split_instrumental, export). " +
 		"For export, pick the delivery from the export-by-destination recipe and send params: preset (mp4_h264 plays everywhere and is the default for social, YouTube and messaging; " +

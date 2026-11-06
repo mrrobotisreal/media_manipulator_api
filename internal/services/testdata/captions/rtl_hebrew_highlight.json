@@ -1,0 +1,54 @@
+{
+  "name": "rtl_hebrew_highlight",
+  "width": 1920,
+  "height": 1080,
+  "style": {
+    "fontSizePct": 5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Montserrat",
+    "highlightColor": "#FFD400",
+    "outlineWidth": 3,
+    "backgroundMode": "none",
+    "wordsPerGroup": 0,
+    "animation": "highlight"
+  },
+  "cues": [
+    {
+      "id": "h",
+      "startSeconds": 1,
+      "endSeconds": 4,
+      "text": "שלום לכולם, ברוכים הבאים לערוץ",
+      "words": [
+        {
+          "text": "שלום",
+          "startSeconds": 1.1,
+          "endSeconds": 1.6
+        },
+        {
+          "text": "לכולם,",
+          "startSeconds": 1.65,
+          "endSeconds": 2.15
+        },
+        {
+          "text": "ברוכים",
+          "startSeconds": 2.2,
+          "endSeconds": 2.7
+        },
+        {
+          "text": "הבאים",
+          "startSeconds": 2.75,
+          "endSeconds": 3.25
+        },
+        {
+          "text": "לערוץ",
+          "startSeconds": 3.3,
+          "endSeconds": 3.8
+        }
+      ]
+    }
+  ]
+}

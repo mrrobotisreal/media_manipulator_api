@@ -1,0 +1,27 @@
+{
+  "name": "none_nowords_vertical",
+  "width": 1080,
+  "height": 1920,
+  "style": {
+    "fontSizePct": 5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Oswald",
+    "bold": true,
+    "outlineWidth": 3,
+    "backgroundMode": "none",
+    "wordsPerGroup": 3,
+    "animation": "none"
+  },
+  "cues": [
+    {
+      "id": "n",
+      "startSeconds": 0.5,
+      "endSeconds": 3.5,
+      "text": "Six words split into two groups"
+    }
+  ]
+}

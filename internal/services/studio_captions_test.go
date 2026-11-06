@@ -43,7 +43,7 @@ func TestSegmentsToCues_SplitsLong(t *testing.T) {
 	}
 }
 
-func TestBuildASS_Golden(t *testing.T) {
+func TestBuildASS_LegacyEscapes(t *testing.T) {
 	style := &models.StudioCaptionStyle{
 		FontSizePct: 5, Color: "#FFFFFF", BackgroundColor: "#000000", BackgroundOpacity: 0.5, Position: "bottom", MaxWidthPct: 90,
 	}
@@ -52,14 +52,13 @@ func TestBuildASS_Golden(t *testing.T) {
 		{ID: "c2", StartSeconds: 65.0, EndSeconds: 67.0, Text: "Line one\nLine two"},
 	}
 	ass := BuildASS(cues, style, 1920, 1080, "Sans")
-
 	for _, want := range []string{
-		"[Script Info]",
 		"PlayResX: 1920",
 		"PlayResY: 1080",
-		"Style: Default,Sans,54,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,", // 5% of 1080 = 54; bg alpha 0.5 → round(127.5)=0x80
-		"Dialogue: 0,0:00:01.50,0:00:03.25,Default,,0,0,0,,Hello (world)",
-		"Dialogue: 0,0:01:05.00,0:01:07.00,Default,,0,0,0,,Line one\\NLine two",
+		// 5% of 1080 = 54; legacy styles render in DejaVu Sans regular; bg alpha 0.5 → 0x80 box (BorderStyle 4).
+		"Style: Default,DejaVu Sans,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,4,0,10.8,2,96,96,54,-1",
+		"Dialogue: 1,0:00:01.50,0:00:03.25,Default,,0,0,0,,Hello (world)",
+		"Dialogue: 1,0:01:05.00,0:01:07.00,Default,,0,0,0,,Line one\\NLine two",
 	} {
 		if !strings.Contains(ass, want) {
 			t.Errorf("ASS missing %q\n---\n%s", want, ass)

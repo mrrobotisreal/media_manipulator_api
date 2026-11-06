@@ -22,6 +22,7 @@ import (
 //	                                        keyframes all lie within N ms (vector) or N/1000 s (studio)
 //	title_in_region(lower30)                an add_title lowerThird, or text/rect layers with y in the lower 30 %
 //	mentions_range(red)                     a grey_except range named red (or a hue range covering it)
+//	value(set_caption_style, look, a|b)     a string field of the first op with that name equals one of a|b (MM121)
 //	a || b                                  either alternative passes (models may pick another valid route)
 //
 // Every primitive has a unit test on canned ops (checks_test.go).
@@ -150,6 +151,24 @@ func parseOne(src string) (Check, error) {
 				return false, fmt.Sprintf("%s missing", args[1])
 			}
 			return compare(v, op, num), fmt.Sprintf("%s = %g", args[1], v)
+		}}, nil
+	case "value":
+		if err := need(3, false); err != nil {
+			return Check{}, err
+		}
+		allowed := strings.Split(args[2], "|")
+		return Check{src, func(ops []map[string]any) (bool, string) {
+			os := opsNamed(ops, args[0])
+			if len(os) == 0 {
+				return false, fmt.Sprintf("no %s op", args[0])
+			}
+			v, _ := os[0][args[1]].(string)
+			for _, a := range allowed {
+				if v == strings.TrimSpace(a) {
+					return true, ""
+				}
+			}
+			return false, fmt.Sprintf("%s = %q", args[1], v)
 		}}, nil
 	case "keyframe_within":
 		if err := need(2, false); err != nil {

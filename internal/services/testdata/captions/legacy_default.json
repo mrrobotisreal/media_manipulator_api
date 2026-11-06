@@ -1,0 +1,27 @@
+{
+  "name": "legacy_default",
+  "width": 1920,
+  "height": 1080,
+  "style": {
+    "fontSizePct": 4.5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.55,
+    "position": "bottom",
+    "maxWidthPct": 90
+  },
+  "cues": [
+    {
+      "id": "a",
+      "startSeconds": 1.5,
+      "endSeconds": 3.25,
+      "text": "Hello {world}"
+    },
+    {
+      "id": "b",
+      "startSeconds": 65,
+      "endSeconds": 67,
+      "text": "Line one\nLine two"
+    }
+  ]
+}

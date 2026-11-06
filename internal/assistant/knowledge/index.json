@@ -361,7 +361,7 @@
    "tiktok",
    "canvas"
   ],
-  "tokens": 1505
+  "tokens": 1560
  },
  "editors/studio/titles": {
   "title": "Darkroom titles, lower-thirds and text",
@@ -731,7 +731,7 @@
    "remove ads",
    "billing"
   ],
-  "tokens": 1024
+  "tokens": 1032
  },
  "pages/privacy-policy": {
   "title": "Privacy Policy",
@@ -1623,20 +1623,6 @@
   ],
   "tokens": 467
  },
- "recipes/studio/shorts-captions": {
-  "title": "Caption styling for Shorts, Reels and TikTok",
-  "kind": "recipe",
-  "keywords": [
-   "Caption styling for Shorts",
-   "Reels and TikTok",
-   "style captions for tiktok",
-   "big captions",
-   "subtitles for shorts",
-   "captions in the middle",
-   "readable subtitles"
-  ],
-  "tokens": 478
- },
  "recipes/studio/speed-ramp": {
   "title": "Speed ramp and slow motion",
   "kind": "recipe",
@@ -1662,6 +1648,19 @@
    "remove a mistake"
   ],
   "tokens": 378
+ },
+ "recipes/studio/studio-caption-styles": {
+  "title": "Caption looks",
+  "kind": "recipe",
+  "keywords": [
+   "Caption looks",
+   "tiktok style captions",
+   "karaoke captions for a music video",
+   "calm captions for an interview",
+   "make the current word yellow",
+   "animated captions"
+  ],
+  "tokens": 421
  },
  "recipes/studio/studio-export-by-destination": {
   "title": "Choose the Darkroom export for the destination",
@@ -1691,7 +1690,7 @@
    "export av1",
    "lossless audio"
   ],
-  "tokens": 1074
+  "tokens": 1069
  },
  "recipes/studio/teal-orange-video": {
   "title": "Teal and orange for video",

@@ -403,10 +403,27 @@ type StudioCaptionCue struct {
 	StartSeconds float64 `json:"startSeconds"`
 	EndSeconds   float64 `json:"endSeconds"`
 	Text         string  `json:"text"`
+	// Words are per-word timings (MM121, additive: absent on older cues, which
+	// stay byte-stable). One entry per whitespace token of Text when present;
+	// a cue without them animates on an even spread.
+	Words []StudioCaptionWord `json:"words,omitempty"`
+}
+
+// StudioCaptionWord is one timed word of a cue (MM121). Emphasis colours the
+// word with the style's highlight colour for the whole cue.
+type StudioCaptionWord struct {
+	Text         string  `json:"text"`
+	StartSeconds float64 `json:"startSeconds"`
+	EndSeconds   float64 `json:"endSeconds"`
+	Emphasis     bool    `json:"emphasis,omitempty"`
 }
 
 // StudioCaptionStyle is the project-wide caption appearance. FontSizePct is a
-// percentage of project height; Position is "bottom" | "top".
+// percentage of project height; Position is "bottom" | "middle" | "top".
+//
+// The MM121 fields are all optional (omitempty, pointers where the zero value
+// is meaningful), so a pre-MM121 style round-trips byte-identically. Absent
+// fields take the defaults in StudioCaptionDefaults (studio_captions_catalog.go).
 type StudioCaptionStyle struct {
 	FontSizePct       float64 `json:"fontSizePct"`
 	Color             string  `json:"color"`
@@ -414,6 +431,20 @@ type StudioCaptionStyle struct {
 	BackgroundOpacity float64 `json:"backgroundOpacity"`
 	Position          string  `json:"position"`
 	MaxWidthPct       float64 `json:"maxWidthPct"`
+
+	FontFamily     string   `json:"fontFamily,omitempty"`     // a StudioCaptionFonts family
+	Bold           *bool    `json:"bold,omitempty"`           // absent = bold
+	Uppercase      *bool    `json:"uppercase,omitempty"`      //
+	HighlightColor string   `json:"highlightColor,omitempty"` // active / emphasised word
+	OutlineColor   string   `json:"outlineColor,omitempty"`   //
+	OutlineWidth   *float64 `json:"outlineWidth,omitempty"`   // 0–12 px at 1080p
+	Shadow         *float64 `json:"shadow,omitempty"`         // 0–1
+	BackgroundMode string   `json:"backgroundMode,omitempty"` // box | none | word_box
+	WordsPerGroup  int      `json:"wordsPerGroup,omitempty"`  // 1–6; 0 = the whole cue
+	Animation      string   `json:"animation,omitempty"`      // none | karaoke_fill | highlight | pop
+	// AnimationStrength scales the effect (pop size), 0–1.
+	AnimationStrength *float64 `json:"animationStrength,omitempty"`
+	LookID            string   `json:"lookId,omitempty"` // the caption look the style started from
 }
 
 // StudioAudioConfig is the project-level auto-ducking configuration. The export

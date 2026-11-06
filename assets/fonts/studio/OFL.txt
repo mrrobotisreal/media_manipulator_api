@@ -1,8 +1,20 @@
-The Darkroom title fonts in this directory (all families except DejaVu Sans,
-which ships under the Bitstream Vera / Arev license in DEJAVU-LICENSE.txt)
-are licensed under the SIL Open Font License, Version 1.1, reproduced below.
-Per-family copyright holders are listed in
+The Darkroom title and caption fonts in this directory (all families except
+DejaVu Sans, which ships under the Bitstream Vera / Arev license in
+DEJAVU-LICENSE.txt) are licensed under the SIL Open Font License, Version 1.1,
+reproduced below. Per-family copyright holders are listed in
 docs/content-studio/design/04-title-fonts.md at the workspace root.
+
+Caption fonts added by MM121 (2026-11-06, from github.com/google/fonts):
+  Bangers           Copyright 2010 The Bangers Project Authors (https://github.com/googlefonts/bangers)
+  Titan One         Copyright (c) 2011, Rodrigo Fuenzalida (www.rfuenzalida.com|hello@rfuenzalida.com), with Reserved Font Name Titan.
+  Lilita One        Copyright (c) 2011 Juan Montoreano (juan@remolacha.biz), with Reserved Font Name Lilita
+  Bowlby One        Copyright (c) 2011 by vernon adams (vern@newtypography.co.uk), with Reserved Font Names "Bowlby" "Bowlby One" and "Bowlby One SC"
+  Rubik Mono One    Copyright 2015 The Rubik Project Authors (mail@hubertfischer.com)
+  Russo One         Copyright (c) 2011-2012, Jovanny Lemonad (jovanny.ru), with Reserved Font Name "Russo"
+  Noto Sans Hebrew  Copyright 2022 The Noto Project Authors (https://github.com/notofonts/hebrew)
+  Noto Sans Arabic  Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)
+  Noto Sans SC      Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
+  Noto Sans KR      Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

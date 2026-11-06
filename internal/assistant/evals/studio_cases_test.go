@@ -48,6 +48,12 @@ var studioReference = map[string]struct {
 	"studio-export-pro-archive":      {"AV1 in MP4 keeps the most quality for its size; older devices may not play it, and ProRes is far larger.", "", false, []Action{{Kind: "export", Params: map[string]any{"preset": "mp4_av1", "container": "mp4", "videoCodec": "av1", "audioCodec": "aac"}}}},
 	"studio-export-pro-music-master": {"FLAC is lossless and half the size of a 24-bit WAV.", "", false, []Action{{Kind: "export", Params: map[string]any{"preset": "audio_flac", "container": "flac", "videoCodec": "none", "audioCodec": "flac"}}}},
 	"studio-export-free-mov":         {"MOV is a Premium format; the dialog has MP4, the closest your plan allows.", "", false, []Action{{Kind: "export", Params: map[string]any{"preset": "mp4_h264", "container": "mp4", "videoCodec": "h264", "audioCodec": "aac", "upgrade": map[string]any{"required": "premium", "option": "mov"}}}}},
+	// MM121 caption looks (the fixture has captions; the anonymous case may answer without an edit).
+	"studio-captions-tiktok":              {"Bold Pop: big uppercase words that pop as they're spoken.", `[{"op":"set_caption_style","look":"bold_pop","position":"middle"}]`, false, nil},
+	"studio-captions-karaoke":             {"Karaoke Classic fills each word as it is sung.", `[{"op":"set_caption_style","look":"karaoke_classic"}]`, false, nil},
+	"studio-captions-calm":                {"The Podcast look: calm lines in a soft box, no animation.", `[{"op":"set_caption_style","look":"podcast"}]`, false, nil},
+	"studio-captions-current-word-yellow": {"The word being spoken now turns yellow.", `[{"op":"set_caption_style","animation":"highlight","highlightColor":"#FFD400"}]`, false, nil},
+	"studio-captions-anon-locked-look":    {"Neon needs a free account: sign up and it unlocks. Meanwhile I applied Bold Pop, which guests can use.", `[{"op":"set_caption_style","look":"bold_pop"}]`, false, nil},
 }
 
 func TestStudioCasesPassableWithRealOps(t *testing.T) {

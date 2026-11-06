@@ -1,0 +1,26 @@
+{
+  "name": "highlight_nowords_landscape",
+  "width": 1920,
+  "height": 1080,
+  "style": {
+    "fontSizePct": 5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Open Sans",
+    "highlightColor": "#39FF14",
+    "backgroundMode": "box",
+    "wordsPerGroup": 0,
+    "animation": "highlight"
+  },
+  "cues": [
+    {
+      "id": "c3",
+      "startSeconds": 5.5,
+      "endSeconds": 8.0,
+      "text": "No word timings on this line"
+    }
+  ]
+}

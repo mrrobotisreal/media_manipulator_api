@@ -1,0 +1,59 @@
+{
+  "name": "emphasis_none_box",
+  "width": 1920,
+  "height": 1080,
+  "style": {
+    "fontSizePct": 5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Inter",
+    "highlightColor": "#FFD400",
+    "backgroundMode": "box",
+    "animation": "none"
+  },
+  "cues": [
+    {
+      "id": "e",
+      "startSeconds": 2,
+      "endSeconds": 5,
+      "text": "This is really important to remember",
+      "words": [
+        {
+          "text": "This",
+          "startSeconds": 2.1,
+          "endSeconds": 2.5
+        },
+        {
+          "text": "is",
+          "startSeconds": 2.55,
+          "endSeconds": 2.95
+        },
+        {
+          "text": "really",
+          "startSeconds": 3.0,
+          "endSeconds": 3.4,
+          "emphasis": true
+        },
+        {
+          "text": "important",
+          "startSeconds": 3.45,
+          "endSeconds": 3.85
+        },
+        {
+          "text": "to",
+          "startSeconds": 3.9,
+          "endSeconds": 4.3
+        },
+        {
+          "text": "remember",
+          "startSeconds": 4.35,
+          "endSeconds": 4.75,
+          "emphasis": true
+        }
+      ]
+    }
+  ]
+}

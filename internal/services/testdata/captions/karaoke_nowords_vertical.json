@@ -1,0 +1,27 @@
+{
+  "name": "karaoke_nowords_vertical",
+  "width": 1080,
+  "height": 1920,
+  "style": {
+    "fontSizePct": 4,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Montserrat",
+    "highlightColor": "#FF3366",
+    "outlineWidth": 3,
+    "backgroundMode": "none",
+    "wordsPerGroup": 4,
+    "animation": "karaoke_fill"
+  },
+  "cues": [
+    {
+      "id": "c3",
+      "startSeconds": 5.5,
+      "endSeconds": 8.0,
+      "text": "No word timings on this line"
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "name": "highlight_words_vertical",
+  "width": 1080,
+  "height": 1920,
+  "style": {
+    "fontSizePct": 5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Poppins",
+    "bold": true,
+    "highlightColor": "#FFD400",
+    "outlineWidth": 3,
+    "shadow": 0.3,
+    "backgroundMode": "none",
+    "wordsPerGroup": 4,
+    "animation": "highlight",
+    "lookId": "clean_highlight"
+  },
+  "cues": [
+    {
+      "id": "c2",
+      "startSeconds": 0.5,
+      "endSeconds": 5.0,
+      "text": "Welcome back. Today we test captions that move with every word",
+      "words": [
+        {
+          "text": "Welcome",
+          "startSeconds": 0.5,
+          "endSeconds": 0.85
+        },
+        {
+          "text": "back.",
+          "startSeconds": 0.9,
+          "endSeconds": 1.25
+        },
+        {
+          "text": "Today",
+          "startSeconds": 1.6,
+          "endSeconds": 1.85
+        },
+        {
+          "text": "we",
+          "startSeconds": 1.9,
+          "endSeconds": 2.15
+        },
+        {
+          "text": "test",
+          "startSeconds": 2.2,
+          "endSeconds": 2.45
+        },
+        {
+          "text": "captions",
+          "startSeconds": 2.5,
+          "endSeconds": 2.75
+        },
+        {
+          "text": "that",
+          "startSeconds": 2.8,
+          "endSeconds": 3.05
+        },
+        {
+          "text": "move",
+          "startSeconds": 3.1,
+          "endSeconds": 3.35
+        },
+        {
+          "text": "with",
+          "startSeconds": 3.4,
+          "endSeconds": 3.65
+        },
+        {
+          "text": "every",
+          "startSeconds": 3.7,
+          "endSeconds": 3.95
+        },
+        {
+          "text": "word",
+          "startSeconds": 4.0,
+          "endSeconds": 4.25
+        }
+      ]
+    }
+  ]
+}

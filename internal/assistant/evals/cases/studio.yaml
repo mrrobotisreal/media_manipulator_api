@@ -249,3 +249,42 @@
     actions: [suggest:export]
     export: ["container=flac|wav", "audioCodec=flac|pcm_s24le", "upgrade=none"]
     no_edits: true
+# --- MM121: caption looks and animation (recipe studio-caption-styles). The fixture has captions;
+# an anonymous user asking for a locked look gets an allowed one and a sign-up note.
+- id: studio-captions-tiktok
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips-captions.txt
+  message: "Make my captions look like TikTok"
+  expect:
+    ops: ["value(set_caption_style, look, bold_pop) || value(set_caption_style, animation, pop)"]
+- id: studio-captions-karaoke
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips-captions.txt
+  message: "I want karaoke captions for this music video"
+  expect:
+    ops: ["value(set_caption_style, look, karaoke_classic) || value(set_caption_style, animation, karaoke_fill)"]
+- id: studio-captions-calm
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips-captions.txt
+  message: "Calm captions for an interview please, nothing flashy"
+  expect:
+    ops: ["value(set_caption_style, look, podcast|minimal) || value(set_caption_style, animation, none)"]
+- id: studio-captions-current-word-yellow
+  surface: studio
+  requires: studio
+  fixture_doc: studio/two-clips-captions.txt
+  message: "Make the current word yellow"
+  expect:
+    ops: ["value(set_caption_style, animation, highlight|karaoke_fill|pop)"]
+- id: studio-captions-anon-locked-look
+  surface: studio
+  requires: studio
+  tier: anonymous
+  fixture_doc: studio/two-clips-captions.txt
+  message: "Use the Neon caption look"
+  expect:
+    ops: ["value(set_caption_style, look, bold_pop|clean_highlight|minimal) || op_count == 0"]
+    any_of: ["sign up", "free account", "account"]
