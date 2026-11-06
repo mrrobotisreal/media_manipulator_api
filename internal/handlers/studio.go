@@ -57,6 +57,8 @@ type StudioHandler struct {
 	// MM118: the tier registry for the output plan gate's `required` and the
 	// export-options route (SetTierRegistry). nil = the table's default ladder.
 	tierRegistry *tiers.Registry
+	// MM122: saved caption looks (SetCaptionLookStore); nil = 503.
+	captionLooks CaptionLookStore
 }
 
 // SetTierRegistry attaches the tier registry (MM118 output gating).
@@ -133,6 +135,12 @@ func RegisterStudioRoutes(r gin.IRouter, h *StudioHandler) {
 	// Export the EDL via NVENC on the dedicated GPU (MM118: MP4, MOV, MKV,
 	// MP3 or WAV from the output table; GET /export-options describes it).
 	studio.GET("/export-options", h.ExportOptions)
+	// MM122: saved caption looks on the account (studio_caption_looks.go).
+	studio.GET("/caption-looks", h.ListCaptionLooks)
+	studio.POST("/caption-looks", h.CreateCaptionLook)
+	studio.GET("/caption-looks/:id", h.GetCaptionLook)
+	studio.PUT("/caption-looks/:id", h.SaveCaptionLook)
+	studio.DELETE("/caption-looks/:id", h.DeleteCaptionLook)
 	studio.POST("/projects/:id/export", h.ExportProject)
 	// Export depth (part 20): persistent history, render-again with the stored
 	// options, and a synchronous single-frame PNG.

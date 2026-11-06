@@ -44,6 +44,10 @@ const (
 	// locator = project_id = the conversation id, under the owner's retention
 	// window. The sweeper hard-deletes the row (messages and feedback cascade).
 	KindAssistantConversation = telemetry.RetainedAssistantConversation
+	// KindStudioCaptionLook is a saved Darkroom caption look (MM122): locator =
+	// project_id = the look id. Kept with the account (looks never expire by
+	// time); the sweeper hard-deletes the studio_caption_looks row (no file).
+	KindStudioCaptionLook = telemetry.RetainedStudioCaptionLook
 )
 
 // Store is the slice of *telemetry.Store the ledger needs. Tests pass a fake.

@@ -72,6 +72,7 @@ type SweepStore interface {
 	DeletePhotoProjectRows(ctx context.Context, projectID string) error
 	DeletePhotoPresetRow(ctx context.Context, presetID string) error
 	DeleteAssistantConversationRow(ctx context.Context, conversationID string) error
+	DeleteStudioCaptionLookRow(ctx context.Context, lookID string) error
 	DeleteVoiceRow(ctx context.Context, voiceID string) ([]string, error)
 	AnonymizeJob(ctx context.Context, jobID string) error
 	JobHasLiveRows(ctx context.Context, jobID string) (bool, error)
@@ -341,6 +342,8 @@ func (s *Sweeper) processBatch(ctx context.Context, rows []telemetry.LedgerRow, 
 			s.finish(ctx, row, res, s.deletePhotoPreset(ctx, row))
 		case KindAssistantConversation:
 			s.finish(ctx, row, res, s.deleteAssistantConversation(ctx, row))
+		case KindStudioCaptionLook:
+			s.finish(ctx, row, res, s.deleteStudioCaptionLook(ctx, row))
 		case KindVoice:
 			s.finish(ctx, row, res, s.deleteVoice(ctx, row))
 		case KindJobRow:
@@ -869,6 +872,15 @@ func (s *Sweeper) deletePhotoPreset(ctx context.Context, row telemetry.LedgerRow
 func (s *Sweeper) deleteAssistantConversation(ctx context.Context, row telemetry.LedgerRow) outcome {
 	if err := s.store.DeleteAssistantConversationRow(ctx, row.Locator); err != nil {
 		return fail(fmt.Errorf("delete assistant conversation row: %w", err))
+	}
+	return outcome{done: true}
+}
+
+// deleteStudioCaptionLook removes a saved caption look (MM122): one row, no
+// file or object exists for it. Idempotent.
+func (s *Sweeper) deleteStudioCaptionLook(ctx context.Context, row telemetry.LedgerRow) outcome {
+	if err := s.store.DeleteStudioCaptionLookRow(ctx, row.Locator); err != nil {
+		return fail(fmt.Errorf("delete caption look row: %w", err))
 	}
 	return outcome{done: true}
 }

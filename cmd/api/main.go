@@ -223,6 +223,9 @@ func main() {
 	// ingest/export progress flows through the same /api/job/:jobId machinery.
 	studioHandler := handlers.NewStudioHandler(jobManager, cfg, inspector, s3Client, pool, transcription)
 	studioHandler.SetTierRegistry(tierRegistry)
+	if store.Enabled() {
+		studioHandler.SetCaptionLookStore(store) // MM122 saved caption looks
+	}
 	// Motion (MM43): projects + export counter on the telemetry store; the
 	// vectorize route reuses the conversion handler's converter job.
 	vectorHandler := newVectorHandler(cfg, store, tierRegistry, s3Client, conversionHandler, analyticsEmitter, logging)
@@ -966,6 +969,13 @@ func routeLimitDispatcher(cfg *config.Config, limiter *limits.Limiter, guard fun
 			routeKey: "photo_presets", tool: "photo_presets",
 			sessionLimit: cfg.RateLimitPhotoPresetsPerSessionPerHour, ipLimit: cfg.RateLimitPhotoPresetsPerIPPerHour,
 			matches: handlers.IsPhotoPresetWritePath,
+		},
+		// MM122: saving a caption look (a cheap write a client loop could
+		// hammer): the caption_looks bucket. Reads, saves, deletes are free.
+		{
+			routeKey: "caption_looks", tool: "caption_looks",
+			sessionLimit: cfg.RateLimitCaptionLooksPerSessionPerHour, ipLimit: cfg.RateLimitCaptionLooksPerIPPerHour,
+			matches: handlers.IsCaptionLookWritePath,
 		},
 		// MM96: export (project, batch, stateless) shares the photo_export bucket
 		// (the uploads numbers); subject masks and heal are GPU work: photo_ai.
