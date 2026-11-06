@@ -361,7 +361,7 @@
    "tiktok",
    "canvas"
   ],
-  "tokens": 1402
+  "tokens": 1505
  },
  "editors/studio/titles": {
   "title": "Darkroom titles, lower-thirds and text",
@@ -1686,9 +1686,12 @@
    "opus audio",
    "small audio file",
    "subtitles people can turn on and off",
-   "closed captions track"
+   "closed captions track",
+   "export prores",
+   "export av1",
+   "lossless audio"
   ],
-  "tokens": 1056
+  "tokens": 1074
  },
  "recipes/studio/teal-orange-video": {
   "title": "Teal and orange for video",

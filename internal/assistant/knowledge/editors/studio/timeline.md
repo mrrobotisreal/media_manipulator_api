@@ -25,32 +25,40 @@ Caption style:
 - `position`: one of bottom, top, default "bottom"
 - `maxWidthPct`: 40 to 100, default 90
 ### Export
-A Darkroom export is a container plus a video codec and an audio codec, from one server table:
-- MP4 (.mp4): H.264 or H.265; audio AAC, Opus.
-- MOV (.mov): H.264 or H.265; audio AAC, PCM 16-bit.
-- MKV (.mkv): H.264 or H.265 or VP9; audio AAC, PCM 16-bit, MP3, Opus, Vorbis.
-- WEBM (.webm): VP9; audio Opus, Vorbis.
-- MP3 (.mp3): audio only; audio MP3.
-- WAV (.wav): audio only; audio PCM 16-bit.
-- OPUS (.opus): audio only; audio Opus.
-Presets (everyone sees them; params.preset in suggest_action export):
-- `mp4_h264` (MP4 · H.264 · AAC): plays everywhere: social, YouTube, messaging, the default; open to everyone.
-- `mp4_hevc` (MP4 · H.265 · AAC): about half the file size at the same quality; plays on phones and modern browsers; needs a free account.
-- `mov_h264` (MOV · H.264 · AAC): Final Cut Pro, iMovie and other Apple editing; needs Premium.
-- `mov_hevc` (MOV · H.265 · AAC): Apple editing at half the size; needs Premium.
-- `webm_vp9_opus` (WEBM · VP9 · Opus): website embeds (browsers play it natively); needs Premium.
-- `mkv_hevc_aac` (MKV · H.265 · AAC): archive copies and media servers (Plex, VLC); needs Premium.
-- `mkv_hevc_opus` (MKV · H.265 · Opus): archive with smaller audio; needs Premium.
-- `audio_mp3` (MP3): podcasts and music, small files; open to everyone.
-- `audio_wav` (WAV · PCM 16-bit): uncompressed audio for further editing or mastering; open to everyone.
-- `audio_opus` (OPUS): the smallest audio file; 96 kbps mono for a spoken podcast; needs Premium.
-Advanced (needs Premium): pick the container, video and audio codec yourself (any valid combination above), audio bitrate (AAC and MP3: 128, 192, 256, 320 kbps, default 192; Opus: 64, 96, 128, 160, 256 kbps, default 128; Vorbis: 128, 192, 256 kbps, default 192; PCM has none) and stereo or mono. Video bitrate, keyframes and frame rate are not settable.
-Warnings shown under the picker:
+A Darkroom export is a container, a video codec and an audio codec, from one server table:
+- MP4: H.264, H.265, AV1; audio AAC, Opus.
+- MOV: H.264, H.265, ProRes 422; audio AAC, PCM 16-bit, PCM 24-bit.
+- MKV: H.264, H.265, VP9, AV1; audio AAC, PCM 16-bit, MP3, Opus, Vorbis, FLAC, PCM 24-bit.
+- WEBM: VP9, AV1; audio Opus, Vorbis.
+- .mp3: audio only, MP3.
+- .wav: audio only, PCM 16-bit, PCM 24-bit.
+- .opus: audio only, Opus.
+- .flac: audio only, FLAC.
+ProRes 422 takes PCM 24-bit or PCM 16-bit audio only.
+Presets (params.preset in suggest_action export; the plan that unlocks each last):
+- `mp4_h264` (MP4 · H.264 · AAC): plays everywhere: social, YouTube, messaging, the default; everyone.
+- `mp4_hevc` (MP4 · H.265 · AAC): half the size at the same quality; phones and modern browsers; a free account.
+- `mov_h264` (MOV · H.264 · AAC): Final Cut Pro, iMovie, Apple editing; Premium.
+- `mov_hevc` (MOV · H.265 · AAC): Apple editing at half the size; Premium.
+- `webm_vp9_opus` (WEBM · VP9 · Opus): website embeds (native in browsers); Premium.
+- `mkv_hevc_aac` (MKV · H.265 · AAC): archive and media servers (Plex, VLC); Premium.
+- `mkv_hevc_opus` (MKV · H.265 · Opus): archive, smaller audio; Premium.
+- `audio_mp3` (MP3): podcasts and music, small; everyone.
+- `audio_wav` (WAV · PCM 16-bit): uncompressed, for further editing; everyone.
+- `audio_opus` (OPUS): smallest audio; 96 kbps mono for a spoken podcast; Premium.
+- `mp4_av1` (MP4 · AV1 · AAC): smallest high-quality video; Pro.
+- `webm_av1_opus` (WEBM · AV1 · Opus): smallest web embed; Pro.
+- `mov_prores` (MOV · ProRes 422 · PCM 24-bit): hand-off to Final Cut, Premiere or Resolve; 10-bit 4:2:2 from the 8-bit timeline, very large; Pro.
+- `audio_flac` (FLAC): lossless master, about half a WAV; Pro.
+- `audio_wav24` (WAV · PCM 24-bit): studio master for mixing; Pro.
+Advanced (needs Premium): any valid container, video and audio codec, audio bitrate (AAC and MP3: 128, 192, 256, 320 kbps, default 192; Opus: 64, 96, 128, 160, 256 kbps, default 128; Vorbis: 128, 192, 256 kbps, default 192; PCM and FLAC have none) and stereo or mono. Video bitrate, keyframes and frame rate are not settable.
+Picker warnings:
 - MKV, MP4 with Opus audio, WEBM, OPUS: QuickTime, Photos and iPhone will not open it.
-- MKV, MOV with PCM 16-bit audio: a browser cannot play it inline.
-Plans (the server checks the live plan): H.265 needs a free account; MKV needs Premium; MOV needs Premium; OPUS needs Premium; an embedded caption track needs Premium; VORBIS needs Premium; VP9 needs Premium; WebM needs Premium. Everything else is open to everyone. MOV never carries Opus or Vorbis (offer MKV, WebM or MP4). AV1, ProRes and FLAC are not available yet.
-Medi offers an export with suggest_action export and params; the dialog opens prefilled and the user presses Export. A choice above the plan is replaced by the nearest one the plan allows, with an upgrade note.
-Output heights: canvas, 2160p, 1440p, 1080p, 720p. Captions: none, burn in, sidecar (SRT + VTT files) or embedded (a track viewers toggle, in MP4/MOV/MKV/WebM; plain text, so styling and animation only survive burn-in; not in audio-only files). Exports render on the server, one allowance unit each whatever the format; VP9 can wait as Queued for an encoder.
+- MKV, MOV with PCM 16-bit audio, MOV with PCM 24-bit audio: a browser cannot play it inline.
+- AV1: older phones, TVs and browsers may not play it.
+Plans (the server checks the live plan): free account: H.265; Premium: MKV, MOV, Opus, embedded captions, Vorbis, VP9, WebM; Pro: AV1, FLAC, PCM 24-bit, ProRes 422; everything else is open to everyone. MOV never carries Opus or Vorbis (offer MKV, WebM or MP4). ProRes sizes are predictable: the dialog shows an estimate, and the server refuses one over the plan's per-file cap before rendering.
+Medi suggests with suggest_action export; the dialog opens prefilled and the user presses Export. Above the plan, the nearest allowed choice is swapped in with an upgrade note.
+Output heights: canvas, 2160p, 1440p, 1080p, 720p. Captions: none, burn in, sidecar (SRT + VTT files) or embedded (a track viewers toggle, in MP4/MOV/MKV/WebM; plain text, so styling and animation only survive burn-in; not in audio-only files). Exports render on the server, one allowance unit each; CPU encodes (VP9, ProRes) may wait as Queued.
 Canvas: projects up to 4K at 24, 30 or 60 fps; vertical 9:16 for Shorts/Reels/TikTok, 1:1 and 4:5 for feeds, 16:9 for YouTube.
 
 ## Search keywords
