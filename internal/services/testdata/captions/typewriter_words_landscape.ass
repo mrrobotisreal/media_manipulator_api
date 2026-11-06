@@ -1,0 +1,26 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,JetBrains Mono,52,&H00E6F0F5,&H00E6F0F5,&H00000000,&H331A1A1A,0,0,0,0,100,100,0,0,4,0,10.4,2,96,96,54,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.50,0:00:00.90,Default,,0,0,0,,{\1a&HFF&\3a&HFF&\t(0,1,\1a&H00&\3a&H00&)}W{\1a&HFF&\3a&HFF&\t(35,36,\1a&H00&\3a&H00&)}e{\1a&HFF&\3a&HFF&\t(70,71,\1a&H00&\3a&H00&)}l{\1a&HFF&\3a&HFF&\t(105,106,\1a&H00&\3a&H00&)}c{\1a&HFF&\3a&HFF&\t(140,141,\1a&H00&\3a&H00&)}o{\1a&HFF&\3a&HFF&\t(175,176,\1a&H00&\3a&H00&)}m{\1a&HFF&\3a&HFF&\t(210,211,\1a&H00&\3a&H00&)}e{\1a&HFF&\3a&HFF&} {\1c&H00D4FF&}back.{\1c&HE6F0F5&}
+Dialogue: 1,0:00:00.90,0:00:01.60,Default,,0,0,0,,Welcome {\1c&H00D4FF&}{\1a&HFF&\3a&HFF&\t(0,1,\1a&H00&\3a&H00&)}b{\1a&HFF&\3a&HFF&\t(49,50,\1a&H00&\3a&H00&)}a{\1a&HFF&\3a&HFF&\t(98,99,\1a&H00&\3a&H00&)}c{\1a&HFF&\3a&HFF&\t(147,148,\1a&H00&\3a&H00&)}k{\1a&HFF&\3a&HFF&\t(196,197,\1a&H00&\3a&H00&)}.{\1c&HE6F0F5&}
+Dialogue: 1,0:00:01.60,0:00:01.90,Default,,0,0,0,,{\1a&HFF&\3a&HFF&\t(0,1,\1a&H00&\3a&H00&)}T{\1a&HFF&\3a&HFF&\t(35,36,\1a&H00&\3a&H00&)}o{\1a&HFF&\3a&HFF&\t(70,71,\1a&H00&\3a&H00&)}d{\1a&HFF&\3a&HFF&\t(105,106,\1a&H00&\3a&H00&)}a{\1a&HFF&\3a&HFF&\t(140,141,\1a&H00&\3a&H00&)}y{\1a&HFF&\3a&HFF&} we test {\1c&H00D4FF&}captions{\1c&HE6F0F5&}
+Dialogue: 1,0:00:01.90,0:00:02.20,Default,,0,0,0,,Today {\1a&HFF&\3a&HFF&\t(0,1,\1a&H00&\3a&H00&)}w{\1a&HFF&\3a&HFF&\t(87,88,\1a&H00&\3a&H00&)}e{\1a&HFF&\3a&HFF&} test {\1c&H00D4FF&}captions{\1c&HE6F0F5&}
+Dialogue: 1,0:00:02.20,0:00:02.50,Default,,0,0,0,,Today we {\1a&HFF&\3a&HFF&\t(0,1,\1a&H00&\3a&H00&)}t{\1a&HFF&\3a&HFF&\t(43,44,\1a&H00&\3a&H00&)}e{\1a&HFF&\3a&HFF&\t(87,88,\1a&H00&\3a&H00&)}s{\1a&HFF&\3a&HFF&\t(131,132,\1a&H00&\3a&H00&)}t{\1a&HFF&\3a&HFF&} {\1c&H00D4FF&}captions{\1c&HE6F0F5&}
+Dialogue: 1,0:00:02.50,0:00:02.80,Default,,0,0,0,,Today we test {\1c&H00D4FF&}{\1a&HFF&\3a&HFF&\t(0,1,\1a&H00&\3a&H00&)}c{\1a&HFF&\3a&HFF&\t(21,22,\1a&H00&\3a&H00&)}a{\1a&HFF&\3a&HFF&\t(43,44,\1a&H00&\3a&H00&)}p{\1a&HFF&\3a&HFF&\t(65,66,\1a&H00&\3a&H00&)}t{\1a&HFF&\3a&HFF&\t(87,88,\1a&H00&\3a&H00&)}i{\1a&HFF&\3a&HFF&\t(109,110,\1a&H00&\3a&H00&)}o{\1a&HFF&\3a&HFF&\t(131,132,\1a&H00&\3a&H00&)}n{\1a&HFF&\3a&HFF&\t(153,154,\1a&H00&\3a&H00&)}s{\1c&HE6F0F5&}
+Dialogue: 1,0:00:02.80,0:00:03.10,Default,,0,0,0,,{\1a&HFF&\3a&HFF&\t(0,1,\1a&H00&\3a&H00&)}t{\1a&HFF&\3a&HFF&\t(43,44,\1a&H00&\3a&H00&)}h{\1a&HFF&\3a&HFF&\t(87,88,\1a&H00&\3a&H00&)}a{\1a&HFF&\3a&HFF&\t(131,132,\1a&H00&\3a&H00&)}t{\1a&HFF&\3a&HFF&} move with every
+Dialogue: 1,0:00:03.10,0:00:03.40,Default,,0,0,0,,that {\1a&HFF&\3a&HFF&\t(0,1,\1a&H00&\3a&H00&)}m{\1a&HFF&\3a&HFF&\t(43,44,\1a&H00&\3a&H00&)}o{\1a&HFF&\3a&HFF&\t(87,88,\1a&H00&\3a&H00&)}v{\1a&HFF&\3a&HFF&\t(131,132,\1a&H00&\3a&H00&)}e{\1a&HFF&\3a&HFF&} with every
+Dialogue: 1,0:00:03.40,0:00:03.70,Default,,0,0,0,,that move {\1a&HFF&\3a&HFF&\t(0,1,\1a&H00&\3a&H00&)}w{\1a&HFF&\3a&HFF&\t(43,44,\1a&H00&\3a&H00&)}i{\1a&HFF&\3a&HFF&\t(87,88,\1a&H00&\3a&H00&)}t{\1a&HFF&\3a&HFF&\t(131,132,\1a&H00&\3a&H00&)}h{\1a&HFF&\3a&HFF&} every
+Dialogue: 1,0:00:03.70,0:00:04.00,Default,,0,0,0,,that move with {\1a&HFF&\3a&HFF&\t(0,1,\1a&H00&\3a&H00&)}e{\1a&HFF&\3a&HFF&\t(35,36,\1a&H00&\3a&H00&)}v{\1a&HFF&\3a&HFF&\t(70,71,\1a&H00&\3a&H00&)}e{\1a&HFF&\3a&HFF&\t(105,106,\1a&H00&\3a&H00&)}r{\1a&HFF&\3a&HFF&\t(140,141,\1a&H00&\3a&H00&)}y
+Dialogue: 1,0:00:04.00,0:00:05.00,Default,,0,0,0,,{\1a&HFF&\3a&HFF&\t(0,1,\1a&H00&\3a&H00&)}w{\1a&HFF&\3a&HFF&\t(43,44,\1a&H00&\3a&H00&)}o{\1a&HFF&\3a&HFF&\t(87,88,\1a&H00&\3a&H00&)}r{\1a&HFF&\3a&HFF&\t(131,132,\1a&H00&\3a&H00&)}d

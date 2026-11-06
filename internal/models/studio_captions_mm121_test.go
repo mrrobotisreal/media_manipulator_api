@@ -41,7 +41,7 @@ func TestSanitizeCaptionStyleMM121(t *testing.T) {
 	st := SanitizeCaptionStyle(&StudioCaptionStyle{
 		FontSizePct: 5, Color: "#fff000", BackgroundColor: "#000000", Position: "middle", MaxWidthPct: 90,
 		FontFamily: "Comic Sans", HighlightColor: "#abcdef", OutlineColor: "nope", OutlineWidth: &ow, Shadow: &sh,
-		BackgroundMode: "glow", WordsPerGroup: 9, Animation: "bounce", AnimationStrength: &as, LookID: "nope",
+		BackgroundMode: "glow", WordsPerGroup: 9, Animation: "wobble", AnimationStrength: &as, LookID: "nope",
 	})
 	if st.Position != "middle" || st.FontFamily != "" || st.HighlightColor != "#ABCDEF" || st.OutlineColor != "" ||
 		*st.OutlineWidth != 12 || *st.Shadow != 0 || st.BackgroundMode != "" || st.WordsPerGroup != 6 ||
@@ -77,8 +77,8 @@ func TestAnonCaptionAllowlist(t *testing.T) {
 			}
 		}
 	}
-	if n != 3 || len(StudioCaptionLooks) != 6 {
-		t.Errorf("want 6 looks, 3 anonymous; have %d, %d", len(StudioCaptionLooks), n)
+	if n != 3 || len(StudioCaptionLooks) != 12 {
+		t.Errorf("want 12 looks (MM122), 3 anonymous; have %d, %d", len(StudioCaptionLooks), n)
 	}
 }
 

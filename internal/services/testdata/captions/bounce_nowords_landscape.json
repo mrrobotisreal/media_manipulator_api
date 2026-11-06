@@ -1,0 +1,34 @@
+{
+  "name": "bounce_nowords_landscape",
+  "width": 1920,
+  "height": 1080,
+  "style": {
+    "fontSizePct": 6,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Montserrat",
+    "bold": true,
+    "highlightColor": "#FFE600",
+    "outlineWidth": 4,
+    "backgroundMode": "none",
+    "wordsPerGroup": 3,
+    "animation": "bounce"
+  },
+  "cues": [
+    {
+      "id": "n1",
+      "startSeconds": 1.0,
+      "endSeconds": 3.4,
+      "text": "No word timings on this line"
+    },
+    {
+      "id": "n2",
+      "startSeconds": 3.6,
+      "endSeconds": 5.2,
+      "text": "A second cue follows"
+    }
+  ]
+}

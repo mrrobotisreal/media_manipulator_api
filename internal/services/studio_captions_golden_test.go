@@ -40,8 +40,8 @@ func captionGoldenFixtures(t *testing.T) []string {
 
 func TestCaptionASSGoldens(t *testing.T) {
 	paths := captionGoldenFixtures(t)
-	if len(paths) < 12 {
-		t.Fatalf("want ≥ 12 caption golden fixtures (decision 4), have %d", len(paths))
+	if len(paths) < 30 {
+		t.Fatalf("want ≥ 30 caption golden fixtures (MM121 18 + MM122 12), have %d", len(paths))
 	}
 	update := os.Getenv("UPDATE_CAPTION_GOLDENS") == "1"
 	for _, p := range paths {
@@ -120,7 +120,8 @@ func TestCaptionGoldenCoverage(t *testing.T) {
 			}
 		}
 	}
-	for _, a := range []string{"none", "karaoke_fill", "highlight", "pop"} {
+	// MM122: every animation, with and without word timings.
+	for _, a := range models.CaptionAnimations {
 		for _, w := range []string{"words", "nowords"} {
 			if !seen[a+"/"+w] {
 				t.Errorf("no fixture for %s %s", a, w)

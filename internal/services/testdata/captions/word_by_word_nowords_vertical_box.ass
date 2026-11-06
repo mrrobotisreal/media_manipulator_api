@@ -1,0 +1,25 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Inter,115,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,-1,0,0,0,100,100,0,0,4,0,23,2,54,54,96,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:01.00,0:00:01.40,Default,,0,0,0,,{\1a&HFF&\3a&HFF&\t(0,140,\1a&H00&\3a&H00&)}No{\1a&HFF&\3a&HFF&} word timings
+Dialogue: 1,0:00:01.40,0:00:01.80,Default,,0,0,0,,No {\1a&HFF&\3a&HFF&\t(0,140,\1a&H00&\3a&H00&)}word{\1a&HFF&\3a&HFF&} timings
+Dialogue: 1,0:00:01.80,0:00:02.20,Default,,0,0,0,,No word {\1a&HFF&\3a&HFF&\t(0,140,\1a&H00&\3a&H00&)}timings
+Dialogue: 1,0:00:02.20,0:00:02.60,Default,,0,0,0,,{\1a&HFF&\3a&HFF&\t(0,140,\1a&H00&\3a&H00&)}on{\1a&HFF&\3a&HFF&} this line
+Dialogue: 1,0:00:02.60,0:00:03.00,Default,,0,0,0,,on {\1a&HFF&\3a&HFF&\t(0,140,\1a&H00&\3a&H00&)}this{\1a&HFF&\3a&HFF&} line
+Dialogue: 1,0:00:03.00,0:00:03.40,Default,,0,0,0,,on this {\1a&HFF&\3a&HFF&\t(0,140,\1a&H00&\3a&H00&)}line
+Dialogue: 1,0:00:03.60,0:00:04.00,Default,,0,0,0,,{\1a&HFF&\3a&HFF&\t(0,140,\1a&H00&\3a&H00&)}A{\1a&HFF&\3a&HFF&} second cue
+Dialogue: 1,0:00:04.00,0:00:04.40,Default,,0,0,0,,A {\1a&HFF&\3a&HFF&\t(0,140,\1a&H00&\3a&H00&)}second{\1a&HFF&\3a&HFF&} cue
+Dialogue: 1,0:00:04.40,0:00:04.80,Default,,0,0,0,,A second {\1a&HFF&\3a&HFF&\t(0,140,\1a&H00&\3a&H00&)}cue
+Dialogue: 1,0:00:04.80,0:00:05.20,Default,,0,0,0,,{\1a&HFF&\3a&HFF&\t(0,140,\1a&H00&\3a&H00&)}follows

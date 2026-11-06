@@ -5,6 +5,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/models"
 )
@@ -26,6 +27,18 @@ import (
 //   - karaoke_fill: one Dialogue per group, \kf per word (filled = highlight).
 //   - highlight: one Dialogue per word span, the active word recoloured.
 //   - pop: as highlight, plus a scale-up-and-back \t on the active word.
+//   - bounce (MM122): as pop, a taller y-stretch with an overshoot settle.
+//   - word_by_word (MM122): words appear at their start (alpha fade-in),
+//     later words hidden.
+//   - box_highlight (MM122): a BorderStyle 3 box in the highlight colour
+//     behind the active word (the WordBox layer, as backgroundMode word_box).
+//   - fade (MM122): \fad in and out per group (exit ~55 % of the entrance).
+//   - typewriter (MM122): the active word's characters revealed across its
+//     spoken span, later words hidden.
+//   - glow (MM122): the active word's outline turns the highlight colour
+//     and its \blur pulses.
+//
+// animationStrength scales every effect (sizes, durations, blur).
 //
 // fontName is ignored (kept for the call sites); the family comes from the
 // style, with a per-cue script fallback (models.CaptionFontFor).
@@ -58,9 +71,9 @@ func BuildASS(cues []models.StudioCaptionCue, style *models.StudioCaptionStyle, 
 	}
 	fmt.Fprintf(&b, "Style: Default,%s,%d,%s,%s,%s,%s,%d,0,0,0,100,100,0,0,%d,%s,%s,%d,%d,%d,%d,-1\n",
 		r.family, r.fontSize, r.primary, r.primary, r.outlineColor, back, bold, borderStyle, assNum(r.outlinePx), assNum(shadow), r.align, marginH, marginH, marginV)
-	if r.bgMode == models.CaptionBackgroundWordBox {
+	if r.boxed {
 		fmt.Fprintf(&b, "Style: WordBox,%s,%d,&HFF000000,&HFF000000,%s,&HFF000000,%d,0,0,0,100,100,0,0,3,%s,0,%d,%d,%d,%d,-1\n",
-			r.family, r.fontSize, hexToASSColor(r.highlight, 1), bold, assNum(r.boxPad), r.align, marginH, marginH, marginV)
+			r.family, r.fontSize, hexToASSColor(r.highlight, 1), bold, assNum(r.wordBoxPad), r.align, marginH, marginH, marginV)
 	}
 	b.WriteString("\n[Events]\n")
 	b.WriteString("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
@@ -85,6 +98,18 @@ type resolvedCaptionStyle struct {
 	wordsPerGroup, align        int
 	popScale                    int
 	maxWidthPct                 float64
+	// MM122 effect parameters (all derived from animationStrength).
+	boxed                  bool    // a WordBox layer: backgroundMode word_box or animation box_highlight
+	wordBoxPad             float64 // the WordBox outline (box padding)
+	bounceX, bounceY       int     // bounce peak \fscx / \fscy
+	bounceDipX, bounceDipY int     // bounce overshoot dip
+	fadeIn, fadeOut        int     // fade ms
+	revealMs               int     // word_by_word fade-in ms
+	typeFrac               float64 // typewriter: share of a word's span its characters take
+	glowBord               float64 // glow outline px
+	glowBlur, glowPulse    float64 // glow \blur rest / peak
+	outlineTag             string  // &HBBGGRR& of the outline colour
+	backAlpha              string  // &HAA& of BackColour (restores \4a after a hide)
 }
 
 func resolveCaptionStyle(st *models.StudioCaptionStyle, height int) resolvedCaptionStyle {
@@ -128,12 +153,32 @@ func resolveCaptionStyle(st *models.StudioCaptionStyle, height int) resolvedCapt
 	r.shadowPx = roundCentis(shadow * 8 * scale)
 	r.boxPad = roundCentis(float64(r.fontSize) * 0.2)
 	r.popScale = 100 + int(math.Round(40*strength))
+	// MM122. Timings follow the motion reference (word stagger 60-120 ms,
+	// exits 40-50 % shorter than entrances); sizes scale with the canvas.
+	r.bounceX = 100 + int(math.Round(20*strength))
+	r.bounceY = 100 + int(math.Round(45*strength))
+	r.bounceDipX = 100 - int(math.Round(6*strength))
+	r.bounceDipY = 100 - int(math.Round(10*strength))
+	r.fadeIn = int(math.Round(120 + 180*strength))
+	r.fadeOut = int(math.Round(float64(r.fadeIn) * 0.55))
+	r.revealMs = int(math.Round(60 + 80*strength))
+	r.typeFrac = 0.5 + 0.5*strength
+	r.glowBord = math.Max(r.outlinePx, roundCentis((2+4*strength)*scale))
+	r.glowBlur = roundCentis((1 + 3*strength) * scale)
+	r.glowPulse = roundCentis((2 + 6*strength) * scale)
 	r.primary = hexToASSColor(st.Color, 1)
 	r.primaryTag = assColorTag(st.Color)
 	r.highlightTag = assColorTag(r.highlight)
 	r.outlineColor = hexToASSColor(firstNonEmptyString(st.OutlineColor, models.CaptionDefaultOutlineColor), 1)
+	r.outlineTag = assColorTag(firstNonEmptyString(st.OutlineColor, models.CaptionDefaultOutlineColor))
 	r.boxColor = hexToASSColor(st.BackgroundColor, st.BackgroundOpacity)
 	r.shadowColor = r.boxColor
+	r.backAlpha = "&H" + r.boxColor[2:4] + "&"
+	r.boxed = r.bgMode == models.CaptionBackgroundWordBox || r.animation == models.CaptionAnimationBoxHighlight
+	r.wordBoxPad = r.boxPad
+	if r.bgMode != models.CaptionBackgroundWordBox {
+		r.wordBoxPad = roundCentis(float64(r.fontSize) * (0.1 + 0.15*strength))
+	}
 	switch st.Position {
 	case "top":
 		r.align = 8
@@ -220,6 +265,7 @@ func writeCueEvents(b *strings.Builder, c models.StudioCaptionCue, r resolvedCap
 	}
 	groups := captionGroups(units, r.wordsPerGroup, hasWords)
 	wordBox := r.bgMode == models.CaptionBackgroundWordBox
+	revealing := revealingAnimation(r.animation)
 	for gi, g := range groups {
 		gs, ge := cs, ce
 		if gi > 0 {
@@ -232,7 +278,16 @@ func writeCueEvents(b *strings.Builder, c models.StudioCaptionCue, r resolvedCap
 			continue
 		}
 		gu := units[g[0]:g[1]]
-		perWord := r.animation == models.CaptionAnimationHighlight || r.animation == models.CaptionAnimationPop || (wordBox && r.animation == models.CaptionAnimationKaraokeFill)
+		perWord := captionPerWord(r.animation) || (wordBox && r.animation == models.CaptionAnimationKaraokeFill)
+		pfx := prefix
+		if r.animation == models.CaptionAnimationFade {
+			in, out := r.fadeIn, r.fadeOut
+			if dur := (ge - gs) * 10; in+out > dur {
+				tot := in + out
+				in, out = in*dur/tot, out*dur/tot
+			}
+			pfx = fmt.Sprintf(`\fad(%d,%d)`, in, out) + prefix
+		}
 		type span struct{ s, e, active int }
 		spans := []span{{gs, ge, -1}}
 		if perWord {
@@ -253,8 +308,11 @@ func writeCueEvents(b *strings.Builder, c models.StudioCaptionCue, r resolvedCap
 				}
 			}
 		}
-		if wordBox {
+		if r.boxed {
 			for _, sp := range spans {
+				if revealing && sp.active < 0 {
+					continue
+				}
 				boxed := false
 				for i := range gu {
 					boxed = boxed || gu[i].emphasis || (i == sp.active && r.animation != models.CaptionAnimationNone)
@@ -262,7 +320,7 @@ func writeCueEvents(b *strings.Builder, c models.StudioCaptionCue, r resolvedCap
 				if !boxed {
 					continue
 				}
-				fmt.Fprintf(b, "Dialogue: 0,%s,%s,WordBox,,0,0,0,,%s\n", assCentis(sp.s), assCentis(sp.e), boxLine(gu, sp.active, r, prefix))
+				fmt.Fprintf(b, "Dialogue: 0,%s,%s,WordBox,,0,0,0,,%s\n", assCentis(sp.s), assCentis(sp.e), boxLine(gu, sp.active, r, pfx))
 			}
 		}
 		if r.animation == models.CaptionAnimationKaraokeFill {
@@ -270,14 +328,113 @@ func writeCueEvents(b *strings.Builder, c models.StudioCaptionCue, r resolvedCap
 			continue
 		}
 		for _, sp := range spans {
-			fmt.Fprintf(b, "Dialogue: 1,%s,%s,Default,,0,0,0,,%s\n", assCentis(sp.s), assCentis(sp.e), textLine(gu, sp.active, r, prefix))
+			if revealing && sp.active < 0 {
+				continue
+			}
+			fmt.Fprintf(b, "Dialogue: 1,%s,%s,Default,,0,0,0,,%s\n", assCentis(sp.s), assCentis(sp.e), textLine(gu, sp.active, r, pfx))
 		}
 	}
+}
+
+// captionPerWord reports whether an animation emits one Dialogue per word
+// span (the active word changes over the group).
+func captionPerWord(animation string) bool {
+	switch animation {
+	case models.CaptionAnimationHighlight, models.CaptionAnimationPop, models.CaptionAnimationBounce,
+		models.CaptionAnimationWordByWord, models.CaptionAnimationBoxHighlight,
+		models.CaptionAnimationTypewriter, models.CaptionAnimationGlow:
+		return true
+	}
+	return false
 }
 
 // popTags is the scale-up-and-back transform on the active word.
 func popTags(r resolvedCaptionStyle) string {
 	return fmt.Sprintf(`\t(0,80,\fscx%d\fscy%d)\t(80,180,\fscx100\fscy100)`, r.popScale, r.popScale)
+}
+
+// bounceTags is a tall stretch, an overshoot dip and the settle (MM122).
+func bounceTags(r resolvedCaptionStyle) string {
+	return fmt.Sprintf(`\t(0,90,\fscx%d\fscy%d)\t(90,180,\fscx%d\fscy%d)\t(180,260,\fscx100\fscy100)`,
+		r.bounceX, r.bounceY, r.bounceDipX, r.bounceDipY)
+}
+
+// scaleTags is the active word's scale transform (pop, bounce), or "".
+func scaleTags(r resolvedCaptionStyle) string {
+	switch r.animation {
+	case models.CaptionAnimationPop:
+		return popTags(r)
+	case models.CaptionAnimationBounce:
+		return bounceTags(r)
+	}
+	return ""
+}
+
+// glowTags lights the active word's outline in the highlight colour and
+// pulses its blur (MM122); glowReset restores the style's outline.
+func glowTags(r resolvedCaptionStyle) string {
+	return fmt.Sprintf(`\3c%s\bord%s\blur%s\t(0,150,\blur%s)\t(150,300,\blur%s)`,
+		r.highlightTag, assNum(r.glowBord), assNum(r.glowBlur), assNum(r.glowPulse), assNum(r.glowBlur))
+}
+
+func glowReset(r resolvedCaptionStyle) string {
+	return `\3c` + r.outlineTag + `\bord` + assNum(r.outlinePx) + `\blur0`
+}
+
+// hideTags / showTags hide and restore a run's fill, outline and shadow
+// alpha (not \alpha, which would also make a translucent shadow opaque).
+// Under backgroundMode box the back colour is the line's box, so it stays.
+func hideTags(r resolvedCaptionStyle) string {
+	if r.bgMode == models.CaptionBackgroundBox {
+		return `\1a&HFF&\3a&HFF&`
+	}
+	return `\1a&HFF&\3a&HFF&\4a&HFF&`
+}
+
+func showTags(r resolvedCaptionStyle) string {
+	if r.bgMode == models.CaptionBackgroundBox {
+		return `\1a&H00&\3a&H00&`
+	}
+	return `\1a&H00&\3a&H00&\4a` + r.backAlpha
+}
+
+// revealingAnimation: word_by_word and typewriter show nothing before a
+// group's first word and hide every word after the active one.
+func revealingAnimation(animation string) bool {
+	return animation == models.CaptionAnimationWordByWord || animation == models.CaptionAnimationTypewriter
+}
+
+// recolorsActive: the animations that paint the active word's fill in the
+// highlight colour (the others mark it by scale, box, glow or reveal).
+func recolorsActive(animation string) bool {
+	return animation == models.CaptionAnimationHighlight || animation == models.CaptionAnimationPop || animation == models.CaptionAnimationBounce
+}
+
+// typewriterText reveals a word's characters (combining marks stay with their
+// base) across typeFrac of its spoken span, each character its own run.
+func typewriterText(u captionTimedUnit, r resolvedCaptionStyle) string {
+	clusters := captionClusters(u.text)
+	d := int(math.Round(float64((u.end-u.start)*10) * r.typeFrac))
+	var b strings.Builder
+	for i, cl := range clusters {
+		t := i * d / len(clusters)
+		fmt.Fprintf(&b, `{%s\t(%d,%d,%s)}%s`, hideTags(r), t, t+1, showTags(r), assEscape(cl))
+	}
+	return b.String()
+}
+
+// captionClusters splits text into characters, a combining mark joining the
+// character before it (unicode Mn / Me), as the TS twin does.
+func captionClusters(s string) []string {
+	var out []string
+	for _, ru := range s {
+		if len(out) > 0 && unicode.In(ru, unicode.Mn, unicode.Me) {
+			out[len(out)-1] += string(ru)
+			continue
+		}
+		out = append(out, string(ru))
+	}
+	return out
 }
 
 func openTags(prefix string) string {
@@ -288,63 +445,82 @@ func openTags(prefix string) string {
 }
 
 // textLine is a group's text with the active (-1 = none) and emphasised words
-// decorated: recoloured to the highlight (not under word_box, where the box
-// carries the highlight) and, for pop, scaled.
+// decorated: recoloured to the highlight (not when a WordBox layer carries the
+// highlight), scaled (pop, bounce), glowing, revealed (word_by_word fades the
+// active word in, typewriter types it; both hide every later word).
 func textLine(gu []captionTimedUnit, active int, r resolvedCaptionStyle, prefix string) string {
 	var b strings.Builder
 	b.WriteString(openTags(prefix))
-	wordBox := r.bgMode == models.CaptionBackgroundWordBox
+	revealing := revealingAnimation(r.animation)
 	for i, u := range gu {
+		if revealing && active >= 0 && i == active+1 {
+			b.WriteString("{" + hideTags(r) + "}")
+		}
 		if i > 0 {
 			b.WriteString(assSep(u.sep))
 		}
 		isActive := i == active
-		color := !wordBox && (isActive || u.emphasis)
-		pop := isActive && r.animation == models.CaptionAnimationPop
-		if !color && !pop {
+		var open, closing string
+		if !r.boxed && (u.emphasis || (isActive && recolorsActive(r.animation))) {
+			open += `\1c` + r.highlightTag
+			closing += `\1c` + r.primaryTag
+		}
+		if isActive {
+			if sc := scaleTags(r); sc != "" {
+				open += sc
+				closing += `\fscx100\fscy100`
+			}
+			switch r.animation {
+			case models.CaptionAnimationGlow:
+				open += glowTags(r)
+				closing += glowReset(r)
+			case models.CaptionAnimationWordByWord:
+				open += fmt.Sprintf(`%s\t(0,%d,%s)`, hideTags(r), r.revealMs, showTags(r))
+			}
+		}
+		typing := isActive && r.animation == models.CaptionAnimationTypewriter
+		if open == "" && closing == "" && !typing {
 			b.WriteString(assEscape(u.text))
 			continue
 		}
-		b.WriteString("{")
-		if color {
-			b.WriteString(`\1c` + r.highlightTag)
+		if open != "" {
+			b.WriteString("{" + open + "}")
 		}
-		if pop {
-			b.WriteString(popTags(r))
+		if typing {
+			b.WriteString(typewriterText(u, r))
+		} else {
+			b.WriteString(assEscape(u.text))
 		}
-		b.WriteString("}" + assEscape(u.text) + "{")
-		if color {
-			b.WriteString(`\1c` + r.primaryTag)
+		if closing != "" {
+			b.WriteString("{" + closing + "}")
 		}
-		if pop {
-			b.WriteString(`\fscx100\fscy100`)
-		}
-		b.WriteString("}")
 	}
 	return b.String()
 }
 
 // boxLine is the WordBox layer: the same text, invisible, with the box (the
-// BorderStyle 3 outline) shown behind the active and emphasised words.
+// BorderStyle 3 outline) shown behind the active and emphasised words (not
+// behind a word a revealing animation has not shown yet).
 func boxLine(gu []captionTimedUnit, active int, r resolvedCaptionStyle, prefix string) string {
 	var b strings.Builder
 	b.WriteString("{" + prefix + `\3a&HFF&}`)
+	revealing := revealingAnimation(r.animation)
 	for i, u := range gu {
 		if i > 0 {
 			b.WriteString(assSep(u.sep))
 		}
 		isActive := i == active && r.animation != models.CaptionAnimationNone
-		pop := i == active && r.animation == models.CaptionAnimationPop
-		if !isActive && !u.emphasis {
+		sc := ""
+		if i == active {
+			sc = scaleTags(r)
+		}
+		if (!isActive && !u.emphasis) || (revealing && i > active) {
 			b.WriteString(assEscape(u.text))
 			continue
 		}
-		b.WriteString(`{\3a&H00&`)
-		if pop {
-			b.WriteString(popTags(r))
-		}
+		b.WriteString(`{\3a&H00&` + sc)
 		b.WriteString("}" + assEscape(u.text) + `{\3a&HFF&`)
-		if pop {
+		if sc != "" {
 			b.WriteString(`\fscx100\fscy100`)
 		}
 		b.WriteString("}")

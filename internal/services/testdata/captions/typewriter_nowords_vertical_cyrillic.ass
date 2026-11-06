@@ -1,0 +1,19 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Space Mono,115,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,0,0,0,0,100,100,0,0,1,5.33,7.11,2,54,54,96,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.50,0:00:01.25,Default,,0,0,0,,{\fnNoto Sans}{\1a&HFF&\3a&HFF&\4a&HFF&\t(0,1,\1a&H00&\3a&H00&\4a&H66&)}П{\1a&HFF&\3a&HFF&\4a&HFF&\t(107,108,\1a&H00&\3a&H00&\4a&H66&)}р{\1a&HFF&\3a&HFF&\4a&HFF&\t(214,215,\1a&H00&\3a&H00&\4a&H66&)}и{\1a&HFF&\3a&HFF&\4a&HFF&\t(321,322,\1a&H00&\3a&H00&\4a&H66&)}в{\1a&HFF&\3a&HFF&\4a&HFF&\t(428,429,\1a&H00&\3a&H00&\4a&H66&)}е{\1a&HFF&\3a&HFF&\4a&HFF&\t(535,536,\1a&H00&\3a&H00&\4a&H66&)}т{\1a&HFF&\3a&HFF&\4a&HFF&\t(642,643,\1a&H00&\3a&H00&\4a&H66&)},{\1a&HFF&\3a&HFF&\4a&HFF&} мир!
+Dialogue: 1,0:00:01.25,0:00:02.00,Default,,0,0,0,,{\fnNoto Sans}Привет, {\1a&HFF&\3a&HFF&\4a&HFF&\t(0,1,\1a&H00&\3a&H00&\4a&H66&)}м{\1a&HFF&\3a&HFF&\4a&HFF&\t(187,188,\1a&H00&\3a&H00&\4a&H66&)}и{\1a&HFF&\3a&HFF&\4a&HFF&\t(375,376,\1a&H00&\3a&H00&\4a&H66&)}р{\1a&HFF&\3a&HFF&\4a&HFF&\t(562,563,\1a&H00&\3a&H00&\4a&H66&)}!
+Dialogue: 1,0:00:02.00,0:00:02.75,Default,,0,0,0,,{\fnNoto Sans}{\1a&HFF&\3a&HFF&\4a&HFF&\t(0,1,\1a&H00&\3a&H00&\4a&H66&)}C{\1a&HFF&\3a&HFF&\4a&HFF&\t(187,188,\1a&H00&\3a&H00&\4a&H66&)}a{\1a&HFF&\3a&HFF&\4a&HFF&\t(375,376,\1a&H00&\3a&H00&\4a&H66&)}f{\1a&HFF&\3a&HFF&\4a&HFF&\t(562,563,\1a&H00&\3a&H00&\4a&H66&)}é{\1a&HFF&\3a&HFF&\4a&HFF&} naïve
+Dialogue: 1,0:00:02.75,0:00:03.50,Default,,0,0,0,,{\fnNoto Sans}Café {\1a&HFF&\3a&HFF&\4a&HFF&\t(0,1,\1a&H00&\3a&H00&\4a&H66&)}n{\1a&HFF&\3a&HFF&\4a&HFF&\t(150,151,\1a&H00&\3a&H00&\4a&H66&)}a{\1a&HFF&\3a&HFF&\4a&HFF&\t(300,301,\1a&H00&\3a&H00&\4a&H66&)}ï{\1a&HFF&\3a&HFF&\4a&HFF&\t(450,451,\1a&H00&\3a&H00&\4a&H66&)}v{\1a&HFF&\3a&HFF&\4a&HFF&\t(600,601,\1a&H00&\3a&H00&\4a&H66&)}e

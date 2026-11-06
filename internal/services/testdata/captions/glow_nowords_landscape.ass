@@ -1,0 +1,25 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Inter,65,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,0,0,0,0,100,100,0,0,4,0,13,2,96,96,54,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:01.00,0:00:01.40,Default,,0,0,0,,{\3c&HD62BFF&\bord3.2\blur1.9\t(0,150,\blur3.8)\t(150,300,\blur1.9)}No{\3c&H000000&\bord0\blur0} word timings on
+Dialogue: 1,0:00:01.40,0:00:01.80,Default,,0,0,0,,No {\3c&HD62BFF&\bord3.2\blur1.9\t(0,150,\blur3.8)\t(150,300,\blur1.9)}word{\3c&H000000&\bord0\blur0} timings on
+Dialogue: 1,0:00:01.80,0:00:02.20,Default,,0,0,0,,No word {\3c&HD62BFF&\bord3.2\blur1.9\t(0,150,\blur3.8)\t(150,300,\blur1.9)}timings{\3c&H000000&\bord0\blur0} on
+Dialogue: 1,0:00:02.20,0:00:02.60,Default,,0,0,0,,No word timings {\3c&HD62BFF&\bord3.2\blur1.9\t(0,150,\blur3.8)\t(150,300,\blur1.9)}on{\3c&H000000&\bord0\blur0}
+Dialogue: 1,0:00:02.60,0:00:03.00,Default,,0,0,0,,{\3c&HD62BFF&\bord3.2\blur1.9\t(0,150,\blur3.8)\t(150,300,\blur1.9)}this{\3c&H000000&\bord0\blur0} line
+Dialogue: 1,0:00:03.00,0:00:03.40,Default,,0,0,0,,this {\3c&HD62BFF&\bord3.2\blur1.9\t(0,150,\blur3.8)\t(150,300,\blur1.9)}line{\3c&H000000&\bord0\blur0}
+Dialogue: 1,0:00:03.60,0:00:04.00,Default,,0,0,0,,{\3c&HD62BFF&\bord3.2\blur1.9\t(0,150,\blur3.8)\t(150,300,\blur1.9)}A{\3c&H000000&\bord0\blur0} second cue follows
+Dialogue: 1,0:00:04.00,0:00:04.40,Default,,0,0,0,,A {\3c&HD62BFF&\bord3.2\blur1.9\t(0,150,\blur3.8)\t(150,300,\blur1.9)}second{\3c&H000000&\bord0\blur0} cue follows
+Dialogue: 1,0:00:04.40,0:00:04.80,Default,,0,0,0,,A second {\3c&HD62BFF&\bord3.2\blur1.9\t(0,150,\blur3.8)\t(150,300,\blur1.9)}cue{\3c&H000000&\bord0\blur0} follows
+Dialogue: 1,0:00:04.80,0:00:05.20,Default,,0,0,0,,A second cue {\3c&HD62BFF&\bord3.2\blur1.9\t(0,150,\blur3.8)\t(150,300,\blur1.9)}follows{\3c&H000000&\bord0\blur0}

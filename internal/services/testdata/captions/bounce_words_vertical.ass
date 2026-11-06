@@ -1,0 +1,26 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Titan One,134,&H00FFFFFF,&H00FFFFFF,&H003D0A2B,&H66000000,0,0,0,0,100,100,0,0,1,8.89,5.69,2,54,54,96,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.50,0:00:00.90,Default,,0,0,0,,{\1c&H007AFF&\t(0,90,\fscx116\fscy136)\t(90,180,\fscx95\fscy92)\t(180,260,\fscx100\fscy100)}Welcome{\1c&HFFFFFF&\fscx100\fscy100} {\1c&H007AFF&}back.{\1c&HFFFFFF&}
+Dialogue: 1,0:00:00.90,0:00:01.60,Default,,0,0,0,,Welcome {\1c&H007AFF&\t(0,90,\fscx116\fscy136)\t(90,180,\fscx95\fscy92)\t(180,260,\fscx100\fscy100)}back.{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:01.60,0:00:01.90,Default,,0,0,0,,{\1c&H007AFF&\t(0,90,\fscx116\fscy136)\t(90,180,\fscx95\fscy92)\t(180,260,\fscx100\fscy100)}Today{\1c&HFFFFFF&\fscx100\fscy100} we
+Dialogue: 1,0:00:01.90,0:00:02.20,Default,,0,0,0,,Today {\1c&H007AFF&\t(0,90,\fscx116\fscy136)\t(90,180,\fscx95\fscy92)\t(180,260,\fscx100\fscy100)}we{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:02.20,0:00:02.50,Default,,0,0,0,,{\1c&H007AFF&\t(0,90,\fscx116\fscy136)\t(90,180,\fscx95\fscy92)\t(180,260,\fscx100\fscy100)}test{\1c&HFFFFFF&\fscx100\fscy100} {\1c&H007AFF&}captions{\1c&HFFFFFF&}
+Dialogue: 1,0:00:02.50,0:00:02.80,Default,,0,0,0,,test {\1c&H007AFF&\t(0,90,\fscx116\fscy136)\t(90,180,\fscx95\fscy92)\t(180,260,\fscx100\fscy100)}captions{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:02.80,0:00:03.10,Default,,0,0,0,,{\1c&H007AFF&\t(0,90,\fscx116\fscy136)\t(90,180,\fscx95\fscy92)\t(180,260,\fscx100\fscy100)}that{\1c&HFFFFFF&\fscx100\fscy100} move
+Dialogue: 1,0:00:03.10,0:00:03.40,Default,,0,0,0,,that {\1c&H007AFF&\t(0,90,\fscx116\fscy136)\t(90,180,\fscx95\fscy92)\t(180,260,\fscx100\fscy100)}move{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:03.40,0:00:03.70,Default,,0,0,0,,{\1c&H007AFF&\t(0,90,\fscx116\fscy136)\t(90,180,\fscx95\fscy92)\t(180,260,\fscx100\fscy100)}with{\1c&HFFFFFF&\fscx100\fscy100} every
+Dialogue: 1,0:00:03.70,0:00:04.00,Default,,0,0,0,,with {\1c&H007AFF&\t(0,90,\fscx116\fscy136)\t(90,180,\fscx95\fscy92)\t(180,260,\fscx100\fscy100)}every{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:04.00,0:00:05.00,Default,,0,0,0,,{\1c&H007AFF&\t(0,90,\fscx116\fscy136)\t(90,180,\fscx95\fscy92)\t(180,260,\fscx100\fscy100)}word{\1c&HFFFFFF&\fscx100\fscy100}

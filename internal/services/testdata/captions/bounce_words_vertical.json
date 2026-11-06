@@ -1,0 +1,90 @@
+{
+  "name": "bounce_words_vertical",
+  "width": 1080,
+  "height": 1920,
+  "style": {
+    "fontSizePct": 7,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Titan One",
+    "highlightColor": "#FF7A00",
+    "outlineColor": "#2B0A3D",
+    "outlineWidth": 5,
+    "shadow": 0.4,
+    "backgroundMode": "none",
+    "wordsPerGroup": 2,
+    "animation": "bounce",
+    "animationStrength": 0.8,
+    "lookId": "bounce_kids"
+  },
+  "cues": [
+    {
+      "id": "c2",
+      "startSeconds": 0.5,
+      "endSeconds": 5.0,
+      "text": "Welcome back. Today we test captions that move with every word",
+      "words": [
+        {
+          "text": "Welcome",
+          "startSeconds": 0.5,
+          "endSeconds": 0.85
+        },
+        {
+          "text": "back.",
+          "startSeconds": 0.9,
+          "endSeconds": 1.25,
+          "emphasis": true
+        },
+        {
+          "text": "Today",
+          "startSeconds": 1.6,
+          "endSeconds": 1.85
+        },
+        {
+          "text": "we",
+          "startSeconds": 1.9,
+          "endSeconds": 2.15
+        },
+        {
+          "text": "test",
+          "startSeconds": 2.2,
+          "endSeconds": 2.45
+        },
+        {
+          "text": "captions",
+          "startSeconds": 2.5,
+          "endSeconds": 2.75,
+          "emphasis": true
+        },
+        {
+          "text": "that",
+          "startSeconds": 2.8,
+          "endSeconds": 3.05
+        },
+        {
+          "text": "move",
+          "startSeconds": 3.1,
+          "endSeconds": 3.35
+        },
+        {
+          "text": "with",
+          "startSeconds": 3.4,
+          "endSeconds": 3.65
+        },
+        {
+          "text": "every",
+          "startSeconds": 3.7,
+          "endSeconds": 3.95
+        },
+        {
+          "text": "word",
+          "startSeconds": 4.0,
+          "endSeconds": 4.25
+        }
+      ]
+    }
+  ]
+}
