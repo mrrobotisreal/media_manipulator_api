@@ -726,6 +726,14 @@ func sanitizeCaptionWords(c StudioCaptionCue) []StudioCaptionWord {
 		}
 		w.EndSeconds = clampF(w.EndSeconds, w.StartSeconds, c.EndSeconds)
 		prev = w.StartSeconds
+		// MM122: the pre-retime Whisper times, kept only as a clamped pair.
+		if w.OrigStartSeconds != nil && w.OrigEndSeconds != nil {
+			os := clampF(*w.OrigStartSeconds, c.StartSeconds, c.EndSeconds)
+			oe := clampF(*w.OrigEndSeconds, os, c.EndSeconds)
+			w.OrigStartSeconds, w.OrigEndSeconds = &os, &oe
+		} else {
+			w.OrigStartSeconds, w.OrigEndSeconds = nil, nil
+		}
 		out[i] = w
 	}
 	return out

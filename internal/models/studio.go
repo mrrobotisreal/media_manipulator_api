@@ -416,6 +416,12 @@ type StudioCaptionWord struct {
 	StartSeconds float64 `json:"startSeconds"`
 	EndSeconds   float64 `json:"endSeconds"`
 	Emphasis     bool    `json:"emphasis,omitempty"`
+	// OrigStartSeconds / OrigEndSeconds (MM122, the per-word editor) keep the
+	// times Whisper gave this word before the first hand retime, so "Re-time
+	// from audio" can restore them without a new AI job. Absent = the word was
+	// never retimed (its times are Whisper's). Both or neither.
+	OrigStartSeconds *float64 `json:"origStartSeconds,omitempty"`
+	OrigEndSeconds   *float64 `json:"origEndSeconds,omitempty"`
 }
 
 // StudioCaptionStyle is the project-wide caption appearance. FontSizePct is a

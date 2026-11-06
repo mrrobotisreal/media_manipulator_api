@@ -12,7 +12,7 @@ func TestSanitizeCaptionWords(t *testing.T) {
 		{Text: " three ", StartSeconds: 2, EndSeconds: 9, Emphasis: true},
 	}}
 	got := SanitizeCaptions([]StudioCaptionCue{cue})[0].Words
-	want := []StudioCaptionWord{{"one", 1, 1.4, false}, {"two", 1.2, 1.8, false}, {"three", 2, 3, true}}
+	want := []StudioCaptionWord{{Text: "one", StartSeconds: 1, EndSeconds: 1.4}, {Text: "two", StartSeconds: 1.2, EndSeconds: 1.8}, {Text: "three", StartSeconds: 2, EndSeconds: 3, Emphasis: true}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("words = %+v, want %+v", got, want)
 	}
