@@ -105,17 +105,55 @@ func TestStudioExportOutputsMigration(t *testing.T) {
 // and adds the `embedded` captions mode; the down deletes un-nameable rows
 // before narrowing, and turns `embedded` rows into `none`.
 func TestStudioExportWebMOpusMigration(t *testing.T) {
-	read := func(name string) string {
-		t.Helper()
-		b, err := os.ReadFile(filepath.Join("migrations", name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		return string(b)
+	// The MM119 lists are the table minus MM120's Pro rows.
+	checkWidenedMigration(t, "20261106001_studio_export_webm_opus", mm120Tokens, true)
+	down := readMigration(t, "20261106001_studio_export_webm_opus.down.sql")
+	del := strings.Index(down, "DELETE FROM studio_exports")
+	embedded := strings.Index(down, "UPDATE studio_exports SET captions_mode = 'none' WHERE captions_mode = 'embedded'")
+	narrow := strings.Index(down, "CHECK (captions_mode IN ('none', 'burn_in', 'sidecar'))")
+	if del < 0 || embedded < 0 || narrow < 0 || del > narrow || embedded > narrow {
+		t.Error("down must delete un-nameable rows and clear `embedded` before narrowing the CHECKs")
 	}
-	up := read("20261106001_studio_export_webm_opus.up.sql")
-	down := read("20261106001_studio_export_webm_opus.down.sql")
+}
 
+// MM120: the Pro formats migration widens container (+flac), video (+av1,
+// prores), audio (+flac, pcm_s24le) and the format CHECK to the whole output
+// table; bitrates and captions modes are unchanged; the down deletes the rows
+// MM119 cannot name before narrowing.
+func TestStudioExportProFormatsMigration(t *testing.T) {
+	checkWidenedMigration(t, "20261106120_studio_export_pro_formats", nil, false)
+	down := readMigration(t, "20261106120_studio_export_pro_formats.down.sql")
+	del := strings.Index(down, "DELETE FROM studio_exports")
+	narrow := strings.Index(down, "CHECK (container IN ('mp4', 'mov', 'mkv', 'webm', 'mp3', 'wav', 'opus'))")
+	if del < 0 || narrow < 0 || del > narrow {
+		t.Error("down must delete un-nameable rows before narrowing the CHECKs")
+	}
+	for _, tok := range []string{"'flac'", "'av1'", "'prores'", "'pcm_s24le'"} {
+		if !strings.Contains(down[del:narrow], tok) {
+			t.Errorf("down must delete rows with %s", tok)
+		}
+	}
+}
+
+// mm120Tokens are the output tokens MM120 added (absent from MM119's lists).
+var mm120Tokens = map[string]bool{"flac": true, "av1": true, "prores": true, "pcm_s24le": true}
+
+func readMigration(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("migrations", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// checkWidenedMigration asserts an up migration re-adds every closed-list
+// CHECK equal to the output table (minus labels/tokens touching `exclude`),
+// widens the format CHECK to the table's labels, and only widens.
+// withBitrateCaptions also checks the bitrate and captions-mode CHECKs.
+func checkWidenedMigration(t *testing.T, name string, exclude map[string]bool, withBitrateCaptions bool) {
+	t.Helper()
+	up := readMigration(t, name+".up.sql")
 	raw, err := os.ReadFile(filepath.Join("..", "services", "testdata", "studio_outputs.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +190,7 @@ func TestStudioExportWebMOpusMigration(t *testing.T) {
 		seen := map[string]bool{}
 		out := []string{}
 		for _, x := range xs {
-			if !seen[x] {
+			if !seen[x] && !exclude[x] {
 				seen[x] = true
 				out = append(out, x)
 			}
@@ -171,43 +209,52 @@ func TestStudioExportWebMOpusMigration(t *testing.T) {
 			bitrates = append(bitrates, strconv.Itoa(b))
 		}
 	}
-	for constraint, want := range map[string][]string{
-		"studio_exports_container_check":     set(containers...),
-		"studio_exports_video_codec_check":   set(video...),
-		"studio_exports_audio_codec_check":   set(audio...),
-		"studio_exports_audio_bitrate_check": set(bitrates...),
-		"studio_exports_captions_mode_check": set("none", "burn_in", "sidecar", "embedded"),
-	} {
-		if got := quoted(up, constraint); strings.Join(got, ",") != strings.Join(want, ",") {
-			t.Errorf("%s = %v, want %v", constraint, got, want)
+	want := map[string][]string{
+		"studio_exports_container_check":   set(containers...),
+		"studio_exports_video_codec_check": set(video...),
+		"studio_exports_audio_codec_check": set(audio...),
+	}
+	if withBitrateCaptions {
+		want["studio_exports_audio_bitrate_check"] = set(bitrates...)
+		want["studio_exports_captions_mode_check"] = set("none", "burn_in", "sidecar", "embedded")
+	}
+	for constraint, w := range want {
+		if got := quoted(up, constraint); strings.Join(got, ",") != strings.Join(w, ",") {
+			t.Errorf("%s: %s = %v, want %v", name, constraint, got, w)
 		}
 		if !strings.Contains(up, "DROP CONSTRAINT IF EXISTS "+constraint) {
-			t.Errorf("up must drop %s before re-adding it", constraint)
+			t.Errorf("%s: up must drop %s before re-adding it", name, constraint)
 		}
 	}
 	m := regexp.MustCompile(`(?s)ADD CONSTRAINT studio_exports_format_check CHECK \(format IN \((.*?)\)\);`).FindStringSubmatch(up)
 	if m == nil {
-		t.Fatal("up does not widen the format CHECK")
+		t.Fatalf("%s: up does not widen the format CHECK", name)
 	}
 	var got []string
 	for _, q := range regexp.MustCompile(`'([a-z0-9_]+)'`).FindAllStringSubmatch(m[1], -1) {
 		got = append(got, q[1])
 	}
-	want := append([]string{}, table.Formats...)
+	labels := []string{}
+	for _, f := range table.Formats {
+		keep := true
+		for tok := range exclude {
+			// A label is <container>_<video>_<audio>; a token matches a part.
+			if strings.HasPrefix(f, tok+"_") || strings.Contains(f, "_"+tok+"_") || strings.HasSuffix(f, "_"+tok) {
+				keep = false
+			}
+		}
+		if keep {
+			labels = append(labels, f)
+		}
+	}
 	sort.Strings(got)
-	sort.Strings(want)
-	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("format CHECK %v != output table formats %v", got, want)
+	sort.Strings(labels)
+	if strings.Join(got, ",") != strings.Join(labels, ",") {
+		t.Errorf("%s: format CHECK %v != output table formats %v", name, got, labels)
 	}
 	for _, forbidden := range []string{"DROP TABLE", "DROP COLUMN", "DELETE FROM", "UPDATE "} {
 		if strings.Contains(up, forbidden) {
-			t.Errorf("up must only widen CHECKs; found %q", forbidden)
+			t.Errorf("%s: up must only widen CHECKs; found %q", name, forbidden)
 		}
-	}
-	del := strings.Index(down, "DELETE FROM studio_exports")
-	embedded := strings.Index(down, "UPDATE studio_exports SET captions_mode = 'none' WHERE captions_mode = 'embedded'")
-	narrow := strings.Index(down, "CHECK (captions_mode IN ('none', 'burn_in', 'sidecar'))")
-	if del < 0 || embedded < 0 || narrow < 0 || del > narrow || embedded > narrow {
-		t.Error("down must delete un-nameable rows and clear `embedded` before narrowing the CHECKs")
 	}
 }

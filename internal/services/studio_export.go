@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 
@@ -266,9 +267,11 @@ type StudioExportPlan struct {
 // (studio_render_completed/failed). Facts about the ffmpeg invocation only —
 // nothing content-derived.
 type StudioRenderStats struct {
-	// Encoder in the analytics vocabulary: "nvenc" | "x264" | "x265" | "vpx" | "audio".
+	// Encoder in the analytics vocabulary: "nvenc" | "x264" | "x265" | "vpx" |
+	// "svtav1" | "prores" | "audio" (MM120 added svtav1 and prores).
 	Encoder string
-	// CPUEncode reports an encode that took the CPU encode gate (MM119, VP9);
+	// CPUEncode reports an encode that took the CPU encode gate (MM119 VP9,
+	// MM120 the libsvtav1 fallback);
 	// CPUQueueMs is how long it waited for the slot (0 = a slot was free).
 	CPUEncode  bool
 	CPUQueueMs int64
@@ -284,6 +287,10 @@ type StudioRenderStats struct {
 	// FilterCount is the number of statements in the -filter_complex graph,
 	// the proxy for compositing complexity.
 	FilterCount int
+	// OutputBytes (MM120) is the rendered file's size, 0 when unknown (a
+	// failed render). Emitted as whole megabytes (outputMB) so the admin can
+	// read output size per codec.
+	OutputBytes int64
 }
 
 // RunExport renders the plan to outputPath, reporting progress on jobID.
@@ -306,6 +313,17 @@ func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan 
 		encoder = enc
 	case out.VideoCodec == StudioVideoVP9:
 		encoder = StudioEncoderVP9
+	case out.VideoCodec == StudioVideoAV1:
+		// MM120: av1_nvenc, else libsvtav1 (behind the CPU gate), else fail
+		// loudly; never a silently different codec.
+		enc, err := studioAV1Encoder(s.cfg)
+		if err != nil {
+			stats.Encoder = "svtav1"
+			return stats, err
+		}
+		encoder = enc
+	case out.VideoCodec == StudioVideoProRes:
+		encoder = StudioEncoderProRes
 	default:
 		encoder = studioH264Encoder(s.cfg)
 	}
@@ -336,7 +354,13 @@ func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan 
 	if run == nil {
 		run = runStudioFFmpeg
 	}
-	return stats, run(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, plan.Duration, args...)
+	err := run(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, plan.Duration, args...)
+	if err == nil {
+		if fi, statErr := os.Stat(outputPath); statErr == nil {
+			stats.OutputBytes = fi.Size()
+		}
+	}
+	return stats, err
 }
 
 // RunFrame renders one still frame (part 20) of the plan at timeline time t to
@@ -362,15 +386,20 @@ func argsHaveAudioMap(args []string) bool {
 }
 
 // encoderAnalyticsName maps the ffmpeg encoder id onto the analytics
-// vocabulary the catalog documents: nvenc | x264 | x265 | audio.
+// vocabulary the catalog documents: nvenc | x264 | x265 | vpx | svtav1 |
+// prores | audio.
 func encoderAnalyticsName(encoder string) string {
 	switch encoder {
-	case "h264_nvenc", "hevc_nvenc":
+	case "h264_nvenc", "hevc_nvenc", StudioEncoderAV1NVENC:
 		return "nvenc"
 	case "libx265":
 		return "x265"
 	case StudioEncoderVP9:
 		return "vpx"
+	case StudioEncoderSVTAV1:
+		return "svtav1"
+	case StudioEncoderProRes:
+		return "prores"
 	case "audio":
 		return "audio"
 	}

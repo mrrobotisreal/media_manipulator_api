@@ -55,11 +55,18 @@ func vp9EncodeArgs(quality string) []string {
 const StudioEncoderVP9 = "libvpx-vp9"
 
 // studioEncodeNeedsCPUGate reports whether an export's video encoder is
-// CPU-bound and must take a slot from the CPU encode gate. NVENC H.264/HEVC
-// and audio-only exports never wait (the x264/x265 fallbacks keep their
-// pre-MM119 behaviour; design §3.5 leaves them a config lever).
+// CPU-bound and must take a slot from the CPU encode gate: libvpx-vp9 (MM119),
+// the libsvtav1 AV1 fallback and prores_ks (MM120; ProRes is CPU-only and ran
+// 2160p at 14.5 fps on the host, slower than a VP9 1080p encode, design §9).
+// NVENC H.264/HEVC/AV1 and audio-only exports never wait (the x264/x265
+// fallbacks keep their pre-MM119 behaviour; design §3.5 leaves them a config
+// lever).
 func studioEncodeNeedsCPUGate(encoder string) bool {
-	return encoder == StudioEncoderVP9
+	switch encoder {
+	case StudioEncoderVP9, StudioEncoderSVTAV1, StudioEncoderProRes:
+		return true
+	}
+	return false
 }
 
 // --- CPU encode gate ---------------------------------------------------------

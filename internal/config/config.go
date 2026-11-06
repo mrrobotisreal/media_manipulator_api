@@ -1328,7 +1328,8 @@ func applyStudioOutputConfig(c *Config) {
 	c.TierAnonStudioFormats = splitCSVLower(getEnv("TIER_ANON_STUDIO_FORMATS", "mp4,h264,aac,mp3,wav,pcm_s16le"))
 	c.TierFreeStudioFormats = splitCSVLower(getEnv("TIER_FREE_STUDIO_FORMATS", "hevc"))
 	c.TierPremiumStudioFormats = splitCSVLower(getEnv("TIER_PREMIUM_STUDIO_FORMATS", "mov,mkv,webm,opus,vp9,vorbis,subs_embedded"))
-	c.TierProStudioFormats = splitCSVLower(getEnv("TIER_PRO_STUDIO_FORMATS", ""))
+	// MM120 (decided Q3): AV1, ProRes 422, FLAC and 24-bit PCM are Pro only.
+	c.TierProStudioFormats = splitCSVLower(getEnv("TIER_PRO_STUDIO_FORMATS", "av1,prores,flac,pcm_s24le"))
 	c.TierAnonStudioAdvanced = getEnvBool("TIER_ANON_STUDIO_ADVANCED", false)
 	c.TierFreeStudioAdvanced = getEnvBool("TIER_FREE_STUDIO_ADVANCED", false)
 	c.TierPremiumStudioAdvanced = getEnvBool("TIER_PREMIUM_STUDIO_ADVANCED", true)

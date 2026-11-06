@@ -205,8 +205,10 @@ func TestProRow(t *testing.T) {
 	// MM77: Pro has its own voices row (design VOICES.md §4.3).
 	same.VoicesSaved, same.VoicesMaxSeconds, same.VoicesConvert, same.VoicesConvertMaxSeconds =
 		pro.VoicesSaved, pro.VoicesMaxSeconds, pro.VoicesConvert, pro.VoicesConvertMaxSeconds
+	// MM120: Pro's Darkroom formats add AV1, ProRes, FLAC and 24-bit PCM.
+	same.StudioFormats = pro.StudioFormats
 	if pro != same {
-		t.Fatalf("pro must equal premium apart from ops/ai/exports, the Motion, summary and voices rows:\n pro     %+v\n premium %+v", pro, premium)
+		t.Fatalf("pro must equal premium apart from ops/ai/exports, the Motion, summary, voices and Darkroom format rows:\n pro     %+v\n premium %+v", pro, premium)
 	}
 	if !pro.PriorityGPU || !pro.AdsRemoved || pro.RateLimitExempt {
 		t.Fatalf("pro flags wrong: %+v", pro)
@@ -316,7 +318,8 @@ func TestPublishedMatrix(t *testing.T) {
 		TierFree:      {"mp4,mp3,wav,h264,hevc,aac,pcm_s16le", false},
 		// MM119: Premium adds WebM, .opus, VP9, Vorbis and embedded subtitles.
 		TierPremium: {"mp4,mov,mkv,webm,mp3,wav,opus,h264,hevc,vp9,aac,pcm_s16le,vorbis,subs_embedded", true},
-		TierPro:     {"mp4,mov,mkv,webm,mp3,wav,opus,h264,hevc,vp9,aac,pcm_s16le,vorbis,subs_embedded", true},
+		// MM120: Pro adds AV1, ProRes, FLAC and 24-bit PCM (Pro only).
+		TierPro: {"mp4,mov,mkv,webm,mp3,wav,opus,flac,h264,hevc,vp9,av1,prores,aac,pcm_s16le,vorbis,pcm_s24le,subs_embedded", true},
 	} {
 		l := want[tier]
 		l.StudioFormats, l.StudioAdvanced = row.formats, row.advanced
