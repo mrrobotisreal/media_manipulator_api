@@ -151,6 +151,12 @@ func (jm *JobManager) EmitStudioRender(
 	if renderSeconds >= 0 {
 		props["renderSeconds"] = int(math.Round(renderSeconds))
 	}
+	// MM119: a CPU-bound encode (VP9) reports how long it waited for a slot
+	// of the CPU encode gate (ms, 0 = none); GPU and audio renders omit it,
+	// so the admin's queue p50/p95 is over CPU encodes only.
+	if stats.CPUEncode {
+		props["cpuQueueMs"] = stats.CPUQueueMs
+	}
 	if timelineSeconds > 0 && renderSeconds >= 0 {
 		props["durationRatioBucket"] = analyticsemit.RatioBucket(renderSeconds / timelineSeconds)
 	}

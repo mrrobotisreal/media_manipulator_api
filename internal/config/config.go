@@ -581,9 +581,13 @@ type Config struct {
 	// ffmpeg work (proxy, filmstrip, export) is pinned to a dedicated GPU so
 	// it doesn't contend with whisper/RIFE on the shared host. We default to
 	// GPU 1 (the 16GB RTX 5080) to mirror AI_CUDA_GPU=1.
-	ContentStudioGPUIndex    int
-	ContentStudioProxyHeight int
-	ContentStudioS3Prefix    string
+	ContentStudioGPUIndex int
+	// StudioCPUEncodeConcurrency (MM119, STUDIO_CPU_ENCODE_CONCURRENCY,
+	// default 2) is the server-wide number of CPU-bound Darkroom export
+	// encodes (libvpx-vp9) that may run at once; more wait as Queued.
+	StudioCPUEncodeConcurrency int
+	ContentStudioProxyHeight   int
+	ContentStudioS3Prefix      string
 	// ContentStudioFontFile is the TTF used by ffmpeg drawtext for text/location
 	// overlays. drawtext needs a real font file on the GPU host.
 	ContentStudioFontFile string
@@ -1085,11 +1089,12 @@ func Load() *Config {
 
 		// Content Studio — getEnvIntDefault for the GPU index so device 0 is a
 		// valid override (getEnvInt rejects <= 0).
-		ContentStudioGPUIndex:    getEnvIntDefault("CONTENT_STUDIO_GPU_INDEX", 1),
-		ContentStudioProxyHeight: getEnvInt("CONTENT_STUDIO_PROXY_HEIGHT", 720),
-		ContentStudioS3Prefix:    getEnv("CONTENT_STUDIO_S3_PREFIX", "studio"),
-		ContentStudioFontFile:    getEnv("CONTENT_STUDIO_FONT_FILE", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-		ContentStudioFontsDir:    getEnv("CONTENT_STUDIO_FONTS_DIR", "assets/fonts/studio"),
+		ContentStudioGPUIndex:      getEnvIntDefault("CONTENT_STUDIO_GPU_INDEX", 1),
+		StudioCPUEncodeConcurrency: getEnvIntDefault("STUDIO_CPU_ENCODE_CONCURRENCY", 2),
+		ContentStudioProxyHeight:   getEnvInt("CONTENT_STUDIO_PROXY_HEIGHT", 720),
+		ContentStudioS3Prefix:      getEnv("CONTENT_STUDIO_S3_PREFIX", "studio"),
+		ContentStudioFontFile:      getEnv("CONTENT_STUDIO_FONT_FILE", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+		ContentStudioFontsDir:      getEnv("CONTENT_STUDIO_FONTS_DIR", "assets/fonts/studio"),
 
 		// AI Document Scan
 		DocumentScanEnabled:                    getEnvBool("DOCUMENT_SCAN_ENABLED", true),
@@ -1322,7 +1327,7 @@ func NormalizePublicAPIBaseURL(raw string) string {
 func applyStudioOutputConfig(c *Config) {
 	c.TierAnonStudioFormats = splitCSVLower(getEnv("TIER_ANON_STUDIO_FORMATS", "mp4,h264,aac,mp3,wav,pcm_s16le"))
 	c.TierFreeStudioFormats = splitCSVLower(getEnv("TIER_FREE_STUDIO_FORMATS", "hevc"))
-	c.TierPremiumStudioFormats = splitCSVLower(getEnv("TIER_PREMIUM_STUDIO_FORMATS", "mov,mkv"))
+	c.TierPremiumStudioFormats = splitCSVLower(getEnv("TIER_PREMIUM_STUDIO_FORMATS", "mov,mkv,webm,opus,vp9,vorbis,subs_embedded"))
 	c.TierProStudioFormats = splitCSVLower(getEnv("TIER_PRO_STUDIO_FORMATS", ""))
 	c.TierAnonStudioAdvanced = getEnvBool("TIER_ANON_STUDIO_ADVANCED", false)
 	c.TierFreeStudioAdvanced = getEnvBool("TIER_FREE_STUDIO_ADVANCED", false)

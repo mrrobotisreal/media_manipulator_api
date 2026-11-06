@@ -30,10 +30,14 @@ import (
 type StudioExportService struct {
 	cfg        *config.Config
 	jobManager *JobManager
+	// cpuGate is the server-wide CPU encode semaphore (MM119); run is the
+	// ffmpeg runner (runStudioFFmpeg; a fake in tests).
+	cpuGate *StudioCPUEncodeGate
+	run     func(ctx context.Context, jm *JobManager, jobID string, gpuIndex int, duration float64, args ...string) error
 }
 
 func NewStudioExportService(cfg *config.Config, jm *JobManager) *StudioExportService {
-	return &StudioExportService{cfg: cfg, jobManager: jm}
+	return &StudioExportService{cfg: cfg, jobManager: jm, cpuGate: sharedStudioCPUEncodeGate(cfg.StudioCPUEncodeConcurrency), run: runStudioFFmpeg}
 }
 
 // StudioExportVideoSeg is one clip placed on a video track. InputIndex points at
@@ -235,6 +239,9 @@ type StudioExportPlan struct {
 	Loudness    string // '' | streaming | podcast | broadcast
 	// CaptionsASSPath, when set, is burned in as the final video filter (Phase 7).
 	CaptionsASSPath string
+	// EmbeddedSubs (MM119), when set, is muxed as a subtitle stream in the
+	// container's subtitle codec (captions mode `embedded`); never burned in.
+	EmbeddedSubs *StudioEmbeddedSubs
 	// Format (part 20) selects the output: "" / "h264" (MP4), "hevc" (MP4), or
 	// the audio-only "mp3" / "wav". The video graph is skipped entirely for the
 	// audio formats (see IsAudioFormat). Superseded by Output when that is set.
@@ -259,8 +266,12 @@ type StudioExportPlan struct {
 // (studio_render_completed/failed). Facts about the ffmpeg invocation only —
 // nothing content-derived.
 type StudioRenderStats struct {
-	// Encoder in the analytics vocabulary: "nvenc" | "x264" | "x265" | "audio".
+	// Encoder in the analytics vocabulary: "nvenc" | "x264" | "x265" | "vpx" | "audio".
 	Encoder string
+	// CPUEncode reports an encode that took the CPU encode gate (MM119, VP9);
+	// CPUQueueMs is how long it waited for the slot (0 = a slot was free).
+	CPUEncode  bool
+	CPUQueueMs int64
 	// Format is the plan's derived output label (part 20, MM118): the legacy
 	// h264 | hevc | mp3 | wav, else <container>_<video>_<audio>.
 	Format string
@@ -293,6 +304,8 @@ func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan 
 			return stats, err
 		}
 		encoder = enc
+	case out.VideoCodec == StudioVideoVP9:
+		encoder = StudioEncoderVP9
 	default:
 		encoder = studioH264Encoder(s.cfg)
 	}
@@ -302,7 +315,28 @@ func (s *StudioExportService) RunExport(ctx context.Context, jobID string, plan 
 	if out.AudioOnly() && !argsHaveAudioMap(args) {
 		return stats, fmt.Errorf("project has no audio to export")
 	}
-	return stats, runStudioFFmpeg(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, plan.Duration, args...)
+	if studioEncodeNeedsCPUGate(encoder) && s.cpuGate != nil {
+		// MM119: the export was accepted and charged; a full CPU gate makes it
+		// wait here as Queued (job currentStage), never a refusal.
+		stats.CPUEncode = true
+		release, waited, queued, err := s.cpuGate.Acquire(ctx, func() {
+			s.jobManager.SetCurrentStage(jobID, StudioJobStageQueued)
+		})
+		if queued {
+			stats.CPUQueueMs = waited.Milliseconds()
+			s.jobManager.AddQueueWait(jobID, waited)
+			s.jobManager.SetCurrentStage(jobID, "")
+		}
+		if err != nil {
+			return stats, fmt.Errorf("export cancelled while queued for an encode slot: %w", err)
+		}
+		defer release()
+	}
+	run := s.run
+	if run == nil {
+		run = runStudioFFmpeg
+	}
+	return stats, run(ctx, s.jobManager, jobID, s.cfg.ContentStudioGPUIndex, plan.Duration, args...)
 }
 
 // RunFrame renders one still frame (part 20) of the plan at timeline time t to
@@ -335,6 +369,8 @@ func encoderAnalyticsName(encoder string) string {
 		return "nvenc"
 	case "libx265":
 		return "x265"
+	case StudioEncoderVP9:
+		return "vpx"
 	case "audio":
 		return "audio"
 	}
@@ -402,6 +438,13 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 		plan.BlankVideo = false
 	}
 	args, stmts, videoOut, audioOut, durStr := buildExportGraph(plan, fontFile, fontsDir)
+	// MM119 embedded captions: the SRT is one more input, after every media
+	// input, so no existing input index moves.
+	subsIdx := -1
+	if plan.EmbeddedSubs != nil && !audioOnly && out.SubtitleCodec() != "" {
+		subsIdx = len(plan.Inputs)
+		args = append(args, "-i", plan.EmbeddedSubs.Path)
+	}
 
 	// Output resolution (part 20): scale the composed canvas as the last video
 	// filter. Skipped when it would be a no-op (0 or equal to the canvas).
@@ -418,6 +461,9 @@ func buildMultiTrackExportArgs(plan StudioExportPlan, encoder, quality, fontFile
 	}
 	if audioOut != "" {
 		args = append(args, "-map", "["+audioOut+"]")
+	}
+	if subsIdx >= 0 {
+		args = append(args, subtitleStreamArgs(out, plan.EmbeddedSubs, subsIdx)...)
 	}
 	if videoOut != "" {
 		args = append(args, videoEncodeArgs(out, encoder, quality)...)

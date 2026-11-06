@@ -118,6 +118,23 @@ func (a *AssistantExports) AdviseExport(tier string, params map[string]any) (map
 		}
 	}
 
+	// MM119: the embedded captions mode is its own token. When the plan lacks
+	// it, the nearest delivery is a sidecar file (every plan; the player
+	// toggles it too) and the upgrade names subs_embedded, unless the output
+	// itself already needed one.
+	captionsMode := req.CaptionsMode
+	if a.Registry != nil && captionsMode == models.StudioCaptionsEmbedded {
+		if ref := tiers.CheckStudioOutput(t, limits, []string{services.StudioTokenSubsEmbedded}, false, requiredFor); ref != nil {
+			captionsMode = models.StudioCaptionsSidecar
+			if upgrade == nil {
+				upgrade = map[string]any{"option": ref.Option}
+				if ref.Required != "" {
+					upgrade["required"] = ref.Required
+				}
+			}
+		}
+	}
+
 	res := map[string]any{
 		"container": out.Container, "videoCodec": out.VideoCodec, "audioCodec": out.AudioCodec,
 		"audioChannels": out.AudioChannels, "format": out.Label(),
@@ -132,8 +149,8 @@ func (a *AssistantExports) AdviseExport(tier string, params map[string]any) (map
 		if _, set := params["resolution"]; set {
 			res["resolution"] = req.Resolution
 		}
-		if req.CaptionsMode != "" {
-			res["captionsMode"] = req.CaptionsMode
+		if captionsMode != "" {
+			res["captionsMode"] = captionsMode
 		}
 	}
 	if w := out.Warnings(); len(w) > 0 {

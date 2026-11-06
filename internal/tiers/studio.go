@@ -14,10 +14,16 @@ import (
 // two lists and the default ladder against each other.
 
 // AllStudioFormats is every gated output token in canonical order: container
-// keys, then video and audio codec keys. "mp3" is both the audio-only container
-// and the codec; "none" (no video) is never gated.
+// keys, then video and audio codec keys, then feature tokens. "mp3" and
+// "opus" are both an audio-only container and the codec; "none" (no video) is
+// never gated. MM119 added webm, opus, vp9, vorbis and subs_embedded (the
+// embedded captions mode).
 func AllStudioFormats() []string {
-	return []string{"mp4", "mov", "mkv", "mp3", "wav", "h264", "hevc", "aac", "pcm_s16le"}
+	return []string{
+		"mp4", "mov", "mkv", "webm", "mp3", "wav", "opus",
+		"h264", "hevc", "vp9", "aac", "pcm_s16le", "vorbis",
+		"subs_embedded",
+	}
 }
 
 // StudioFormatSet is a tier's Darkroom output capability set: a canonical
@@ -167,8 +173,11 @@ func CheckStudioOutput(tier Tier, l Limits, tokens []string, advanced bool, requ
 		}
 	}
 	what := strings.ToUpper(option)
-	if option == StudioOptionAdvanced {
+	switch option {
+	case StudioOptionAdvanced:
 		what = "Advanced export settings"
+	case "subs_embedded":
+		what = "Embedded subtitle"
 	}
 	switch ref.Required {
 	case "free":

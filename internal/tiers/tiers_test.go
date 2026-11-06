@@ -307,14 +307,16 @@ func TestPublishedMatrix(t *testing.T) {
 
 	// MM118 Darkroom output row (design DARKROOM_OUTPUTS_AND_CAPTIONS.md §3.4):
 	// anonymous loses HEVC; Premium adds MOV, MKV and Advanced; Pro = Premium.
+	// MM119 (§4): Premium adds WebM, VP9, Opus/Vorbis, .opus and embedded subs.
 	for tier, row := range map[Tier]struct {
 		formats  StudioFormatSet
 		advanced bool
 	}{
 		TierAnonymous: {"mp4,mp3,wav,h264,aac,pcm_s16le", false},
 		TierFree:      {"mp4,mp3,wav,h264,hevc,aac,pcm_s16le", false},
-		TierPremium:   {"mp4,mov,mkv,mp3,wav,h264,hevc,aac,pcm_s16le", true},
-		TierPro:       {"mp4,mov,mkv,mp3,wav,h264,hevc,aac,pcm_s16le", true},
+		// MM119: Premium adds WebM, .opus, VP9, Vorbis and embedded subtitles.
+		TierPremium: {"mp4,mov,mkv,webm,mp3,wav,opus,h264,hevc,vp9,aac,pcm_s16le,vorbis,subs_embedded", true},
+		TierPro:     {"mp4,mov,mkv,webm,mp3,wav,opus,h264,hevc,vp9,aac,pcm_s16le,vorbis,subs_embedded", true},
 	} {
 		l := want[tier]
 		l.StudioFormats, l.StudioAdvanced = row.formats, row.advanced

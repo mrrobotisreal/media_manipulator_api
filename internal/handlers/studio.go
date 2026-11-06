@@ -215,6 +215,7 @@ func (h *StudioHandler) ExportFactsLookup(c *gin.Context) (StudioExportFacts, bo
 	}
 	facts := StudioExportFacts{Height: effectiveExportHeight(req, project.Height)}
 	facts.Output, facts.OutputOK = resolveOutputOK(req)
+	facts.CaptionsMode = req.CaptionsMode
 	return facts, true
 }
 
@@ -1312,7 +1313,7 @@ func (h *StudioHandler) launchExport(c *gin.Context, projectID string, req model
 	// MM118 output plan: the quota dispatcher already ran StudioExportGate;
 	// this is the authoritative check (render-again replays land here too, so a
 	// downgraded account cannot replay an output its plan lost).
-	if refuseStudioFormat(c, h.tierRegistry, output) {
+	if refuseStudioFormat(c, h.tierRegistry, output, req.CaptionsMode) {
 		return
 	}
 	project, err := h.repo.GetProject(loadCtx, projectID)
@@ -1527,6 +1528,20 @@ func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef
 		}
 	}
 
+	// MM119 embedded captions: write the cues as SRT next to the output; the
+	// args builder adds it as the last input and encodes it in the
+	// container's subtitle codec. A failed write drops the track, not the
+	// export (the same rule as the burn-in .ass).
+	if len(exportCfg.embeddedCues) > 0 && spec.output.SubtitleCodec() != "" {
+		srtPath := filepath.Join(filepath.Dir(outputPath), "captions.srt")
+		if err := os.WriteFile(srtPath, []byte(services.BuildStudioSRT(exportCfg.embeddedCues)), 0o644); err != nil {
+			log.Printf("studio export: write SRT failed: %v", err)
+		} else {
+			plan.EmbeddedSubs = &services.StudioEmbeddedSubs{Path: srtPath, Language: services.StudioSubtitleLanguage(exportCfg.captionsLanguage)}
+			cleanup = append(cleanup, srtPath)
+		}
+	}
+
 	// Keyframe sidecar (part 15): the generated sendcmd script is written next
 	// to the output and referenced by the graph (sendcmd=f=…). Best-effort —
 	// a failed write drops the animation ramps, not the export.
@@ -1728,6 +1743,11 @@ func (h *StudioHandler) runCaptionsJob(job *models.ConversionJob, projectID stri
 		_ = h.jobManager.UpdateJobError(jobID, "Failed to save captions")
 		return
 	}
+	// MM119: remember the cue language for the embedded subtitle stream's
+	// tag. Best-effort: a missing tag is `und`, not a failed caption job.
+	if err := h.repo.SetCaptionsLanguage(ctx, projectID, result.Language); err != nil {
+		log.Printf("studio captions: save language failed for job %s: %v", jobID, err)
+	}
 
 	_ = h.jobManager.UpdateJobResult(jobID, "/api/studio/projects/"+projectID)
 	if err := h.jobManager.UpdateJobStatus(jobID, models.StatusCompleted); err != nil {
@@ -1854,6 +1874,10 @@ type studioExportConfig struct {
 	// Caption burn-in (when enabled + present).
 	captions     []models.StudioCaptionCue
 	captionStyle *models.StudioCaptionStyle
+	// MM119 embedded captions: the cues muxed as a subtitle stream, and the
+	// caption language for its tag ("" = untagged).
+	embeddedCues     []models.StudioCaptionCue
+	captionsLanguage string
 }
 
 // buildStudioExportConfig resolves ducking, loudness and the LUT assets the EDL
@@ -1877,6 +1901,14 @@ func buildStudioExportConfig(project *models.StudioProject, assetByID map[string
 	if burn && len(project.Captions) > 0 {
 		cfg.captions = project.Captions
 		cfg.captionStyle = project.CaptionStyle
+	}
+	// MM119 embedded: the cues become a plain-text subtitle stream, never
+	// pixels. Unlike an explicit burn_in it respects the "captions enabled"
+	// toggle (decided): a project with captions switched off exports without
+	// a track.
+	if mode == models.StudioCaptionsEmbedded && project.CaptionsEnabled && len(project.Captions) > 0 {
+		cfg.embeddedCues = project.Captions
+		cfg.captionsLanguage = project.CaptionsLanguage
 	}
 	for _, track := range project.Tracks {
 		for _, clip := range track.Clips {

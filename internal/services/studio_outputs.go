@@ -18,6 +18,9 @@ import (
 // TestStudioOutputTableFixture) committed byte for byte as its offline fallback.
 //
 // Adding a format (MM119, MM120) is a row here plus an encoder function.
+// MM119 added Opus, Vorbis, VP9, WebM, the `.opus` audio-only container and
+// the embedded subtitle stream per container (SubtitleCodec, token
+// subs_embedded).
 
 // Output tokens: container keys and codec keys share one vocabulary (the tier
 // FormatSet, analytics, the request). "mp3" is both the audio-only container and
@@ -29,15 +32,34 @@ const (
 	StudioContainerMKV = "mkv"
 	StudioContainerMP3 = "mp3"
 	StudioContainerWAV = "wav"
+	// MM119: WebM, and `.opus` (Ogg Opus, audio-only; "opus" is both the
+	// container and the codec, like mp3).
+	StudioContainerWebM = "webm"
+	StudioContainerOpus = "opus"
 
 	StudioVideoH264 = "h264"
 	StudioVideoHEVC = "hevc"
+	StudioVideoVP9  = "vp9" // MM119, libvpx-vp9 (CPU, behind the CPU encode semaphore)
 	StudioVideoNone = "none"
 
-	StudioAudioAAC  = "aac"
-	StudioAudioPCM  = "pcm_s16le"
-	StudioAudioMP3  = "mp3"
-	StudioAudioNone = "none"
+	StudioAudioAAC    = "aac"
+	StudioAudioPCM    = "pcm_s16le"
+	StudioAudioMP3    = "mp3"
+	StudioAudioOpus   = "opus"   // MM119, libopus, always 48 kHz
+	StudioAudioVorbis = "vorbis" // MM119, libvorbis
+	StudioAudioNone   = "none"
+
+	// StudioTokenSubsEmbedded gates the `embedded` captions mode (MM119): the
+	// cues written as a subtitle stream instead of into the picture. Not a
+	// container or codec, but gated through the same StudioFormats set.
+	StudioTokenSubsEmbedded = "subs_embedded"
+)
+
+// Subtitle stream codecs per container (the embedded captions mode, MM119).
+const (
+	StudioSubsSRT     = "srt"      // Matroska (SubRip)
+	StudioSubsMovText = "mov_text" // MP4 / MOV (3GPP timed text)
+	StudioSubsWebVTT  = "webvtt"   // WebM
 )
 
 // Warnings a combination carries (closed list; the UI translates them).
@@ -60,6 +82,10 @@ type StudioOutputContainer struct {
 	AudioCodecs []string `json:"audioCodecs"`
 	// Faststart moves the MP4/MOV index to the front (-movflags +faststart).
 	Faststart bool `json:"faststart"`
+	// SubtitleCodec is the ffmpeg subtitle encoder of an embedded captions
+	// track in this container (MM119); "" = the container cannot carry one
+	// (audio-only), so the embedded mode is refused.
+	SubtitleCodec string `json:"subtitleCodec,omitempty"`
 }
 
 // StudioOutputCodec is one codec row.
@@ -114,37 +140,56 @@ type StudioOutputTable struct {
 var studioOutputTable = StudioOutputTable{
 	Containers: []StudioOutputContainer{
 		{Key: StudioContainerMP4, Ext: ".mp4", MIME: "video/mp4", MediaKind: "video",
-			VideoCodecs: []string{StudioVideoH264, StudioVideoHEVC}, AudioCodecs: []string{StudioAudioAAC}, Faststart: true},
+			VideoCodecs: []string{StudioVideoH264, StudioVideoHEVC}, AudioCodecs: []string{StudioAudioAAC, StudioAudioOpus}, Faststart: true,
+			SubtitleCodec: StudioSubsMovText},
 		{Key: StudioContainerMOV, Ext: ".mov", MIME: "video/quicktime", MediaKind: "video",
-			VideoCodecs: []string{StudioVideoH264, StudioVideoHEVC}, AudioCodecs: []string{StudioAudioAAC, StudioAudioPCM}, Faststart: true},
+			VideoCodecs: []string{StudioVideoH264, StudioVideoHEVC}, AudioCodecs: []string{StudioAudioAAC, StudioAudioPCM}, Faststart: true,
+			SubtitleCodec: StudioSubsMovText},
 		{Key: StudioContainerMKV, Ext: ".mkv", MIME: "video/x-matroska", MediaKind: "video",
-			VideoCodecs: []string{StudioVideoH264, StudioVideoHEVC}, AudioCodecs: []string{StudioAudioAAC, StudioAudioPCM, StudioAudioMP3}},
+			VideoCodecs:   []string{StudioVideoH264, StudioVideoHEVC, StudioVideoVP9},
+			AudioCodecs:   []string{StudioAudioAAC, StudioAudioPCM, StudioAudioMP3, StudioAudioOpus, StudioAudioVorbis},
+			SubtitleCodec: StudioSubsSRT},
+		{Key: StudioContainerWebM, Ext: ".webm", MIME: "video/webm", MediaKind: "video",
+			VideoCodecs: []string{StudioVideoVP9}, AudioCodecs: []string{StudioAudioOpus, StudioAudioVorbis},
+			SubtitleCodec: StudioSubsWebVTT},
 		{Key: StudioContainerMP3, Ext: ".mp3", MIME: "audio/mpeg", MediaKind: "audio", AudioOnly: true,
 			VideoCodecs: []string{StudioVideoNone}, AudioCodecs: []string{StudioAudioMP3}},
 		{Key: StudioContainerWAV, Ext: ".wav", MIME: "audio/wav", MediaKind: "audio", AudioOnly: true,
 			VideoCodecs: []string{StudioVideoNone}, AudioCodecs: []string{StudioAudioPCM}},
+		{Key: StudioContainerOpus, Ext: ".opus", MIME: "audio/ogg", MediaKind: "audio", AudioOnly: true,
+			VideoCodecs: []string{StudioVideoNone}, AudioCodecs: []string{StudioAudioOpus}},
 	},
 	Codecs: []StudioOutputCodec{
 		{Key: StudioVideoH264, Kind: "video", Bitrates: []int{}},
 		{Key: StudioVideoHEVC, Kind: "video", Bitrates: []int{}},
+		{Key: StudioVideoVP9, Kind: "video", Bitrates: []int{}},
 		{Key: StudioAudioAAC, Kind: "audio", Bitrates: []int{128, 192, 256, 320}, DefaultBitrate: 192},
 		{Key: StudioAudioPCM, Kind: "audio", Bitrates: []int{}},
 		{Key: StudioAudioMP3, Kind: "audio", Bitrates: []int{128, 192, 256, 320}, DefaultBitrate: 192},
+		{Key: StudioAudioOpus, Kind: "audio", Bitrates: []int{64, 96, 128, 160, 256}, DefaultBitrate: 128},
+		{Key: StudioAudioVorbis, Kind: "audio", Bitrates: []int{128, 192, 256}, DefaultBitrate: 192},
 	},
 	Warnings: []StudioOutputWarning{
 		{Warning: StudioWarnAppleIncompatible, Container: StudioContainerMKV},
 		{Warning: StudioWarnNoBrowserPreview, Container: StudioContainerMKV},
 		// Chrome and Firefox do not decode PCM inside MOV.
 		{Warning: StudioWarnNoBrowserPreview, Container: StudioContainerMOV, AudioCodec: StudioAudioPCM},
+		// MM119: QuickTime, Photos and iOS do not open Opus in MP4, WebM or .opus.
+		{Warning: StudioWarnAppleIncompatible, Container: StudioContainerMP4, AudioCodec: StudioAudioOpus},
+		{Warning: StudioWarnAppleIncompatible, Container: StudioContainerWebM},
+		{Warning: StudioWarnAppleIncompatible, Container: StudioContainerOpus},
 	},
 	Presets: []StudioOutputPreset{
 		{Key: "mp4_h264", Container: StudioContainerMP4, VideoCodec: StudioVideoH264, AudioCodec: StudioAudioAAC},
 		{Key: "mp4_hevc", Container: StudioContainerMP4, VideoCodec: StudioVideoHEVC, AudioCodec: StudioAudioAAC},
 		{Key: "mov_h264", Container: StudioContainerMOV, VideoCodec: StudioVideoH264, AudioCodec: StudioAudioAAC},
 		{Key: "mov_hevc", Container: StudioContainerMOV, VideoCodec: StudioVideoHEVC, AudioCodec: StudioAudioAAC},
+		{Key: "webm_vp9_opus", Container: StudioContainerWebM, VideoCodec: StudioVideoVP9, AudioCodec: StudioAudioOpus},
 		{Key: "mkv_hevc_aac", Container: StudioContainerMKV, VideoCodec: StudioVideoHEVC, AudioCodec: StudioAudioAAC},
+		{Key: "mkv_hevc_opus", Container: StudioContainerMKV, VideoCodec: StudioVideoHEVC, AudioCodec: StudioAudioOpus},
 		{Key: "audio_mp3", Container: StudioContainerMP3, VideoCodec: StudioVideoNone, AudioCodec: StudioAudioMP3},
 		{Key: "audio_wav", Container: StudioContainerWAV, VideoCodec: StudioVideoNone, AudioCodec: StudioAudioPCM},
+		{Key: "audio_opus", Container: StudioContainerOpus, VideoCodec: StudioVideoNone, AudioCodec: StudioAudioOpus},
 	},
 	LegacyFormats: map[string]string{
 		StudioFormatH264: "mp4_h264",
@@ -153,14 +198,18 @@ var studioOutputTable = StudioOutputTable{
 		StudioFormatWAV:  "audio_wav",
 	},
 	Tokens: []string{
-		StudioContainerMP4, StudioContainerMOV, StudioContainerMKV, StudioContainerMP3, StudioContainerWAV,
-		StudioVideoH264, StudioVideoHEVC, StudioAudioAAC, StudioAudioPCM,
+		StudioContainerMP4, StudioContainerMOV, StudioContainerMKV, StudioContainerWebM,
+		StudioContainerMP3, StudioContainerWAV, StudioContainerOpus,
+		StudioVideoH264, StudioVideoHEVC, StudioVideoVP9, StudioAudioAAC, StudioAudioPCM, StudioAudioVorbis,
+		StudioTokenSubsEmbedded,
 	},
 	MinTier: map[string]string{
 		StudioContainerMP4: "anonymous", StudioContainerMP3: "anonymous", StudioContainerWAV: "anonymous",
 		StudioVideoH264: "anonymous", StudioAudioAAC: "anonymous", StudioAudioPCM: "anonymous",
 		StudioVideoHEVC:    "free",
 		StudioContainerMOV: "premium", StudioContainerMKV: "premium",
+		StudioContainerWebM: "premium", StudioContainerOpus: "premium", StudioVideoVP9: "premium", StudioAudioVorbis: "premium",
+		StudioTokenSubsEmbedded: "premium",
 	},
 	AdvancedMinTier: "premium",
 	DefaultChannels: studioDefaultChannels,
@@ -308,6 +357,15 @@ func (o StudioOutput) File() (ext, mime, mediaKind string) {
 func (o StudioOutput) Faststart() bool {
 	c, ok := studioContainer(o.Container)
 	return ok && c.Faststart
+}
+
+// SubtitleCodec is the container's embedded subtitle encoder ("" = none).
+func (o StudioOutput) SubtitleCodec() string {
+	c, ok := studioContainer(o.Container)
+	if !ok {
+		return ""
+	}
+	return c.SubtitleCodec
 }
 
 // Tokens are the gated output tokens of this output (container, video codec
@@ -502,6 +560,16 @@ func audioEncodeArgs(o StudioOutput) []string {
 		args = []string{"-c:a", "pcm_s16le"}
 	case StudioAudioMP3:
 		args = []string{"-c:a", "libmp3lame", "-b:a", fmt.Sprintf("%dk", o.AudioBitrate)}
+	case StudioAudioOpus:
+		// Opus is 48 kHz only. The voip application tunes for speech; it only
+		// wins over `audio` for a mono low-bitrate (podcast-voice) output.
+		app := "audio"
+		if o.AudioChannels == 1 && o.AudioBitrate <= 64 {
+			app = "voip"
+		}
+		args = []string{"-c:a", "libopus", "-b:a", fmt.Sprintf("%dk", o.AudioBitrate), "-vbr", "on", "-ar", "48000", "-application", app}
+	case StudioAudioVorbis:
+		args = []string{"-c:a", "libvorbis", "-b:a", fmt.Sprintf("%dk", o.AudioBitrate)}
 	default: // aac
 		args = []string{"-c:a", "aac", "-b:a", fmt.Sprintf("%dk", o.AudioBitrate)}
 	}
@@ -514,6 +582,9 @@ func audioEncodeArgs(o StudioOutput) []string {
 // videoEncodeArgs is the video codec half for a container. MKV drops the
 // MP4-family hvc1 tag (Matroska names HEVC by its CodecID).
 func videoEncodeArgs(o StudioOutput, encoder, quality string) []string {
+	if o.VideoCodec == StudioVideoVP9 {
+		return vp9EncodeArgs(quality)
+	}
 	if o.VideoCodec != StudioVideoHEVC {
 		return h264EncodeArgs(encoder, quality)
 	}

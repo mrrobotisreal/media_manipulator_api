@@ -160,3 +160,58 @@
     export: ["container=mp4", "upgrade=premium"]
     any_of: ["Premium"]
     no_edits: true
+# --- MM119: Opus, WebM, embedded subtitles. Recipe lines: website embed -> WebM VP9 + Opus
+# 96-128k; podcast -> Opus 96k mono or MP3; captions people can turn off -> embedded
+# (sidecar for YouTube). Opus in MOV is refused and Medi offers MKV/MP4.
+- id: studio-export-website-embed
+  surface: studio
+  requires: studio
+  tier: premium
+  fixture_doc: studio/two-clips.txt
+  message: "I want to embed this video on my website. Set up the export."
+  expect:
+    actions: [suggest:export]
+    export: ["container=webm", "videoCodec=vp9", "audioCodec=opus", "upgrade=none"]
+    no_edits: true
+- id: studio-export-small-audio
+  surface: studio
+  requires: studio
+  tier: premium
+  fixture_doc: studio/two-clips.txt
+  message: "Give me a small audio file of this"
+  expect:
+    actions: [suggest:export]
+    export: ["container=opus|mp3", "videoCodec=none"]
+    no_edits: true
+- id: studio-export-opus-mov
+  surface: studio
+  requires: studio
+  tier: premium
+  fixture_doc: studio/two-clips.txt
+  message: "Export it as a MOV with Opus audio"
+  expect:
+    actions: [suggest:export]
+    export: ["container=mkv|mp4|webm", "audioCodec=opus"]
+    any_of: ["MOV", "QuickTime"]
+    no_edits: true
+- id: studio-export-toggle-subs
+  surface: studio
+  requires: studio
+  tier: premium
+  fixture_doc: studio/two-clips.txt
+  message: "I want subtitles people can turn on and off"
+  expect:
+    actions: [suggest:export]
+    export: ["captionsMode=embedded"]
+    no_edits: true
+- id: studio-export-free-webm
+  surface: studio
+  requires: studio
+  tier: free
+  fixture_doc: studio/two-clips.txt
+  message: "Export a WebM for my website"
+  expect:
+    actions: [suggest:export]
+    export: ["container=mp4", "upgrade=premium"]
+    any_of: ["Premium"]
+    no_edits: true
