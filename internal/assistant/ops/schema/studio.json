@@ -596,6 +596,17 @@
           "reason": {
             "$ref": "#/$defs/reason"
           },
+          "look": {
+            "type": "string",
+            "enum": [
+              "bold_pop",
+              "karaoke_classic",
+              "clean_highlight",
+              "minimal",
+              "neon",
+              "podcast"
+            ]
+          },
           "fontSizePct": {
             "type": "number",
             "minimum": 1,
@@ -616,6 +627,7 @@
             "type": "string",
             "enum": [
               "bottom",
+              "middle",
               "top"
             ]
           },
@@ -623,6 +635,87 @@
             "type": "number",
             "minimum": 40,
             "maximum": 100
+          },
+          "fontFamily": {
+            "type": "string",
+            "enum": [
+              "Inter",
+              "Noto Sans",
+              "Open Sans",
+              "Montserrat",
+              "Poppins",
+              "Raleway",
+              "DejaVu Sans",
+              "Oswald",
+              "Bebas Neue",
+              "Anton",
+              "Bangers",
+              "Titan One",
+              "Lilita One",
+              "Bowlby One",
+              "Rubik Mono One",
+              "Russo One",
+              "Playfair Display",
+              "Merriweather",
+              "Lora",
+              "JetBrains Mono",
+              "Space Mono",
+              "Dancing Script",
+              "Pacifico",
+              "Noto Sans Hebrew",
+              "Noto Sans Arabic",
+              "Noto Sans SC",
+              "Noto Sans KR"
+            ]
+          },
+          "bold": {
+            "type": "boolean"
+          },
+          "uppercase": {
+            "type": "boolean"
+          },
+          "highlightColor": {
+            "$ref": "#/$defs/hex_color"
+          },
+          "outlineColor": {
+            "$ref": "#/$defs/hex_color"
+          },
+          "outlineWidth": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 12
+          },
+          "shadow": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "backgroundMode": {
+            "type": "string",
+            "enum": [
+              "box",
+              "none",
+              "word_box"
+            ]
+          },
+          "wordsPerGroup": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6
+          },
+          "animation": {
+            "type": "string",
+            "enum": [
+              "none",
+              "karaoke_fill",
+              "highlight",
+              "pop"
+            ]
+          },
+          "animationStrength": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
           }
         },
         "required": [
@@ -630,6 +723,11 @@
         ],
         "additionalProperties": false,
         "anyOf": [
+          {
+            "required": [
+              "look"
+            ]
+          },
           {
             "required": [
               "fontSizePct"
@@ -658,6 +756,61 @@
           {
             "required": [
               "maxWidthPct"
+            ]
+          },
+          {
+            "required": [
+              "fontFamily"
+            ]
+          },
+          {
+            "required": [
+              "bold"
+            ]
+          },
+          {
+            "required": [
+              "uppercase"
+            ]
+          },
+          {
+            "required": [
+              "highlightColor"
+            ]
+          },
+          {
+            "required": [
+              "outlineColor"
+            ]
+          },
+          {
+            "required": [
+              "outlineWidth"
+            ]
+          },
+          {
+            "required": [
+              "shadow"
+            ]
+          },
+          {
+            "required": [
+              "backgroundMode"
+            ]
+          },
+          {
+            "required": [
+              "wordsPerGroup"
+            ]
+          },
+          {
+            "required": [
+              "animation"
+            ]
+          },
+          {
+            "required": [
+              "animationStrength"
             ]
           }
         ]

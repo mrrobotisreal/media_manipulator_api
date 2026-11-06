@@ -16,14 +16,8 @@ Video, image, audio and LUT clips stack on separate tracks; upper video tracks c
 Speed: 0.1× to 10×, default 1 (maintain pitch optional). A freeze frame holds one source frame; it cannot be combined with speed or reverse.
 Markers: up to 500 per project, name up to 80 characters. Press M to add one at the playhead.
 ### Captions
-Auto-captions come from Whisper (one AI job, suggested as an action); cues can be edited, styled, burned in or exported as SRT/VTT sidecars.
-Caption style:
-- `fontSizePct`: 1 to 15, default 4.5
-- `color`: text, default "#FFFFFF"
-- `backgroundColor`: text, default "#000000"
-- `backgroundOpacity`: 0 to 1, default 0.55
-- `position`: one of bottom, top, default "bottom"
-- `maxWidthPct`: 40 to 100, default 90
+Auto-captions: Whisper with word timings (one AI job, a suggested action); cues are edited on the lane (timings re-spread); looks and animation: the studio-caption-styles recipe.
+Caption style: fontSizePct 1-15 (4.5); color (#FFFFFF); backgroundColor (#000000); backgroundOpacity 0-1 (0.55); position bottom|middle|top (bottom); maxWidthPct 40-100 (90); fontFamily; bold; uppercase; highlightColor; outlineColor; outlineWidth 0-12; shadow 0-1; backgroundMode box|none|word_box; wordsPerGroup 1-6; animation none|karaoke_fill|highlight|pop; animationStrength 0-1; lookId (a studio-caption-styles look).
 ### Export
 A Darkroom export is a container, a video codec and an audio codec, from one server table:
 - MP4: H.264, H.265, AV1; audio AAC, Opus.

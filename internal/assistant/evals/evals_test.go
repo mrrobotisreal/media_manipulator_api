@@ -487,3 +487,20 @@ func TestAnyOfReadsEditSummaries(t *testing.T) {
 		t.Fatal("an unrelated edit summary must not satisfy any_of")
 	}
 }
+
+// MM121: value(op, field, a|b) compares a string field of the first op with that name.
+func TestCheckValue(t *testing.T) {
+	o := `[{"op":"set_caption_style","look":"bold_pop","animation":"pop"}]`
+	if ok, why := check(t, "value(set_caption_style, look, bold_pop|clean_highlight)", o); !ok {
+		t.Errorf("look should match: %s", why)
+	}
+	if ok, _ := check(t, "value(set_caption_style, animation, karaoke_fill)", o); ok {
+		t.Error("animation pop must not match karaoke_fill")
+	}
+	if ok, _ := check(t, "value(set_caption_style, look, bold_pop)", `[{"op":"grade"}]`); ok {
+		t.Error("no such op must fail")
+	}
+	if _, err := ParseCheck("value(set_caption_style, look)"); err == nil {
+		t.Error("value needs three arguments")
+	}
+}
