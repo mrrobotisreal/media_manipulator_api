@@ -157,6 +157,12 @@ func (jm *JobManager) EmitStudioRender(
 	if stats.CPUEncode {
 		props["cpuQueueMs"] = stats.CPUQueueMs
 	}
+	// MM120: the rendered file in whole megabytes (10^6 bytes, rounded up so
+	// a tiny file is 1, never 0), success only: the admin's output size
+	// p50/p95 per codec. A file size, nothing content-derived.
+	if renderErr == nil && stats.OutputBytes > 0 {
+		props["outputMB"] = (stats.OutputBytes + 999_999) / 1_000_000
+	}
 	if timelineSeconds > 0 && renderSeconds >= 0 {
 		props["durationRatioBucket"] = analyticsemit.RatioBucket(renderSeconds / timelineSeconds)
 	}

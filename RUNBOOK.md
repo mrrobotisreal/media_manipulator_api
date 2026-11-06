@@ -766,7 +766,7 @@ Operator: every token and Advanced. Every export still costs one `exportsPerDay`
 | `TIER_ANON_STUDIO_FORMATS` | `mp4,h264,aac,mp3,wav,pcm_s16le` | Output tokens anonymous can export (MP4 H.264, MP3, WAV). Anonymous has no H.265 since MM118. |
 | `TIER_FREE_STUDIO_FORMATS` | `hevc` (+ anonymous's) | Free adds H.265 MP4. |
 | `TIER_PREMIUM_STUDIO_FORMATS` | `mov,mkv,webm,opus,vp9,vorbis,subs_embedded` (+ free's) | Premium adds MOV and MKV (MM118), WebM, `.opus`/Opus, VP9, Vorbis and the embedded captions track (MM119). |
-| `TIER_PRO_STUDIO_FORMATS` | empty (+ Premium's) | Pro = Premium until MM120 adds AV1, ProRes, FLAC, 24-bit WAV. |
+| `TIER_PRO_STUDIO_FORMATS` | `av1,prores,flac,pcm_s24le` (+ Premium's) | Pro adds AV1, ProRes 422 MOV, FLAC and 24-bit WAV (MM120). |
 | `TIER_ANON_STUDIO_ADVANCED` / `TIER_FREE_STUDIO_ADVANCED` | `false` / `false` | The Advanced picker (combinations, audio bitrate 128/192/256/320, mono). |
 | `TIER_PREMIUM_STUDIO_ADVANCED` / `TIER_PRO_STUDIO_ADVANCED` | `true` / `true` | Same, Premium and Pro. |
 
@@ -793,6 +793,25 @@ Verify on the host: `ffprobe -v error -show_entries stream=codec_type,codec_name
 (WebM: `vp9`, `opus` 48000, and with embedded captions a `webvtt` stream tagged with the
 language and `title=Captions`; MKV shows `subrip`, MP4/MOV `mov_text`; `.opus` is one `opus`
 stream at 48000). Admin `/darkroom` → CPU encode queue shows the wait p50/p95.
+
+**MM120 (Pro formats: AV1, ProRes 422, FLAC, 24-bit WAV).** Migration
+`20261106120_studio_export_pro_formats` must run **before** the MM120 binary serves (container
+`flac`, video `av1`/`prores`, audio `flac`/`pcm_s24le`, 23 new derived labels). Without it the
+history row of a Pro-format export fails to insert (logged; the render still runs).
+
+- **AV1** uses `av1_nvenc` when a real 256x256 probe encode on `CONTENT_STUDIO_GPU_INDEX`
+  succeeds (RTX 5080: ~300 fps at 1080p), else `libsvtav1` behind the CPU encode gate, else the
+  export **fails** with "AV1 export is unsupported on this server" (`ErrStudioAV1Unavailable`,
+  never a silently different codec). If it fires: `ffmpeg -encoders | grep -E "av1_nvenc|libsvtav1"`,
+  then `CUDA_VISIBLE_DEVICES=<idx> ffmpeg -f lavfi -i color=s=256x256:d=0.1 -c:v av1_nvenc -f null -`.
+  The probe result is cached per process: restart the API after fixing the driver.
+- **ProRes** (`prores_ks`, CPU) takes a CPU encode slot too (2160p ran at 14.5 fps on the host).
+  Files are large (~1.2 GB per minute at 1080p30, ~4.6 GB at 2160p30); an export whose
+  estimate exceeds the plan's `maxFileBytes` (Pro 5 GiB = ~4.5 min at 1080p30) or the output
+  disk's free space minus 2 GiB is refused with 413 `too_large` before any job starts.
+- Verify on the host: `ffprobe -v error -show_entries stream=codec_name,codec_tag_string,profile,pix_fmt,sample_rate,bits_per_raw_sample outputs/<jobId>/converted.mov`
+  (ProRes: `prores` `apcn` `Standard` `yuv422p10le` + `pcm_s24le` `in24` 48000/24; AV1 MP4:
+  `av1` `av01`; `.flac`: `flac` 48000/24).
 
 #### Video summary frame budgets and deep synthesis (MM74)
 

@@ -20,7 +20,10 @@ import (
 // Adding a format (MM119, MM120) is a row here plus an encoder function.
 // MM119 added Opus, Vorbis, VP9, WebM, the `.opus` audio-only container and
 // the embedded subtitle stream per container (SubtitleCodec, token
-// subs_embedded).
+// subs_embedded). MM120 added the Pro-only rows: AV1 (MP4, WebM, MKV), ProRes
+// 422 (MOV only, PCM audio only: a video codec may narrow the audio codecs a
+// container offers, StudioOutputCodec.AudioCodecs), FLAC (MKV and the `.flac`
+// audio-only container) and 24-bit PCM (MOV, MKV, and WAV beside 16-bit).
 
 // Output tokens: container keys and codec keys share one vocabulary (the tier
 // FormatSet, analytics, the request). "mp3" is both the audio-only container and
@@ -36,18 +39,27 @@ const (
 	// container and the codec, like mp3).
 	StudioContainerWebM = "webm"
 	StudioContainerOpus = "opus"
+	// MM120: `.flac` (audio-only; "flac" is both the container and the codec).
+	StudioContainerFLAC = "flac"
 
 	StudioVideoH264 = "h264"
 	StudioVideoHEVC = "hevc"
 	StudioVideoVP9  = "vp9" // MM119, libvpx-vp9 (CPU, behind the CPU encode semaphore)
-	StudioVideoNone = "none"
+	// MM120 (Pro): AV1 (av1_nvenc, libsvtav1 fallback behind the CPU gate) and
+	// ProRes 422 (prores_ks, 10-bit 4:2:2 from the 8-bit graph).
+	StudioVideoAV1    = "av1"
+	StudioVideoProRes = "prores"
+	StudioVideoNone   = "none"
 
 	StudioAudioAAC    = "aac"
 	StudioAudioPCM    = "pcm_s16le"
 	StudioAudioMP3    = "mp3"
 	StudioAudioOpus   = "opus"   // MM119, libopus, always 48 kHz
 	StudioAudioVorbis = "vorbis" // MM119, libvorbis
-	StudioAudioNone   = "none"
+	// MM120 (Pro): lossless FLAC and 24-bit PCM, both forced to 48 kHz.
+	StudioAudioFLAC  = "flac"
+	StudioAudioPCM24 = "pcm_s24le"
+	StudioAudioNone  = "none"
 
 	// StudioTokenSubsEmbedded gates the `embedded` captions mode (MM119): the
 	// cues written as a subtitle stream instead of into the picture. Not a
@@ -66,6 +78,8 @@ const (
 const (
 	StudioWarnAppleIncompatible = "apple_incompatible" // QuickTime / Photos / iOS will not open it
 	StudioWarnNoBrowserPreview  = "no_browser_preview" // a browser cannot play it inline
+	// MM120: older phones, TVs and browsers have no AV1 decoder.
+	StudioWarnAV1Playback = "av1_playback"
 )
 
 // Default stereo; mono is an Advanced choice.
@@ -96,6 +110,23 @@ type StudioOutputCodec struct {
 	// the codec has no bitrate (PCM). DefaultBitrate is what a preset uses.
 	Bitrates       []int `json:"bitrates"`
 	DefaultBitrate int   `json:"defaultBitrate"`
+	// AudioCodecs (video codecs only, MM120) narrows the audio codecs the
+	// container offers when this video codec is picked, in preference order
+	// (the first one the container carries is the default); empty = any.
+	// ProRes takes PCM only.
+	AudioCodecs []string `json:"audioCodecs,omitempty"`
+	// EstimateKbps (MM120) is the predictable bitrate the size estimate and
+	// the output size guard use: a video codec's at 1920x1080 30 fps (scaled
+	// by pixels x fps), an audio codec's for stereo 48 kHz (mono halves it).
+	// 0 = not predictable (constant-quality codecs): no estimate, no guard.
+	EstimateKbps int `json:"estimateKbps,omitempty"`
+	// Fallback (MM120) lists the codecs a plan without this one gets instead,
+	// in order: Medi's nearest allowed preset prefers them.
+	Fallback []string `json:"fallback,omitempty"`
+	// NoFaststart (MM120): skip -movflags +faststart even in MP4/MOV. A
+	// ProRes hand-off file is never streamed, and faststart would re-write
+	// the whole multi-gigabyte file once more after the encode.
+	NoFaststart bool `json:"noFaststart,omitempty"`
 }
 
 // StudioOutputWarning attaches a warning to every combination matching its
@@ -140,34 +171,43 @@ type StudioOutputTable struct {
 var studioOutputTable = StudioOutputTable{
 	Containers: []StudioOutputContainer{
 		{Key: StudioContainerMP4, Ext: ".mp4", MIME: "video/mp4", MediaKind: "video",
-			VideoCodecs: []string{StudioVideoH264, StudioVideoHEVC}, AudioCodecs: []string{StudioAudioAAC, StudioAudioOpus}, Faststart: true,
+			VideoCodecs: []string{StudioVideoH264, StudioVideoHEVC, StudioVideoAV1}, AudioCodecs: []string{StudioAudioAAC, StudioAudioOpus}, Faststart: true,
 			SubtitleCodec: StudioSubsMovText},
 		{Key: StudioContainerMOV, Ext: ".mov", MIME: "video/quicktime", MediaKind: "video",
-			VideoCodecs: []string{StudioVideoH264, StudioVideoHEVC}, AudioCodecs: []string{StudioAudioAAC, StudioAudioPCM}, Faststart: true,
+			VideoCodecs: []string{StudioVideoH264, StudioVideoHEVC, StudioVideoProRes}, AudioCodecs: []string{StudioAudioAAC, StudioAudioPCM, StudioAudioPCM24}, Faststart: true,
 			SubtitleCodec: StudioSubsMovText},
 		{Key: StudioContainerMKV, Ext: ".mkv", MIME: "video/x-matroska", MediaKind: "video",
-			VideoCodecs:   []string{StudioVideoH264, StudioVideoHEVC, StudioVideoVP9},
-			AudioCodecs:   []string{StudioAudioAAC, StudioAudioPCM, StudioAudioMP3, StudioAudioOpus, StudioAudioVorbis},
+			VideoCodecs:   []string{StudioVideoH264, StudioVideoHEVC, StudioVideoVP9, StudioVideoAV1},
+			AudioCodecs:   []string{StudioAudioAAC, StudioAudioPCM, StudioAudioMP3, StudioAudioOpus, StudioAudioVorbis, StudioAudioFLAC, StudioAudioPCM24},
 			SubtitleCodec: StudioSubsSRT},
 		{Key: StudioContainerWebM, Ext: ".webm", MIME: "video/webm", MediaKind: "video",
-			VideoCodecs: []string{StudioVideoVP9}, AudioCodecs: []string{StudioAudioOpus, StudioAudioVorbis},
+			VideoCodecs: []string{StudioVideoVP9, StudioVideoAV1}, AudioCodecs: []string{StudioAudioOpus, StudioAudioVorbis},
 			SubtitleCodec: StudioSubsWebVTT},
 		{Key: StudioContainerMP3, Ext: ".mp3", MIME: "audio/mpeg", MediaKind: "audio", AudioOnly: true,
 			VideoCodecs: []string{StudioVideoNone}, AudioCodecs: []string{StudioAudioMP3}},
 		{Key: StudioContainerWAV, Ext: ".wav", MIME: "audio/wav", MediaKind: "audio", AudioOnly: true,
-			VideoCodecs: []string{StudioVideoNone}, AudioCodecs: []string{StudioAudioPCM}},
+			VideoCodecs: []string{StudioVideoNone}, AudioCodecs: []string{StudioAudioPCM, StudioAudioPCM24}},
 		{Key: StudioContainerOpus, Ext: ".opus", MIME: "audio/ogg", MediaKind: "audio", AudioOnly: true,
 			VideoCodecs: []string{StudioVideoNone}, AudioCodecs: []string{StudioAudioOpus}},
+		{Key: StudioContainerFLAC, Ext: ".flac", MIME: "audio/flac", MediaKind: "audio", AudioOnly: true,
+			VideoCodecs: []string{StudioVideoNone}, AudioCodecs: []string{StudioAudioFLAC}},
 	},
 	Codecs: []StudioOutputCodec{
 		{Key: StudioVideoH264, Kind: "video", Bitrates: []int{}},
 		{Key: StudioVideoHEVC, Kind: "video", Bitrates: []int{}},
 		{Key: StudioVideoVP9, Kind: "video", Bitrates: []int{}},
+		// MM120. ProRes 422 is ~147 Mb/s at 1080p30 (Apple's figure; the
+		// server fixture render measured it, design §9).
+		{Key: StudioVideoAV1, Kind: "video", Bitrates: []int{}, Fallback: []string{StudioVideoHEVC, StudioVideoVP9}},
+		{Key: StudioVideoProRes, Kind: "video", Bitrates: []int{}, AudioCodecs: []string{StudioAudioPCM24, StudioAudioPCM},
+			EstimateKbps: 147000, Fallback: []string{StudioVideoHEVC}, NoFaststart: true},
 		{Key: StudioAudioAAC, Kind: "audio", Bitrates: []int{128, 192, 256, 320}, DefaultBitrate: 192},
-		{Key: StudioAudioPCM, Kind: "audio", Bitrates: []int{}},
+		{Key: StudioAudioPCM, Kind: "audio", Bitrates: []int{}, EstimateKbps: 1536},
 		{Key: StudioAudioMP3, Kind: "audio", Bitrates: []int{128, 192, 256, 320}, DefaultBitrate: 192},
 		{Key: StudioAudioOpus, Kind: "audio", Bitrates: []int{64, 96, 128, 160, 256}, DefaultBitrate: 128},
 		{Key: StudioAudioVorbis, Kind: "audio", Bitrates: []int{128, 192, 256}, DefaultBitrate: 192},
+		{Key: StudioAudioFLAC, Kind: "audio", Bitrates: []int{}, Fallback: []string{StudioAudioPCM}},
+		{Key: StudioAudioPCM24, Kind: "audio", Bitrates: []int{}, EstimateKbps: 2304, Fallback: []string{StudioAudioPCM}},
 	},
 	Warnings: []StudioOutputWarning{
 		{Warning: StudioWarnAppleIncompatible, Container: StudioContainerMKV},
@@ -178,6 +218,10 @@ var studioOutputTable = StudioOutputTable{
 		{Warning: StudioWarnAppleIncompatible, Container: StudioContainerMP4, AudioCodec: StudioAudioOpus},
 		{Warning: StudioWarnAppleIncompatible, Container: StudioContainerWebM},
 		{Warning: StudioWarnAppleIncompatible, Container: StudioContainerOpus},
+		// MM120: no AV1 decoder on older phones, TVs and browsers.
+		{Warning: StudioWarnAV1Playback, VideoCodec: StudioVideoAV1},
+		// MKV / MOV with 24-bit PCM: no browser plays it inline either.
+		{Warning: StudioWarnNoBrowserPreview, Container: StudioContainerMOV, AudioCodec: StudioAudioPCM24},
 	},
 	Presets: []StudioOutputPreset{
 		{Key: "mp4_h264", Container: StudioContainerMP4, VideoCodec: StudioVideoH264, AudioCodec: StudioAudioAAC},
@@ -190,6 +234,12 @@ var studioOutputTable = StudioOutputTable{
 		{Key: "audio_mp3", Container: StudioContainerMP3, VideoCodec: StudioVideoNone, AudioCodec: StudioAudioMP3},
 		{Key: "audio_wav", Container: StudioContainerWAV, VideoCodec: StudioVideoNone, AudioCodec: StudioAudioPCM},
 		{Key: "audio_opus", Container: StudioContainerOpus, VideoCodec: StudioVideoNone, AudioCodec: StudioAudioOpus},
+		// MM120, Pro only.
+		{Key: "mp4_av1", Container: StudioContainerMP4, VideoCodec: StudioVideoAV1, AudioCodec: StudioAudioAAC},
+		{Key: "webm_av1_opus", Container: StudioContainerWebM, VideoCodec: StudioVideoAV1, AudioCodec: StudioAudioOpus},
+		{Key: "mov_prores", Container: StudioContainerMOV, VideoCodec: StudioVideoProRes, AudioCodec: StudioAudioPCM24},
+		{Key: "audio_flac", Container: StudioContainerFLAC, VideoCodec: StudioVideoNone, AudioCodec: StudioAudioFLAC},
+		{Key: "audio_wav24", Container: StudioContainerWAV, VideoCodec: StudioVideoNone, AudioCodec: StudioAudioPCM24},
 	},
 	LegacyFormats: map[string]string{
 		StudioFormatH264: "mp4_h264",
@@ -199,8 +249,9 @@ var studioOutputTable = StudioOutputTable{
 	},
 	Tokens: []string{
 		StudioContainerMP4, StudioContainerMOV, StudioContainerMKV, StudioContainerWebM,
-		StudioContainerMP3, StudioContainerWAV, StudioContainerOpus,
-		StudioVideoH264, StudioVideoHEVC, StudioVideoVP9, StudioAudioAAC, StudioAudioPCM, StudioAudioVorbis,
+		StudioContainerMP3, StudioContainerWAV, StudioContainerOpus, StudioContainerFLAC,
+		StudioVideoH264, StudioVideoHEVC, StudioVideoVP9, StudioVideoAV1, StudioVideoProRes,
+		StudioAudioAAC, StudioAudioPCM, StudioAudioVorbis, StudioAudioPCM24,
 		StudioTokenSubsEmbedded,
 	},
 	MinTier: map[string]string{
@@ -210,6 +261,8 @@ var studioOutputTable = StudioOutputTable{
 		StudioContainerMOV: "premium", StudioContainerMKV: "premium",
 		StudioContainerWebM: "premium", StudioContainerOpus: "premium", StudioVideoVP9: "premium", StudioAudioVorbis: "premium",
 		StudioTokenSubsEmbedded: "premium",
+		// MM120 (decided Q3): Pro only.
+		StudioContainerFLAC: "pro", StudioVideoAV1: "pro", StudioVideoProRes: "pro", StudioAudioPCM24: "pro",
 	},
 	AdvancedMinTier: "premium",
 	DefaultChannels: studioDefaultChannels,
@@ -300,12 +353,39 @@ func studioDerivedFormats() []string {
 	}
 	for _, c := range studioOutputTable.Containers {
 		for _, v := range c.VideoCodecs {
-			for _, a := range c.AudioCodecs {
+			for _, a := range studioAudioCodecsFor(c, v) {
 				add(StudioOutputLabel(c.Key, v, a))
 			}
 		}
 	}
 	return out
+}
+
+// studioAudioCodecsFor is the audio codecs container c offers with video codec
+// v: the container's list, narrowed (and reordered) by the video codec's own
+// AudioCodecs when it has one (MM120: ProRes takes PCM only, 24-bit first).
+func studioAudioCodecsFor(c StudioOutputContainer, video string) []string {
+	vc, ok := studioCodec(video)
+	if !ok || len(vc.AudioCodecs) == 0 {
+		return c.AudioCodecs
+	}
+	out := []string{}
+	for _, a := range vc.AudioCodecs {
+		if containsStr(c.AudioCodecs, a) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// StudioAudioCodecsFor is studioAudioCodecsFor by container key (nil for an
+// unknown container).
+func StudioAudioCodecsFor(container, video string) []string {
+	c, ok := studioContainer(container)
+	if !ok {
+		return nil
+	}
+	return studioAudioCodecsFor(c, video)
 }
 
 // StudioOutputWarnings lists the warnings of one combination, in table order.
@@ -353,10 +433,16 @@ func (o StudioOutput) File() (ext, mime, mediaKind string) {
 	return c.Ext, c.MIME, c.MediaKind
 }
 
-// Faststart reports whether the container takes -movflags +faststart.
+// Faststart reports whether the output takes -movflags +faststart: the
+// container does (MP4/MOV) and the video codec does not opt out (MM120:
+// ProRes, a multi-gigabyte hand-off file that is never streamed).
 func (o StudioOutput) Faststart() bool {
 	c, ok := studioContainer(o.Container)
-	return ok && c.Faststart
+	if !ok || !c.Faststart {
+		return false
+	}
+	vc, known := studioCodec(o.VideoCodec)
+	return !known || !vc.NoFaststart
 }
 
 // SubtitleCodec is the container's embedded subtitle encoder ("" = none).
@@ -463,8 +549,12 @@ func ResolveStudioOutput(r StudioOutputRequest) (StudioOutput, error) {
 	if video == "" {
 		video = c.VideoCodecs[0]
 	}
-	if audio == "" {
-		audio = c.AudioCodecs[0]
+	audioCodecs := c.AudioCodecs
+	if containsStr(c.VideoCodecs, video) {
+		audioCodecs = studioAudioCodecsFor(c, video)
+	}
+	if audio == "" && len(audioCodecs) > 0 {
+		audio = audioCodecs[0]
 	}
 	if !containsStr(c.VideoCodecs, video) {
 		if _, known := studioCodec(video); !known && video != StudioVideoNone {
@@ -477,6 +567,10 @@ func ResolveStudioOutput(r StudioOutputRequest) (StudioOutput, error) {
 			return StudioOutput{}, outputErr("Unsupported audio codec")
 		}
 		return StudioOutput{}, outputErr("%s cannot carry %s audio", strings.ToUpper(container), audio)
+	}
+	if !containsStr(audioCodecs, audio) {
+		// MM120: the video codec narrows the container's audio (ProRes = PCM).
+		return StudioOutput{}, outputErr("%s video takes %s audio only", video, strings.Join(audioCodecs, " or "))
 	}
 	codec, _ := studioCodec(audio)
 	bitrate := r.AudioBitrate
@@ -570,6 +664,13 @@ func audioEncodeArgs(o StudioOutput) []string {
 		args = []string{"-c:a", "libopus", "-b:a", fmt.Sprintf("%dk", o.AudioBitrate), "-vbr", "on", "-ar", "48000", "-application", app}
 	case StudioAudioVorbis:
 		args = []string{"-c:a", "libvorbis", "-b:a", fmt.Sprintf("%dk", o.AudioBitrate)}
+	case StudioAudioFLAC:
+		// MM120: lossless, no loudness change (the plan's loudness preset is
+		// the only level change, as for every codec). The mix is float, so
+		// s32 keeps its resolution: ffmpeg's FLAC encoder writes it as 24-bit.
+		args = []string{"-c:a", "flac", "-sample_fmt", "s32", "-ar", "48000"}
+	case StudioAudioPCM24:
+		args = []string{"-c:a", "pcm_s24le", "-ar", "48000"}
 	default: // aac
 		args = []string{"-c:a", "aac", "-b:a", fmt.Sprintf("%dk", o.AudioBitrate)}
 	}
@@ -582,8 +683,13 @@ func audioEncodeArgs(o StudioOutput) []string {
 // videoEncodeArgs is the video codec half for a container. MKV drops the
 // MP4-family hvc1 tag (Matroska names HEVC by its CodecID).
 func videoEncodeArgs(o StudioOutput, encoder, quality string) []string {
-	if o.VideoCodec == StudioVideoVP9 {
+	switch o.VideoCodec {
+	case StudioVideoVP9:
 		return vp9EncodeArgs(quality)
+	case StudioVideoAV1:
+		return av1EncodeArgs(encoder, quality)
+	case StudioVideoProRes:
+		return proResEncodeArgs()
 	}
 	if o.VideoCodec != StudioVideoHEVC {
 		return h264EncodeArgs(encoder, quality)

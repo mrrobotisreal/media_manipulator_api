@@ -8,7 +8,8 @@
       "audioOnly": false,
       "videoCodecs": [
         "h264",
-        "hevc"
+        "hevc",
+        "av1"
       ],
       "audioCodecs": [
         "aac",
@@ -25,11 +26,13 @@
       "audioOnly": false,
       "videoCodecs": [
         "h264",
-        "hevc"
+        "hevc",
+        "prores"
       ],
       "audioCodecs": [
         "aac",
-        "pcm_s16le"
+        "pcm_s16le",
+        "pcm_s24le"
       ],
       "faststart": true,
       "subtitleCodec": "mov_text"
@@ -43,14 +46,17 @@
       "videoCodecs": [
         "h264",
         "hevc",
-        "vp9"
+        "vp9",
+        "av1"
       ],
       "audioCodecs": [
         "aac",
         "pcm_s16le",
         "mp3",
         "opus",
-        "vorbis"
+        "vorbis",
+        "flac",
+        "pcm_s24le"
       ],
       "faststart": false,
       "subtitleCodec": "srt"
@@ -62,7 +68,8 @@
       "mediaKind": "video",
       "audioOnly": false,
       "videoCodecs": [
-        "vp9"
+        "vp9",
+        "av1"
       ],
       "audioCodecs": [
         "opus",
@@ -95,7 +102,8 @@
         "none"
       ],
       "audioCodecs": [
-        "pcm_s16le"
+        "pcm_s16le",
+        "pcm_s24le"
       ],
       "faststart": false
     },
@@ -110,6 +118,20 @@
       ],
       "audioCodecs": [
         "opus"
+      ],
+      "faststart": false
+    },
+    {
+      "key": "flac",
+      "ext": ".flac",
+      "mime": "audio/flac",
+      "mediaKind": "audio",
+      "audioOnly": true,
+      "videoCodecs": [
+        "none"
+      ],
+      "audioCodecs": [
+        "flac"
       ],
       "faststart": false
     }
@@ -134,6 +156,31 @@
       "defaultBitrate": 0
     },
     {
+      "key": "av1",
+      "kind": "video",
+      "bitrates": [],
+      "defaultBitrate": 0,
+      "fallback": [
+        "hevc",
+        "vp9"
+      ]
+    },
+    {
+      "key": "prores",
+      "kind": "video",
+      "bitrates": [],
+      "defaultBitrate": 0,
+      "audioCodecs": [
+        "pcm_s24le",
+        "pcm_s16le"
+      ],
+      "estimateKbps": 147000,
+      "fallback": [
+        "hevc"
+      ],
+      "noFaststart": true
+    },
+    {
       "key": "aac",
       "kind": "audio",
       "bitrates": [
@@ -148,7 +195,8 @@
       "key": "pcm_s16le",
       "kind": "audio",
       "bitrates": [],
-      "defaultBitrate": 0
+      "defaultBitrate": 0,
+      "estimateKbps": 1536
     },
     {
       "key": "mp3",
@@ -182,6 +230,25 @@
         256
       ],
       "defaultBitrate": 192
+    },
+    {
+      "key": "flac",
+      "kind": "audio",
+      "bitrates": [],
+      "defaultBitrate": 0,
+      "fallback": [
+        "pcm_s16le"
+      ]
+    },
+    {
+      "key": "pcm_s24le",
+      "kind": "audio",
+      "bitrates": [],
+      "defaultBitrate": 0,
+      "estimateKbps": 2304,
+      "fallback": [
+        "pcm_s16le"
+      ]
     }
   ],
   "warnings": [
@@ -210,6 +277,15 @@
     {
       "warning": "apple_incompatible",
       "container": "opus"
+    },
+    {
+      "warning": "av1_playback",
+      "videoCodec": "av1"
+    },
+    {
+      "warning": "no_browser_preview",
+      "container": "mov",
+      "audioCodec": "pcm_s24le"
     }
   ],
   "presets": [
@@ -272,6 +348,36 @@
       "container": "opus",
       "videoCodec": "none",
       "audioCodec": "opus"
+    },
+    {
+      "key": "mp4_av1",
+      "container": "mp4",
+      "videoCodec": "av1",
+      "audioCodec": "aac"
+    },
+    {
+      "key": "webm_av1_opus",
+      "container": "webm",
+      "videoCodec": "av1",
+      "audioCodec": "opus"
+    },
+    {
+      "key": "mov_prores",
+      "container": "mov",
+      "videoCodec": "prores",
+      "audioCodec": "pcm_s24le"
+    },
+    {
+      "key": "audio_flac",
+      "container": "flac",
+      "videoCodec": "none",
+      "audioCodec": "flac"
+    },
+    {
+      "key": "audio_wav24",
+      "container": "wav",
+      "videoCodec": "none",
+      "audioCodec": "pcm_s24le"
     }
   ],
   "legacyFormats": {
@@ -287,28 +393,51 @@
     "wav",
     "mp4_h264_opus",
     "mp4_hevc_opus",
+    "mp4_av1_aac",
+    "mp4_av1_opus",
     "mov_h264_aac",
     "mov_h264_pcm_s16le",
+    "mov_h264_pcm_s24le",
     "mov_hevc_aac",
     "mov_hevc_pcm_s16le",
+    "mov_hevc_pcm_s24le",
+    "mov_prores_pcm_s24le",
+    "mov_prores_pcm_s16le",
     "mkv_h264_aac",
     "mkv_h264_pcm_s16le",
     "mkv_h264_mp3",
     "mkv_h264_opus",
     "mkv_h264_vorbis",
+    "mkv_h264_flac",
+    "mkv_h264_pcm_s24le",
     "mkv_hevc_aac",
     "mkv_hevc_pcm_s16le",
     "mkv_hevc_mp3",
     "mkv_hevc_opus",
     "mkv_hevc_vorbis",
+    "mkv_hevc_flac",
+    "mkv_hevc_pcm_s24le",
     "mkv_vp9_aac",
     "mkv_vp9_pcm_s16le",
     "mkv_vp9_mp3",
     "mkv_vp9_opus",
     "mkv_vp9_vorbis",
+    "mkv_vp9_flac",
+    "mkv_vp9_pcm_s24le",
+    "mkv_av1_aac",
+    "mkv_av1_pcm_s16le",
+    "mkv_av1_mp3",
+    "mkv_av1_opus",
+    "mkv_av1_vorbis",
+    "mkv_av1_flac",
+    "mkv_av1_pcm_s24le",
     "webm_vp9_opus",
     "webm_vp9_vorbis",
-    "opus_none_opus"
+    "webm_av1_opus",
+    "webm_av1_vorbis",
+    "wav_none_pcm_s24le",
+    "opus_none_opus",
+    "flac_none_flac"
   ],
   "tokens": [
     "mp4",
@@ -318,16 +447,22 @@
     "mp3",
     "wav",
     "opus",
+    "flac",
     "h264",
     "hevc",
     "vp9",
+    "av1",
+    "prores",
     "aac",
     "pcm_s16le",
     "vorbis",
+    "pcm_s24le",
     "subs_embedded"
   ],
   "minTier": {
     "aac": "anonymous",
+    "av1": "pro",
+    "flac": "pro",
     "h264": "anonymous",
     "hevc": "free",
     "mkv": "premium",
@@ -336,6 +471,8 @@
     "mp4": "anonymous",
     "opus": "premium",
     "pcm_s16le": "anonymous",
+    "pcm_s24le": "pro",
+    "prores": "pro",
     "subs_embedded": "premium",
     "vorbis": "premium",
     "vp9": "premium",

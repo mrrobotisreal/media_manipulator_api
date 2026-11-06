@@ -45,6 +45,14 @@ func TestValidateExportRequestOutputs(t *testing.T) {
 		"mkv_hevc_opus":      {OutputPreset: "mkv_hevc_opus", CaptionsMode: "embedded"},
 		"h264":               {CaptionsMode: "embedded"},
 		"opus_none_opus":     {OutputPreset: "audio_opus", CaptionsMode: "none"},
+		// MM120.
+		"mp4_av1_aac":          {OutputPreset: "mp4_av1"},
+		"webm_av1_opus":        {OutputPreset: "webm_av1_opus", CaptionsMode: "embedded"},
+		"mkv_av1_flac":         {Container: "mkv", VideoCodec: "av1", AudioCodec: "flac"},
+		"mov_prores_pcm_s24le": {OutputPreset: "mov_prores"},
+		"mov_hevc_pcm_s24le":   {Container: "mov", VideoCodec: "hevc", AudioCodec: "pcm_s24le"},
+		"flac_none_flac":       {OutputPreset: "audio_flac"},
+		"wav_none_pcm_s24le":   {OutputPreset: "audio_wav24"},
 	}
 	for label, r := range ok {
 		r := r
@@ -66,6 +74,17 @@ func TestValidateExportRequestOutputs(t *testing.T) {
 		"bitrate on pcm":    {Format: "wav", AudioBitrate: 192},
 		"bitrate off-list":  {AudioBitrate: 160},
 		"channels":          {AudioChannels: 3},
+		// MM120: ProRes is MOV only with PCM only; AV1 never in MOV; FLAC
+		// never in MP4/MOV/WebM; embedded never on .flac.
+		"prores in mp4":     {Container: "mp4", VideoCodec: "prores"},
+		"prores in mkv":     {Container: "mkv", VideoCodec: "prores"},
+		"prores + aac":      {Container: "mov", VideoCodec: "prores", AudioCodec: "aac"},
+		"av1 in mov":        {Container: "mov", VideoCodec: "av1"},
+		"flac in mp4":       {Container: "mp4", AudioCodec: "flac"},
+		"flac in webm":      {Container: "webm", AudioCodec: "flac"},
+		"pcm24 in mp4":      {Container: "mp4", AudioCodec: "pcm_s24le"},
+		"bitrate on flac":   {OutputPreset: "audio_flac", AudioBitrate: 192},
+		"embedded on .flac": {OutputPreset: "audio_flac", CaptionsMode: "embedded"},
 	} {
 		r := r
 		if _, msg := validateExportRequest(&r); msg == "" {
@@ -145,6 +164,25 @@ func TestStudioFormatGateMatrix(t *testing.T) {
 		{"premium .opus mono 64", premium, true, `{"container":"opus","audioBitrate":64,"audioChannels":1}`, 200, "", ""},
 		{"premium mkv embedded", premium, true, `{"outputPreset":"mkv_hevc_opus","captionsMode":"embedded"}`, 200, "", ""},
 		{"pro mp4 opus", pro, true, `{"container":"mp4","audioCodec":"opus"}`, 200, "", ""},
+		// MM120 (decided Q3): AV1, ProRes, FLAC and 24-bit PCM are Pro only;
+		// Premium gets 403 required pro + upgradePath pro for each token.
+		{"premium av1 mp4", premium, true, `{"outputPreset":"mp4_av1"}`, 403, "av1", "pro"},
+		{"premium av1 webm", premium, true, `{"outputPreset":"webm_av1_opus"}`, 403, "av1", "pro"},
+		{"premium av1 mkv", premium, true, `{"container":"mkv","videoCodec":"av1"}`, 403, "av1", "pro"},
+		{"premium prores", premium, true, `{"outputPreset":"mov_prores"}`, 403, "prores", "pro"},
+		{"premium flac", premium, true, `{"outputPreset":"audio_flac"}`, 403, "flac", "pro"},
+		{"premium flac in mkv", premium, true, `{"container":"mkv","audioCodec":"flac"}`, 403, "flac", "pro"},
+		{"premium wav24", premium, true, `{"outputPreset":"audio_wav24"}`, 403, "pcm_s24le", "pro"},
+		{"premium mov pcm24", premium, true, `{"container":"mov","audioCodec":"pcm_s24le"}`, 403, "pcm_s24le", "pro"},
+		{"free av1 (mp4 and aac are free)", free, true, `{"outputPreset":"mp4_av1"}`, 403, "av1", "pro"},
+		{"free prores names mov first", free, true, `{"outputPreset":"mov_prores"}`, 403, "mov", "premium"},
+		{"pro av1 mp4", pro, true, `{"outputPreset":"mp4_av1"}`, 200, "", ""},
+		{"pro webm av1 opus", pro, true, `{"outputPreset":"webm_av1_opus"}`, 200, "", ""},
+		{"pro prores", pro, true, `{"outputPreset":"mov_prores"}`, 200, "", ""},
+		{"pro prores pcm16", pro, true, `{"container":"mov","videoCodec":"prores","audioCodec":"pcm_s16le"}`, 200, "", ""},
+		{"pro flac", pro, true, `{"outputPreset":"audio_flac"}`, 200, "", ""},
+		{"pro wav24", pro, true, `{"outputPreset":"audio_wav24"}`, 200, "", ""},
+		{"pro mkv av1 flac", pro, true, `{"container":"mkv","videoCodec":"av1","audioCodec":"flac"}`, 200, "", ""},
 	}
 	for _, c := range cases {
 		r := gateRouter(t, reg, c.user, c.signed, peekFacts)
@@ -163,6 +201,10 @@ func TestStudioFormatGateMatrix(t *testing.T) {
 		}
 		if body.Error != "format_not_in_plan" || body.LimitKey != "studio_format" || body.Option != c.option || body.Required != c.required {
 			t.Errorf("%s: body %+v", c.name, body)
+		}
+		// MM120: a signed-in caller below Pro is routed to Pro itself.
+		if c.required == "pro" && c.signed && body.UpgradePath != "pro" {
+			t.Errorf("%s: upgradePath %q, want pro", c.name, body.UpgradePath)
 		}
 	}
 }
@@ -255,11 +297,12 @@ func TestExportOptionsRoute(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 			t.Fatal(err)
 		}
-		if len(body.Table.Containers) != 7 || len(body.Table.Presets) != 10 || len(body.Table.Formats) != 28 {
+		if len(body.Table.Containers) != 8 || len(body.Table.Presets) != 15 || len(body.Table.Formats) != 51 {
 			t.Errorf("table shape: %d containers %d presets %d formats", len(body.Table.Containers), len(body.Table.Presets), len(body.Table.Formats))
 		}
 		if body.Required["hevc"] != "free" || body.Required["mov"] != "premium" || body.Required["advanced"] != "premium" || body.Required["mp4"] != "anonymous" ||
-			body.Required["webm"] != "premium" || body.Required["vp9"] != "premium" || body.Required["opus"] != "premium" || body.Required["subs_embedded"] != "premium" {
+			body.Required["webm"] != "premium" || body.Required["vp9"] != "premium" || body.Required["opus"] != "premium" || body.Required["subs_embedded"] != "premium" ||
+			body.Required["av1"] != "pro" || body.Required["prores"] != "pro" || body.Required["flac"] != "pro" || body.Required["pcm_s24le"] != "pro" {
 			t.Errorf("required = %v", body.Required)
 		}
 		has := strings.Contains(","+strings.Join(body.Caller.Formats, ",")+",", ",mov,")

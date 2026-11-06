@@ -8,11 +8,11 @@ import (
 )
 
 func TestStudioFormatSet(t *testing.T) {
-	s := NewStudioFormatSet("HEVC", " mp4 ", "av1", "mp4", "aac")
+	s := NewStudioFormatSet("HEVC", " mp4 ", "dnxhr", "mp4", "aac")
 	if s != "mp4,hevc,aac" {
 		t.Fatalf("canonical set = %q", s)
 	}
-	if !s.Has("hevc") || s.Has("mov") || s.Has("av1") {
+	if !s.Has("hevc") || s.Has("mov") || s.Has("dnxhr") {
 		t.Error("Has")
 	}
 	b, _ := json.Marshal(s)

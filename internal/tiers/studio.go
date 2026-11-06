@@ -17,11 +17,13 @@ import (
 // keys, then video and audio codec keys, then feature tokens. "mp3" and
 // "opus" are both an audio-only container and the codec; "none" (no video) is
 // never gated. MM119 added webm, opus, vp9, vorbis and subs_embedded (the
-// embedded captions mode).
+// embedded captions mode); MM120 the Pro-only flac (container and codec),
+// av1, prores and pcm_s24le.
 func AllStudioFormats() []string {
 	return []string{
-		"mp4", "mov", "mkv", "webm", "mp3", "wav", "opus",
-		"h264", "hevc", "vp9", "aac", "pcm_s16le", "vorbis",
+		"mp4", "mov", "mkv", "webm", "mp3", "wav", "opus", "flac",
+		"h264", "hevc", "vp9", "av1", "prores",
+		"aac", "pcm_s16le", "vorbis", "pcm_s24le",
 		"subs_embedded",
 	}
 }
@@ -178,6 +180,10 @@ func CheckStudioOutput(tier Tier, l Limits, tokens []string, advanced bool, requ
 		what = "Advanced export settings"
 	case "subs_embedded":
 		what = "Embedded subtitle"
+	case "prores":
+		what = "ProRes"
+	case "pcm_s24le":
+		what = "24-bit WAV"
 	}
 	switch ref.Required {
 	case "free":

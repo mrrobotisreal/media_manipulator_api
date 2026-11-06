@@ -32,6 +32,18 @@ func TestAssistantExportsAdvise(t *testing.T) {
 		{"podcast opus mono on premium", "premium", map[string]any{"container": "opus", "audioBitrate": float64(96), "audioChannels": float64(1)}, map[string]any{"container": "opus", "audioCodec": "opus", "audioBitrate": 96, "audioChannels": 1}, ""},
 		{"embedded subs on premium", "premium", map[string]any{"preset": "mp4_h264", "captionsMode": "embedded"}, map[string]any{"container": "mp4", "captionsMode": "embedded"}, ""},
 		{"embedded subs on free -> sidecar", "free", map[string]any{"preset": "mp4_h264", "captionsMode": "embedded"}, map[string]any{"container": "mp4", "captionsMode": "sidecar"}, "premium"},
+		// MM120 Pro rows (decided Q3): Premium is offered the nearest Premium
+		// preset (ProRes -> MOV H.265, AV1 -> MP4 H.265 / WebM VP9, FLAC and
+		// 24-bit WAV -> 16-bit WAV) with upgrade required pro.
+		{"prores on premium -> mov hevc", "premium", map[string]any{"preset": "mov_prores"}, map[string]any{"container": "mov", "videoCodec": "hevc", "preset": "mov_hevc"}, "pro"},
+		{"av1 mp4 on premium -> mp4 hevc", "premium", map[string]any{"preset": "mp4_av1"}, map[string]any{"container": "mp4", "videoCodec": "hevc", "preset": "mp4_hevc"}, "pro"},
+		{"av1 webm on premium -> webm vp9", "premium", map[string]any{"preset": "webm_av1_opus"}, map[string]any{"container": "webm", "videoCodec": "vp9", "preset": "webm_vp9_opus"}, "pro"},
+		{"flac on premium -> wav", "premium", map[string]any{"preset": "audio_flac"}, map[string]any{"container": "wav", "audioCodec": "pcm_s16le", "preset": "audio_wav"}, "pro"},
+		{"wav24 on premium -> wav", "premium", map[string]any{"preset": "audio_wav24"}, map[string]any{"container": "wav", "audioCodec": "pcm_s16le", "preset": "audio_wav"}, "pro"},
+		{"prores on free -> mp4 hevc", "free", map[string]any{"preset": "mov_prores"}, map[string]any{"container": "mp4", "videoCodec": "hevc", "preset": "mp4_hevc"}, "premium"},
+		{"prores on pro", "pro", map[string]any{"preset": "mov_prores"}, map[string]any{"container": "mov", "videoCodec": "prores", "audioCodec": "pcm_s24le", "preset": "mov_prores"}, ""},
+		{"av1 on pro", "pro", map[string]any{"preset": "mp4_av1", "resolution": float64(2160)}, map[string]any{"container": "mp4", "videoCodec": "av1", "preset": "mp4_av1", "resolution": 2160}, ""},
+		{"flac on pro", "pro", map[string]any{"preset": "audio_flac"}, map[string]any{"container": "flac", "audioCodec": "flac", "preset": "audio_flac"}, ""},
 		{"operator gets anything", "operator", map[string]any{"container": "mkv", "audioCodec": "mp3", "audioChannels": float64(1)}, map[string]any{"container": "mkv", "audioCodec": "mp3", "audioChannels": 1}, ""},
 	}
 	for _, c := range cases {
@@ -59,7 +71,16 @@ func TestAssistantExportsAdvise(t *testing.T) {
 	if got, _ := a.AdviseExport("premium", map[string]any{"preset": "mkv_hevc_aac"}); !strings.Contains(strings.Join(toStrings(got["warnings"]), ","), "apple_incompatible") {
 		t.Errorf("MKV suggestion must carry its warnings: %v", got)
 	}
+	if got, _ := a.AdviseExport("pro", map[string]any{"preset": "mp4_av1"}); !strings.Contains(strings.Join(toStrings(got["warnings"]), ","), "av1_playback") {
+		t.Errorf("AV1 suggestion must carry the playback warning: %v", got)
+	}
+	if got, _ := a.AdviseExport("premium", map[string]any{"preset": "mov_prores"}); got["upgrade"].(map[string]any)["option"] != "prores" {
+		t.Errorf("ProRes on premium must name prores: %v", got)
+	}
 	for name, p := range map[string]map[string]any{
+		"prores + aac":     {"container": "mov", "videoCodec": "prores", "audioCodec": "aac"},
+		"prores in mp4":    {"container": "mp4", "videoCodec": "prores"},
+		"flac in mov":      {"container": "mov", "audioCodec": "flac"},
 		"opus in mov":      {"container": "mov", "audioCodec": "opus"},
 		"vorbis in mp4":    {"container": "mp4", "audioCodec": "vorbis"},
 		"embedded on opus": {"preset": "audio_opus", "captionsMode": "embedded"},

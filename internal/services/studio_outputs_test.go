@@ -107,7 +107,7 @@ func TestStudioOutputResolve(t *testing.T) {
 		{Container: "mov", AudioCodec: "vorbis"},                    // nor Vorbis
 		{Container: "mp4", AudioCodec: "vorbis"},                    // Vorbis is WebM/MKV only
 		{Container: "mp4", VideoCodec: "vp9"},                       // VP9 is WebM/MKV only
-		{Container: "webm", VideoCodec: "h264"},                     // WebM is VP9 only (until AV1)
+		{Container: "webm", VideoCodec: "h264"},                     // WebM is VP9/AV1 only
 		{Container: "webm", AudioCodec: "aac"},                      // and Opus/Vorbis only
 		{Container: "opus", VideoCodec: "vp9"},                      // .opus is audio-only
 		{Container: "opus", AudioCodec: "opus", AudioBitrate: 192},  // not in Opus's list
@@ -116,7 +116,7 @@ func TestStudioOutputResolve(t *testing.T) {
 		{Container: "mp4", AudioCodec: "mp3"},                       // not in MP4 either
 		{Container: "avi"},                                          // not a container
 		{Container: "mp3", VideoCodec: "h264"},                      // audio-only container
-		{Container: "mkv", VideoCodec: "av1"},                       // unknown video codec (MM120)
+		{Container: "mkv", VideoCodec: "dnxhr"},                     // unknown video codec
 		{Container: "wav", AudioBitrate: 192},                       // PCM has no bitrate
 		{AudioBitrate: 200},                                         // not in the closed list
 		{AudioBitrate: -1},
@@ -144,7 +144,7 @@ func TestStudioOutputTableIsConsistent(t *testing.T) {
 	}
 	for _, c := range tab.Containers {
 		for _, v := range c.VideoCodecs {
-			for _, a := range c.AudioCodecs {
+			for _, a := range StudioAudioCodecsFor(c.Key, v) { // MM120: ProRes narrows MOV to PCM
 				o, err := ResolveStudioOutput(StudioOutputRequest{Container: c.Key, VideoCodec: v, AudioCodec: a})
 				if err != nil {
 					t.Errorf("%s/%s/%s: %v", c.Key, v, a, err)
@@ -171,8 +171,8 @@ func TestStudioOutputTableIsConsistent(t *testing.T) {
 			t.Errorf("token %s has no MinTier", tok)
 		}
 	}
-	if len(tab.Formats) != 28 {
-		t.Errorf("MM118 + MM119 ship 28 labels, got %d: %v", len(tab.Formats), tab.Formats)
+	if len(tab.Formats) != 51 {
+		t.Errorf("MM118 + MM119 + MM120 ship 51 labels, got %d: %v", len(tab.Formats), tab.Formats)
 	}
 }
 

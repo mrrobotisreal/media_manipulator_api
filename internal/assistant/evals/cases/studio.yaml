@@ -215,3 +215,37 @@
     export: ["container=mp4", "upgrade=premium"]
     any_of: ["Premium"]
     no_edits: true
+# --- MM120: Pro formats. Hand-off to an editor -> ProRes MOV (Pro); smallest high quality
+# -> AV1 MP4 (Pro, older devices may not play it); music master -> FLAC / 24-bit WAV (Pro).
+- id: studio-export-premium-prores
+  surface: studio
+  requires: studio
+  tier: premium
+  fixture_doc: studio/two-clips.txt
+  message: "Export ProRes so my editor can grade it in Resolve"
+  expect:
+    actions: [suggest:export]
+    export: ["container=mov", "videoCodec=hevc", "upgrade=pro"]
+    any_of: ["Pro"]
+    no_edits: true
+- id: studio-export-pro-archive
+  surface: studio
+  requires: studio
+  tier: pro
+  fixture_doc: studio/two-clips.txt
+  message: "Best quality export for my archive"
+  expect:
+    actions: [suggest:export]
+    export: ["videoCodec=av1|prores", "upgrade=none"]
+    any_of: ["size", "large", "big", "smaller", "play"]
+    no_edits: true
+- id: studio-export-pro-music-master
+  surface: studio
+  requires: studio
+  tier: pro
+  fixture_doc: studio/two-clips.txt
+  message: "I need a lossless master of the audio"
+  expect:
+    actions: [suggest:export]
+    export: ["container=flac|wav", "audioCodec=flac|pcm_s24le", "upgrade=none"]
+    no_edits: true

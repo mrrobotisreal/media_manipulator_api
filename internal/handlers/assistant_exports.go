@@ -163,11 +163,23 @@ func (a *AssistantExports) AdviseExport(tier string, params map[string]any) (map
 }
 
 // nearestAllowedPreset is the closest preset the plan allows to want: same
-// kind first (video vs audio-only), then the same video codec, the same
-// container, the same audio codec; table order breaks ties.
+// kind first (video vs audio-only), then the same video codec (or, MM120, the
+// first one of the wanted codec's table Fallback: ProRes -> H.265, AV1 ->
+// H.265 then VP9), the same container, the same audio codec (or its
+// fallback: FLAC / 24-bit PCM -> 16-bit PCM); table order breaks ties.
 func nearestAllowedPreset(t tiers.Tier, l tiers.Limits, want services.StudioOutput, requiredFor func(string) tiers.Tier) (services.StudioOutput, bool) {
+	tab := services.StudioOutputs()
+	fallback := func(codec string) []string {
+		for _, c := range tab.Codecs {
+			if c.Key == codec {
+				return c.Fallback
+			}
+		}
+		return nil
+	}
+	videoFallback, audioFallback := fallback(want.VideoCodec), fallback(want.AudioCodec)
 	best, bestScore := services.StudioOutput{}, -1
-	for _, p := range services.StudioOutputs().Presets {
+	for _, p := range tab.Presets {
 		o, err := services.ResolveStudioOutput(services.StudioOutputRequest{Preset: p.Key})
 		if err != nil || tiers.CheckStudioOutput(t, l, o.Tokens(), o.Advanced, requiredFor) != nil {
 			continue
@@ -178,11 +190,15 @@ func nearestAllowedPreset(t tiers.Tier, l tiers.Limits, want services.StudioOutp
 		}
 		if o.VideoCodec == want.VideoCodec {
 			score += 10
+		} else if i := indexOfStr(videoFallback, o.VideoCodec); i >= 0 {
+			score += 9 - i
 		}
 		if o.Container == want.Container {
 			score += 5
 		}
 		if o.AudioCodec == want.AudioCodec {
+			score += 2
+		} else if indexOfStr(audioFallback, o.AudioCodec) >= 0 {
 			score++
 		}
 		if score > bestScore {
@@ -190,4 +206,13 @@ func nearestAllowedPreset(t tiers.Tier, l tiers.Limits, want services.StudioOutp
 		}
 	}
 	return best, bestScore >= 0
+}
+
+func indexOfStr(xs []string, x string) int {
+	for i, v := range xs {
+		if v == x {
+			return i
+		}
+	}
+	return -1
 }

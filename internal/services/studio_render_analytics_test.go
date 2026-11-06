@@ -159,3 +159,32 @@ func TestEmitStudioRenderOutputProps(t *testing.T) {
 		}
 	}
 }
+
+// MM120: a completed render carries outputMB (whole megabytes, rounded up)
+// and the new encoder names; a failed one never carries a size.
+func TestEmitStudioRenderOutputMB(t *testing.T) {
+	jm, an := analyticsJobManager(t)
+	job := jm.CreateJob(models.OriginalFileInfo{Name: "export.mov", Size: 0, Type: "video/quicktime"}, nil)
+	jm.RecordJobCreated(t.Context(), job.ID, testOwner(), studioExportFacts())
+	stats := StudioRenderStats{Encoder: "prores", CPUEncode: true, Format: "mov_prores_pcm_s24le", Container: "mov", VideoCodec: "prores", AudioCodec: "pcm_s24le", OutputBytes: 1_156_258_910}
+	jm.EmitStudioRender(job.ID, stats, 32, 60, nil)
+	ev := an.named(analyticsemit.StudioRenderCompleted)[0]
+	if ev.Properties["outputMB"] != int64(1157) || ev.Properties["encoder"] != "prores" || ev.Properties["videoCodec"] != "prores" {
+		t.Errorf("props = %v", ev.Properties)
+	}
+	small := stats
+	small.OutputBytes = 1200
+	jm.EmitStudioRender(job.ID, small, 1, 60, nil)
+	if got := an.named(analyticsemit.StudioRenderCompleted)[1].Properties["outputMB"]; got != int64(1) {
+		t.Errorf("a tiny file is 1 MB, got %v", got)
+	}
+	jm.EmitStudioRender(job.ID, stats, 5, 60, errors.New("boom"))
+	if _, present := an.named(analyticsemit.StudioRenderFailed)[0].Properties["outputMB"]; present {
+		t.Error("a failed render carries no output size")
+	}
+	for enc, want := range map[string]string{"av1_nvenc": "nvenc", "libsvtav1": "svtav1", "prores_ks": "prores"} {
+		if got := encoderAnalyticsName(enc); got != want {
+			t.Errorf("%s -> %s, want %s", enc, got, want)
+		}
+	}
+}

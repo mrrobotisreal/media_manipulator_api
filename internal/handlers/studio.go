@@ -1355,6 +1355,13 @@ func (h *StudioHandler) launchExport(c *gin.Context, projectID string, req model
 			return
 		}
 	}
+	// MM120 ProRes size guard: a predictable-size output that would exceed
+	// the per-file cap or the output disk is refused here, before the
+	// checkpoint and before any job exists (the quota unit is refunded).
+	outW, outH := services.OutputDimensions(project.Width, project.Height, req.Resolution)
+	if refuseStudioOutputSize(c, output, outW, outH, project.FPS, duration, h.cfg.MaxFileSize, h.cfg.OutputDir) {
+		return
+	}
 
 	// Version-history auto-checkpoint (part 09): snapshot the EDL this render
 	// will represent, before the job starts. Best-effort — a failed checkpoint
