@@ -1,0 +1,69 @@
+{
+  "name": "karaoke_words_landscape",
+  "width": 1920,
+  "height": 1080,
+  "style": {
+    "fontSizePct": 5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Lilita One",
+    "bold": false,
+    "highlightColor": "#00C8FF",
+    "outlineColor": "#10204A",
+    "outlineWidth": 4,
+    "shadow": 0.3,
+    "backgroundMode": "none",
+    "wordsPerGroup": 0,
+    "animation": "karaoke_fill",
+    "animationStrength": 1,
+    "lookId": "karaoke_classic"
+  },
+  "cues": [
+    {
+      "id": "c1",
+      "startSeconds": 1.0,
+      "endSeconds": 4.4,
+      "text": "Sing it loud tonight we are alive",
+      "words": [
+        {
+          "text": "Sing",
+          "startSeconds": 1.2,
+          "endSeconds": 1.55
+        },
+        {
+          "text": "it",
+          "startSeconds": 1.6,
+          "endSeconds": 1.95
+        },
+        {
+          "text": "loud",
+          "startSeconds": 2.0,
+          "endSeconds": 2.35
+        },
+        {
+          "text": "tonight",
+          "startSeconds": 2.4,
+          "endSeconds": 2.75
+        },
+        {
+          "text": "we",
+          "startSeconds": 2.8,
+          "endSeconds": 3.15
+        },
+        {
+          "text": "are",
+          "startSeconds": 3.2,
+          "endSeconds": 3.55
+        },
+        {
+          "text": "alive",
+          "startSeconds": 3.6,
+          "endSeconds": 3.95
+        }
+      ]
+    }
+  ]
+}

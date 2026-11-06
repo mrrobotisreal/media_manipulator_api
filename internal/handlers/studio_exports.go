@@ -468,6 +468,7 @@ func (h *StudioHandler) ExportFrame(c *gin.Context) {
 		assPath := filepath.Join(workDir, "captions.ass")
 		if err := os.WriteFile(assPath, []byte(services.BuildASS(exportCfg.captions, exportCfg.captionStyle, project.Width, project.Height, "")), 0o644); err == nil {
 			plan.CaptionsASSPath = assPath
+			plan.CaptionsFontsDir = captionFontsDir(h.cfg.ContentStudioFontsDir)
 		}
 	}
 	if cmds := services.GenerateStudioSendCmd(plan); cmds != "" {
@@ -525,4 +526,21 @@ func jsonUnmarshalLoose(raw []byte, v any) bool {
 		return false
 	}
 	return json.Unmarshal(raw, v) == nil
+}
+
+// captionFontsDir is the absolute caption fonts directory for the subtitles
+// filter (MM121): CONTENT_STUDIO_FONTS_DIR resolved against the API's working
+// directory, "" when unset or missing (libass then falls back to fontconfig).
+func captionFontsDir(dir string) string {
+	if strings.TrimSpace(dir) == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return ""
+	}
+	if st, err := os.Stat(abs); err != nil || !st.IsDir() {
+		return ""
+	}
+	return abs
 }

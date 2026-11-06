@@ -1,0 +1,17 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Montserrat,77,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,0,0,0,0,100,100,0,0,1,5.33,0,2,54,54,96,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:05.50,0:00:07.16,Default,,0,0,0,,{\1c&H6633FF&\2c&HFFFFFF&}{\kf41}No{\k0} {\kf42}word{\k0} {\kf42}timings{\k0} {\kf41}on
+Dialogue: 1,0:00:07.16,0:00:08.00,Default,,0,0,0,,{\1c&H6633FF&\2c&HFFFFFF&}{\kf42}this{\k0} {\kf42}line

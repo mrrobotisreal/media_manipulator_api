@@ -1,0 +1,26 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Montserrat,134,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,-1,0,0,0,100,100,0,0,1,10.67,7.11,2,54,54,96,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.50,0:00:00.90,Default,,0,0,0,,{\1c&H00E6FF&\t(0,80,\fscx128\fscy128)\t(80,180,\fscx100\fscy100)}WELCOME{\1c&HFFFFFF&\fscx100\fscy100} BACK.
+Dialogue: 1,0:00:00.90,0:00:01.60,Default,,0,0,0,,WELCOME {\1c&H00E6FF&\t(0,80,\fscx128\fscy128)\t(80,180,\fscx100\fscy100)}BACK.{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:01.60,0:00:01.90,Default,,0,0,0,,{\1c&H00E6FF&\t(0,80,\fscx128\fscy128)\t(80,180,\fscx100\fscy100)}TODAY{\1c&HFFFFFF&\fscx100\fscy100} WE
+Dialogue: 1,0:00:01.90,0:00:02.20,Default,,0,0,0,,TODAY {\1c&H00E6FF&\t(0,80,\fscx128\fscy128)\t(80,180,\fscx100\fscy100)}WE{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:02.20,0:00:02.50,Default,,0,0,0,,{\1c&H00E6FF&\t(0,80,\fscx128\fscy128)\t(80,180,\fscx100\fscy100)}TEST{\1c&HFFFFFF&\fscx100\fscy100} CAPTIONS
+Dialogue: 1,0:00:02.50,0:00:02.80,Default,,0,0,0,,TEST {\1c&H00E6FF&\t(0,80,\fscx128\fscy128)\t(80,180,\fscx100\fscy100)}CAPTIONS{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:02.80,0:00:03.10,Default,,0,0,0,,{\1c&H00E6FF&\t(0,80,\fscx128\fscy128)\t(80,180,\fscx100\fscy100)}THAT{\1c&HFFFFFF&\fscx100\fscy100} MOVE
+Dialogue: 1,0:00:03.10,0:00:03.40,Default,,0,0,0,,THAT {\1c&H00E6FF&\t(0,80,\fscx128\fscy128)\t(80,180,\fscx100\fscy100)}MOVE{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:03.40,0:00:03.70,Default,,0,0,0,,{\1c&H00E6FF&\t(0,80,\fscx128\fscy128)\t(80,180,\fscx100\fscy100)}WITH{\1c&HFFFFFF&\fscx100\fscy100} EVERY
+Dialogue: 1,0:00:03.70,0:00:04.00,Default,,0,0,0,,WITH {\1c&H00E6FF&\t(0,80,\fscx128\fscy128)\t(80,180,\fscx100\fscy100)}EVERY{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:04.00,0:00:05.00,Default,,0,0,0,,{\1c&H00E6FF&\t(0,80,\fscx128\fscy128)\t(80,180,\fscx100\fscy100)}WORD{\1c&HFFFFFF&\fscx100\fscy100}

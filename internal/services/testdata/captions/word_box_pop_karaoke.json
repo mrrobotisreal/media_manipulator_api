@@ -1,0 +1,53 @@
+{
+  "name": "word_box_pop_karaoke",
+  "width": 1080,
+  "height": 1920,
+  "style": {
+    "fontSizePct": 5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Titan One",
+    "highlightColor": "#00E0A0",
+    "backgroundMode": "word_box",
+    "wordsPerGroup": 3,
+    "animation": "karaoke_fill"
+  },
+  "cues": [
+    {
+      "id": "k",
+      "startSeconds": 0.2,
+      "endSeconds": 2.6,
+      "text": "One two three four five",
+      "words": [
+        {
+          "text": "One",
+          "startSeconds": 0.3,
+          "endSeconds": 0.7
+        },
+        {
+          "text": "two",
+          "startSeconds": 0.75,
+          "endSeconds": 1.15
+        },
+        {
+          "text": "three",
+          "startSeconds": 1.2,
+          "endSeconds": 1.6
+        },
+        {
+          "text": "four",
+          "startSeconds": 1.65,
+          "endSeconds": 2.05
+        },
+        {
+          "text": "five",
+          "startSeconds": 2.1,
+          "endSeconds": 2.5
+        }
+      ]
+    }
+  ]
+}

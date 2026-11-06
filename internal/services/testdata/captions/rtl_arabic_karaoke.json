@@ -1,0 +1,53 @@
+{
+  "name": "rtl_arabic_karaoke",
+  "width": 1080,
+  "height": 1920,
+  "style": {
+    "fontSizePct": 5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Inter",
+    "highlightColor": "#00C8FF",
+    "outlineWidth": 3,
+    "backgroundMode": "none",
+    "animation": "karaoke_fill"
+  },
+  "cues": [
+    {
+      "id": "r",
+      "startSeconds": 0.5,
+      "endSeconds": 3.5,
+      "text": "مرحبا بكم في القناة اليوم",
+      "words": [
+        {
+          "text": "مرحبا",
+          "startSeconds": 0.6,
+          "endSeconds": 1.1
+        },
+        {
+          "text": "بكم",
+          "startSeconds": 1.15,
+          "endSeconds": 1.65
+        },
+        {
+          "text": "في",
+          "startSeconds": 1.7,
+          "endSeconds": 2.2
+        },
+        {
+          "text": "القناة",
+          "startSeconds": 2.25,
+          "endSeconds": 2.75
+        },
+        {
+          "text": "اليوم",
+          "startSeconds": 2.8,
+          "endSeconds": 3.3
+        }
+      ]
+    }
+  ]
+}

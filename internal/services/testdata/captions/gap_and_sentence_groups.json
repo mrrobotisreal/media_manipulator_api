@@ -1,0 +1,83 @@
+{
+  "name": "gap_and_sentence_groups",
+  "width": 1920,
+  "height": 1080,
+  "style": {
+    "fontSizePct": 5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Inter",
+    "backgroundMode": "none",
+    "outlineWidth": 3,
+    "wordsPerGroup": 5,
+    "animation": "highlight"
+  },
+  "cues": [
+    {
+      "id": "g",
+      "startSeconds": 0,
+      "endSeconds": 6,
+      "text": "Wait. Then go on now — after a pause we resume",
+      "words": [
+        {
+          "text": "Wait.",
+          "startSeconds": 0.2,
+          "endSeconds": 0.55
+        },
+        {
+          "text": "Then",
+          "startSeconds": 0.7,
+          "endSeconds": 0.95
+        },
+        {
+          "text": "go",
+          "startSeconds": 1.0,
+          "endSeconds": 1.25
+        },
+        {
+          "text": "on",
+          "startSeconds": 1.3,
+          "endSeconds": 1.55
+        },
+        {
+          "text": "now",
+          "startSeconds": 1.6,
+          "endSeconds": 1.85
+        },
+        {
+          "text": "—",
+          "startSeconds": 2.0,
+          "endSeconds": 2.15
+        },
+        {
+          "text": "after",
+          "startSeconds": 2.8,
+          "endSeconds": 3.1
+        },
+        {
+          "text": "a",
+          "startSeconds": 3.15,
+          "endSeconds": 3.45
+        },
+        {
+          "text": "pause",
+          "startSeconds": 3.5,
+          "endSeconds": 3.8
+        },
+        {
+          "text": "we",
+          "startSeconds": 3.85,
+          "endSeconds": 4.15
+        },
+        {
+          "text": "resume",
+          "startSeconds": 4.2,
+          "endSeconds": 4.5
+        }
+      ]
+    }
+  ]
+}

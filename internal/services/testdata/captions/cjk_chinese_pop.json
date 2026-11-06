@@ -1,0 +1,75 @@
+{
+  "name": "cjk_chinese_pop",
+  "width": 1920,
+  "height": 1080,
+  "style": {
+    "fontSizePct": 5,
+    "color": "#FFFFFF",
+    "backgroundColor": "#000000",
+    "backgroundOpacity": 0.6,
+    "position": "bottom",
+    "maxWidthPct": 90,
+    "fontFamily": "Bangers",
+    "highlightColor": "#FFE600",
+    "outlineWidth": 4,
+    "backgroundMode": "none",
+    "wordsPerGroup": 4,
+    "animation": "pop",
+    "animationStrength": 0.5
+  },
+  "cues": [
+    {
+      "id": "z",
+      "startSeconds": 1,
+      "endSeconds": 3.5,
+      "text": "今天我们来测试字幕。",
+      "words": [
+        {
+          "text": "今",
+          "startSeconds": 1.0,
+          "endSeconds": 1.2
+        },
+        {
+          "text": "天",
+          "startSeconds": 1.25,
+          "endSeconds": 1.45
+        },
+        {
+          "text": "我",
+          "startSeconds": 1.5,
+          "endSeconds": 1.7
+        },
+        {
+          "text": "们",
+          "startSeconds": 1.75,
+          "endSeconds": 1.95
+        },
+        {
+          "text": "来",
+          "startSeconds": 2.0,
+          "endSeconds": 2.2
+        },
+        {
+          "text": "测",
+          "startSeconds": 2.25,
+          "endSeconds": 2.45
+        },
+        {
+          "text": "试",
+          "startSeconds": 2.5,
+          "endSeconds": 2.7
+        },
+        {
+          "text": "字",
+          "startSeconds": 2.75,
+          "endSeconds": 2.95
+        },
+        {
+          "text": "幕。",
+          "startSeconds": 3.0,
+          "endSeconds": 3.2
+        }
+      ]
+    }
+  ]
+}

@@ -687,6 +687,7 @@ func SanitizeCaptions(cues []StudioCaptionCue) []StudioCaptionCue {
 			c.EndSeconds = c.StartSeconds
 		}
 		c.Text = truncateRunes(c.Text, studioMaxCaptionLen)
+		c.Words = sanitizeCaptionWords(c)
 		out = append(out, c)
 		if len(out) >= studioMaxCaptionCues {
 			break
@@ -696,13 +697,49 @@ func SanitizeCaptions(cues []StudioCaptionCue) []StudioCaptionCue {
 	return out
 }
 
-// SanitizeCaptionStyle clamps caption appearance, defaulting bad values.
+// StudioMaxCaptionWords caps a cue's word timings (MM121).
+const StudioMaxCaptionWords = 64
+
+// sanitizeCaptionWords validates a cue's word timings (MM121): one word per
+// caption unit of the text (CaptionUnits), each non-empty, ≤ 64, times inside
+// the cue window and non-decreasing. Anything else drops the whole list (the
+// cue then animates on an even spread), since a partial list would attach
+// times to the wrong words. A valid list (what the UI's re-spread helper and
+// SegmentsToCues produce) comes back unchanged.
+func sanitizeCaptionWords(c StudioCaptionCue) []StudioCaptionWord {
+	if len(c.Words) == 0 {
+		return nil
+	}
+	if len(c.Words) > StudioMaxCaptionWords || len(c.Words) != len(CaptionUnits(c.Text)) {
+		return nil
+	}
+	out := make([]StudioCaptionWord, len(c.Words))
+	prev := c.StartSeconds
+	for i, w := range c.Words {
+		w.Text = truncateRunes(strings.TrimSpace(w.Text), 100)
+		if w.Text == "" {
+			return nil
+		}
+		w.StartSeconds = clampF(w.StartSeconds, c.StartSeconds, c.EndSeconds)
+		if w.StartSeconds < prev {
+			w.StartSeconds = prev
+		}
+		w.EndSeconds = clampF(w.EndSeconds, w.StartSeconds, c.EndSeconds)
+		prev = w.StartSeconds
+		out[i] = w
+	}
+	return out
+}
+
+// SanitizeCaptionStyle clamps caption appearance, defaulting bad values. The
+// MM121 fields are kept only when present and valid (unknown → absent), so a
+// pre-MM121 style sanitizes byte-identically.
 func SanitizeCaptionStyle(st *StudioCaptionStyle) *StudioCaptionStyle {
 	if st == nil {
 		return nil
 	}
 	pos := st.Position
-	if pos != "top" {
+	if pos != "top" && pos != "middle" {
 		pos = "bottom"
 	}
 	color := "#FFFFFF"
@@ -713,7 +750,7 @@ func SanitizeCaptionStyle(st *StudioCaptionStyle) *StudioCaptionStyle {
 	if isHexColor(st.BackgroundColor) {
 		bg = normalizeHexColor(st.BackgroundColor)
 	}
-	return &StudioCaptionStyle{
+	out := &StudioCaptionStyle{
 		FontSizePct:       clampF(orDefaultPositive(st.FontSizePct, 4.5), 1, 15),
 		Color:             color,
 		BackgroundColor:   bg,
@@ -721,6 +758,55 @@ func SanitizeCaptionStyle(st *StudioCaptionStyle) *StudioCaptionStyle {
 		Position:          pos,
 		MaxWidthPct:       clampF(orDefaultPositive(st.MaxWidthPct, 90), 40, 100),
 	}
+	if _, ok := CaptionFontByFamily(st.FontFamily); ok {
+		out.FontFamily = st.FontFamily
+	}
+	if st.Bold != nil {
+		out.Bold = bptr(*st.Bold)
+	}
+	if st.Uppercase != nil {
+		out.Uppercase = bptr(*st.Uppercase)
+	}
+	if isHexColor(st.HighlightColor) {
+		out.HighlightColor = normalizeHexColor(st.HighlightColor)
+	}
+	if isHexColor(st.OutlineColor) {
+		out.OutlineColor = normalizeHexColor(st.OutlineColor)
+	}
+	if st.OutlineWidth != nil {
+		out.OutlineWidth = ptrF(clampF(*st.OutlineWidth, 0, 12))
+	}
+	if st.Shadow != nil {
+		out.Shadow = ptrF(clampF(*st.Shadow, 0, 1))
+	}
+	if inList(CaptionBackgroundModes, st.BackgroundMode) {
+		out.BackgroundMode = st.BackgroundMode
+	}
+	switch {
+	case st.WordsPerGroup > 6:
+		out.WordsPerGroup = 6
+	case st.WordsPerGroup > 0:
+		out.WordsPerGroup = st.WordsPerGroup
+	}
+	if inList(CaptionAnimations, st.Animation) {
+		out.Animation = st.Animation
+	}
+	if st.AnimationStrength != nil {
+		out.AnimationStrength = ptrF(clampF(*st.AnimationStrength, 0, 1))
+	}
+	if _, ok := CaptionLookByID(st.LookID); ok {
+		out.LookID = st.LookID
+	}
+	return out
+}
+
+func inList(list []string, v string) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 // SanitizeAudioConfig clamps the ducking config to safe ranges.

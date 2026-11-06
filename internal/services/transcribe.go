@@ -69,6 +69,10 @@ func NewTranscriptionService(cfg *config.Config, inspector *MediaInspector, jm *
 type TranscribeOptions struct {
 	Format   string `json:"format"`
 	Language string `json:"language,omitempty"`
+	// WordTimestamps asks whisper for per-word start/end (MM121). Default
+	// false, so the converter and transcode callers run the exact same
+	// command as before; only the Darkroom caption job sets it.
+	WordTimestamps bool `json:"-"`
 }
 
 // TranscribeResult is written to transcribe_result.json and surfaced to the UI.
@@ -97,6 +101,17 @@ type TranscribeSegmentDTO struct {
 	Start float64 `json:"start"`
 	End   float64 `json:"end"`
 	Text  string  `json:"text"`
+	// Words is set only when TranscribeOptions.WordTimestamps was (MM121).
+	Words []TranscribeWordDTO `json:"words,omitempty"`
+}
+
+// TranscribeWordDTO is one whisper word timing. Word keeps whisper's leading
+// space (it marks a word boundary; unspaced scripts have none).
+type TranscribeWordDTO struct {
+	Word        string  `json:"word"`
+	Start       float64 `json:"start"`
+	End         float64 `json:"end"`
+	Probability float64 `json:"probability"`
 }
 
 // WhisperCT2Config mirrors the configuration used by the transcoding project so
@@ -112,13 +127,16 @@ type WhisperCT2Config struct {
 	BatchSize   *int
 	Language    string
 	OutputDir   string
+	// WordTimestamps adds `--word_timestamps True` (MM121, studio captions only).
+	WordTimestamps bool
 }
 
 type whisperSegment struct {
-	ID    int     `json:"id"`
-	Start float64 `json:"start"`
-	End   float64 `json:"end"`
-	Text  string  `json:"text"`
+	ID    int                 `json:"id"`
+	Start float64             `json:"start"`
+	End   float64             `json:"end"`
+	Text  string              `json:"text"`
+	Words []TranscribeWordDTO `json:"words,omitempty"`
 }
 
 type whisperResponse struct {
@@ -203,6 +221,7 @@ func (s *TranscriptionService) Transcribe(ctx context.Context, job *models.Conve
 	if strings.TrimSpace(opts.Language) != "" {
 		whisperCfg.Language = strings.TrimSpace(opts.Language)
 	}
+	whisperCfg.WordTimestamps = opts.WordTimestamps
 
 	// Pre-flight GPU selection through the shared scheduler. The scheduler
 	// queries nvidia-smi for current free VRAM on every card, picks one that
@@ -324,12 +343,23 @@ func buildSegmentDTOs(segments []whisperSegment) []TranscribeSegmentDTO {
 		if end < seg.Start {
 			end = seg.Start
 		}
-		out = append(out, TranscribeSegmentDTO{
+		dto := TranscribeSegmentDTO{
 			ID:    idx,
 			Start: roundMilli(seg.Start),
 			End:   roundMilli(end),
 			Text:  text,
-		})
+		}
+		for _, w := range seg.Words {
+			if strings.TrimSpace(w.Word) == "" {
+				continue
+			}
+			we := w.End
+			if we < w.Start {
+				we = w.Start
+			}
+			dto.Words = append(dto.Words, TranscribeWordDTO{Word: w.Word, Start: roundMilli(w.Start), End: roundMilli(we), Probability: w.Probability})
+		}
+		out = append(out, dto)
 	}
 	return out
 }
@@ -756,27 +786,7 @@ func runWhisperCT2JSON(ctx context.Context, cfg WhisperCT2Config, audioPath stri
 	}
 	defer os.RemoveAll(runOutputDir)
 
-	args := []string{audioPath, "--model", cfg.Model}
-	if strings.TrimSpace(cfg.Device) != "" {
-		args = append(args, "--device", cfg.Device)
-	}
-	if cfg.DeviceIndex != nil {
-		args = append(args, "--device_index", strconv.Itoa(*cfg.DeviceIndex))
-	}
-	if strings.TrimSpace(cfg.ComputeType) != "" {
-		args = append(args, "--compute_type", cfg.ComputeType)
-	}
-	args = append(args, "--vad_filter", whisperCT2Bool(cfg.VADFilter))
-	if cfg.Batched {
-		args = append(args, "--batched", "True")
-	}
-	if cfg.BatchSize != nil {
-		args = append(args, "--batch_size", strconv.Itoa(*cfg.BatchSize))
-	}
-	if strings.TrimSpace(cfg.Language) != "" {
-		args = append(args, "--language", cfg.Language)
-	}
-	args = append(args, "--output_format", "json", "--output_dir", runOutputDir)
+	args := whisperCT2Args(cfg, audioPath, runOutputDir)
 
 	stdout, stderr, err := runWhisperCommand(ctx, cfg.Bin, args...)
 	if err != nil {
@@ -805,6 +815,37 @@ func runWhisperCT2JSON(ctx context.Context, cfg WhisperCT2Config, audioPath stri
 	return payload, nil
 }
 
+// whisperCT2Args builds the whisper-ctranslate2 argument list. Pure, so the
+// word-timestamp flag (studio captions only, MM121) is unit-tested: with
+// WordTimestamps false the list is exactly the pre-MM121 one.
+func whisperCT2Args(cfg WhisperCT2Config, audioPath, runOutputDir string) []string {
+	args := []string{audioPath, "--model", cfg.Model}
+	if strings.TrimSpace(cfg.Device) != "" {
+		args = append(args, "--device", cfg.Device)
+	}
+	if cfg.DeviceIndex != nil {
+		args = append(args, "--device_index", strconv.Itoa(*cfg.DeviceIndex))
+	}
+	if strings.TrimSpace(cfg.ComputeType) != "" {
+		args = append(args, "--compute_type", cfg.ComputeType)
+	}
+	args = append(args, "--vad_filter", whisperCT2Bool(cfg.VADFilter))
+	if cfg.Batched {
+		args = append(args, "--batched", "True")
+	}
+	if cfg.BatchSize != nil {
+		args = append(args, "--batch_size", strconv.Itoa(*cfg.BatchSize))
+	}
+	if strings.TrimSpace(cfg.Language) != "" {
+		args = append(args, "--language", cfg.Language)
+	}
+	if cfg.WordTimestamps {
+		args = append(args, "--word_timestamps", "True")
+	}
+	args = append(args, "--output_format", "json", "--output_dir", runOutputDir)
+	return args
+}
+
 func parseWhisperCT2Response(payload []byte) (whisperResponse, error) {
 	var parsed struct {
 		Text     string `json:"text"`
@@ -813,6 +854,12 @@ func parseWhisperCT2Response(payload []byte) (whisperResponse, error) {
 			Start whisperCT2Number `json:"start"`
 			End   whisperCT2Number `json:"end"`
 			Text  string           `json:"text"`
+			Words []struct {
+				Word        string           `json:"word"`
+				Start       whisperCT2Number `json:"start"`
+				End         whisperCT2Number `json:"end"`
+				Probability whisperCT2Number `json:"probability"`
+			} `json:"words"`
 		} `json:"segments"`
 	}
 	if err := json.Unmarshal(payload, &parsed); err != nil {
@@ -831,7 +878,11 @@ func parseWhisperCT2Response(payload []byte) (whisperResponse, error) {
 		if end < start {
 			end = start
 		}
-		resp.Segments = append(resp.Segments, whisperSegment{ID: idx, Start: start, End: end, Text: text})
+		ws := whisperSegment{ID: idx, Start: start, End: end, Text: text}
+		for _, w := range seg.Words {
+			ws.Words = append(ws.Words, TranscribeWordDTO{Word: w.Word, Start: float64(w.Start), End: float64(w.End), Probability: float64(w.Probability)})
+		}
+		resp.Segments = append(resp.Segments, ws)
 		if text != "" {
 			parts = append(parts, text)
 		}

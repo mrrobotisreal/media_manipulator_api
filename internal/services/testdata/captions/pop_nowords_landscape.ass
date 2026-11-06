@@ -1,0 +1,21 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Bangers,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,0,0,0,0,100,100,0,0,1,5,0,2,96,96,54,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:05.50,0:00:05.91,Default,,0,0,0,,{\1c&HFFFFFF&\t(0,80,\fscx140\fscy140)\t(80,180,\fscx100\fscy100)}No{\1c&HFFFFFF&\fscx100\fscy100} word timings
+Dialogue: 1,0:00:05.91,0:00:06.33,Default,,0,0,0,,No {\1c&HFFFFFF&\t(0,80,\fscx140\fscy140)\t(80,180,\fscx100\fscy100)}word{\1c&HFFFFFF&\fscx100\fscy100} timings
+Dialogue: 1,0:00:06.33,0:00:06.75,Default,,0,0,0,,No word {\1c&HFFFFFF&\t(0,80,\fscx140\fscy140)\t(80,180,\fscx100\fscy100)}timings{\1c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 1,0:00:06.75,0:00:07.16,Default,,0,0,0,,{\1c&HFFFFFF&\t(0,80,\fscx140\fscy140)\t(80,180,\fscx100\fscy100)}on{\1c&HFFFFFF&\fscx100\fscy100} this line
+Dialogue: 1,0:00:07.16,0:00:07.58,Default,,0,0,0,,on {\1c&HFFFFFF&\t(0,80,\fscx140\fscy140)\t(80,180,\fscx100\fscy100)}this{\1c&HFFFFFF&\fscx100\fscy100} line
+Dialogue: 1,0:00:07.58,0:00:08.00,Default,,0,0,0,,on this {\1c&HFFFFFF&\t(0,80,\fscx140\fscy140)\t(80,180,\fscx100\fscy100)}line{\1c&HFFFFFF&\fscx100\fscy100}

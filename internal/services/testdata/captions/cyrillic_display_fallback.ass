@@ -1,0 +1,25 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Bangers,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,0,0,0,0,100,100,0,0,1,5,0,2,96,96,54,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.50,0:00:00.60,Default,,0,0,0,,{\fnNoto Sans}ПРИВЕТ, ДРУЗЬЯ!
+Dialogue: 1,0:00:00.60,0:00:01.20,Default,,0,0,0,,{\fnNoto Sans}{\1c&H00E6FF&}ПРИВЕТ,{\1c&HFFFFFF&} ДРУЗЬЯ!
+Dialogue: 1,0:00:01.20,0:00:01.80,Default,,0,0,0,,{\fnNoto Sans}ПРИВЕТ, {\1c&H00E6FF&}ДРУЗЬЯ!{\1c&HFFFFFF&}
+Dialogue: 1,0:00:01.80,0:00:02.40,Default,,0,0,0,,{\fnNoto Sans}{\1c&H00E6FF&}ЭТО{\1c&HFFFFFF&} СУБТИТРЫ
+Dialogue: 1,0:00:02.40,0:00:03.50,Default,,0,0,0,,{\fnNoto Sans}ЭТО {\1c&H00E6FF&}СУБТИТРЫ{\1c&HFFFFFF&}
+Dialogue: 1,0:00:04.00,0:00:04.10,Default,,0,0,0,,{\fnNoto Sans}STRAßE ǄEMAL ﬁNE
+Dialogue: 1,0:00:04.10,0:00:04.55,Default,,0,0,0,,{\fnNoto Sans}{\1c&H00E6FF&}STRAßE{\1c&HFFFFFF&} ǄEMAL ﬁNE
+Dialogue: 1,0:00:04.55,0:00:05.00,Default,,0,0,0,,{\fnNoto Sans}STRAßE {\1c&H00E6FF&}ǄEMAL{\1c&HFFFFFF&} ﬁNE
+Dialogue: 1,0:00:05.00,0:00:05.45,Default,,0,0,0,,{\fnNoto Sans}STRAßE ǄEMAL {\1c&H00E6FF&}ﬁNE{\1c&HFFFFFF&}
+Dialogue: 1,0:00:05.45,0:00:06.00,Default,,0,0,0,,{\fnNoto Sans}{\1c&H00E6FF&}ὒ{\1c&HFFFFFF&}

@@ -357,6 +357,7 @@ func (h *StudioHandler) SaveProject(c *gin.Context) {
 	if !h.requireProjectAccess(c, strings.TrimSpace(c.Param("id"))) {
 		return
 	}
+	applyAnonCaptionAllowlist(c, req.CaptionStyle)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 	// Image clips carry no speed/reverse/freeze (Go is authoritative; the UI
@@ -1531,6 +1532,7 @@ func (h *StudioHandler) runExportJob(jobID string, refs []services.StudioClipRef
 			log.Printf("studio export: write ASS failed: %v", err)
 		} else {
 			plan.CaptionsASSPath = assPath
+			plan.CaptionsFontsDir = captionFontsDir(h.cfg.ContentStudioFontsDir)
 			cleanup = append(cleanup, assPath)
 		}
 	}
@@ -1737,14 +1739,16 @@ func (h *StudioHandler) runCaptionsJob(job *models.ConversionJob, projectID stri
 	}
 
 	transcriptPath := filepath.Join(workDir, "transcript.vtt")
-	result, err := h.transcription.Transcribe(ctx, job, mixPath, transcriptPath, services.TranscribeOptions{Format: "vtt", Language: language})
+	result, err := h.transcription.Transcribe(ctx, job, mixPath, transcriptPath, services.TranscribeOptions{Format: "vtt", Language: language, WordTimestamps: true})
 	if err != nil {
 		log.Printf("studio captions: transcribe failed for job %s: %v", jobID, err)
 		_ = h.jobManager.UpdateJobError(jobID, err.Error())
 		return
 	}
 
-	cues := services.SegmentsToCues(result.Segments, uuid.NewString)
+	// MM121: word-timed cues; words that start inside a trailing silence are
+	// whisper's invented filler and are dropped.
+	cues := services.SegmentsToCuesUntil(result.Segments, uuid.NewString, services.DetectTrailingSilence(ctx, mixPath))
 	if err := h.repo.SaveCaptions(ctx, projectID, cues); err != nil {
 		log.Printf("studio captions: save failed for job %s: %v", jobID, err)
 		_ = h.jobManager.UpdateJobError(jobID, "Failed to save captions")
@@ -2024,4 +2028,22 @@ func (h *StudioHandler) registerRow(c *gin.Context, kind, id, projectID string, 
 // registerKey records a Darkroom source S3 object.
 func (h *StudioHandler) registerKey(c *gin.Context, sessionID, key, parent, projectID string, size int64) {
 	retention.Default().RegisterS3(detachedCtx(c), h.retentionOwner(c, sessionID), key, parent, "", projectID, size)
+}
+
+// applyAnonCaptionAllowlist (MM121, design §6.4): an anonymous caller gets
+// three caption looks and the animations they use. A crafted body naming a
+// locked look or animation is rewritten to the nearest allowed one before the
+// save, so the export (which re-reads the stored style) can never render it.
+// Signed-in callers (any plan) and a tier system that is off pass through.
+func applyAnonCaptionAllowlist(c *gin.Context, st *models.StudioCaptionStyle) {
+	if st == nil {
+		return
+	}
+	res, ok := middleware.ResolveTier(c)
+	if !ok || res.Tier != tiers.TierAnonymous {
+		return
+	}
+	if changed := models.ApplyAnonCaptionAllowlist(st); len(changed) > 0 {
+		log.Printf("studio: anonymous caption style downgraded: %s", strings.Join(changed, ", "))
+	}
 }

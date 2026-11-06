@@ -240,6 +240,10 @@ type StudioExportPlan struct {
 	Loudness    string // '' | streaming | podcast | broadcast
 	// CaptionsASSPath, when set, is burned in as the final video filter (Phase 7).
 	CaptionsASSPath string
+	// CaptionsFontsDir, when set, is the subtitles filter's fontsdir (MM121):
+	// libass loads the caption fonts from it, the same files JASSUB draws the
+	// preview with, instead of whatever fontconfig finds on the host.
+	CaptionsFontsDir string
 	// EmbeddedSubs (MM119), when set, is muxed as a subtitle stream in the
 	// container's subtitle codec (captions mode `embedded`); never burned in.
 	EmbeddedSubs *StudioEmbeddedSubs
@@ -628,7 +632,11 @@ func buildExportGraph(plan StudioExportPlan, fontFile, fontsDir string) (args []
 		}
 		// Caption burn-in is the final video filter (Phase 7).
 		if plan.CaptionsASSPath != "" {
-			stmts = append(stmts, fmt.Sprintf("[%s]subtitles=filename='%s'[vout]", last, filterPathEscape(plan.CaptionsASSPath)))
+			fontsDir := ""
+			if plan.CaptionsFontsDir != "" {
+				fontsDir = fmt.Sprintf(":fontsdir='%s'", filterPathEscape(plan.CaptionsFontsDir))
+			}
+			stmts = append(stmts, fmt.Sprintf("[%s]subtitles=filename='%s'%s[vout]", last, filterPathEscape(plan.CaptionsASSPath), fontsDir))
 			last = "vout"
 		}
 		videoOut = last

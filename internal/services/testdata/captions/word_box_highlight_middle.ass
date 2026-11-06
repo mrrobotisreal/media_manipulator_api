@@ -1,0 +1,38 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Russo One,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,0,0,0,0,100,100,0,0,1,2,0,5,96,96,54,-1
+Style: WordBox,Russo One,54,&HFF000000,&HFF000000,&H00D62BFF,&HFF000000,0,0,0,0,100,100,0,0,3,10.8,0,5,96,96,54,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.50,0:00:00.90,WordBox,,0,0,0,,{\3a&HFF&}{\3a&H00&}WELCOME{\3a&HFF&} BACK.
+Dialogue: 0,0:00:00.90,0:00:01.60,WordBox,,0,0,0,,{\3a&HFF&}WELCOME {\3a&H00&}BACK.{\3a&HFF&}
+Dialogue: 1,0:00:00.50,0:00:00.90,Default,,0,0,0,,WELCOME BACK.
+Dialogue: 1,0:00:00.90,0:00:01.60,Default,,0,0,0,,WELCOME BACK.
+Dialogue: 0,0:00:01.60,0:00:01.90,WordBox,,0,0,0,,{\3a&HFF&}{\3a&H00&}TODAY{\3a&HFF&} WE TEST
+Dialogue: 0,0:00:01.90,0:00:02.20,WordBox,,0,0,0,,{\3a&HFF&}TODAY {\3a&H00&}WE{\3a&HFF&} TEST
+Dialogue: 0,0:00:02.20,0:00:02.50,WordBox,,0,0,0,,{\3a&HFF&}TODAY WE {\3a&H00&}TEST{\3a&HFF&}
+Dialogue: 1,0:00:01.60,0:00:01.90,Default,,0,0,0,,TODAY WE TEST
+Dialogue: 1,0:00:01.90,0:00:02.20,Default,,0,0,0,,TODAY WE TEST
+Dialogue: 1,0:00:02.20,0:00:02.50,Default,,0,0,0,,TODAY WE TEST
+Dialogue: 0,0:00:02.50,0:00:02.80,WordBox,,0,0,0,,{\3a&HFF&}{\3a&H00&}CAPTIONS{\3a&HFF&} THAT MOVE
+Dialogue: 0,0:00:02.80,0:00:03.10,WordBox,,0,0,0,,{\3a&HFF&}CAPTIONS {\3a&H00&}THAT{\3a&HFF&} MOVE
+Dialogue: 0,0:00:03.10,0:00:03.40,WordBox,,0,0,0,,{\3a&HFF&}CAPTIONS THAT {\3a&H00&}MOVE{\3a&HFF&}
+Dialogue: 1,0:00:02.50,0:00:02.80,Default,,0,0,0,,CAPTIONS THAT MOVE
+Dialogue: 1,0:00:02.80,0:00:03.10,Default,,0,0,0,,CAPTIONS THAT MOVE
+Dialogue: 1,0:00:03.10,0:00:03.40,Default,,0,0,0,,CAPTIONS THAT MOVE
+Dialogue: 0,0:00:03.40,0:00:03.70,WordBox,,0,0,0,,{\3a&HFF&}{\3a&H00&}WITH{\3a&HFF&} EVERY WORD
+Dialogue: 0,0:00:03.70,0:00:04.00,WordBox,,0,0,0,,{\3a&HFF&}WITH {\3a&H00&}EVERY{\3a&HFF&} WORD
+Dialogue: 0,0:00:04.00,0:00:05.00,WordBox,,0,0,0,,{\3a&HFF&}WITH EVERY {\3a&H00&}WORD{\3a&HFF&}
+Dialogue: 1,0:00:03.40,0:00:03.70,Default,,0,0,0,,WITH EVERY WORD
+Dialogue: 1,0:00:03.70,0:00:04.00,Default,,0,0,0,,WITH EVERY WORD
+Dialogue: 1,0:00:04.00,0:00:05.00,Default,,0,0,0,,WITH EVERY WORD

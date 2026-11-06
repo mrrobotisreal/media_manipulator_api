@@ -1,0 +1,14 @@
+{
+  "name": "legacy_nil_style",
+  "width": 1280,
+  "height": 720,
+  "style": null,
+  "cues": [
+    {
+      "id": "a",
+      "startSeconds": 0,
+      "endSeconds": 2,
+      "text": "Default style, top of the hour"
+    }
+  ]
+}

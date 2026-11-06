@@ -1,0 +1,27 @@
+[Script Info]
+; Media Manipulator Darkroom captions (generator v1)
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Inter,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,0,0,0,0,100,100,0,0,1,3,0,2,96,96,54,-1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:00.20,Default,,0,0,0,,Wait.
+Dialogue: 1,0:00:00.20,0:00:00.70,Default,,0,0,0,,{\1c&H00D4FF&}Wait.{\1c&HFFFFFF&}
+Dialogue: 1,0:00:00.70,0:00:01.00,Default,,0,0,0,,{\1c&H00D4FF&}Then{\1c&HFFFFFF&} go on now
+Dialogue: 1,0:00:01.00,0:00:01.30,Default,,0,0,0,,Then {\1c&H00D4FF&}go{\1c&HFFFFFF&} on now
+Dialogue: 1,0:00:01.30,0:00:01.60,Default,,0,0,0,,Then go {\1c&H00D4FF&}on{\1c&HFFFFFF&} now
+Dialogue: 1,0:00:01.60,0:00:02.00,Default,,0,0,0,,Then go on {\1c&H00D4FF&}now{\1c&HFFFFFF&}
+Dialogue: 1,0:00:02.00,0:00:02.80,Default,,0,0,0,,{\1c&H00D4FF&}—{\1c&HFFFFFF&}
+Dialogue: 1,0:00:02.80,0:00:03.15,Default,,0,0,0,,{\1c&H00D4FF&}after{\1c&HFFFFFF&} a pause we resume
+Dialogue: 1,0:00:03.15,0:00:03.50,Default,,0,0,0,,after {\1c&H00D4FF&}a{\1c&HFFFFFF&} pause we resume
+Dialogue: 1,0:00:03.50,0:00:03.85,Default,,0,0,0,,after a {\1c&H00D4FF&}pause{\1c&HFFFFFF&} we resume
+Dialogue: 1,0:00:03.85,0:00:04.20,Default,,0,0,0,,after a pause {\1c&H00D4FF&}we{\1c&HFFFFFF&} resume
+Dialogue: 1,0:00:04.20,0:00:06.00,Default,,0,0,0,,after a pause we {\1c&H00D4FF&}resume{\1c&HFFFFFF&}
