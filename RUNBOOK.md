@@ -765,8 +765,8 @@ Operator: every token and Advanced. Every export still costs one `exportsPerDay`
 | --- | --- | --- |
 | `TIER_ANON_STUDIO_FORMATS` | `mp4,h264,aac,mp3,wav,pcm_s16le` | Output tokens anonymous can export (MP4 H.264, MP3, WAV). Anonymous has no H.265 since MM118. |
 | `TIER_FREE_STUDIO_FORMATS` | `hevc` (+ anonymous's) | Free adds H.265 MP4. |
-| `TIER_PREMIUM_STUDIO_FORMATS` | `mov,mkv` (+ free's) | Premium adds MOV and MKV. |
-| `TIER_PRO_STUDIO_FORMATS` | empty (+ Premium's) | Pro = Premium until MM119/MM120 add Opus, WebM, AV1, ProRes, FLAC. |
+| `TIER_PREMIUM_STUDIO_FORMATS` | `mov,mkv,webm,opus,vp9,vorbis,subs_embedded` (+ free's) | Premium adds MOV and MKV (MM118), WebM, `.opus`/Opus, VP9, Vorbis and the embedded captions track (MM119). |
+| `TIER_PRO_STUDIO_FORMATS` | empty (+ Premium's) | Pro = Premium until MM120 adds AV1, ProRes, FLAC, 24-bit WAV. |
 | `TIER_ANON_STUDIO_ADVANCED` / `TIER_FREE_STUDIO_ADVANCED` | `false` / `false` | The Advanced picker (combinations, audio bitrate 128/192/256/320, mono). |
 | `TIER_PREMIUM_STUDIO_ADVANCED` / `TIER_PRO_STUDIO_ADVANCED` | `true` / `true` | Same, Premium and Pro. |
 
@@ -778,6 +778,21 @@ binary writes after it (no container) read back with the parts their `format` me
 Verify a MOV/MKV export on the host with `ffprobe -v error -show_entries
 format=format_name:stream=codec_name,codec_tag_string outputs/<jobId>/converted.mov`
 (HEVC in MOV/MP4 must show `hvc1`; MKV carries no tag and no faststart).
+
+**MM119 (WebM, Opus, embedded captions, CPU encode gate).** Migration
+`20261106001_studio_export_webm_opus` must run **before** the MM119 binary serves: it widens
+the `studio_exports` CHECKs (container `webm`/`opus`, video `vp9`, audio `opus`/`vorbis`,
+bitrates 64/96/160, the 14 new derived labels, captions mode `embedded`). Without it the
+history row of a WebM/Opus/embedded export fails to insert (logged; the render still runs).
+
+| Var | Default | Effect |
+| --- | --- | --- |
+| `STUDIO_CPU_ENCODE_CONCURRENCY` | `2` | Server-wide number of CPU-bound Darkroom export encodes (libvpx-vp9) running at once; more wait as **Queued** (job `currentStage: "queued"`, wait in `queueWaitMs` and `studio_render_completed.cpuQueueMs`). NVENC and audio exports never wait. Each VP9 encode uses `-threads 16`; on the 32-thread host two concurrent 1080p encodes each kept ~86 % of a lone encode's speed (design §9). Raise it only with spare cores; lower it to 1 if the API host gets sluggish during WebM exports. |
+
+Verify on the host: `ffprobe -v error -show_entries stream=codec_type,codec_name,sample_rate:stream_tags=language,title outputs/<jobId>/converted.webm`
+(WebM: `vp9`, `opus` 48000, and with embedded captions a `webvtt` stream tagged with the
+language and `title=Captions`; MKV shows `subrip`, MP4/MOV `mov_text`; `.opus` is one `opus`
+stream at 48000). Admin `/darkroom` → CPU encode queue shows the wait p50/p95.
 
 #### Video summary frame budgets and deep synthesis (MM74)
 
