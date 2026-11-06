@@ -2307,8 +2307,10 @@ func (c *Converter) runFFmpegWithProgress(jobID string, name string, args ...str
 		return fmt.Errorf("failed to start FFmpeg: %v", err)
 	}
 
-	// Parse ffmpeg progress output
+	// Parse ffmpeg progress output ('\r'-terminated stats lines, see scanFFmpegLines)
 	scanner := bufio.NewScanner(stderr)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Split(scanFFmpegLines)
 	durationRegex := regexp.MustCompile(`Duration: (\d{2}):(\d{2}):(\d{2})\.(\d{2})`)
 	timeRegex := regexp.MustCompile(`time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})`)
 
