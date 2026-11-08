@@ -17,9 +17,11 @@ const (
 	LedgerAuditRetentionDays  = 30
 	// AssistantUsageRetentionMonths keeps Medi's content-free usage rows (MM104).
 	AssistantUsageRetentionMonths = 13
-	PurgeBatchRows                = 5000
-	PurgeInterval                 = time.Hour
-	maxPurgeBatchesPerRule        = 200
+	// BurstRunsRetentionDays keeps the content-free burst_runs ledger (MM124).
+	BurstRunsRetentionDays = 400
+	PurgeBatchRows         = 5000
+	PurgeInterval          = time.Hour
+	maxPurgeBatchesPerRule = 200
 )
 
 // PurgeStore is the slice of *telemetry.Store the purger uses.
@@ -69,6 +71,8 @@ func Cutoff(rule string, now time.Time) time.Time {
 		return day(CleanupRunRetentionDays)
 	case telemetry.PurgeLedgerDeleted, telemetry.PurgeAccountDeletes:
 		return day(LedgerAuditRetentionDays)
+	case telemetry.PurgeBurstRuns:
+		return day(BurstRunsRetentionDays)
 	case telemetry.PurgeAssistantUsage:
 		// 13 months, the analytics lifecycle (MM104).
 		return now.AddDate(0, -AssistantUsageRetentionMonths, 0)

@@ -29,6 +29,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/burst"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/cleanup"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/cmdaudit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
@@ -318,6 +319,11 @@ func main() {
 	if len(cfg.DRAllowedEmails) == 0 {
 		logging.Warn("DR_ALLOWED_EMAILS is empty; any verified Firebase user of the project can access /api/dr/* — set DR_ALLOWED_EMAILS to restrict the Double Raven portal")
 	}
+
+	// MM124 GPU burst (dark): logs one line; the reaper runs whenever the
+	// BURST_AWS_* credentials are present, even with BURST_ENABLED=false, so a
+	// flag flip cannot strand an instance. No scheduler or tool is wired here.
+	startBurst(ctx, cfg, pool, s3Client, logging)
 
 	// Cleanup worker
 	if cfg.CleanupEnabled {
@@ -1415,4 +1421,31 @@ func onAPIPaths(h gin.HandlerFunc) gin.HandlerFunc {
 		}
 		h(c)
 	}
+}
+
+// startBurst wires the MM124 burst reaper (see internal/burst). With no AWS
+// credentials it only logs the startup line and makes no AWS or Tailscale call.
+func startBurst(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, s3Client *s3.Client, logging *slog.Logger) {
+	var prov burst.Provider
+	if cfg.Burst.AWSConfigured() {
+		client, err := burst.NewEC2Client(ctx, cfg.Burst.Region, cfg.Burst.AccessKey, cfg.Burst.SecretKey)
+		if err != nil {
+			logging.Error("burst: could not build the EC2 client; reaper not started", "error", err.Error())
+			return
+		}
+		prov = burst.NewEC2Provider(client, logging)
+	}
+	var st burst.Store
+	if pool != nil {
+		st = burst.NewPGStore(pool)
+	}
+	var prefixes burst.PrefixStore
+	if s3Client != nil {
+		prefixes = &burst.S3Staging{API: s3Client, Bucket: cfg.S3Bucket, Prefix: cfg.Burst.S3Prefix}
+	}
+	var ledger *burst.Ledger
+	if st != nil {
+		ledger = burst.NewLedger(cfg.Burst.DailySpendCapUSD, cfg.Burst.MonthlySpendCapUSD, st, nil)
+	}
+	burst.Start(ctx, cfg.Burst, prov, st, prefixes, nil, ledger, logging)
 }

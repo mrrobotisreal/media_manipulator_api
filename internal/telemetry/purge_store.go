@@ -21,6 +21,8 @@ const (
 	PurgeAccountDeletes = "account_deletions"
 	// PurgeAssistantUsage (MM104): content-free Medi usage rows, kept 13 months.
 	PurgeAssistantUsage = "assistant_usage"
+	// PurgeBurstRuns (MM124): content-free burst_runs ledger rows, kept 400 days.
+	PurgeBurstRuns = "burst_runs"
 )
 
 type purgeRule struct {
@@ -49,11 +51,13 @@ var purgeRules = map[string]purgeRule{
 	PurgeAccountDeletes: {table: "mm_account_deletions", where: "deleted_at < $1"},
 	// cutoff = now - 13 months (MM104): Medi usage/cost rows hold no content.
 	PurgeAssistantUsage: {table: "assistant_usage_events", where: "created_at < $1"},
+	// cutoff = now - 400 d (MM124): only terminated runs; a live row is never swept.
+	PurgeBurstRuns: {table: "burst_runs", where: "terminated_at IS NOT NULL AND offered_at < $1"},
 }
 
 // PurgeRuleNames lists the rules in the order the purger runs them.
 func PurgeRuleNames() []string {
-	return []string{PurgeUsageCounters, PurgeSafetyIncident, PurgeAPIRequestIPs, PurgeRateLimitIPs, PurgeCleanupRuns, PurgeLedgerDeleted, PurgeAccountDeletes, PurgeAssistantUsage}
+	return []string{PurgeUsageCounters, PurgeSafetyIncident, PurgeAPIRequestIPs, PurgeRateLimitIPs, PurgeCleanupRuns, PurgeLedgerDeleted, PurgeAccountDeletes, PurgeAssistantUsage, PurgeBurstRuns}
 }
 
 func purgeSQL(r purgeRule) string {

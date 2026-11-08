@@ -1313,6 +1313,62 @@ Medi (code name `assistant`, ADR-0018, design `docs/design/MEDI_ASSISTANT.md`) i
 
 ---
 
+### 4.19 GPU burst (MM124)
+
+GPU burst (code name `burst`, ADR-0020, design `docs/design/GPU_BURST_EC2.md`) runs a queued GPU job on an on-demand EC2 instance when the home GPUs are full. MM124 ships only the **dark core**: config, profiles, the `burst_runs` ledger with hard spend caps, the EC2 provider, the Tailscale key minter, the reaper, the planner's launch/terminate bookkeeping and `cmd/burst-ctl`. **Nothing schedules a burst yet** (the scheduler hook is MM127, the worker is MM125). With `BURST_ENABLED` unset the API logs one `burst: disabled ...` line at boot and nothing else, except the reaper when the `BURST_AWS_*` credentials are present. The scheduler and every tool are untouched.
+
+Enabled but missing any of AWS credentials, subnets, security group, instance profile, one AMI, or Tailscale OAuth credentials logs once and behaves as disabled (fail closed). The AWS client is built from `BURST_AWS_*` static credentials, never the default chain, so the S3 client keeps its own credentials.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `BURST_ENABLED` | `false` | Kill switch for launching. The reaper ignores it. |
+| `BURST_SCOPE` | `operator` | `operator` or `all` (who may burst; used by MM127). |
+| `BURST_WORKLOADS` | *(empty)* | CSV of profile keys that may burst (`remove_background`, `ai_upscale`, `redact_text`, `remove_object`, `deepfilter`, `demucs`, `frame_interpolation`, `whisper-ct2`, `restore-`, `image-restore-`, `ollama`, `voices-`). Empty = none. Never-rows (`face_privacy`, `rembg[photo]`, `lama[photo]`, analysis) cannot be listed. |
+| `BURST_AWS_REGION` | `us-west-2` | EC2 region. |
+| `BURST_AWS_ACCESS_KEY_ID` / `BURST_AWS_SECRET_ACCESS_KEY` | (unset) | The `mm-burst-controller` IAM user's own keys (MM123). Their presence starts the reaper. Never log or paste. |
+| `BURST_SUBNET_IDS` | (unset) | CSV, one subnet per AZ; launch tries candidates x subnets. |
+| `BURST_SECURITY_GROUP_ID` | (unset) | SG with no inbound rules. |
+| `BURST_INSTANCE_PROFILE` | (unset) | Worker instance profile name (S3 `burst/*` only). |
+| `BURST_AMIS` | (unset) | `family:arch=ami-...` CSV, e.g. `image:x86_64=ami-...`. Families: `image`, `audio`, `video`, `restore`, `ollama`, `voices`. |
+| `BURST_INSTANCE_TYPES_<FAMILY>` | profile default | Override the candidate list, e.g. `BURST_INSTANCE_TYPES_IMAGE=g6e.xlarge,g6.xlarge`. A benchmark result is a config change. |
+| `BURST_PRICE_USD_PER_HOUR` | `g6.xlarge=0.80,g6e.xlarge=1.86,g7.2xlarge=2.52` | `type=price` CSV. **Unverified third-party figures until MM128**; check with `burst-ctl prices`. |
+| `BURST_EBS_USD_PER_GB_MONTH` / `BURST_EGRESS_USD_PER_GB` | `0.08` / `0.09` | Cost-formula rates (unverified until MM128). |
+| `BURST_DAILY_SPEND_CAP_USD` / `BURST_MONTHLY_SPEND_CAP_USD` | `25` / `250` | Hard caps, UTC day and month. Settled spend plus live reservations is re-read every 30 s. An offer that would cross a cap is `cap_refused` and never launches. A running instance is never killed for the cap. |
+| `BURST_MAX_INSTANCES` | `2` | Live runs at once. |
+| `BURST_MAX_INSTANCE_MINUTES` | `120` | Worker self-shutdown timer; the reaper terminates anything older than this + 15 min. |
+| `BURST_BOOT_TIMEOUT_SECONDS` | `600` | Boot deadline (MM127). |
+| `BURST_KEEP_FAILED_MINUTES` | `0` | Keep a failed instance for debugging (0 = terminate at once). |
+| `BURST_REAPER_INTERVAL_SECONDS` | `60` | Reaper period (plus once at boot). |
+| `BURST_WORKER_PORT` | `7781` | Worker control port over Tailscale (MM125). |
+| `BURST_S3_PREFIX` | `burst/` | Transient staging prefix in `S3_BUCKET` (`burst/<runId>/`). |
+| `TAILSCALE_OAUTH_CLIENT_ID` / `TAILSCALE_OAUTH_CLIENT_SECRET` / `TAILSCALE_TAILNET` | (unset) | OAuth client with the `auth_keys` scope for the tag. Never log or paste the secret. |
+| `BURST_TAILSCALE_TAG` | `tag:mm-burst` | Tag on every minted key (single-use, ephemeral, preauthorized, 10 min). |
+| `BURST_TRIGGER_DEBOUNCE_SECONDS` / `BURST_MIN_PREDICTED_WAIT_SECONDS` | `3` / `120` | Read here, used by the MM127 trigger. |
+
+**AWS resource names.** MM123 (the AWS and Tailscale setup) fills these in; until it logs them the placeholders below stand:
+
+| Item | Name |
+|---|---|
+| Controller IAM user | `mm-burst-controller` (MM123 fills in) |
+| Worker instance profile / role | `<MM123: instance profile name>` |
+| Security group | `<MM123: sg-...>` |
+| Subnets (one per AZ) | `<MM123: subnet-...,subnet-...>` |
+| AMIs | `<MM126: ami-... per family>` |
+| Tailscale tag and tailnet | `tag:mm-burst`, `<MM123: tailnet>` |
+| AWS Budgets | monthly $250 with a deny-`RunInstances` action, daily $25 alert only (MM123) |
+
+**Migration.** `20261108001_burst_runs` creates the `burst_runs` ledger (no filenames, no user content, no keys). The retention purger deletes terminated rows after 400 days (rule `burst_runs`, hourly, dry-run follows `RETENTION_SWEEP_DRY_RUN`).
+
+**burst-ctl** (run from the repo root on the server; it reads the same `.env`):
+
+- `go run ./cmd/burst-ctl status`: live instances, today's and this month's spend against the caps.
+- `go run ./cmd/burst-ctl runs --since 24h`: recent runs, state and cost.
+- `go run ./cmd/burst-ctl reap`: one reaper pass as a dry run; add `--yes` to terminate. From the CLI's point of view every tagged instance is an orphan, except a launch-test less than 15 minutes old.
+- `go run ./cmd/burst-ctl launch-test --workload remove_background --i-know-this-costs-money`: launches one instance with a no-op user-data that shuts down in 5 minutes, waits for running, terminates, prints the cost (expect under $0.05). The live smoke; deferred to MM127 in the MM124 session because MM123 was not finished.
+- `go run ./cmd/burst-ctl prices`: AWS Pricing API against `BURST_PRICE_USD_PER_HOUR` (the controller needs `pricing:GetProducts`).
+
+**How to stop everything now.** Set `BURST_ENABLED=false` and restart the API, then `go run ./cmd/burst-ctl reap --yes` (terminates every `mm-burst=1` instance and deletes `burst/` staging prefixes). For a hard stop at AWS: detach the controller user's policies or attach the deny-`RunInstances` policy by hand (the monthly budget action does this at $250).
+
 ## 5. HTTP API surface
 
 All routes live under `/api/` except `/healthz`.

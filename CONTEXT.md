@@ -206,3 +206,20 @@ The guide's cheap pre-model check (`InScope`): a message passes when it names a 
 **Spend cap** (MM104):
 `ASSISTANT_DAILY_SPEND_CAP_USD` (default 10): today's UTC sum of `assistant_usage_events.cost_usd` plus in-flight worst-case reservations. At the cap the copilot answers `503 assistant_paused` (no charge) and the guide answers from retrieval only, without a model call. The OpenRouter key's own credit limit is the hard backstop.
 _Avoid_: confusing it with the per-user `assistant_turns` allowance.
+
+**Burst run** (MM124):
+One cloud-GPU attempt for one queued job: a `burst_runs` row that goes `offered -> launching -> booting -> ready -> staging_in -> running -> staging_out -> completed`, or ends in a side exit (`lost_race`, `adopted`, `launch_failed`, `boot_timeout`, `worker_lost`, `tool_failed`, `cap_refused`, `orphaned`). Every exit sets `terminated_at`; the planner enforces the edges. Holds cost, never filenames or keys.
+_Avoid_: "job" (a job is the user's work; a burst run is one attempt to run it remotely).
+
+**Burst profile** (MM124):
+A row of the table in `internal/burst/profiles.go`, keyed by scheduler `Kind`: worker family, minimum GPU memory, ordered instance-type candidates, disk, prewarm files, seed hold-time and remote timeout. Rows marked `Never` (face detect, Aperture interactive, analysis) are explicit so a new GPU tool cannot silently become burstable; a test fails when a `GPURequest` Kind has no row.
+
+**Worker family** (MM124):
+Which AMI holds a profile's runtime: `image`, `audio`, `video`, `restore`, `ollama`, `voices` (design §9). `BURST_AMIS` maps `family:arch` to an AMI id.
+
+**Reaper** (MM124):
+The goroutine that terminates every `mm-burst=1` instance with no live run, or older than `BURST_MAX_INSTANCE_MINUTES + 15`, marks its row `orphaned`, settles the best known cost, and deletes `burst/<runId>/` for runs that are terminal or unknown. Runs once at boot and every `BURST_REAPER_INTERVAL_SECONDS`, whenever AWS credentials are present, even with `BURST_ENABLED=false`.
+
+**Hedged race** (MM124, used by MM127):
+From the offer until the worker reports `ready`, the job is still a local waiter. A local slot first: the run becomes `lost_race` (or the booting instance is adopted by another eligible waiter). The remote first: the waiter leaves the local queue.
+
