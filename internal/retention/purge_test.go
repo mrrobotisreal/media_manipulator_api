@@ -140,3 +140,17 @@ func TestAccountTombstonesPurgedAfterThirtyDays(t *testing.T) {
 		t.Error("the purger must run the account_deletions rule")
 	}
 }
+
+// MM124: the burst_runs ledger is swept after 400 days, terminated rows only.
+func TestBurstRunsPurgeRule(t *testing.T) {
+	now := time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC)
+	if got, want := Cutoff(telemetry.PurgeBurstRuns, now), now.AddDate(0, 0, -400); !got.Equal(want) {
+		t.Errorf("cutoff %v want %v", got, want)
+	}
+	f := &fakePurgeDB{rows: map[string]int64{telemetry.PurgeBurstRuns: 9}}
+	p := NewPurger(f, nil)
+	p.SetClock(func() time.Time { return now })
+	if got := p.Run(t.Context(), false); got[telemetry.PurgeBurstRuns] != 9 {
+		t.Errorf("burst_runs purged %d, want 9", got[telemetry.PurgeBurstRuns])
+	}
+}

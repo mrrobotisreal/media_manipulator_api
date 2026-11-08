@@ -212,3 +212,17 @@ func TestJobRecordNoStoreAndBadID(t *testing.T) {
 		t.Errorf("no store: %v", err)
 	}
 }
+
+// MM124: the burst_runs sweep never touches a live (unterminated) run.
+func TestBurstRunsPurgeNeverTouchesLiveRows(t *testing.T) {
+	r, ok := purgeRules[PurgeBurstRuns]
+	if !ok || r.table != "burst_runs" {
+		t.Fatal("burst_runs rule missing")
+	}
+	if !strings.Contains(r.where, "terminated_at IS NOT NULL") || !strings.Contains(r.where, "offered_at < $1") {
+		t.Errorf("where = %s", r.where)
+	}
+	if !strings.HasPrefix(purgeSQL(r), "DELETE FROM burst_runs") {
+		t.Error("must be a bounded DELETE")
+	}
+}
