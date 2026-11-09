@@ -30,6 +30,7 @@ import (
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/burst"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/burst/staging"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/cleanup"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/cmdaudit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
@@ -1448,4 +1449,9 @@ func startBurst(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, s3C
 		ledger = burst.NewLedger(cfg.Burst.DailySpendCapUSD, cfg.Burst.MonthlySpendCapUSD, st, nil)
 	}
 	burst.Start(ctx, cfg.Burst, prov, st, prefixes, nil, ledger, logging)
+	// MM125: with burst fully configured, publish the deploy-built worker by hash
+	// (no build here; a missing binary is logged and nothing else changes).
+	if cfg.Burst.Configured() && s3Client != nil {
+		go burst.PublishWorkerBinary(ctx, &staging.S3Store{API: s3Client, Bucket: cfg.S3Bucket}, cfg.Burst.S3Prefix, logging)
+	}
 }
