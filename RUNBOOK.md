@@ -1345,17 +1345,22 @@ Enabled but missing any of AWS credentials, subnets, security group, instance pr
 | `BURST_TAILSCALE_TAG` | `tag:mm-burst` | Tag on every minted key (single-use, ephemeral, preauthorized, 10 min). |
 | `BURST_TRIGGER_DEBOUNCE_SECONDS` / `BURST_MIN_PREDICTED_WAIT_SECONDS` | `3` / `120` | Read here, used by the MM127 trigger. |
 
-**AWS resource names.** MM123 (the AWS and Tailscale setup) fills these in; until it logs them the placeholders below stand:
+**AWS and Tailscale resources** (created by MM123 on 2026-11-09, region us-west-2; ids are not secrets; the keys live only in the server `.env`):
 
-| Item | Name |
+| Item | Name / id |
 |---|---|
-| Controller IAM user | `mm-burst-controller` (MM123 fills in) |
-| Worker instance profile / role | `<MM123: instance profile name>` |
-| Security group | `<MM123: sg-...>` |
-| Subnets (one per AZ) | `<MM123: subnet-...,subnet-...>` |
+| Controller IAM user | `mm-burst-controller` (policy `mm-burst-controller`: RunInstances only for g6.xlarge, g6.2xlarge, g6e.xlarge, g7.2xlarge, g7.4xlarge, g7e.2xlarge with tag `mm-burst=1`; terminate only tagged; S3 only `burst/` + `burst-images/`). Key in `BURST_AWS_ACCESS_KEY_ID` / `BURST_AWS_SECRET_ACCESS_KEY` |
+| Worker role / instance profile | `mm-burst-worker` (`AmazonSSMManagedInstanceCore` + inline `mm-burst-worker-s3`) |
+| Network | default VPC `vpc-081178f4ede5bd9a8`; S3 gateway endpoint `vpce-04ec0e4ef5fed2ae0`; EBS encryption by default on |
+| Security group | `sg-005b8dbe0db36040e` (`mm-burst-worker`, no inbound) |
+| Subnets (one per AZ, 2a–2d) | `subnet-09c4144b464a3413e,subnet-0a5cdaee4febb78d9,subnet-0ffa06d407397f990,subnet-0d76e4ea060032607` |
+| S3 staging | lifecycle rule `mm-burst-staging` on `burst/` (expire 1 day, abort multipart 1 day), beside the seven pre-existing rules |
+| AWS Budgets | `mm-burst-monthly` $250 (alerts 50/80/100 % actual + 100 % forecast; action at 100 % actual attaches `mm-burst-deny-launch` to `mm-burst-controller`, automatic, via role `mm-burst-budgets-action`); `mm-burst-daily` $25 alert only. Both filter on service "Amazon Elastic Compute Cloud - Compute" until the `mm-burst` cost tag is activated |
+| Cost-allocation tag | `mm-burst`: activate in Billing → Cost allocation tags after the first tagged instance exists (MM127) |
 | AMIs | `<MM126: ami-... per family>` |
-| Tailscale tag and tailnet | `tag:mm-burst`, `<MM123: tailnet>` |
-| AWS Budgets | monthly $250 with a deny-`RunInstances` action, daily $25 alert only (MM123) |
+| Tailscale | tag `tag:mm-burst` (owner `autogroup:admin`); grant `tag:creatv` → `tag:mm-burst` tcp 7781, 11434, 8791; no grant from `tag:mm-burst`; policy `tests` enforce both; OAuth client (Trust credentials) scopes Auth Keys write (tag `tag:mm-burst`) + Devices Core read; `TAILSCALE_TAILNET=-` (the client's own tailnet) |
+
+**To undo everything** (CloudShell): delete the budget action and budgets, detach/delete the policies, delete user `mm-burst-controller` (keys first), role + instance profile `mm-burst-worker`, role `mm-burst-budgets-action`, SG `sg-005b8dbe0db36040e`, endpoint `vpce-04ec0e4ef5fed2ae0`, lifecycle rule `mm-burst-staging`; in Tailscale delete the OAuth client and the three ADDED (GPU burst) policy blocks.
 
 **Migration.** `20261108001_burst_runs` creates the `burst_runs` ledger (no filenames, no user content, no keys). The retention purger deletes terminated rows after 400 days (rule `burst_runs`, hourly, dry-run follows `RETENTION_SWEEP_DRY_RUN`).
 
