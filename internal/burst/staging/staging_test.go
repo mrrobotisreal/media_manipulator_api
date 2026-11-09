@@ -198,6 +198,14 @@ func (f *fakeS3) PutObject(_ context.Context, in *s3.PutObjectInput, _ ...func(*
 	f.objs[*in.Key] = readAll(in.Body)
 	return &s3.PutObjectOutput{}, nil
 }
+func (f *fakeS3) HeadObject(_ context.Context, in *s3.HeadObjectInput, _ ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.objs[*in.Key]; !ok {
+		return nil, &s3types.NotFound{}
+	}
+	return &s3.HeadObjectOutput{}, nil
+}
 func (f *fakeS3) GetObject(_ context.Context, in *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -285,6 +293,12 @@ func TestS3Store_MultipartOverThresholdAndDelete(t *testing.T) {
 	}
 	if _, err := st.GetBytes(ctx, "burst/r/nope"); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
+	}
+	if ok, err := st.Exists(ctx, "burst/r/in/1"); !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	if ok, err := st.Exists(ctx, "burst/r/zzz"); ok || err != nil {
+		t.Fatal(ok, err)
 	}
 	api.failPart = 3
 	if err := st.PutFile(ctx, "burst/r/in/2", big); err == nil || api.aborted != 1 {

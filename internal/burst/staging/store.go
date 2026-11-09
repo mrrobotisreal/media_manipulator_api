@@ -31,6 +31,8 @@ type ObjectStore interface {
 	PutFile(ctx context.Context, key, path string) error
 	PutBytes(ctx context.Context, key string, b []byte) error
 	GetBytes(ctx context.Context, key string) ([]byte, error)
+	// Exists reports whether key exists.
+	Exists(ctx context.Context, key string) (bool, error)
 	// GetTo streams the object into w.
 	GetTo(ctx context.Context, key string, w io.Writer) error
 	// DeletePrefix removes every object under prefix.
@@ -40,6 +42,7 @@ type ObjectStore interface {
 // S3API is the slice of *s3.Client the S3Store uses.
 type S3API interface {
 	PutObject(ctx context.Context, in *s3.PutObjectInput, opts ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+	HeadObject(ctx context.Context, in *s3.HeadObjectInput, opts ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
 	GetObject(ctx context.Context, in *s3.GetObjectInput, opts ...func(*s3.Options)) (*s3.GetObjectOutput, error)
 	CreateMultipartUpload(ctx context.Context, in *s3.CreateMultipartUploadInput, opts ...func(*s3.Options)) (*s3.CreateMultipartUploadOutput, error)
 	UploadPart(ctx context.Context, in *s3.UploadPartInput, opts ...func(*s3.Options)) (*s3.UploadPartOutput, error)
@@ -125,6 +128,19 @@ func (s *S3Store) multipart(ctx context.Context, key string, f *os.File, size in
 		return err
 	}
 	return nil
+}
+
+func (s *S3Store) Exists(ctx context.Context, key string) (bool, error) {
+	_, err := s.API.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(s.Bucket), Key: aws.String(key)})
+	if err == nil {
+		return true, nil
+	}
+	var nf *s3types.NotFound
+	var nsk *s3types.NoSuchKey
+	if errors.As(err, &nf) || errors.As(err, &nsk) {
+		return false, nil
+	}
+	return false, err
 }
 
 func (s *S3Store) GetTo(ctx context.Context, key string, w io.Writer) error {
@@ -215,6 +231,13 @@ func (m *MemStore) GetBytes(_ context.Context, key string) ([]byte, error) {
 		b = m.CorruptOnGet(key, b)
 	}
 	return b, nil
+}
+
+func (m *MemStore) Exists(_ context.Context, key string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.objs[key]
+	return ok, nil
 }
 
 func (m *MemStore) GetTo(ctx context.Context, key string, w io.Writer) error {

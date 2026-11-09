@@ -181,3 +181,84 @@ func scrub(err error) error {
 	}
 	return err
 }
+
+// Device is the slice of a Tailscale device the worker lookup needs.
+type Device struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Hostname  string   `json:"hostname"`
+	Addresses []string `json:"addresses"`
+}
+
+// ErrDeviceNotFound: no device with that hostname (yet).
+var ErrDeviceNotFound = errors.New("tailscale: device not found")
+
+// WorkerHostname is the tailnet hostname the user-data gives a run's instance.
+func WorkerHostname(runID string) string {
+	id := strings.ReplaceAll(runID, "-", "")
+	if len(id) > 8 {
+		id = id[:8]
+	}
+	return "mm-burst-" + id
+}
+
+// DevicesURL is the list-devices URL. Tailnet "-" (the OAuth client's own
+// tailnet) passes through PathEscape unchanged.
+func (m *TailscaleMinter) DevicesURL() string {
+	return m.base() + "/api/v2/tailnet/" + url.PathEscape(m.Tailnet) + "/devices"
+}
+
+// ResolveIP returns the tailnet IPv4 of the device named hostname (decision 7:
+// the Tailscale devices API, scope Devices Core read). ErrDeviceNotFound until
+// the instance has joined.
+func (m *TailscaleMinter) ResolveIP(ctx context.Context, hostname string) (string, error) {
+	tok, err := m.accessToken(ctx)
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.DevicesURL(), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := m.client().Do(req)
+	if err != nil {
+		return "", fmt.Errorf("tailscale devices: %w", scrub(err))
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if resp.StatusCode == http.StatusUnauthorized {
+		m.mu.Lock()
+		m.token = ""
+		m.mu.Unlock()
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("tailscale devices: status %d", resp.StatusCode)
+	}
+	var out struct {
+		Devices []Device `json:"devices"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return "", errors.New("tailscale devices: unreadable response")
+	}
+	for _, d := range out.Devices {
+		short := d.Name
+		if i := strings.IndexByte(short, '.'); i >= 0 {
+			short = short[:i]
+		}
+		if d.Hostname != hostname && short != hostname {
+			continue
+		}
+		for _, a := range d.Addresses {
+			if !strings.Contains(a, ":") {
+				return a, nil
+			}
+		}
+	}
+	return "", ErrDeviceNotFound
+}
+
+// Resolver finds a run's worker address (the minter implements it).
+type Resolver interface {
+	ResolveIP(ctx context.Context, hostname string) (string, error)
+}

@@ -9,6 +9,10 @@ import (
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
+// BinDir is the burst/bin/<sha256>/burst-worker directory (MM125); the reaper
+// must never treat it as a run's staging prefix.
+const BinDir = "bin"
+
 // PrefixStore deletes and lists the transient staging prefixes
 // (s3://<bucket>/burst/<runId>/).
 type PrefixStore interface {
@@ -40,7 +44,7 @@ func (s *S3Staging) prefix() string {
 }
 
 func (s *S3Staging) DeleteRun(ctx context.Context, runID string) error {
-	if runID == "" || strings.ContainsAny(runID, "/.") {
+	if runID == "" || runID == BinDir || strings.ContainsAny(runID, "/.") {
 		return nil // never build a prefix that could reach beyond one run
 	}
 	pfx := s.prefix() + runID + "/"
@@ -78,7 +82,7 @@ func (s *S3Staging) ListRunIDs(ctx context.Context) ([]string, error) {
 		}
 		for _, cp := range out.CommonPrefixes {
 			id := strings.Trim(strings.TrimPrefix(aws.ToString(cp.Prefix), s.prefix()), "/")
-			if id != "" {
+			if id != "" && id != BinDir { // burst/bin/ holds worker builds, not a run
 				ids = append(ids, id)
 			}
 		}
