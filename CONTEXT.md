@@ -220,6 +220,16 @@ Which AMI holds a profile's runtime: `image`, `audio`, `video`, `restore`, `olla
 **Reaper** (MM124):
 The goroutine that terminates every `mm-burst=1` instance with no live run, or older than `BURST_MAX_INSTANCE_MINUTES + 15`, marks its row `orphaned`, settles the best known cost, and deletes `burst/<runId>/` for runs that are terminal or unknown. Runs once at boot and every `BURST_REAPER_INTERVAL_SECONDS`, whenever AWS credentials are present, even with `BURST_ENABLED=false`.
 
+**Executor spec** (MM125):
+`internal/burst/exec.Spec`: the commands of one GPU step plus every path they touch, declared as `Inputs`, `Outputs` and `Scratch`. The local executor runs it exactly as today; the remote executor stages the declared files through `s3://.../burst/<runId>/`, rewrites the commands and returns with the outputs verified at their original paths. Validation fails closed (`ErrUndeclaredPath`).
+_Avoid_: "job spec" (a job is the user's work).
+
+**Declared path** (MM125):
+A local file or directory named in a Spec's `Inputs`, `Outputs` or `Scratch`. Only declared paths are rewritten for the worker (exact prefix, longest first); a path under UPLOAD_DIR, OUTPUT_DIR, TEMP_DIR, PHOTO_DIR or the AI tmp dir that is not declared is an error, never a guess. Runtime paths (`/opt/media-manipulator-ai/{bin,env,models,scripts,venvs,vulkan,repos}`) need no declaration.
+
+**Burst worker** (MM125):
+`cmd/burst-worker`, a static Go binary fetched by hash at boot. It runs one spec per instance, authenticates with an HMAC of the per-run token, and powers the instance off if nobody talks to it for 10 minutes.
+
 **Hedged race** (MM124, used by MM127):
 From the offer until the worker reports `ready`, the job is still a local waiter. A local slot first: the run becomes `lost_race` (or the booting instance is adopted by another eligible waiter). The remote first: the waiter leaves the local queue.
 
