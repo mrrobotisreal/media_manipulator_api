@@ -559,6 +559,64 @@ smoke_finish fake || true
 	}
 }
 
+// Every check helper is called while a case is being SET UP, before its tool
+// has run, so the output file does not exist yet. On 2026-11-10 valid_wav_in
+// looked for the file at that moment, found nothing and returned "false",
+// failing a DeepFilterNet run that had worked. For each helper: build the
+// string with no output present, create the output, then evaluate the string
+// (the real order); and prove the same string still fails when the output
+// never appears.
+func TestSmokeCheckStringsAreBuiltBeforeTheOutputExists(t *testing.T) {
+	for _, tool := range []string{"bash", "identify", "ffmpeg", "ffprobe"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skip("needs " + tool)
+		}
+	}
+	lib := filepath.Join(scriptsDir(t), "smoke", "smoke-lib.sh")
+	fix := filepath.Join(scriptsDir(t), "smoke", "fixtures")
+	// n_png lives in restore.sh; take its one-line definition from there.
+	rb, err := os.ReadFile(filepath.Join(scriptsDir(t), "smoke", "restore.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nPNG := ""
+	for _, line := range strings.Split(string(rb), "\n") {
+		if strings.HasPrefix(line, "n_png() {") {
+			nPNG = line
+		}
+	}
+	if nPNG == "" {
+		t.Fatal("n_png not found in restore.sh")
+	}
+	cases := []struct {
+		name   string
+		helper string // shell: prints the check string; $D is an empty dir
+		make   string // shell: creates the output under $D
+	}{
+		{"is_png", `is_png "$D/out.png"`, `cp '` + fix + `/photo.png' "$D/out.png"`},
+		{"valid_wav", `valid_wav "$D/out.wav"`, `ffmpeg -v error -f lavfi -i sine=duration=2 "$D/out.wav"`},
+		{"valid_wav_in", `valid_wav_in "$D"`, `ffmpeg -v error -f lavfi -i sine=duration=2 "$D/in48_DeepFilterNet3.wav"`},
+		{"n_png", `n_png "$D" 4`, `cp '` + fix + `'/frames/f0[1-4].png "$D/"`},
+	}
+	for _, c := range cases {
+		for _, produce := range []bool{true, false} {
+			d := t.TempDir()
+			script := ". '" + lib + "' >/dev/null 2>&1\n" + nPNG + "\nD='" + d + "'\n" +
+				"c=\"$(" + c.helper + ")\"\n" // built with no output present
+			if produce {
+				script += c.make + "\n"
+			}
+			script += "sh -c \"$c\"\n"
+			cmd := exec.Command("bash", "-c", script)
+			cmd.Env = append(os.Environ(), "SMOKE_OUT="+filepath.Join(d, "s.json"))
+			out, runErr := cmd.CombinedOutput()
+			if passed := runErr == nil; passed != produce {
+				t.Errorf("%s: output produced=%v but check passed=%v\n%s", c.name, produce, passed, out)
+			}
+		}
+	}
+}
+
 func TestExportDryRunListsPathsWithoutTouchingTheHost(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("no bash")

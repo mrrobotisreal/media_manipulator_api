@@ -180,6 +180,11 @@ step_unpack() {
   RUNTIME_MANIFEST="$exp"
   rm -rf "$dir/mm-import"
   status "disk after unpack: $(df -h / | awk 'NR==2{print $3" used of "$2" ("$5")"}')"
+  local pct
+  pct="$(df --output=pcent / | sed -n '2p' | tr -dc '0-9')"
+  if [ "${pct:-0}" -gt 85 ]; then
+    fail_build "root disk is ${pct}% full after unpacking $MM_FAMILY: raise its RootGiB in internal/burst/profiles.go and scripts/burst/lib.sh"
+  fi
 }
 
 step_dirs_and_unit() {
