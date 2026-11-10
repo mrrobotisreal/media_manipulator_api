@@ -189,12 +189,31 @@ while :; do
   fi
   cur="$(aws s3 cp "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.status" - 2>/dev/null | tail -n 1 || true)"
   if [ -n "$cur" ] && [ "$cur" != "$last" ]; then log "builder: $cur"; last="$cur"; fi
+  # The builder can vanish without writing .failed: terminated by someone else
+  # (on 2026-11-10 an API reaper older than MM126 killed one a minute after
+  # launch), its 3 h self-shutdown, or an AWS problem. Stop at once with the
+  # reason instead of waiting out the timeout.
+  ist="$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --query 'Reservations[0].Instances[0].[State.Name,StateReason.Message]' --output text 2>/dev/null || true)"
+  case "$ist" in
+    shutting-down*|terminated*|stopping*|stopped*)
+      why="$(printf '%s' "$ist" | cut -f2-)"
+      INSTANCE_ID=""
+      die "builder is gone before it finished (state: $(printf '%s' "$ist" | cut -f1); reason: ${why:-unknown}; last status: ${last:-none}). If the reason is a user-initiated termination, check that the API on the server runs MM126 or later (its reaper spares builders tagged mm-burst-build) and run 'go run ./cmd/burst-ctl status'."
+      ;;
+    "")
+      # Not found at all: AWS forgets terminated instances after about an hour.
+      if [ "$el" -gt 120 ]; then
+        INSTANCE_ID=""
+        die "builder is gone before it finished (AWS no longer lists it; last status: ${last:-none}). Check that the API on the server runs MM126 or later, then retry."
+      fi
+      ;;
+  esac
   if [ -n "$SMOKE_AMI" ]; then
     aws s3api head-object --bucket "$MM_BUCKET" --key "$BUILD_PREFIX/$FAMILY.verified" >/dev/null 2>&1 && break
   else
     aws s3api head-object --bucket "$MM_BUCKET" --key "$BUILD_PREFIX/$FAMILY.ready" >/dev/null 2>&1 && break
   fi
-  sleep 20
+  sleep "${MM_POLL_SECONDS:-20}"
 done
 SMOKE="$(aws s3 cp "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.smoke.json" - | jq -c .)"
 echo "$SMOKE" | jq .
