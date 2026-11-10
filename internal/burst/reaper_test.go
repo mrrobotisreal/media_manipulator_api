@@ -104,6 +104,29 @@ func TestReaper_LaunchTestGraceWindow(t *testing.T) {
 	}
 }
 
+// An MM126 image builder (tag mm-burst-build) is not a run, so it has no live
+// run or ledger row. On 2026-11-10 a reaper without this rule killed a video
+// builder one minute after launch. Spared until BuildMaxAge, boot pass
+// included; reaped after that.
+func TestReaper_SparesImageBuildersUntilBuildMaxAge(t *testing.T) {
+	rp, prov, _, _, clk := reaperRig(nil)
+	prov.tagged = []Instance{{ID: "i-build", Build: "video", LaunchTime: clk.Now().Add(-1 * time.Minute)}}
+	if rep := rp.Pass(context.Background(), false, false); len(rep.Terminated) != 0 {
+		t.Fatalf("a fresh builder must be spared: %+v", rep)
+	}
+	if rep := rp.Pass(context.Background(), true, false); len(rep.Terminated) != 0 {
+		t.Fatalf("a fresh builder must be spared at boot too: %+v", rep)
+	}
+	clk.Advance(BuildMaxAge - 2*time.Minute)
+	if rep := rp.Pass(context.Background(), false, false); len(rep.Terminated) != 0 {
+		t.Fatalf("a builder inside BuildMaxAge must be spared: %+v", rep)
+	}
+	clk.Advance(10 * time.Minute)
+	if rep := rp.Pass(context.Background(), false, false); len(rep.Terminated) != 1 || rep.Terminated[0] != "i-build" {
+		t.Fatalf("a builder past BuildMaxAge is reaped: %+v", rep)
+	}
+}
+
 func TestReaper_ProviderErrorIsReportedNotFatal(t *testing.T) {
 	rp, prov, _, _, _ := reaperRig(nil)
 	prov.listErr = ErrDenied

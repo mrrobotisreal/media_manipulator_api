@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/burst/manifest"
 )
@@ -149,6 +150,74 @@ esac
 	}
 	if strings.Contains(got, "UNEXPECTED") || strings.Contains(got, "launched") {
 		t.Errorf("must stop at the prompt without launching:\n%s", got)
+	}
+}
+
+// On 2026-11-10 an old API reaper terminated a video builder a minute after
+// launch, and build-image.sh then waited out its full 170-minute timeout. The
+// wait loop must notice a vanished builder and stop with the reason.
+func TestBuildImageStopsWhenTheBuilderIsTerminated(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("no bash")
+	}
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Skip("no jq")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go (the script builds burst-ctl for the bundle)")
+	}
+	bin := t.TempDir()
+	// ec2 calls first: run-instances carries user-data that itself contains
+	// "aws s3 cp ...", so the s3 patterns must not see it.
+	fake := `#!/bin/sh
+case "$1 $2" in
+  "ec2 run-instances") echo i-0builder; exit 0 ;;
+  "ec2 describe-instances") printf 'terminated\tClient.UserInitiatedShutdown: User initiated shutdown\n'; exit 0 ;;
+  "ec2 terminate-instances") echo "TERMINATE-CALLED" >&2; exit 0 ;;
+esac
+case "$*" in
+  *"s3api head-object"*manifest.json*) exit 0 ;;
+  *"s3api head-object"*) exit 1 ;;
+  *"s3 cp s3://"*manifest.json*) echo '{"runtimeManifest":"abc123"}' ;;
+  *"s3 cp s3://"*".status -"*) echo "apt: base packages" ;;
+  *"s3 cp "*|*"s3 rm "*) exit 0 ;;
+  *"ssm get-parameter"*) echo ami-0e5b7b1a57b07ca51 ;;
+  *"Images[0].Name"*) echo "Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 24.04) 20261106" ;;
+  *"Images[0].RootDeviceName"*) echo /dev/sda1 ;;
+  *"Ebs.VolumeSize"*) echo 75 ;;
+  *"Images[0].Architecture"*) echo x86_64 ;;
+  *) echo "UNEXPECTED: $*" >&2; exit 99 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(bin, "aws"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", filepath.Join(scriptsDir(t), "build-image.sh"), "video", "2026-11-10", "--yes")
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "MM_POLL_SECONDS=0")
+	done := make(chan struct{})
+	var out []byte
+	var err error
+	go func() { out, err = cmd.CombinedOutput(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(90 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatal("build-image.sh kept waiting for a terminated builder")
+	}
+	got := string(out)
+	if err == nil {
+		t.Fatalf("must fail:\n%s", got)
+	}
+	for _, want := range []string{"builder is gone before it finished", "state: terminated", "User initiated shutdown", "MM126 or later"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "TERMINATE-CALLED") || strings.Contains(got, "could not terminate") {
+		t.Errorf("must not try to terminate an instance that is already gone:\n%s", got)
+	}
+	if strings.Contains(got, "UNEXPECTED") {
+		t.Errorf("unexpected aws call:\n%s", got)
 	}
 }
 

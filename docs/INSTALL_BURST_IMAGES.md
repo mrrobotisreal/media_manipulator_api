@@ -66,3 +66,7 @@ A build is about $0.50 (video) to $2 (restore) of g6.xlarge time. Snapshot stora
 - One AMI per family serves both Ada (L4) and Blackwell. The G7 smoke run of `restore` decides whether a second AMI is needed.
 - `INSTALL_VIDEO_RESTORATION.md` says mmcv v2.2.0; the host runs 2.1.0 and the image rebuilds 2.1.0.
 - Whisper `small` and `large-v3-turbo` (`/opt/creatv/models`, owned by `syncd`) are not in the audio family.
+
+## Before the first build: the API on the server must run MM126 or later
+
+The API's burst reaper terminates any `mm-burst=1` instance that is not a live run. From MM126 on, it spares image builders (tag `mm-burst-build`) for 4 hours. An API older than MM126 kills a builder about a minute after launch. That happened on 2026-11-10. So deploy the API (and restart it) after pulling MM126, **before** running `build-image.sh`. `build-image.sh` also stops at once with the reason if its builder disappears, instead of waiting out its timeout.
