@@ -34,6 +34,18 @@ MMCV_COMMIT="${MMCV_COMMIT:-57c4e25e06e2d4f8a9357c84bcd24089a284dc88}"
 
 dry() { [ "$MM_DRY" = "1" ]; }
 
+# output_has "pattern" cmd args...: true when cmd's output contains pattern.
+# Never pipe a command into `grep -q` under `set -o pipefail`: grep exits at
+# the first match, the producer gets SIGPIPE (exit 141) and the pipeline
+# reports failure even though the pattern is there. On 2026-11-10 that made
+# `ffmpeg -encoders | grep -q h264_nvenc` fail on a build that has NVENC.
+output_has() {
+  local pat="$1" out
+  shift
+  out="$("$@" 2>/dev/null)" || true
+  grep -q -- "$pat" <<<"$out"
+}
+
 # plan "text": prints the step; returns 0 (true) when dry so callers can `plan x && return 0`.
 plan() {
   printf 'PLAN  %s\n' "$*"
@@ -78,10 +90,20 @@ step_ffmpeg() {
   add-apt-repository -y ppa:ubuntuhandbook1/ffmpeg8 >/dev/null
   apt-get update -qq
   if ! apt-get install -y -qq "ffmpeg=10:8.1.1-0build1~ubuntu24.04"; then
-    status "WARNING: ffmpeg 8.1.1 is no longer in the PPA; installing the newest"
+    # The PPA keeps only its newest build (8.1.1 was superseded by 8.1.2 on
+    # 2026-06-20), so the exact host version cannot be installed. A newer 8.1.x
+    # patch release is accepted; any other series stops the build. The version
+    # used is recorded in /etc/mm-burst/image.json.
+    status "note: ffmpeg 8.1.1 is no longer in the PPA (superseded); installing the newest 8.1.x"
     apt-get install -y -qq ffmpeg
   fi
-  ffmpeg -hide_banner -encoders 2>/dev/null | grep -q h264_nvenc || fail_build "ffmpeg has no h264_nvenc"
+  local ffv
+  ffv="$(ffmpeg -version 2>/dev/null | sed -n '1p' | cut -d' ' -f3)"
+  case "$ffv" in
+    8.1|8.1.*) status "ffmpeg $ffv installed (host has 8.1.1)" ;;
+    *) fail_build "ffmpeg $ffv is not an 8.1.x release (host has 8.1.1)" ;;
+  esac
+  output_has h264_nvenc ffmpeg -hide_banner -encoders || fail_build "ffmpeg has no h264_nvenc"
 }
 
 step_tailscale() {
@@ -98,15 +120,23 @@ step_tailscale() {
 
 step_vulkan_driver_bits() {
   # The Go code pins VK_ICD_FILENAMES to /opt/media-manipulator-ai/vulkan/nvidia_icd_egl.json, which
-  # loads libEGL_nvidia.so.0. The OSS-driver DLAMI may ship only the compute half of the driver.
+  # loads libEGL_nvidia.so.0 (host: package libnvidia-gl-590). The OSS-driver DLAMI may ship only the
+  # compute half of the driver, and may have installed it from a runfile rather than apt, so the
+  # matching libnvidia-gl package is tried by exact driver version first, and the result is proven
+  # with vulkaninfo through our own ICD file before anything else runs.
   status "vulkan: NVIDIA GL/EGL userspace libraries"
-  plan "if libEGL_nvidia.so.0 is not in ldconfig: apt-get install libnvidia-gl-<driver major>-server (fallback libnvidia-gl-<major>); copy api_version from the system nvidia_icd.json into $MM_ROOT/vulkan/nvidia_icd_egl.json if that file exists (library_path stays libEGL_nvidia.so.0)" && return 0
-  if ! ldconfig -p | grep -q 'libEGL_nvidia.so.0'; then
-    local major
-    major="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1 | cut -d. -f1)"
-    apt-get install -y -qq "libnvidia-gl-${major}-server" || apt-get install -y -qq "libnvidia-gl-${major}" \
-      || fail_build "no libnvidia-gl package for driver $major (Vulkan ICD would fail)"
+  plan "if libEGL_nvidia.so.0 is not in ldconfig: apt-get install libnvidia-gl-<major>-server=<exact driver> (then -server any version, then libnvidia-gl-<major>); copy api_version from the system nvidia_icd.json into $MM_ROOT/vulkan/nvidia_icd_egl.json if that file exists; prove it: vulkaninfo --summary with VK_ICD_FILENAMES=our ICD must list an NVIDIA GPU" && return 0
+  local drv major
+  drv="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | sed -n '1p' | tr -d ' ')"
+  major="${drv%%.*}"
+  status "vulkan: driver $drv; driver packages: $(dpkg -l 2>/dev/null | awk '/^ii/ && $2 ~ /nvidia/ {print $2"="$3}' | tr '\n' ' ' | cut -c1-400)"
+  if ! output_has 'libEGL_nvidia.so.0' ldconfig -p; then
+    apt-get install -y -qq "libnvidia-gl-${major}-server=${drv}-0ubuntu1" \
+      || apt-get install -y -qq "libnvidia-gl-${major}-server" \
+      || apt-get install -y -qq "libnvidia-gl-${major}" \
+      || fail_build "no libnvidia-gl package for driver $drv (Vulkan ICD would fail); driver packages: $(dpkg -l | awk '/^ii/ && $2 ~ /nvidia/ {print $2}' | tr '\n' ' ')"
     ldconfig
+    output_has 'libEGL_nvidia.so.0' ldconfig -p || fail_build "libEGL_nvidia.so.0 still missing after installing libnvidia-gl for driver $drv"
   fi
   local sys=/usr/share/vulkan/icd.d/nvidia_icd.json icd="$MM_ROOT/vulkan/nvidia_icd_egl.json"
   if [ -f "$sys" ] && [ -f "$icd" ]; then
@@ -115,6 +145,15 @@ step_vulkan_driver_bits() {
     if [ -n "$v" ]; then
       jq --arg v "$v" '.ICD.api_version = $v' "$icd" > "$icd.new" && mv "$icd.new" "$icd"
     fi
+  fi
+  if [ -f "$icd" ]; then
+    local vk
+    vk="$(VK_ICD_FILENAMES="$icd" VK_DRIVER_FILES="$icd" VK_LOADER_LAYERS_DISABLE='*' vulkaninfo --summary 2>&1 || true)"
+    if ! grep -qi 'nvidia' <<<"$vk"; then
+      printf '%s\n' "$vk" >> "$LOGFILE"
+      fail_build "Vulkan does not see the NVIDIA GPU through $icd (vulkaninfo output in the log)"
+    fi
+    status "vulkan: OK, $(grep -m1 -i 'deviceName' <<<"$vk" | sed 's/^ *//' | cut -c1-120)"
   fi
 }
 
@@ -181,8 +220,8 @@ step_image_json() {
   local tok base drv ff
   tok="$(curl -fsS -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' || true)"
   base="$(curl -fsS -H "X-aws-ec2-metadata-token: $tok" http://169.254.169.254/latest/meta-data/ami-id || echo unknown)"
-  drv="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1)"
-  ff="$(ffmpeg -version | head -1 | cut -d' ' -f3)"
+  drv="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | sed -n '1p')"
+  ff="$(ffmpeg -version | sed -n '1p' | cut -d' ' -f3)"
   jq -n --arg family "$MM_FAMILY" --arg base "$base" --arg drv "$drv" --arg cuda "$(basename "$(readlink -f "$CUDA_HOME_DIR")")" \
     --arg ff "$ff" --arg rm "${RUNTIME_MANIFEST:-$(jq -r .runtimeManifest /etc/mm-burst-export-manifest.json)}" --arg date "$(date -u +%F)" --arg exp "$MM_DATE" \
     '{family: $family, arch: "ada+blackwell", baseAmi: $base, driver: $drv, cuda: $cuda, ffmpeg: $ff, runtimeManifest: $rm, exportDate: $exp, builtAt: $date}' \
@@ -284,8 +323,8 @@ step_rebuild_mmcv() {
   "$py" -c "import mmcv, mmcv.ops; print('mmcv', mmcv.__version__)" || fail_build "mmcv.ops does not import"
   local so
   so="$("$py" -c "import mmcv,os;print(os.path.join(os.path.dirname(mmcv.__file__),[f for f in os.listdir(os.path.dirname(mmcv.__file__)) if f.startswith('_ext')][0]))")"
-  "$CUDA_HOME_DIR/bin/cuobjdump" --list-elf "$so" | grep -q 'sm_89' || fail_build "mmcv _ext has no sm_89 code"
-  "$CUDA_HOME_DIR/bin/cuobjdump" --list-elf "$so" | grep -q 'sm_120' || fail_build "mmcv _ext has no sm_120 code"
+  output_has 'sm_89' "$CUDA_HOME_DIR/bin/cuobjdump" --list-elf "$so" || fail_build "mmcv _ext has no sm_89 code"
+  output_has 'sm_120' "$CUDA_HOME_DIR/bin/cuobjdump" --list-elf "$so" || fail_build "mmcv _ext has no sm_120 code"
 }
 
 # RVRT's deform_attn is a torch JIT extension. The host cache has it for sm_120

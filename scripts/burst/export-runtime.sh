@@ -138,9 +138,9 @@ SHA="$(sha256sum "$TARBALL" | cut -d' ' -f1)"
 HOSTJSON="$STAGE/$FAMILY.host.json"
 "$CTL" manifest "$FAMILY" --json > "$STAGE/$FAMILY.manifest.core.json"
 FFCONF="$(ffmpeg -hide_banner -buildconf 2>/dev/null | tr -s ' \n' ' ' | sed 's/^ *//')"
-DRIVER="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 || true)"
+DRIVER="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | sed -n '1p' || true)"
 jq -n --arg date "$DATE" --arg key "$KEY_PREFIX/$FAMILY.tar.zst" --argjson size "$SIZE" --arg sha "$SHA" \
-  --arg ffver "$(ffmpeg -version 2>/dev/null | head -1 | cut -d' ' -f3)" --arg ffconf "$FFCONF" --arg drv "$DRIVER" \
+  --arg ffver "$(ffmpeg -version 2>/dev/null | sed -n '1p' | cut -d' ' -f3)" --arg ffconf "$FFCONF" --arg drv "$DRIVER" \
   --slurpfile m "$STAGE/$FAMILY.manifest.core.json" \
   '{family: $m[0].family, date: $date, runtimeManifest: $m[0].sha256, manifest: $m[0],
     tarball: {key: $key, bytes: $size, sha256: $sha}, host: {ffmpeg: $ffver, ffmpegConfiguration: $ffconf, nvidiaDriver: $drv}}' > "$HOSTJSON"
