@@ -2536,6 +2536,58 @@ has been honoured since 0.1.x), check the unit's `OLLAMA_KEEP_ALIVE`, and `curl
 call; a daemon that ignores even that needs restarting with
 `OLLAMA_KEEP_ALIVE=0`.
 
+### 8.6 Burst offers (MM127)
+
+Off unless `BURST_ENABLED=true` and burst is fully configured (section 4.19), and
+inert for every call site that carries no `Burst` descriptor (none do until the
+wave-1 tools are converted, MM127b). With no offerer the scheduler is exactly
+sections 8.1 to 8.4.
+
+**Decision flow.** Each time a parked waiter with a `Burst` descriptor fails to
+get a local slot, the scheduler hands the planner a value copy of it
+(`Consider`, under the scheduler mutex, never blocking). The planner checks, in
+order: enabled; configured; the Kind has a burst profile that is not `Never`;
+its workload is in `BURST_WORKLOADS`; scope (`all`, or `operator` with an
+operator owner); priority at least standard; every candidate card full (in use
+at `GPU_SCHED_MAX_JOBS_PER_GPU`, or not enough free VRAM at the last probe);
+at least one other queued waiter sharing a card ranks at or above it; the
+condition has held `BURST_TRIGGER_DEBOUNCE_SECONDS`; the predicted local wait is
+at least `BURST_MIN_PREDICTED_WAIT_SECONDS`; an AMI exists for the profile's
+family; live plus launching instances are under `BURST_MAX_INSTANCES`; and no
+better-ranked contender needs the last instance slot. Only then does it launch
+(asynchronously; `Reserve` inside `Launch` enforces the spend caps).
+
+**The race.** The waiter stays parked after an accepted offer. Local first: it
+takes the slot as today and the booting run is handed to the best other eligible
+waiter of the same family whose GPU memory fits (`adopted`), else terminated
+(`lost_race`). Remote first: the waiter leaves the queue with a remote target
+(`AcquireTarget`) and `queueWaitMs` is enqueue to remote ready. If the caller
+cancels or `MaxWait` passes, the pending run is terminated. A launch or boot
+failure puts the waiter back invisibly, with a 60 s per-waiter cooldown before it
+is offered again. A failure after the run started is the helper's job
+(`PlanBurstFallback`: one local re-acquire at the original enqueue time with
+`Burst` cleared, so it cannot burst twice).
+
+**Log lines** (grep the journal for `burst:`):
+
+| Line | Meaning |
+| --- | --- |
+| `burst: offer accepted kind=... predicted=... ahead=N rank=R` | a launch started |
+| `burst: offer declined kind=... reason=R predicted=...` | declined; at most one line per waiter per reason per 30 s |
+| `burst: remote ready run=...` | the worker answered; the waiter will take it |
+| `burst: lost race run=... reason=local_slot\|gave_up: terminating` | the loser was terminated |
+| `burst: adopted run=... by job=...` | the booting instance moved to another waiter |
+| `burst: offer failed ... reason=launch_failed\|boot_failed\|cap_refused` | waiter put back; nothing left running |
+| `gpu-scheduler: ... took remote burst run ...` | the remote won |
+
+**Decline reasons.** `disabled`, `not_configured` (a `BURST_*`/Tailscale value is
+missing; the startup line names it), `no_profile`, `never_burst`, `workload_off`
+(add the key to `BURST_WORKLOADS`), `scope`, `background`, `cards_not_full`,
+`head_of_line` (it gets the next local slot), `debounce`, `below_min_wait` (the
+predicted wait is under `BURST_MIN_PREDICTED_WAIT_SECONDS`; set it to 0 for the
+literal "always burst the second job" rule), `max_instances`, `slot_contested`,
+`no_ami`, `cooldown`, `cap_refused`, `launch_failed`, `boot_failed`.
+
 ---
 
 ## 9. External dependencies

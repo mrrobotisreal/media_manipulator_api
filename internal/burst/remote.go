@@ -164,8 +164,17 @@ func coalesce(a, b string) string {
 	return b
 }
 
+// WaitReady blocks until the run's worker has joined the tailnet and reports
+// ready and idle (the first half of Run), without staging or running anything.
+// The scheduler's burst planner (MM127) uses it to learn that a booting
+// instance can take the job. It does not change the run's state.
+func (r *Remote) WaitReady(ctx context.Context, run *Run) error {
+	_, _, err := r.waitForWorker(ctx, run)
+	return err
+}
+
 func (r *Remote) waitForWorker(ctx context.Context, run *Run) (base, token string, err error) {
-	token, ok := r.Tokens.Token(run.ID)
+	token, ok := r.Tokens.Token(run.WorkerRunID())
 	if !ok {
 		return "", "", fmt.Errorf("%w: no run token", ErrWorkerLost)
 	}
@@ -175,7 +184,7 @@ func (r *Remote) waitForWorker(ctx context.Context, run *Run) (base, token strin
 	}
 	rctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
-	host := WorkerHostname(run.ID)
+	host := WorkerHostname(run.WorkerRunID())
 	var ip string
 	for ip == "" {
 		ip, err = r.Resolver.ResolveIP(rctx, host)
@@ -232,7 +241,7 @@ func (r *Remote) Run(ctx context.Context, run *Run, spec exec.Spec) (err error) 
 	outcome := StateToolFailed
 	defer func() {
 		bg := context.WithoutCancel(ctx)
-		if derr := r.Store.DeletePrefix(bg, RunPrefix(r.Prefix, run.ID)+"/"); derr != nil {
+		if derr := r.Store.DeletePrefix(bg, RunPrefix(r.Prefix, run.WorkerRunID())+"/"); derr != nil {
 			r.log().Warn("burst: staging prefix delete failed; the reaper will retry", "run", run.ID, "error", derr.Error())
 		}
 		if err == nil {
@@ -242,7 +251,7 @@ func (r *Remote) Run(ctx context.Context, run *Run, spec exec.Spec) (err error) 
 		if terr := r.Life.Terminate(bg, run, outcome); terr != nil {
 			r.log().Warn("burst: terminate after run", "run", run.ID, "outcome", string(outcome), "error", terr.Error())
 		}
-		r.Tokens.Forget(run.ID)
+		r.Tokens.Forget(run.WorkerRunID())
 	}()
 	fail := func(state State, errType string, e error) error {
 		outcome, run.ErrorType = state, errType
@@ -252,7 +261,7 @@ func (r *Remote) Run(ctx context.Context, run *Run, spec exec.Spec) (err error) 
 	if verr := r.Validator.Validate(spec); verr != nil {
 		return fail(StateToolFailed, "invalid_spec", verr)
 	}
-	mp, merr := exec.NewMapper(r.RemoteRoot, run.ID, spec)
+	mp, merr := exec.NewMapper(r.RemoteRoot, run.WorkerRunID(), spec)
 	if merr != nil {
 		return fail(StateToolFailed, "invalid_spec", merr)
 	}
@@ -278,7 +287,7 @@ func (r *Remote) Run(ctx context.Context, run *Run, spec exec.Spec) (err error) 
 	if aerr := r.Life.Advance(ctx, run, StateStagingIn); aerr != nil {
 		return fail(StateToolFailed, "transition", aerr)
 	}
-	prefix := RunPrefix(r.Prefix, run.ID)
+	prefix := RunPrefix(r.Prefix, run.WorkerRunID())
 	var srcs []staging.Source
 	for _, m := range mp.Maps {
 		if m.Group == exec.GroupIn {
@@ -296,7 +305,7 @@ func (r *Remote) Run(ctx context.Context, run *Run, spec exec.Spec) (err error) 
 	run.BytesIn = inM.TotalBytes()
 	r.log().Info("burst: inputs staged", "run", run.ID, "files", len(inM.Files), "bytes", inM.TotalBytes())
 
-	req := wire.RunRequest{RunID: run.ID, Prefix: prefix, InputBytes: inM.TotalBytes()}
+	req := wire.RunRequest{RunID: run.WorkerRunID(), Prefix: prefix, InputBytes: inM.TotalBytes()}
 	for _, c := range steps {
 		req.Steps = append(req.Steps, wire.Cmd{Label: c.Label, Exe: c.Exe, Args: c.Args, Env: c.Env, Dir: c.Dir, TimeoutSec: int(c.Timeout / time.Second)})
 	}
@@ -327,7 +336,7 @@ func (r *Remote) Run(ctx context.Context, run *Run, spec exec.Spec) (err error) 
 	st, polErr := r.pollUntilDone(ctx, run, base, token, spec.Stdout)
 	if polErr != nil {
 		if errors.Is(polErr, ErrCancelled) {
-			_, _ = r.call(context.WithoutCancel(ctx), base, token, http.MethodPost, "/v1/runs/"+run.ID+"/cancel", nil, nil)
+			_, _ = r.call(context.WithoutCancel(ctx), base, token, http.MethodPost, "/v1/runs/"+run.WorkerRunID()+"/cancel", nil, nil)
 			return fail(StateToolFailed, "cancelled", polErr)
 		}
 		return fail(StateWorkerLost, "worker_lost", polErr)
@@ -337,7 +346,7 @@ func (r *Remote) Run(ctx context.Context, run *Run, spec exec.Spec) (err error) 
 		return fail(StateToolFailed, "cancelled", ErrCancelled)
 	case wire.StateFailed:
 		if st.Phase == wire.PhaseRunning {
-			return fail(StateToolFailed, "tool_failed", &ToolFailure{ExitCode: st.ExitCode, TimedOut: st.TimedOut, StderrTail: r.redactTail(run.ID, st.StderrTail)})
+			return fail(StateToolFailed, "tool_failed", &ToolFailure{ExitCode: st.ExitCode, TimedOut: st.TimedOut, StderrTail: r.redactTail(run.WorkerRunID(), st.StderrTail)})
 		}
 		kind := ErrStagingOut
 		if st.Phase == wire.PhaseStagingIn {
@@ -396,7 +405,7 @@ func (r *Remote) pollUntilDone(ctx context.Context, run *Run, base, token string
 	cursor, fails := 0, 0
 	for {
 		var st wire.Status
-		code, err := r.call(ctx, base, token, http.MethodGet, "/v1/runs/"+run.ID+"?cursor="+strconv.Itoa(cursor), nil, &st)
+		code, err := r.call(ctx, base, token, http.MethodGet, "/v1/runs/"+run.WorkerRunID()+"?cursor="+strconv.Itoa(cursor), nil, &st)
 		switch {
 		case ctx.Err() != nil:
 			return wire.Status{}, fmt.Errorf("%w: %v", ErrCancelled, ctx.Err())
