@@ -156,3 +156,24 @@ func TestDestIsPartOfTheFamilyFingerprint(t *testing.T) {
 		t.Fatal("per-path hash must not depend on dest")
 	}
 }
+
+func TestComputeAtDestMatchesHostAfterAFaithfulCopy(t *testing.T) {
+	host, image := t.TempDir(), t.TempDir()
+	write(t, filepath.Join(host, "venv/lib/a.py"), "print(1)", t0)
+	write(t, filepath.Join(host, "home/cache.bin"), "weights", t0)
+	write(t, filepath.Join(image, "venv/lib/a.py"), "print(1)", t0)
+	write(t, filepath.Join(image, "img-home/cache.bin"), "weights", t0)
+	es := []Entry{
+		{Src: filepath.Join(host, "venv"), Dest: filepath.Join(image, "venv")},
+		{Src: filepath.Join(host, "home/cache.bin"), Dest: filepath.Join(image, "img-home/cache.bin")},
+	}
+	onHost, _ := computeEntries("t", []Entry{{Src: es[0].Src, Dest: es[0].Dest}, {Src: es[1].Src, Dest: es[1].Dest}}, nil, false)
+	inImage, _ := computeEntries("t", es, nil, true)
+	if onHost.SHA256 != inImage.SHA256 {
+		t.Fatalf("a faithful copy must reproduce the host fingerprint:\n%s\n%s", onHost.SHA256, inImage.SHA256)
+	}
+	write(t, filepath.Join(image, "venv/lib/a.py"), "print(22)", t0)
+	if bad, _ := computeEntries("t", es, nil, true); bad.SHA256 == onHost.SHA256 {
+		t.Fatal("a corrupted copy must differ")
+	}
+}

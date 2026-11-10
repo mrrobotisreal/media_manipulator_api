@@ -55,6 +55,7 @@ func (e *env) manifest(args []string) error {
 	asJSON := fs.Bool("json", false, "print the full manifest as JSON")
 	paths := fs.Bool("paths", false, "print the family's paths as src<TAB>dest lines (no filesystem access)")
 	excl := fs.Bool("excludes", false, "print the exclude patterns")
+	atDest := fs.Bool("from-dest", false, "read files at their image location (builder verification after unpacking)")
 	if err := fs.Parse(reorderFlags(args)); err != nil {
 		return err
 	}
@@ -78,7 +79,11 @@ func (e *env) manifest(args []string) error {
 		}
 		return nil
 	}
-	m, err := manifest.Compute(fam)
+	compute := manifest.Compute
+	if *atDest {
+		compute = manifest.ComputeAtDest
+	}
+	m, err := compute(fam)
 	if err != nil {
 		return err
 	}

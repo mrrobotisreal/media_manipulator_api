@@ -127,17 +127,33 @@ func Compute(family string) (Manifest, error) {
 	return ComputeEntries(family, es, Excludes())
 }
 
+// ComputeAtDest fingerprints the family as it sits in an image: files are read
+// at each entry's Dest (so the HOME caches are found under /opt/mm-burst-home)
+// but labelled with their host Src, so an unpacked tarball must reproduce the
+// host fingerprint exactly. The builder uses it right after unpacking.
+func ComputeAtDest(family string) (Manifest, error) {
+	es, err := Entries(family)
+	if err != nil {
+		return Manifest{}, err
+	}
+	return computeEntries(family, es, Excludes(), true)
+}
+
 // ComputeEntries fingerprints explicit entries (tests use temp dirs). A missing
 // path is recorded as missing (not an error) so the caller decides; the export
 // refuses to run with any.
 func ComputeEntries(family string, es []Entry, excludes []string) (Manifest, error) {
+	return computeEntries(family, es, excludes, false)
+}
+
+func computeEntries(family string, es []Entry, excludes []string, atDest bool) (Manifest, error) {
 	m := Manifest{Family: family, Version: Version}
 	sorted := append([]Entry(nil), es...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Src < sorted[j].Src })
 	top := sha256.New()
 	fmt.Fprintf(top, "mm-burst-manifest v%d %s\n", Version, family)
 	for _, e := range sorted {
-		pm, err := fingerprint(e, excludes)
+		pm, err := fingerprint(e, excludes, atDest)
 		if err != nil {
 			return Manifest{}, err
 		}
@@ -150,9 +166,13 @@ func ComputeEntries(family string, es []Entry, excludes []string) (Manifest, err
 	return m, nil
 }
 
-func fingerprint(e Entry, excludes []string) (PathManifest, error) {
+func fingerprint(e Entry, excludes []string, atDest bool) (PathManifest, error) {
 	pm := PathManifest{Path: e.Src, Dest: e.Dest}
-	st, err := os.Lstat(e.Src)
+	read := e.Src
+	if atDest {
+		read = e.Dest
+	}
+	st, err := os.Lstat(read)
 	if errors.Is(err, fs.ErrNotExist) {
 		pm.Kind, pm.Missing = "missing", true
 		pm.SHA256 = hex.EncodeToString(sha256.New().Sum(nil))
@@ -181,7 +201,7 @@ func fingerprint(e Entry, excludes []string) (PathManifest, error) {
 	}
 	if !st.IsDir() {
 		pm.Kind = "file"
-		if err := line(".", st, e.Src); err != nil {
+		if err := line(".", st, read); err != nil {
 			return pm, err
 		}
 		pm.SHA256 = hex.EncodeToString(h.Sum(nil))
@@ -219,7 +239,7 @@ func fingerprint(e Entry, excludes []string) (PathManifest, error) {
 		}
 		return nil
 	}
-	if err := walk(e.Src, ""); err != nil {
+	if err := walk(read, ""); err != nil {
 		return pm, err
 	}
 	pm.SHA256 = hex.EncodeToString(h.Sum(nil))
