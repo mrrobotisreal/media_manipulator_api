@@ -408,6 +408,82 @@ esac
 	}
 }
 
+// The smoke output checks run on the builder, so a broken check fails a good
+// build. On 2026-11-10 is_png had a stray "x" after -format, so identify also
+// opened a file named "x" and every image case failed on valid PNGs. Run each
+// check string against real good and bad files.
+func TestSmokeOutputChecksAcceptGoodFilesAndRejectBad(t *testing.T) {
+	for _, tool := range []string{"bash", "identify", "ffmpeg", "ffprobe"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skip("needs " + tool)
+		}
+	}
+	dir := t.TempDir()
+	lib := filepath.Join(scriptsDir(t), "smoke", "smoke-lib.sh")
+	good := filepath.Join(scriptsDir(t), "smoke", "fixtures", "photo.png")
+	notPNG := filepath.Join(dir, "fake.png")
+	if err := os.WriteFile(notPNG, []byte("not an image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wav := filepath.Join(dir, "a.wav")
+	if out, err := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=duration=2", wav).CombinedOutput(); err != nil {
+		t.Fatalf("make wav: %v %s", err, out)
+	}
+	short := filepath.Join(dir, "short.wav")
+	if out, err := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=duration=0.3", short).CombinedOutput(); err != nil {
+		t.Fatalf("make wav: %v %s", err, out)
+	}
+	// check runs the named helper to get the check string, then evaluates it
+	// with sh -c exactly as case_run does.
+	check := func(helper, file string) bool {
+		script := ". '" + lib + "' >/dev/null 2>&1; c=$(" + helper + " '" + file + "'); sh -c \"$c\""
+		cmd := exec.Command("bash", "-c", script)
+		cmd.Env = append(os.Environ(), "SMOKE_OUT="+filepath.Join(dir, "s.json"))
+		return cmd.Run() == nil
+	}
+	cases := []struct {
+		helper, file string
+		want         bool
+	}{
+		{"is_png", good, true},
+		{"is_png", notPNG, false},
+		{"is_png", filepath.Join(dir, "missing.png"), false},
+		{"is_png", wav, false},
+		{"valid_wav", wav, true},
+		{"valid_wav", short, false},
+		{"valid_wav", notPNG, false},
+	}
+	// DeepFilterNet's output name varies by model version; valid_wav_in finds it.
+	wavDir := filepath.Join(dir, "df")
+	if err := os.MkdirAll(wavDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	emptyDir := filepath.Join(dir, "empty")
+	if err := os.MkdirAll(emptyDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(wav); err != nil {
+		t.Fatal(err)
+	} else if err := os.WriteFile(filepath.Join(wavDir, "in48_DeepFilterNet3.wav"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cases = append(cases,
+		struct {
+			helper, file string
+			want         bool
+		}{"valid_wav_in", wavDir, true},
+		struct {
+			helper, file string
+			want         bool
+		}{"valid_wav_in", emptyDir, false},
+	)
+	for _, c := range cases {
+		if got := check(c.helper, c.file); got != c.want {
+			t.Errorf("%s %s = %v, want %v", c.helper, filepath.Base(c.file), got, c.want)
+		}
+	}
+}
+
 func TestExportDryRunListsPathsWithoutTouchingTheHost(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("no bash")

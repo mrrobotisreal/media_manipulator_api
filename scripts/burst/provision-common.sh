@@ -57,7 +57,8 @@ status() {
   local line
   line="$(date -u +%H:%M:%S) $*"
   if dry; then printf 'STATUS %s\n' "$line"; return 0; fi
-  printf '%s\n' "$line" | tee -a "$LOGFILE" >&2
+  # stderr only: the builder's user-data already appends stdout+stderr to $LOGFILE.
+  printf '%s\n' "$line" >&2
   printf '%s\n' "$line" | aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.status" --only-show-errors || true
 }
 
