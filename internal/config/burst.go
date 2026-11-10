@@ -39,6 +39,15 @@ type BurstConfig struct {
 	DailySpendCapUSD   float64
 	MonthlySpendCapUSD float64
 
+	// RefuseStaleImages (BURST_REFUSE_STALE_IMAGES, MM126): refuse to launch from
+	// an image whose runtime manifest differs from the host's. Default false:
+	// stale images still run, the drift is only logged and shown in burst-ctl.
+	RefuseStaleImages bool
+	// RootDevice (BURST_ROOT_DEVICE, MM126) is the AMI's root device name for the
+	// volume-size override at launch: /dev/xvda (default) or /dev/sda1. The
+	// builder prints the right value for the DLAMI-derived images.
+	RootDevice string
+
 	MaxInstances       int
 	MaxInstanceMinutes int
 	BootTimeoutSeconds int
@@ -171,6 +180,8 @@ func loadBurstConfig() BurstConfig {
 		DailySpendCapUSD:   getEnvFloat("BURST_DAILY_SPEND_CAP_USD", 25),
 		MonthlySpendCapUSD: getEnvFloat("BURST_MONTHLY_SPEND_CAP_USD", 250),
 
+		RefuseStaleImages:  getEnvBool("BURST_REFUSE_STALE_IMAGES", false),
+		RootDevice:         getEnv("BURST_ROOT_DEVICE", "/dev/xvda"),
 		MaxInstances:       getEnvInt("BURST_MAX_INSTANCES", 2),
 		MaxInstanceMinutes: getEnvInt("BURST_MAX_INSTANCE_MINUTES", 120),
 		BootTimeoutSeconds: getEnvInt("BURST_BOOT_TIMEOUT_SECONDS", 600),

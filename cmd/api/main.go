@@ -30,6 +30,7 @@ import (
 
 	"github.com/mrrobotisreal/media_manipulator_api/internal/analyticsemit"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/burst"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/burst/manifest"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/burst/staging"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/cleanup"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/cmdaudit"
@@ -1435,6 +1436,13 @@ func startBurst(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, s3C
 			return
 		}
 		prov = burst.NewEC2Provider(client, logging)
+		// MM126: image drift check, in the background (file list + sizes +
+		// mtimes of the host runtime vs each AMI's runtime-manifest tag).
+		if len(cfg.Burst.AMIs) > 0 {
+			dc := &burst.DriftChecker{API: client, AMIs: cfg.Burst.AMIs, Log: logging,
+				Host: func(f string) (manifest.Manifest, error) { return manifest.Compute(f) }}
+			go dc.Run(ctx)
+		}
 	}
 	var st burst.Store
 	if pool != nil {

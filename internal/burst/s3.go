@@ -13,6 +13,10 @@ import (
 // must never treat it as a run's staging prefix.
 const BinDir = "bin"
 
+// BuildDir is burst/build/<date>/ (MM126): image-builder bundles and smoke
+// results written by the builder instance. Also never a run prefix.
+const BuildDir = "build"
+
 // PrefixStore deletes and lists the transient staging prefixes
 // (s3://<bucket>/burst/<runId>/).
 type PrefixStore interface {
@@ -44,7 +48,7 @@ func (s *S3Staging) prefix() string {
 }
 
 func (s *S3Staging) DeleteRun(ctx context.Context, runID string) error {
-	if runID == "" || runID == BinDir || strings.ContainsAny(runID, "/.") {
+	if runID == "" || runID == BinDir || runID == BuildDir || strings.ContainsAny(runID, "/.") {
 		return nil // never build a prefix that could reach beyond one run
 	}
 	pfx := s.prefix() + runID + "/"
@@ -82,7 +86,7 @@ func (s *S3Staging) ListRunIDs(ctx context.Context) ([]string, error) {
 		}
 		for _, cp := range out.CommonPrefixes {
 			id := strings.Trim(strings.TrimPrefix(aws.ToString(cp.Prefix), s.prefix()), "/")
-			if id != "" && id != BinDir { // burst/bin/ holds worker builds, not a run
+			if id != "" && id != BinDir && id != BuildDir { // burst/bin/ holds worker builds, not a run
 				ids = append(ids, id)
 			}
 		}

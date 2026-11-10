@@ -217,6 +217,13 @@ A row of the table in `internal/burst/profiles.go`, keyed by scheduler `Kind`: w
 **Worker family** (MM124):
 Which AMI holds a profile's runtime: `image`, `audio`, `video`, `restore`, `ollama`, `voices` (design §9). `BURST_AMIS` maps `family:arch` to an AMI id.
 
+**Runtime manifest** (MM126):
+A sha256 over a worker family's host paths (sorted file list, sizes and mtimes, never contents), computed by `internal/burst/manifest` from `internal/burst/manifest/families/<family>.paths`. `burst-ctl manifest <family>` prints it; `export-runtime.sh` stores it beside the tarball; `build-image.sh` tags the AMI `runtime-manifest=<sha>`; the API compares the two.
+_Avoid_: "image hash" (it fingerprints the host's runtime, not the AMI).
+
+**Stale image** (MM126):
+A worker image whose `runtime-manifest` tag differs from the host's current manifest: the host's venvs, models or scripts changed after the image was built. It is logged once a day (`burst: image <family> is stale vs host`) and shown as `stale: true` in `burst-ctl status`. Stale images still run unless `BURST_REFUSE_STALE_IMAGES=true`. An image with no tag or a missing AMI is "unknown", not stale.
+
 **Reaper** (MM124):
 The goroutine that terminates every `mm-burst=1` instance with no live run, or older than `BURST_MAX_INSTANCE_MINUTES + 15`, marks its row `orphaned`, settles the best known cost, and deletes `burst/<runId>/` for runs that are terminal or unknown. Runs once at boot and every `BURST_REAPER_INTERVAL_SECONDS`, whenever AWS credentials are present, even with `BURST_ENABLED=false`.
 

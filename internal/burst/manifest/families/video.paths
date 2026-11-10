@@ -1,0 +1,7 @@
+# MM126 video family: RIFE (ncnn Vulkan). bin/rife-ncnn-vulkan holds the unzipped release
+# (all rife-* models, a few hundred MB) and the symlink the host config points at.
+/opt/media-manipulator-ai/bin/rife-ncnn-vulkan
+/opt/media-manipulator-ai/scripts/frame_interpolate_rife.py
+/opt/media-manipulator-ai/env/vulkan-nvidia.sh
+/opt/media-manipulator-ai/env/cuda-nvidia.sh
+/opt/media-manipulator-ai/vulkan/nvidia_icd_egl.json

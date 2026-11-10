@@ -1,0 +1,20 @@
+# MM126 image family: rembg, Real-ESRGAN (ncnn Vulkan), EasyOCR redact, LaMa, face privacy.
+# Format: one absolute SOURCE path per line (file or directory), optionally
+# "SOURCE => DEST" when the image keeps it elsewhere (HOME caches only).
+/opt/media-manipulator-ai/venvs/bg-remove
+/opt/media-manipulator-ai/venvs/vision-privacy
+/opt/media-manipulator-ai/venvs/inpaint
+/opt/media-manipulator-ai/bin/realesrgan-ncnn-vulkan
+/opt/media-manipulator-ai/models/rembg
+/opt/media-manipulator-ai/models/yunet
+/opt/media-manipulator-ai/env/onnxruntime-cuda-bg-remove.sh
+/opt/media-manipulator-ai/env/vulkan-nvidia.sh
+/opt/media-manipulator-ai/env/cuda-nvidia.sh
+/opt/media-manipulator-ai/vulkan/nvidia_icd_egl.json
+/opt/media-manipulator-ai/scripts/redact_text_pii.py
+/opt/media-manipulator-ai/scripts/remove_object_lama.py
+/opt/media-manipulator-ai/scripts/face_privacy.py
+# Model caches that live in the operator's HOME on the host. Only these files
+# are taken; the image sees them under HOME=/opt/mm-burst-home (burst-worker.service).
+/home/mwintrow/.EasyOCR/model => /opt/mm-burst-home/.EasyOCR/model
+/home/mwintrow/.cache/torch/hub/checkpoints/big-lama.pt => /opt/mm-burst-home/.cache/torch/hub/checkpoints/big-lama.pt

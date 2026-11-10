@@ -1,0 +1,19 @@
+# MM126: base-name globs skipped by the export (tar --exclude), the manifest
+# (internal/burst/runtime) and the builder's verify step. One list, three users.
+# Caches the host rewrites at runtime (so the manifest stays stable):
+__pycache__
+*.pyc
+# Not needed on a worker:
+.git
+*.zip
+onepiece_demo.mp4
+input.jpg
+input2.jpg
+# Secrets must never ride along even if a tree contains one:
+.env
+.env.*
+id_rsa*
+id_ed25519*
+.netrc
+# Credentials by exact name (the HF token lives at /var/lib/creatv/hf/token; no listed path contains it, a test enforces that):
+.git-credentials

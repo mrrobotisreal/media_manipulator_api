@@ -13,6 +13,10 @@ import (
 // spares a fresh launch-test instance (a separate process owns it).
 const LaunchTestKind = "launch-test"
 
+// BuildMaxAge is how long an image-builder instance (tag mm-burst-build) is
+// spared by the reaper. Builders shut themselves down after 3 h.
+const BuildMaxAge = 4 * time.Hour
+
 // Reaper terminates anything that is not a live run and clears staging
 // prefixes with no live run. It runs whenever AWS credentials are configured,
 // even with BURST_ENABLED=false, so a flag flip cannot strand instances.
@@ -96,6 +100,14 @@ func (r *Reaper) Pass(ctx context.Context, boot, dry bool) Report {
 		_, runLive := liveRuns[in.RunID]
 		isLive := liveInst[in.ID] || runLive
 		reason := ""
+		if in.Build != "" {
+			// MM126 image builder: not a run. Spared until it outlives its own
+			// 3 h self-shutdown by a wide margin.
+			if in.LaunchTime.IsZero() || now.Sub(in.LaunchTime) <= BuildMaxAge {
+				continue
+			}
+			isLive = true
+		}
 		switch {
 		case !isLive:
 			reason = "orphan: no live run"

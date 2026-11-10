@@ -45,6 +45,7 @@ type Instance struct {
 	LaunchTime time.Time
 	RunID      string // tag mm-burst-run
 	JobID      string // tag mm-burst-job
+	Build      string // tag mm-burst-build (MM126 image builder, not a run)
 }
 
 // Provider is the cloud seam; tests never touch AWS.
@@ -62,4 +63,8 @@ const (
 	TagBurst = "mm-burst"
 	TagRun   = "mm-burst-run"
 	TagJob   = "mm-burst-job"
+	// TagBuild marks an AMI-builder instance (MM126). It also carries
+	// mm-burst=1 so it counts against the burst budget, but it is not a run:
+	// the reaper leaves it alone until it is older than BuildMaxAge.
+	TagBuild = "mm-burst-build"
 )

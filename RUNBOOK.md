@@ -1329,7 +1329,9 @@ Enabled but missing any of AWS credentials, subnets, security group, instance pr
 | `BURST_SUBNET_IDS` | (unset) | CSV, one subnet per AZ; launch tries candidates x subnets. |
 | `BURST_SECURITY_GROUP_ID` | (unset) | SG with no inbound rules. |
 | `BURST_INSTANCE_PROFILE` | (unset) | Worker instance profile name (S3 `burst/*` only). |
-| `BURST_AMIS` | (unset) | `family:arch=ami-...` CSV, e.g. `image:x86_64=ami-...`. Families: `image`, `audio`, `video`, `restore`, `ollama`, `voices`. |
+| `BURST_AMIS` | (unset) | `family:arch=ami-...` CSV, e.g. `image:x86_64=ami-...`. Families: `image`, `audio`, `video`, `restore`, `ollama`, `voices`. MM126 builds the first four (one AMI per family serves L4 and Blackwell; the builder prints the line). |
+| `BURST_REFUSE_STALE_IMAGES` | `false` | MM126. `true` = do not launch from an image whose `runtime-manifest` tag differs from the host (`ErrStaleImage`). Default: stale images still run, the drift is only logged and flagged. |
+| `BURST_ROOT_DEVICE` | `/dev/xvda` | MM126. Root device name used for the root-volume size override at launch. Set it only if a `build-image.sh` result box says the DLAMI-derived image uses another name (e.g. `/dev/sda1`). |
 | `BURST_INSTANCE_TYPES_<FAMILY>` | profile default | Override the candidate list, e.g. `BURST_INSTANCE_TYPES_IMAGE=g6e.xlarge,g6.xlarge`. A benchmark result is a config change. |
 | `BURST_PRICE_USD_PER_HOUR` | `g6.xlarge=0.80,g6e.xlarge=1.86,g7.2xlarge=2.52` | `type=price` CSV. **Unverified third-party figures until MM128**; check with `burst-ctl prices`. |
 | `BURST_EBS_USD_PER_GB_MONTH` / `BURST_EGRESS_USD_PER_GB` | `0.08` / `0.09` | Cost-formula rates (unverified until MM128). |
@@ -1357,7 +1359,8 @@ Enabled but missing any of AWS credentials, subnets, security group, instance pr
 | S3 staging | lifecycle rule `mm-burst-staging` on `burst/` (expire 1 day, abort multipart 1 day), beside the seven pre-existing rules |
 | AWS Budgets | `mm-burst-monthly` $250 (alerts 50/80/100 % actual + 100 % forecast; action at 100 % actual attaches `mm-burst-deny-launch` to `mm-burst-controller`, automatic, via role `mm-burst-budgets-action`); `mm-burst-daily` $25 alert only. Both filter on service "Amazon Elastic Compute Cloud - Compute" until the `mm-burst` cost tag is activated |
 | Cost-allocation tag | `mm-burst`: activate in Billing → Cost allocation tags after the first tagged instance exists (MM127) |
-| AMIs | `<MM126: ami-... per family>` |
+| AMIs | `<MM126: ami-... per family>` (built by `scripts/burst/build-image.sh`; see `docs/INSTALL_BURST_IMAGES.md`) |
+| Image builder IAM user | `mm-burst-builder` (policy `scripts/burst/iam/mm-burst-builder-policy.json`: RunInstances only g6.xlarge/g7.2xlarge + tag `mm-burst=1` + profile `mm-burst-worker`; CreateImage/tags; Deregister/DeleteSnapshot only with tag `mm-burst-image=1`; SSM `/aws/service/deeplearning/*`; S3 `burst/*` and read `burst-images/*`). Key lives in `~/.aws/credentials` profile `mm-burst-builder` on the server, never in `.env`. |
 | Tailscale | tag `tag:mm-burst` (owner `autogroup:admin`); grant `tag:creatv` → `tag:mm-burst` tcp 7781, 11434, 8791; no grant from `tag:mm-burst`; policy `tests` enforce both; OAuth client (Trust credentials) scopes Auth Keys write (tag `tag:mm-burst`) + Devices Core read; `TAILSCALE_TAILNET=-` (the client's own tailnet) |
 
 **Executor, worker and user-data (MM125).** Nothing runs until MM127 routes a tool through the executor; this is what exists.
@@ -1373,6 +1376,8 @@ Enabled but missing any of AWS credentials, subnets, security group, instance pr
 **Migration.** `20261108001_burst_runs` creates the `burst_runs` ledger (no filenames, no user content, no keys). The retention purger deletes terminated rows after 400 days (rule `burst_runs`, hourly, dry-run follows `RETENTION_SWEEP_DRY_RUN`).
 
 **burst-ctl** (run from the repo root on the server; it reads the same `.env`):
+
+- `go run ./cmd/burst-ctl manifest <family> [--json|--paths|--excludes|--from-dest]` (MM126): the host runtime fingerprint of a worker-image family; a pure filesystem read that never loads `.env`. `status` now also lists each configured image with `stale: true|false`.
 
 - `go run ./cmd/burst-ctl status`: live instances, today's and this month's spend against the caps.
 - `go run ./cmd/burst-ctl runs --since 24h`: recent runs, state and cost.
@@ -2586,9 +2591,12 @@ call; a daemon that ignores even that needs restarting with
       ├── bg-remove/       ← rembg
       ├── inpaint/         ← simple_lama_inpainting
       └── vision-privacy/  ← face_privacy + redact_text_pii Python deps
+/opt/media-manipulator-ai/{repos,models/restore,models/yunet,vulkan,tmp}   ← also part of the layout (restore + vision + Vulkan ICD)
 <PHOTO_DIR>/                                           ← default uploads/photo (MM95)
   └── <projectId>/{original.<ext>,proxy.jpg|png,thumb.jpg|png,masks/<id>.png,bases/<hash>.png}
 ```
+
+> **The burst worker images mirror this layout; rebuild after changing it** (MM126). The listed paths per family are `internal/burst/manifest/families/*.paths`. After any change to a venv, model, repo, wrapper script or Vulkan/env file named there, `burst-ctl status` shows the family `stale: true`; rebuild with `docs/INSTALL_BURST_IMAGES.md`. A path that is not in a `.paths` list is not on the image and a remote run of a tool that needs it will fail.
 
 ---
 
