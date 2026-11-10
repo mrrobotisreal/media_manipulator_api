@@ -1331,7 +1331,7 @@ Enabled but missing any of AWS credentials, subnets, security group, instance pr
 | `BURST_INSTANCE_PROFILE` | (unset) | Worker instance profile name (S3 `burst/*` only). |
 | `BURST_AMIS` | (unset) | `family:arch=ami-...` CSV, e.g. `image:x86_64=ami-...`. Families: `image`, `audio`, `video`, `restore`, `ollama`, `voices`. MM126 builds the first four (one AMI per family serves L4 and Blackwell; the builder prints the line). |
 | `BURST_REFUSE_STALE_IMAGES` | `false` | MM126. `true` = do not launch from an image whose `runtime-manifest` tag differs from the host (`ErrStaleImage`). Default: stale images still run, the drift is only logged and flagged. |
-| `BURST_ROOT_DEVICE` | `/dev/xvda` | MM126. Root device name used for the root-volume size override at launch. Set it only if a `build-image.sh` result box says the DLAMI-derived image uses another name (e.g. `/dev/sda1`). |
+| `BURST_ROOT_DEVICE` | `/dev/sda1` | MM126. Root device name used for the root-volume size override at launch. `/dev/sda1` is what AWS reports for the Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 24.04) build 20261106 (verified 2026-11-10). Set it only if a `build-image.sh` result box says otherwise. |
 | `BURST_INSTANCE_TYPES_<FAMILY>` | profile default | Override the candidate list, e.g. `BURST_INSTANCE_TYPES_IMAGE=g6e.xlarge,g6.xlarge`. A benchmark result is a config change. |
 | `BURST_PRICE_USD_PER_HOUR` | `g6.xlarge=0.80,g6e.xlarge=1.86,g7.2xlarge=2.52` | `type=price` CSV. **Unverified third-party figures until MM128**; check with `burst-ctl prices`. |
 | `BURST_EBS_USD_PER_GB_MONTH` / `BURST_EGRESS_USD_PER_GB` | `0.08` / `0.09` | Cost-formula rates (unverified until MM128). |

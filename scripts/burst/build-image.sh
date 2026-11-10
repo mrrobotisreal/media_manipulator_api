@@ -82,9 +82,16 @@ elif [ "$DRY" = 1 ]; then
 else
   BASE_AMI="$(aws ssm get-parameter --name "$MM_SSM_PARAM" --query Parameter.Value --output text)"
 fi
-ROOT_DEV="/dev/xvda"
+ROOT_DEV="/dev/sda1"
 if [ "$DRY" != 1 ]; then
-  read -r IMG_NAME ROOT_DEV < <(aws ec2 describe-images --image-ids "$BASE_AMI" --query 'Images[0].[Name,RootDeviceName]' --output text | tr '\t' ' ')
+  # One value per call: the image name contains spaces ("Deep Learning Base ..."),
+  # so reading name and device from one line split the name into the device.
+  IMG_NAME="$(aws ec2 describe-images --image-ids "$BASE_AMI" --query 'Images[0].Name' --output text)"
+  ROOT_DEV="$(aws ec2 describe-images --image-ids "$BASE_AMI" --query 'Images[0].RootDeviceName' --output text)"
+  case "$ROOT_DEV" in
+    /dev/[a-z]*) ;;
+    *) die "could not read the root device name of $BASE_AMI (got '$ROOT_DEV')" ;;
+  esac
   echo "Base image:    $BASE_AMI  ($IMG_NAME)  root device $ROOT_DEV"
   BASE_GIB="$(aws ec2 describe-images --image-ids "$BASE_AMI" --query 'Images[0].BlockDeviceMappings[?DeviceName==`'"$ROOT_DEV"'`].Ebs.VolumeSize | [0]' --output text)"
   echo "Base root disk: ${BASE_GIB} GiB (an image cannot launch with a smaller root than this; the profile root for $FAMILY is $ROOT_GIB GiB)"
@@ -232,5 +239,5 @@ echo "snapshot size:    ${SNAP_GIB} GiB provisioned (billed on used blocks; abou
 echo "runtime manifest: $RUNTIME_MANIFEST"
 echo "smoke:            $(echo "$SMOKE" | jq -c '{passed, instanceType, driverAndGpu, cases: [.cases[] | {name, ok, seconds, gpuPeakMiB}]}')"
 echo "BURST_AMIS entry: $FAMILY:x86_64=$AMI"
-[ "$ROOT_DEV" = "/dev/xvda" ] || echo "NOTE: set BURST_ROOT_DEVICE=$ROOT_DEV in the API .env (the DLAMI root device is not /dev/xvda)"
+[ "$ROOT_DEV" = "/dev/sda1" ] || echo "NOTE: set BURST_ROOT_DEVICE=$ROOT_DEV in the API .env (this image's root device is not the default /dev/sda1)"
 echo "====================================================================="

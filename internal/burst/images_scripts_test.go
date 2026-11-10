@@ -109,6 +109,49 @@ func TestBuildImageDryRunNeverCallsAWS(t *testing.T) {
 	}
 }
 
+// A real (non-dry) run up to the y/N prompt against a fake `aws` that answers
+// like AWS did on 2026-11-10: the DLAMI's name has spaces in it, which once
+// leaked into the root device name and broke every launch.
+func TestBuildImageReadsRootDeviceFromANameWithSpaces(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("no bash")
+	}
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Skip("no jq")
+	}
+	bin := t.TempDir()
+	fake := `#!/bin/sh
+case "$*" in
+  *"s3api head-object"*) exit 0 ;;
+  *"s3 cp s3://"*manifest.json*) echo '{"runtimeManifest":"abc123"}' ;;
+  *"ssm get-parameter"*) echo ami-0e5b7b1a57b07ca51 ;;
+  *"[Name,RootDeviceName]"*) printf 'Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 24.04) 20261106\t/dev/sda1\n' ;;
+  *"Images[0].Name"*) printf 'Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 24.04) 20261106\n' ;;
+  *"Images[0].RootDeviceName"*) echo /dev/sda1 ;;
+  *"Ebs.VolumeSize"*) echo 75 ;;
+  *"Images[0].Architecture"*) echo x86_64 ;;
+  *) echo "UNEXPECTED: $*" >&2; exit 99 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(bin, "aws"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", filepath.Join(scriptsDir(t), "build-image.sh"), "video", "2026-11-10")
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+	cmd.Stdin = strings.NewReader("n\n") // decline at the launch prompt
+	out, _ := cmd.CombinedOutput()
+	got := string(out)
+	if !strings.Contains(got, "root device /dev/sda1") {
+		t.Fatalf("root device not parsed:\n%s", got)
+	}
+	if !strings.Contains(got, "Base root disk: 75 GiB") {
+		t.Errorf("base root disk not read for /dev/sda1:\n%s", got)
+	}
+	if strings.Contains(got, "UNEXPECTED") || strings.Contains(got, "launched") {
+		t.Errorf("must stop at the prompt without launching:\n%s", got)
+	}
+}
+
 func TestExportDryRunListsPathsWithoutTouchingTheHost(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("no bash")

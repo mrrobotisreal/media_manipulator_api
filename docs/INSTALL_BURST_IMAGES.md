@@ -52,7 +52,7 @@ Deviations from the ticket's list, from the S0 inventory: the host has no faster
 - **Driver mismatch / `no kernel image is available`**: the DLAMI's driver must be at least what the cu128 wheels need (the host runs 590.48.01; the DLAMI ships 595.x). A `no kernel image` error in `restore` means the mmcv step did not run for both architectures; check `$MM_PROVISION_LOG` in the failure log.
 - **Vulkan ICD** (`vkCreateInstance` failed, `realesrgan`/`rife` smoke fail): the builder log shows the `libnvidia-gl` step. Check `ldconfig -p | grep libEGL_nvidia` on a builder and `/opt/media-manipulator-ai/vulkan/nvidia_icd_egl.json`.
 - **mmcv build failure**: `nvcc` must be CUDA 12.8 (`/usr/local/cuda-12.8`). If the DLAMI dropped 12.8, set `CUDA_HOME_DIR` in `provision-common.sh` and keep it equal to the torch wheel's CUDA minor version.
-- **Root device**: if the build result says to set `BURST_ROOT_DEVICE`, do (the DLAMI may use `/dev/sda1`).
+- **Root device**: the DLAMI uses `/dev/sda1`, the default. Set `BURST_ROOT_DEVICE` only if a build result box says to.
 - **Root disk larger than the profile root**: the build refuses; raise `RootGiB` in `internal/burst/profiles.go` and in `scripts/burst/lib.sh` (a test keeps the two equal).
 - **A builder left running**: it terminates itself after 3 h; the API reaper spares `mm-burst-build` instances for 4 h and terminates older ones. Console: EC2 → Instances → tag `mm-burst-build`.
 - **Stale after a rebuild**: the AMI id in `BURST_AMIS` is still the old one; update `.env` and restart the API.

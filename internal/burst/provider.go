@@ -31,7 +31,7 @@ type LaunchRequest struct {
 	SecurityGroupID string
 	InstanceProfile string
 	RootGiB         int
-	RootDevice      string // default /dev/xvda
+	RootDevice      string // default /dev/sda1 (the AWS Deep Learning Base AMI root device)
 	UserData        string // opaque, plain text; the provider base64-encodes it
 }
 
