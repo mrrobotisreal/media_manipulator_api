@@ -126,3 +126,18 @@ func CandidatesFor(p Profile, overrides map[string][]string) []string {
 	}
 	return p.Candidates
 }
+
+// GPUMemGiB is the GPU memory of an instance type's single GPU (design §5), 0
+// when unknown. The planner uses it to decide whether a booting instance can be
+// adopted by another waiter.
+func GPUMemGiB(instanceType string) int {
+	switch {
+	case strings.HasPrefix(instanceType, "g6e."):
+		return 48
+	case strings.HasPrefix(instanceType, "g6."):
+		return 24
+	case strings.HasPrefix(instanceType, "g7."):
+		return 32
+	}
+	return 0
+}
