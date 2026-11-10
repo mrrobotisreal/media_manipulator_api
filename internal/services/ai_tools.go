@@ -258,15 +258,22 @@ func (a *AIService) runDeepFilter(ctx context.Context, jobID, inputPath, outputP
 	}
 
 	a.sendProgress(jobID, 55)
+	// The enhanced file goes to its own directory. With one shared directory,
+	// a deepFilter whose save_audio ignores --output-dir overwrites the input
+	// in place and leaves nothing new to find (the 2026-11-10 host bug).
+	outDir := filepath.Join(workDir, "enhanced")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return fmt.Errorf("create deepFilter output dir: %w", err)
+	}
 	if err := a.withToolGPU(ctx, jobID, aiGPUKeyDeepFilter, a.cfg.AICUDAGPU, func(card int) error {
 		return a.exec(ctx, "deepFilter", cudaEnv(card), a.cfg.DeepFilterBin,
-			"--output-dir", workDir, normalizedWav,
+			"--output-dir", outDir, normalizedWav,
 		)
 	}); err != nil {
 		return err
 	}
 
-	enhanced, err := findEnhancedWav(workDir, normalizedWav)
+	enhanced, err := findEnhancedWav(outDir, normalizedWav)
 	if err != nil {
 		return err
 	}
@@ -326,7 +333,11 @@ func findEnhancedWav(workDir, originalWav string) (string, error) {
 		})
 	}
 	if len(candidates) == 0 {
-		return "", fmt.Errorf("deepFilter did not produce an enhanced WAV in %s", workDir)
+		// The usual cause on this host (found 2026-11-10): the audio-clean
+		// venv's df/io.py was rewritten for torchaudio 2.11 and its save_audio
+		// ignores --output-dir, so deepFilter overwrites its input instead.
+		// scripts/server/patch_deepfilter_io.py restores it (RUNBOOK 7.4).
+		return "", fmt.Errorf("deepFilter did not produce an enhanced WAV in %s (if it exited 0, its save_audio is ignoring --output-dir: run scripts/server/patch_deepfilter_io.py --apply on the GPU host)", workDir)
 	}
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].hint != candidates[j].hint {

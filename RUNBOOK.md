@@ -1704,6 +1704,7 @@ opus, ac3, dts}`. AI audio operations (in `ai_tools.go`):
 | --- | --- | --- |
 | `demucs: model download failed` | First-ever run without network OR HF rate-limited. | Pre-download once with the bin manually so the model lands in `~/.cache/torch`. |
 | `deepFilter: not found` | Path doesn't exist or venv is broken. | `$AI_DEEPFILTER_BIN --help`. |
+| `deepFilter did not produce an enhanced WAV in ...` while `deepFilter` itself exited 0 (clean voice, remove background noise, Darkroom voice clean all fail) | The `audio-clean` venv's `df/io.py` was rewritten by hand on 2026-05-17 because torchaudio 2.11 dropped `torchaudio.save`/`load`/`info`; that rewrite's `save_audio` ignored `--output-dir` and the model suffix, so `deepFilter` overwrote its input and wrote nothing to the output directory. Found 2026-11-10 by the burst audio image's smoke test. | On the GPU host: `/opt/media-manipulator-ai/venvs/audio-clean/bin/python scripts/server/patch_deepfilter_io.py --apply` (backs the file up next to it, restores the upstream output-path rules, self-tests; safe to run twice). Re-run it after reinstalling DeepFilterNet in that venv, then re-export the burst `audio` family (`scripts/burst/export-runtime.sh audio`) and rebuild its image. |
 | Output is silent for `isolate_vocals` | The source had no vocals to begin with. | Expected; not an error. |
 
 ---
