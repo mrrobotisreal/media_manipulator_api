@@ -8,5 +8,5 @@ MM_FAMILY=restore
 # shellcheck source=provision-common.sh
 . "$HERE/provision-common.sh"
 parse_provision_args "$@"
-restore_rebuild() { step_rebuild_mmcv; step_prebuild_rvrt_ext; }
+restore_rebuild() { step_rebuild_mmcv; step_link_mmagic_configs; step_prebuild_rvrt_ext; }
 provision_main restore_rebuild

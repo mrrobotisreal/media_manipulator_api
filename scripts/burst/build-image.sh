@@ -86,6 +86,11 @@ ROOT_DEV="/dev/xvda"
 if [ "$DRY" != 1 ]; then
   read -r IMG_NAME ROOT_DEV < <(aws ec2 describe-images --image-ids "$BASE_AMI" --query 'Images[0].[Name,RootDeviceName]' --output text | tr '\t' ' ')
   echo "Base image:    $BASE_AMI  ($IMG_NAME)  root device $ROOT_DEV"
+  BASE_GIB="$(aws ec2 describe-images --image-ids "$BASE_AMI" --query 'Images[0].BlockDeviceMappings[?DeviceName==`'"$ROOT_DEV"'`].Ebs.VolumeSize | [0]' --output text)"
+  echo "Base root disk: ${BASE_GIB} GiB (an image cannot launch with a smaller root than this; the profile root for $FAMILY is $ROOT_GIB GiB)"
+  if [ "$BASE_GIB" != "None" ] && [ "$BASE_GIB" -gt "$ROOT_GIB" ]; then
+    die "the base image's root disk (${BASE_GIB} GiB) is larger than the $FAMILY profile root ($ROOT_GIB GiB): raise RootGiB in internal/burst/profiles.go and lib.sh first"
+  fi
   [ "$(aws ec2 describe-images --image-ids "$BASE_AMI" --query 'Images[0].Architecture' --output text)" = "x86_64" ] || die "$BASE_AMI is not x86_64"
 else
   echo "Base image:    $BASE_AMI"

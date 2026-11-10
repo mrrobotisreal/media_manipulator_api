@@ -139,6 +139,7 @@ step_unpack() {
   cp "$dir/mm-import/manifest.json" /etc/mm-burst-export-manifest.json
   RUNTIME_MANIFEST="$exp"
   rm -rf "$dir/mm-import"
+  status "disk after unpack: $(df -h / | awk 'NR==2{print $3" used of "$2" ("$5")"}')"
 }
 
 step_dirs_and_unit() {
@@ -298,4 +299,19 @@ step_prebuild_rvrt_ext() {
     cd "$MM_ROOT/repos/RVRT"
     "$MM_ROOT/venvs/restore-sr/bin/python" -c "from models.op.deform_attn import deform_attn_ext; print('deform_attn ext ok')"
   ) || fail_build "RVRT deform_attn extension build failed"
+}
+
+# S0 finding: restore_video.py reads the BasicVSR++ config from
+# $MM_ROOT/repos/mmagic/configs/..., but the host has mmagic only as a pip
+# package (configs ship inside it at site-packages/mmagic/.mim/configs) and no
+# repos/mmagic directory. The image links the packaged configs there so the
+# script's path resolves. A symlink only; nothing else differs from the host.
+step_link_mmagic_configs() {
+  status "restore: link repos/mmagic -> packaged mmagic configs"
+  plan "if $MM_ROOT/repos/mmagic is absent: ln -s <restore-vsr-mm site-packages>/mmagic/.mim $MM_ROOT/repos/mmagic (BasicVSR++ config path)" && return 0
+  [ -e "$MM_ROOT/repos/mmagic" ] && return 0
+  local mim
+  mim="$("$MM_ROOT/venvs/restore-vsr-mm/bin/python" -c "import mmagic,os;print(os.path.join(os.path.dirname(mmagic.__file__),'.mim'))")"
+  [ -d "$mim/configs" ] || fail_build "mmagic package has no .mim/configs"
+  ln -s "$mim" "$MM_ROOT/repos/mmagic"
 }
