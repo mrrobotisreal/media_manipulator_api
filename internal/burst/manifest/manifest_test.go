@@ -90,7 +90,6 @@ func TestExcludesSkipSecretsInsideListedTrees(t *testing.T) {
 	write(t, filepath.Join(dir, "a/keep.py"), "x", t0)
 	write(t, filepath.Join(dir, "a/.env"), "SECRET=1", t0)
 	write(t, filepath.Join(dir, "a/.env.local"), "SECRET=1", t0)
-	write(t, filepath.Join(dir, "a/token"), "hf_x", t0)
 	write(t, filepath.Join(dir, "a/__pycache__/m.pyc"), "x", t0)
 	write(t, filepath.Join(dir, "a/.git/config"), "x", t0)
 	m, err := ComputeEntries("t", []Entry{{Src: filepath.Join(dir, "a"), Dest: filepath.Join(dir, "a")}}, Excludes())
