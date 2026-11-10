@@ -59,7 +59,7 @@ Deviations from the ticket's list, from the S0 inventory: the host has no faster
 
 ## Cost
 
-A build is about $0.50 (video) to $2 (restore) of g6.xlarge time. Snapshot storage is about $0.05 per GB-month on used blocks (an upper bound is the provisioned root size: 100 + 80 + 100 + 150 GiB = $21.50 a month). Prune keeps the newest two per family.
+A build is about $0.50 (video) to $2 (restore) of g6.xlarge time. Snapshot storage is about $0.05 per GB-month on used blocks (an upper bound is the provisioned root size: 100 + 100 + 100 + 150 GiB = $22.50 a month). Prune keeps the newest two per family.
 
 ## Open decisions logged by MM126
 
