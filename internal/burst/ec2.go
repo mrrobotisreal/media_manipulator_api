@@ -56,7 +56,7 @@ func NewEC2Client(ctx context.Context, region, accessKey, secretKey string) (*ec
 func BuildRunInstancesInput(req LaunchRequest, instanceType, subnet string) *ec2.RunInstancesInput {
 	dev := req.RootDevice
 	if dev == "" {
-		dev = "/dev/xvda"
+		dev = "/dev/sda1"
 	}
 	root := int32(req.RootGiB)
 	if root <= 0 {

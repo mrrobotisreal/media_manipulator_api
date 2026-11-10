@@ -44,8 +44,8 @@ type BurstConfig struct {
 	// stale images still run, the drift is only logged and shown in burst-ctl.
 	RefuseStaleImages bool
 	// RootDevice (BURST_ROOT_DEVICE, MM126) is the AMI's root device name for the
-	// volume-size override at launch: /dev/xvda (default) or /dev/sda1. The
-	// builder prints the right value for the DLAMI-derived images.
+	// volume-size override at launch: /dev/sda1 (default; what AWS reports for the
+	// Deep Learning Base AMI, verified 2026-11-10) or /dev/xvda. The builder prints the real value.
 	RootDevice string
 
 	MaxInstances       int
@@ -181,7 +181,7 @@ func loadBurstConfig() BurstConfig {
 		MonthlySpendCapUSD: getEnvFloat("BURST_MONTHLY_SPEND_CAP_USD", 250),
 
 		RefuseStaleImages:  getEnvBool("BURST_REFUSE_STALE_IMAGES", false),
-		RootDevice:         getEnv("BURST_ROOT_DEVICE", "/dev/xvda"),
+		RootDevice:         getEnv("BURST_ROOT_DEVICE", "/dev/sda1"),
 		MaxInstances:       getEnvInt("BURST_MAX_INSTANCES", 2),
 		MaxInstanceMinutes: getEnvInt("BURST_MAX_INSTANCE_MINUTES", 120),
 		BootTimeoutSeconds: getEnvInt("BURST_BOOT_TIMEOUT_SECONDS", 600),
