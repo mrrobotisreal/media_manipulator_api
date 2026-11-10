@@ -1,6 +1,7 @@
 package burst
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -481,6 +482,80 @@ func TestSmokeOutputChecksAcceptGoodFilesAndRejectBad(t *testing.T) {
 		if got := check(c.helper, c.file); got != c.want {
 			t.Errorf("%s %s = %v, want %v", c.helper, filepath.Base(c.file), got, c.want)
 		}
+	}
+}
+
+// The whole case_run harness, not just the check strings: a fake nvidia-smi
+// reports GPU memory rising while the case runs, and each case's check reads
+// the command's own output through $CASE_LOG (on 2026-11-10 the redact check
+// grepped a log name that does not exist, failing a tool that had worked).
+func TestSmokeCaseRunReadsTheCaseLogAndRecordsResults(t *testing.T) {
+	for _, tool := range []string{"bash", "jq"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skip("needs " + tool)
+		}
+	}
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// nvidia-smi: 100 MiB idle, 900 MiB while a "busy" marker file exists.
+	busy := filepath.Join(dir, "busy")
+	smi := "#!/bin/sh\nif [ -f '" + busy + "' ]; then echo 900; else echo 100; fi\n"
+	if err := os.WriteFile(filepath.Join(bin, "nvidia-smi"), []byte(smi), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "smoke.json")
+	lib := filepath.Join(scriptsDir(t), "smoke", "smoke-lib.sh")
+	script := `. '` + lib + `'
+work() { touch '` + busy + `'; sleep 0.5; echo "$1"; rm -f '` + busy + `'; }
+case_run says-ok 1 "" "grep -q 'redactions=2' \"\$CASE_LOG\"" -- bash -c "$(declare -f work); work redactions=2"
+case_run says-nothing 1 "" "grep -q 'redactions=[1-9]' \"\$CASE_LOG\"" -- bash -c "$(declare -f work); work redactions=0"
+case_run no-gpu 1 "" "true" -- true
+smoke_finish fake || true
+`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SMOKE_OUT="+out)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("harness: %v\n%s", err, b)
+	}
+	b, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var res struct {
+		Passed bool `json:"passed"`
+		Cases  []struct {
+			Name string `json:"name"`
+			OK   bool   `json:"ok"`
+			GPU  int    `json:"gpuPeakMiB"`
+			Why  string `json:"why"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(b, &res); err != nil {
+		t.Fatalf("smoke json: %v\n%s", err, b)
+	}
+	got := map[string]bool{}
+	for _, c := range res.Cases {
+		got[c.Name] = c.OK
+		switch c.Name {
+		case "says-ok":
+			if !c.OK || c.GPU < 700 {
+				t.Errorf("says-ok must pass with GPU use recorded: %+v", c)
+			}
+		case "says-nothing":
+			if c.OK || c.Why != "output check failed" {
+				t.Errorf("says-nothing must fail its check: %+v", c)
+			}
+		case "no-gpu":
+			if c.OK || !strings.Contains(c.Why, "no GPU use") {
+				t.Errorf("a case that never touched the GPU must fail: %+v", c)
+			}
+		}
+	}
+	if len(got) != 3 || res.Passed {
+		t.Fatalf("want 3 cases and passed=false: %s", b)
 	}
 }
 

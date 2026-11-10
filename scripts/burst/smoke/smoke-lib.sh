@@ -36,7 +36,8 @@ vulkan_env() { echo "VK_ICD_FILENAMES=$MM_ROOT/vulkan/nvidia_icd_egl.json VK_DRI
 
 # case_run NAME GPU(1|0) "ENV..." CHECK_CMD -- COMMAND...
 #   CHECK_CMD is evaluated after the command with $OUT-style paths already
-#   baked in by the caller (an `sh -c` string); exit 0 = valid output.
+#   baked in by the caller (an `sh -c` string); exit 0 = valid output. It sees
+#   $CASE_LOG, the command's own stdout+stderr: write \$CASE_LOG in the string.
 case_run() {
   local name="$1" needgpu="$2" envs="$3" check="$4"
   shift 5
@@ -55,7 +56,11 @@ case_run() {
   t1="$(date +%s.%N)"
   local extra=$(( ${peak:-0} - ${base:-0} ))
   if [ "$rc" -ne 0 ]; then ok=false; why="exit $rc"; fi
-  if $ok && ! sh -c "$check" >>"$log" 2>&1; then ok=false; why="output check failed"; fi
+  # The check gets CASE_LOG = this case's own log ($WORK/<name>.log), so a
+  # check never has to spell the log's name (on 2026-11-10 one spelled it
+  # wrong). Read it before appending the check's own output to it.
+  if $ok && ! CASE_LOG="$log" sh -c "$check" >>"$log.check" 2>&1; then ok=false; why="output check failed"; fi
+  if [ -f "$log.check" ]; then cat "$log.check" >>"$log"; rm -f "$log.check"; fi
   if $ok && [ "$needgpu" = "1" ] && [ "$extra" -lt "$SMOKE_MIN_GPU_MIB" ]; then
     ok=false; why="no GPU use (peak +${extra} MiB < ${SMOKE_MIN_GPU_MIB}): silent CPU fallback?"
   fi

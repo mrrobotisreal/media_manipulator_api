@@ -30,7 +30,7 @@ case_run vrt 1 "$(cuda_env)" "$(n_png "$WORK/o-vrt/frames" 32)" -- \
 # "No faces were detected" error is the expected, GPU-initialised outcome.
 # We assert that exact message instead of an output file.
 for m in gfpgan codeformer; do
-  case_run "face-$m" 1 "CUDA_DEVICE_ORDER=PCI_BUS_ID" "grep -q 'No faces were detected' '$WORK/face-$m.log'" -- sh -c \
+  case_run "face-$m" 1 "CUDA_DEVICE_ORDER=PCI_BUS_ID" "grep -q 'No faces were detected' \"\$CASE_LOG\"" -- sh -c \
     "$R/venvs/face-restore/bin/python $R/scripts/restore_image_faces.py --model $m --input $FIX/photo.png --out-dir $WORK/o-$m --upscale 2 --models-dir $R/models/restore --repos-dir $R/repos --gpu $SMOKE_CARD; [ \$? -ne 0 ]"
 done
 for m in fbcnn scunet nafnet; do
