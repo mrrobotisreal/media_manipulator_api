@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mrrobotisreal/media_manipulator_api/internal/burst"
 )
 
 // GPUSnapshot is one row from `nvidia-smi --query-gpu=...,memory.free`. We use
@@ -48,6 +50,14 @@ type GPURequest struct {
 	// it Acquire gives up with ErrGPUMaxWait. Used by background work that may
 	// be dropped rather than queue forever (MM94, ANALYSIS_GPU_MAX_WAIT_SECONDS).
 	MaxWait time.Duration
+	// Burst, when non-nil, makes this request eligible for a cloud GPU offer
+	// (MM127, design §4). Nil = never burst; every call site that does not set
+	// it behaves exactly as before. Only call sites that can run remotely set it.
+	Burst *BurstEligibility
+	// EnqueuedAt, when non-zero, is the waiter's original enqueue time on the
+	// scheduler's clock. Internal: a fallback re-acquire after a failed burst
+	// passes the first acquire's time so aging and order are preserved (§6.4).
+	EnqueuedAt time.Time
 }
 
 // GPU queue priorities. Two levels is all the tier matrix sells, plus one for
@@ -99,6 +109,12 @@ type GPUScheduler struct {
 	// ticking is whether the re-probe goroutine is running. Guarded by mu.
 	reprobe time.Duration
 	ticking bool
+
+	// MM127 burst hook. All nil/zero when burst is off: nothing below runs.
+	burst   BurstOfferer
+	pred    *holdPredictor
+	running map[uint64]runningSlot // slot id (= waiter id) -> running slot
+	nextID  uint64
 }
 
 // gpuWaiter is one in-flight Acquire.
@@ -125,6 +141,16 @@ type gpuWaiter struct {
 	// the first probe). A background waiter only stands aside for a waiter
 	// that wants one of the same cards.
 	cards map[int]bool
+
+	// MM127 burst bookkeeping (inert when no offerer is installed).
+	id            uint64
+	kind          string
+	burst         *BurstEligibility
+	vram          int64
+	queued        bool         // has failed to get a slot at least once (stays true while re-probing)
+	offerer       BurstOfferer // set once the offerer has seen this waiter (so it gets Withdraw)
+	pendingRemote bool         // an offer was accepted; stop asking
+	remote        *burst.Run   // set when the remote is ready
 }
 
 // hasBackgroundWaiter reports whether any background waiter is in flight.
@@ -334,9 +360,23 @@ type GPUWait struct {
 
 // AcquireTimed is Acquire plus the time spent waiting for the slot (MM33
 // queueWaitMs). All Acquire semantics apply.
+//
+// It is local-only: a Burst descriptor on req is ignored (MM127), so every
+// existing call site keeps its semantics. Use AcquireTarget to allow a remote.
 func (s *GPUScheduler) AcquireTimed(ctx context.Context, req GPURequest) (int, func(), GPUWait, error) {
+	req.Burst = nil
+	t, release, waited, err := s.AcquireTarget(ctx, req)
+	return t.Card, release, waited, err
+}
+
+// AcquireTarget is AcquireTimed that may also return a remote burst target
+// (MM127): when req.Burst is set, an offerer is installed and it accepts the
+// waiter, a cloud GPU races the local queue and whichever is ready first wins.
+// For a remote target Card is 0 (the instance has one GPU), the release func
+// is a no-op for local accounting, and GPUWait.Wait is enqueue -> remote ready.
+func (s *GPUScheduler) AcquireTarget(ctx context.Context, req GPURequest) (Target, func(), GPUWait, error) {
 	if !s.enabled {
-		return -1, func() {}, GPUWait{}, nil
+		return Target{Card: -1}, func() {}, GPUWait{}, nil
 	}
 	safety := req.SafetyMarginMiB
 	if safety <= 0 {
@@ -369,8 +409,22 @@ func (s *GPUScheduler) AcquireTimed(ctx context.Context, req GPURequest) (int, f
 
 	// Register before the first probe so a Premium caller starts deterring
 	// standard callers immediately, not only once it has already lost a race.
-	w := &gpuWaiter{priority: req.Priority, blocking: req.Priority > GPUPriorityStandard, enqueued: s.now()}
+	enqueuedAt := s.now()
+	if !req.EnqueuedAt.IsZero() && req.EnqueuedAt.Before(enqueuedAt) {
+		// A burst fallback re-acquire keeps the first acquire's age (MM127, §6.4).
+		enqueuedAt = req.EnqueuedAt
+	}
+	s.nextID++
+	w := &gpuWaiter{priority: req.Priority, blocking: req.Priority > GPUPriorityStandard, enqueued: enqueuedAt,
+		id: s.nextID, kind: req.Kind, burst: req.Burst, vram: required}
 	s.waiters[w] = struct{}{}
+	exit := WithdrawGaveUp
+	defer func() {
+		// Tell the offerer this waiter is gone (MM127). Non-blocking by contract.
+		if w.offerer != nil {
+			w.offerer.Withdraw(w.id, exit)
+		}
+	}()
 	defer func() {
 		delete(s.waiters, w)
 		// Whoever was standing aside for this caller can stop now: callers
@@ -391,10 +445,10 @@ func (s *GPUScheduler) AcquireTimed(ctx context.Context, req GPURequest) (int, f
 		s.mu.Lock()
 
 		if ctx.Err() != nil {
-			return -1, nil, GPUWait{}, ctxErr()
+			return Target{Card: -1}, nil, GPUWait{}, ctxErr()
 		}
 		if err != nil {
-			return -1, nil, GPUWait{}, fmt.Errorf("nvidia-smi probe: %w", err)
+			return Target{Card: -1}, nil, GPUWait{}, fmt.Errorf("nvidia-smi probe: %w", err)
 		}
 
 		gpuByIdx := make(map[int]GPUSnapshot, len(snaps))
@@ -455,6 +509,10 @@ func (s *GPUScheduler) AcquireTimed(ctx context.Context, req GPURequest) (int, f
 			if queued {
 				waited = GPUWait{Queued: true, Wait: s.now().Sub(w.enqueued)}
 			}
+			if s.pred != nil {
+				s.running[w.id] = runningSlot{kind: req.Kind, card: chosen, start: s.now()}
+			}
+			slotID := w.id
 			var releaseOnce sync.Once
 			release := func() {
 				releaseOnce.Do(func() {
@@ -462,12 +520,28 @@ func (s *GPUScheduler) AcquireTimed(ctx context.Context, req GPURequest) (int, f
 					if s.inUse[chosen] > 0 {
 						s.inUse[chosen]--
 					}
+					s.observeReleaseLocked(slotID)
 					s.cond.Broadcast()
 					s.mu.Unlock()
 					log.Printf("gpu-scheduler: %s released GPU %d", req.Kind, chosen)
 				})
 			}
-			return chosen, release, waited, nil
+			exit = WithdrawLocalSlot
+			return Target{Card: chosen, EnqueuedAt: enqueuedAt}, release, waited, nil
+		}
+
+		// MM127: a cloud GPU that became ready first wins the race; a local
+		// slot found above always wins a tie. With no offerer both branches
+		// are skipped (w.remote is only ever set by an offerer's launch), so
+		// the loop is the pre-MM127 code.
+		if w.remote != nil {
+			exit = WithdrawRemoteTaken
+			waited := GPUWait{Queued: true, Wait: s.now().Sub(enqueuedAt)}
+			log.Printf("gpu-scheduler: %s took remote burst run %s after %s in queue", req.Kind, w.remote.ID, waited.Wait.Round(time.Second))
+			return Target{Card: 0, Remote: w.remote, EnqueuedAt: enqueuedAt}, func() {}, waited, nil
+		}
+		if s.burst != nil && req.Burst != nil && !w.pendingRemote {
+			s.considerBurstLocked(w, req, cands, gpuByIdx, required, maxPerGPU)
 		}
 
 		// Nothing fits — queue.
@@ -477,11 +551,12 @@ func (s *GPUScheduler) AcquireTimed(ctx context.Context, req GPURequest) (int, f
 			log.Printf("gpu-scheduler: %s queued (required=%dMiB+%dMiB safety); waiting for GPU", req.Kind, req.VRAMRequiredMiB, safety)
 		}
 		w.parked = true
+		w.queued = true
 		s.startReprobeTicker()
 		err = s.waitOrCtx(ctx, s.agingWake(w))
 		w.parked = false
 		if err != nil {
-			return -1, nil, GPUWait{}, ctxErr()
+			return Target{Card: -1}, nil, GPUWait{}, ctxErr()
 		}
 	}
 }
@@ -499,6 +574,17 @@ func acquireGPUForJobOn(ctx context.Context, s *GPUScheduler, jm *JobManager, jo
 		jm.AddQueueWait(jobID, waited.Wait)
 	}
 	return idx, release, err
+}
+
+// acquireTargetForJobOn is AcquireTarget that also records the queue wait on the
+// job (MM33 queueWaitMs), for a local or a remote target alike (MM127). The
+// wave-1 helper (runGPUStep, MM127b) uses it.
+func acquireTargetForJobOn(ctx context.Context, s *GPUScheduler, jm *JobManager, jobID string, req GPURequest) (Target, func(), error) {
+	t, release, waited, err := s.AcquireTarget(ctx, req)
+	if err == nil && waited.Queued {
+		jm.AddQueueWait(jobID, waited.Wait)
+	}
+	return t, release, err
 }
 
 // gpuAcquireFunc is acquireGPUForJob's shape, so services can inject a fake
