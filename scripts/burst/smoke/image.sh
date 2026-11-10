@@ -12,7 +12,7 @@ case_run ort-providers 0 "$(cuda_env)" "true" -- sh -c \
   "$MM_ROOT/venvs/bg-remove/bin/python -c \"import onnxruntime as o,sys; p=o.get_available_providers(); print(p); sys.exit(0 if 'CUDAExecutionProvider' in p else 1)\""
 case_run upscale-x4 1 "$(vulkan_env)" "$(is_png "$WORK/up.png")" -- \
   "$MM_ROOT/bin/realesrgan-ncnn-vulkan/realesrgan-ncnn-vulkan" -i "$FIX/photo.png" -o "$WORK/up.png" -n realesrgan-x4plus -s 4 -t 0 -g "$SMOKE_CARD" -f png
-case_run redact-text 1 "$(cuda_env)" "$(is_png "$WORK/redact.png") && grep -q 'redactions=[1-9]' '$WORK/redact.log'" -- \
+case_run redact-text 1 "$(cuda_env)" "$(is_png "$WORK/redact.png") && grep -q 'redactions=[1-9]' \"\$CASE_LOG\"" -- \
   "$MM_ROOT/venvs/vision-privacy/bin/python" "$MM_ROOT/scripts/redact_text_pii.py" --input "$FIX/text.png" --output "$WORK/redact.png" --detect pii --redaction blackbox --gpu
 case_run lama 1 "$(cuda_env)" "$(is_png "$WORK/lama.png")" -- \
   "$MM_ROOT/venvs/inpaint/bin/python" "$MM_ROOT/scripts/remove_object_lama.py" --input "$FIX/photo.png" --mask "$FIX/mask.png" --output "$WORK/lama.png"
