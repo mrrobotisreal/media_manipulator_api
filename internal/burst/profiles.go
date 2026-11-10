@@ -48,6 +48,11 @@ var (
 	candRestore = []string{"g6.xlarge", "g7.2xlarge", "g6e.xlarge"}
 )
 
+// Root sizes: the base DLAMI's own disk is 75 GiB and about 48 GiB of it is
+// already used, so a family's runtime needs base + its files + headroom. The
+// audio image was 88 % full on an 80 GiB root (measured on the builder,
+// 2026-11-10), so audio is 100 GiB like image and video. Keep scripts/burst/lib.sh
+// in step (TestLibRootSizesMatchTheBurstProfiles).
 func img(key string, extra ...string) Profile {
 	return Profile{Key: key, Wave: 1, Family: FamilyImage, MinGPUMemGiB: 8, Candidates: candSmall,
 		RootGiB: 100, ScratchGiB: 20, Prewarm: extra, SeedHoldSeconds: 30, RemoteTimeout: 900}
@@ -63,9 +68,9 @@ var profiles = []Profile{
 	img("ai_upscale"),
 	img("redact_text"),
 	img("remove_object"),
-	{Key: "deepfilter", Wave: 1, Family: FamilyAudio, MinGPUMemGiB: 8, Candidates: candAudio, RootGiB: 80, ScratchGiB: 20, SeedHoldSeconds: 20, RemoteTimeout: 900},
-	{Key: "demucs", Wave: 1, Family: FamilyAudio, MinGPUMemGiB: 8, Candidates: candAudio, RootGiB: 80, ScratchGiB: 20, SeedHoldSeconds: 60, RemoteTimeout: 1800},
-	{Key: "whisper-ct2", Wave: 1, Family: FamilyAudio, MinGPUMemGiB: 8, Candidates: candAudio, RootGiB: 80, ScratchGiB: 20, SeedHoldSeconds: 60, RemoteTimeout: 1800},
+	{Key: "deepfilter", Wave: 1, Family: FamilyAudio, MinGPUMemGiB: 8, Candidates: candAudio, RootGiB: 100, ScratchGiB: 20, SeedHoldSeconds: 20, RemoteTimeout: 900},
+	{Key: "demucs", Wave: 1, Family: FamilyAudio, MinGPUMemGiB: 8, Candidates: candAudio, RootGiB: 100, ScratchGiB: 20, SeedHoldSeconds: 60, RemoteTimeout: 1800},
+	{Key: "whisper-ct2", Wave: 1, Family: FamilyAudio, MinGPUMemGiB: 8, Candidates: candAudio, RootGiB: 100, ScratchGiB: 20, SeedHoldSeconds: 60, RemoteTimeout: 1800},
 	{Key: "frame_interpolation", Wave: 1, Family: FamilyVideo, MinGPUMemGiB: 8, Candidates: candAudio, RootGiB: 100, ScratchGiB: 60, SeedHoldSeconds: 120, RemoteTimeout: 3600},
 	{Key: "restore-", Prefix: true, Wave: 1, Family: FamilyRestore, MinGPUMemGiB: 16, Candidates: candRestore, RootGiB: 150, ScratchGiB: 100, SeedHoldSeconds: 600, RemoteTimeout: 7200},
 	{Key: "image-restore-", Prefix: true, Wave: 1, Family: FamilyRestore, MinGPUMemGiB: 12, Candidates: candRestore, RootGiB: 150, ScratchGiB: 20, SeedHoldSeconds: 60, RemoteTimeout: 1800},

@@ -38,6 +38,9 @@ vulkan_env() { echo "VK_ICD_FILENAMES=$MM_ROOT/vulkan/nvidia_icd_egl.json VK_DRI
 #   CHECK_CMD is evaluated after the command with $OUT-style paths already
 #   baked in by the caller (an `sh -c` string); exit 0 = valid output. It sees
 #   $CASE_LOG, the command's own stdout+stderr: write \$CASE_LOG in the string.
+#   A check helper must only BUILD the string. Anything that looks at the
+#   command's output (find, ls, grep, ffprobe) must sit inside the string, so
+#   it runs after the command, never while the case is being set up.
 case_run() {
   local name="$1" needgpu="$2" envs="$3" check="$4"
   shift 5
@@ -73,12 +76,14 @@ case_run() {
     "$(awk -v a="$t0" -v b="$t1" 'BEGIN{printf "%.2f", b-a}')" "$extra" "$why" >&2
 }
 
-# valid_wav_in DIR: like valid_wav for the first .wav in DIR (DeepFilterNet
-# names its output after its model version, as findEnhancedWav expects).
+# valid_wav_in DIR: the check string passes when DIR holds a .wav that decodes
+# and lasts >= 1 s. DeepFilterNet names its output after its model version, as
+# findEnhancedWav expects, so the file is looked up BY THE CHECK STRING, when
+# it runs after the tool. (On 2026-11-10 this helper looked the file up while
+# the case was being set up, before the tool had run, found nothing and
+# returned "false": a good DeepFilterNet run failed.)
 valid_wav_in() {
-  local f
-  f="$(find "$1" -maxdepth 1 -name '*.wav' -type f 2>/dev/null | sort | sed -n '1p')"
-  if [ -z "$f" ]; then echo "false"; else valid_wav "$f"; fi
+  echo "f=\$(find '$1' -maxdepth 1 -name '*.wav' -type f 2>/dev/null | sort | sed -n '1p'); [ -n \"\$f\" ] && [ -s \"\$f\" ] && [ \"\$(ffprobe -v error -show_entries format=duration -of csv=p=0 \"\$f\" | cut -d. -f1)\" -ge 1 ]"
 }
 
 # instance_type: the EC2 instance type via IMDSv2 (a token is required), or

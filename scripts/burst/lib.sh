@@ -20,7 +20,7 @@ MM_HOME="/opt/mm-burst-home"
 profile_root_gib() {
   case "$1" in
     image) echo 100 ;;
-    audio) echo 80 ;;
+    audio) echo 100 ;;
     video) echo 100 ;;
     restore) echo 150 ;;
     *) return 1 ;;
