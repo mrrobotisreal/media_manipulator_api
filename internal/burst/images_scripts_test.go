@@ -275,6 +275,139 @@ func TestOutputHasIsSafeUnderPipefail(t *testing.T) {
 	}
 }
 
+// On 2026-11-10 the video build passed its smoke test, then idled for an hour
+// on a g7.2xlarge waiting for the AMI to become "available" and gave up while
+// the snapshot was still copying. The builder must be terminated as soon as
+// the snapshot exists (the snapshot is point-in-time), and the wait must not
+// call a slow-but-pending image a failure.
+func TestBuildImageTerminatesBuilderOnceSnapshotStarts(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("no bash")
+	}
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Skip("no jq")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go (the script builds burst-ctl for the bundle)")
+	}
+	bin := t.TempDir()
+	state := filepath.Join(bin, "image-polls")
+	calls := filepath.Join(bin, "calls")
+	fake := `#!/bin/sh
+case "$1 $2" in
+  "ec2 run-instances") echo i-0builder; exit 0 ;;
+  "ec2 describe-instances") printf 'running\tNone\n'; exit 0 ;;
+  "ec2 terminate-instances") echo "terminate $*" >> "` + calls + `"; exit 0 ;;
+  "ec2 create-image") echo "create-image" >> "` + calls + `"; echo ami-0new; exit 0 ;;
+  "ec2 describe-snapshots") echo 100; exit 0 ;;
+esac
+case "$*" in
+  *"ami-0new"*"Ebs.SnapshotId"*) echo snap-0abc ;;
+  *"ami-0new"*"Images[0].State"*)
+    n=$(cat "` + state + `" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "` + state + `"
+    echo "state-poll $n" >> "` + calls + `"
+    if [ $n -ge 3 ]; then echo available; else echo pending; fi ;;
+  *"ami-0new"*"Snapshot"*) echo snap-0abc ;;
+  *"s3api head-object"*manifest.json*) exit 0 ;;
+  *"s3api head-object"*ready*) exit 0 ;;
+  *"s3api head-object"*) exit 1 ;;
+  *"s3 cp s3://"*manifest.json*) echo '{"runtimeManifest":"abc123"}' ;;
+  *"s3 cp s3://"*smoke.json*) echo '{"passed":true,"driverAndGpu":"595.112.07, NVIDIA RTX PRO 4500","cases":[{"name":"rife-v4.6","ok":true,"seconds":9.9,"gpuPeakMiB":295}]}' ;;
+  *"s3 cp s3://"*".status -"*) echo "READY: image can be created" ;;
+  *"s3 cp "*|*"s3 rm "*) exit 0 ;;
+  *"ssm get-parameter"*) echo ami-0e5b7b1a57b07ca51 ;;
+  *"Images[0].Name"*) echo "Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 24.04) 20261106" ;;
+  *"Images[0].RootDeviceName"*) echo /dev/sda1 ;;
+  *"Ebs.VolumeSize"*) echo 75 ;;
+  *"Images[0].Architecture"*) echo x86_64 ;;
+  *) echo "UNEXPECTED: $*" >&2; exit 99 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(bin, "aws"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", filepath.Join(scriptsDir(t), "build-image.sh"), "video", "2026-11-10", "--yes", "--instance-type", "g7.2xlarge")
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "MM_POLL_SECONDS=0")
+	out, err := cmd.CombinedOutput()
+	got := string(out)
+	if err != nil {
+		t.Fatalf("build must succeed:\n%s", got)
+	}
+	if !strings.Contains(got, "snapshot snap-0abc started; terminating the builder now") {
+		t.Fatalf("the builder must be terminated once the snapshot starts:\n%s", got)
+	}
+	b, rerr := os.ReadFile(calls)
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	seq := strings.Split(strings.TrimSpace(string(b)), "\n")
+	// Expected order: create-image, terminate (once), then the state polls
+	// until "available". Terminating before the image is available is the point.
+	if len(seq) < 2 || seq[0] != "create-image" || !strings.HasPrefix(seq[1], "terminate ec2 terminate-instances --instance-ids i-0builder") {
+		t.Fatalf("want create-image then terminate before any state poll; got %q", seq)
+	}
+	if n := strings.Count(string(b), "terminate "); n != 1 {
+		t.Errorf("terminate exactly once (not again in the exit handler); got %d: %q", n, seq)
+	}
+	for _, want := range []string{"BURST_AMIS entry: video:x86_64=ami-0new", "snapshot size:    100 GiB"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "UNEXPECTED") {
+		t.Errorf("unexpected aws call:\n%s", got)
+	}
+}
+
+// --result prints the BUILD RESULT box for an image that finished after the
+// script stopped (the 2026-11-10 video image), reading only from AWS and S3.
+func TestBuildImageResultModeReadsAnExistingImage(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("no bash")
+	}
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Skip("no jq")
+	}
+	bin := t.TempDir()
+	fake := `#!/bin/sh
+case "$1 $2" in
+  "ec2 run-instances"|"ec2 create-image"|"ec2 terminate-instances") echo "MUST-NOT-LAUNCH $*" >&2; exit 99 ;;
+  "ec2 describe-snapshots") echo 100; exit 0 ;;
+esac
+case "$*" in
+  *"ami-0469153071fef4704"*"Images[0].State"*) echo available ;;
+  *"ami-0469153071fef4704"*"mm-burst-image"*) echo 1 ;;
+  *"ami-0469153071fef4704"*"family"*) echo video ;;
+  *"ami-0469153071fef4704"*"RootDeviceName"*) echo /dev/sda1 ;;
+  *"ami-0469153071fef4704"*"base-ami"*) echo ami-0e5b7b1a57b07ca51 ;;
+  *"ami-0469153071fef4704"*"runtime-manifest"*) echo 64150c00 ;;
+  *"ami-0469153071fef4704"*"CreationDate"*) echo 2026-11-10T15:38:54.000Z ;;
+  *"ami-0469153071fef4704"*"SnapshotId"*) printf 'snap-0c86df5d09216c8bd\tNone\tNone\n' ;;
+  *"ami-0e5b7b1a57b07ca51"*"Images[0].Name"*) echo "Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 24.04) 20261106" ;;
+  *"s3 cp s3://"*smoke.json*) echo '{"passed":true,"driverAndGpu":"595.112.07, NVIDIA RTX PRO 4500","cases":[{"name":"rife-v4.6","ok":true,"seconds":9.92,"gpuPeakMiB":295}]}' ;;
+  *) echo "UNEXPECTED: $*" >&2; exit 99 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(bin, "aws"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", filepath.Join(scriptsDir(t), "build-image.sh"), "video", "2026-11-10", "--result", "ami-0469153071fef4704")
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+	out, err := cmd.CombinedOutput()
+	got := string(out)
+	if err != nil {
+		t.Fatalf("--result must succeed:\n%s", got)
+	}
+	for _, want := range []string{"BUILD RESULT", "AMI:              ami-0469153071fef4704", "root device:      /dev/sda1", "snapshot size:    100 GiB", `"rife-v4.6"`, "BURST_AMIS entry: video:x86_64=ami-0469153071fef4704"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "MUST-NOT-LAUNCH") || strings.Contains(got, "UNEXPECTED") || strings.Contains(got, "Launch a") {
+		t.Errorf("--result must only read:\n%s", got)
+	}
+}
+
 func TestExportDryRunListsPathsWithoutTouchingTheHost(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("no bash")
