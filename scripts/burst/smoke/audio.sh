@@ -4,11 +4,15 @@
 . "$(dirname "${BASH_SOURCE[0]}")/smoke-lib.sh"
 export HOME="${HOME_OVERRIDE:-$([ -d /opt/mm-burst-home ] && echo /opt/mm-burst-home || echo "$HOME")}"
 
-mkdir -p "$WORK/df" "$WORK/dm"
-ffmpeg -v error -y -i "$FIX/speech.wav" -ac 1 -ar 48000 "$WORK/in48.wav"
-# DeepFilterNet names its output after its model version; take the one WAV it wrote.
+mkdir -p "$WORK/df-in" "$WORK/df" "$WORK/dm"
+ffmpeg -v error -y -i "$FIX/speech.wav" -ac 1 -ar 48000 "$WORK/df-in/in48.wav"
+# Same shape as runDeepFilter in ai_tools.go: the input in one directory, the
+# enhanced file in another (named after the model version, so it is looked up).
+# A deepFilter whose save_audio ignores --output-dir overwrites the input and
+# writes nothing here; that was the host's state until 2026-11-10 and it
+# fails this case. The fix is scripts/server/patch_deepfilter_io.py.
 case_run deepfilter 1 "$(cuda_env)" "$(valid_wav_in "$WORK/df")" -- \
-  "$MM_ROOT/venvs/audio-clean/bin/deepFilter" --output-dir "$WORK/df" "$WORK/in48.wav"
+  "$MM_ROOT/venvs/audio-clean/bin/deepFilter" --output-dir "$WORK/df" "$WORK/df-in/in48.wav"
 case_run demucs 1 "$(cuda_env)" "ls '$WORK'/dm/htdemucs/*/vocals.wav >/dev/null" -- \
   "$MM_ROOT/venvs/audio-separate/bin/demucs" -n htdemucs --two-stems=vocals --segment 7 -o "$WORK/dm" "$FIX/speech.wav"
 # The host only has medium and large-v3 cached (no "small"); medium is the API default model.

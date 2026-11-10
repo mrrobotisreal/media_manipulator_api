@@ -107,6 +107,28 @@ sudo cp scripts/server/document_ocr.py \
 sudo chmod +x /opt/media-manipulator-ai/scripts/document_ocr.py
 ```
 
+## `patch_deepfilter_io.py`
+
+A one-off repair for the GPU host's `audio-clean` venv, not a deployed service.
+DeepFilterNet 0.5.6's `df/io.py` needs `torchaudio.save`/`load`/`info`, which
+torchaudio 2.11 no longer has, so on 2026-05-17 that file was rewritten by hand
+to use `soundfile`. The rewrite's `save_audio` dropped `output_dir` and
+`suffix`, so `deepFilter --output-dir DIR in.wav` overwrote `in.wav` and wrote
+nothing into `DIR`, and the API then failed with "deepFilter did not produce an
+enhanced WAV". The script replaces only `save_audio`, keeping `soundfile`:
+
+```bash
+cd ~/media-manipulator/api
+PY=/opt/media-manipulator-ai/venvs/audio-clean/bin/python
+$PY scripts/server/patch_deepfilter_io.py            # dry run
+$PY scripts/server/patch_deepfilter_io.py --apply    # backup + patch + self-test
+```
+
+It refuses a file it does not recognise, leaves an already-patched file alone,
+and puts the original back if its self-test fails. Tests (no torch needed; they
+run against a copy of the host's file in `testdata/df_io_host.py`):
+`python3 -m unittest scripts/server/test_patch_deepfilter_io.py`.
+
 ## `voices_service.py`
 
 The resident **voices** service (`mm-voices`, MM77, ADR-0015). Unlike the
