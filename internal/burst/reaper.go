@@ -71,6 +71,7 @@ func (r *Reaper) Pass(ctx context.Context, boot, dry bool) Report {
 	if r.Live != nil {
 		for _, run := range r.Live() {
 			liveRuns[run.ID] = run
+			liveRuns[run.WorkerRunID()] = run // an adopted run's staging prefix is the worker's
 			if run.InstanceID != "" {
 				liveInst[run.InstanceID] = true
 			}

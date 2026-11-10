@@ -266,7 +266,7 @@ func (p *Planner) Terminate(ctx context.Context, run *Run, outcome State) error 
 		p.Ledger.Release(run.ID) // never launched: nothing billed
 	}
 	if p.Prefixes != nil {
-		if err := p.Prefixes.DeleteRun(ctx, run.ID); err != nil {
+		if err := p.Prefixes.DeleteRun(ctx, run.WorkerRunID()); err != nil {
 			p.log().Warn("burst: staging prefix delete failed; the reaper will retry", "run", run.ID, "error", err.Error())
 		}
 	}
@@ -289,6 +289,7 @@ func (p *Planner) Adopt(ctx context.Context, old *Run, newJob Offer) (*Run, erro
 	}
 	now := p.now()
 	nr := *old
+	nr.WorkerID = old.WorkerRunID()
 	nr.ID, nr.JobID, nr.Kind, nr.Workload = uuid.NewString(), newJob.JobID, newJob.Kind, prof.Key
 	nr.Tier, nr.Priority, nr.PredictedWaitMs = newJob.Tier, newJob.Priority, newJob.PredictedWaitMs
 	nr.OfferedAt, nr.AdoptedFrom, nr.CostMicros, nr.TerminatedAt, nr.FinishedAt = now, old.ID, 0, nil, nil

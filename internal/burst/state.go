@@ -109,6 +109,19 @@ type Run struct {
 	CostMicros      int64
 	ErrorType       string
 	AdoptedFrom     string
+	// WorkerID is the run id baked into the instance (its tailnet hostname, run
+	// token, staging prefix and data dir). It equals ID except on an adopted
+	// run (MM127): the new row gets a new ID but the instance still answers to
+	// the run it was launched for. Not persisted; empty means ID.
+	WorkerID string
+}
+
+// WorkerRunID is the identity the worker on this run's instance knows.
+func (r Run) WorkerRunID() string {
+	if r.WorkerID != "" {
+		return r.WorkerID
+	}
+	return r.ID
 }
 
 // Transition moves the run along an edge of the table, stamping the matching

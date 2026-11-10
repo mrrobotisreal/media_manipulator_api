@@ -89,6 +89,11 @@ func makeTestScheduler(snaps []GPUSnapshot, probeErr error) *GPUScheduler {
 	}
 	s := newGPUScheduler(probe)
 	s.enabled = true
+	if os.Getenv(offererSuiteEnv) != "" {
+		// MM127: the MM94 suite must pass unchanged with an offerer installed and
+		// nil descriptors. This offerer fails the test run if it is ever asked.
+		s.SetBurstOfferer(panicOfferer{})
+	}
 	return s
 }
 

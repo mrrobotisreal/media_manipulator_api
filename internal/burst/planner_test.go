@@ -290,3 +290,42 @@ func TestBurstDark_NoProviderOrMinterCalls(t *testing.T) {
 		t.Fatal("zero provider or minter calls expected")
 	}
 }
+
+// MM127: an adopted run keeps the identity baked into its instance.
+func TestPlanner_AdoptedRunKeepsWorkerIdentity(t *testing.T) {
+	r := newRig(testCfg())
+	ctx := context.Background()
+	old, _ := r.p.Launch(ctx, Offer{JobID: "j1", Kind: "remove_background"})
+	if old.WorkerRunID() != old.ID {
+		t.Fatalf("a fresh run's worker id is its own id: %q", old.WorkerRunID())
+	}
+	nr, err := r.p.Adopt(ctx, old, Offer{JobID: "j2", Kind: "ai_upscale"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nr.ID == old.ID || nr.WorkerRunID() != old.ID {
+		t.Fatalf("adopted run %q must still address worker %q, got %q", nr.ID, old.ID, nr.WorkerRunID())
+	}
+	// A second hand-over keeps pointing at the original worker.
+	nr2, err := r.p.Adopt(ctx, nr, Offer{JobID: "j3", Kind: "redact_text"})
+	if err != nil || nr2.WorkerRunID() != old.ID {
+		t.Fatalf("chain: %v %q", err, nr2.WorkerRunID())
+	}
+	// Terminate deletes the worker's staging prefix, not the new row id's.
+	if err := r.p.Terminate(ctx, nr2, StateLostRace); err != nil {
+		t.Fatal(err)
+	}
+	r.pre.mu.Lock()
+	defer r.pre.mu.Unlock()
+	if len(r.pre.deleted) == 0 || r.pre.deleted[len(r.pre.deleted)-1] != old.ID {
+		t.Fatalf("deleted prefixes = %v, want the worker's %q", r.pre.deleted, old.ID)
+	}
+}
+
+func TestGPUMemGiB(t *testing.T) {
+	for typ, want := range map[string]int{"g6.xlarge": 24, "g6e.xlarge": 48, "g7.2xlarge": 32, "p4d.24xlarge": 0} {
+		if got := GPUMemGiB(typ); got != want {
+			t.Errorf("%s: %d, want %d", typ, got, want)
+		}
+	}
+}
