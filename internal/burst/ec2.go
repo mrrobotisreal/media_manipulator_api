@@ -184,6 +184,8 @@ func toInstance(i types.Instance) Instance {
 			out.RunID = aws.ToString(t.Value)
 		case TagJob:
 			out.JobID = aws.ToString(t.Value)
+		case TagBuild:
+			out.Build = aws.ToString(t.Value)
 		}
 	}
 	return out

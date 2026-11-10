@@ -1,0 +1,23 @@
+# MM126 restore family: Real-ESRGAN, SwinIR, HAT, BasicVSR++, RVRT, VRT, GFPGAN, CodeFormer, FBCNN, SCUNet, NAFNet.
+# repos/DiffBIR, venvs/gen-* are generative experiments and are not part of the family.
+/opt/media-manipulator-ai/venvs/restore-sr
+/opt/media-manipulator-ai/venvs/restore-vsr-mm
+/opt/media-manipulator-ai/venvs/face-restore
+/opt/media-manipulator-ai/venvs/preclean
+/opt/media-manipulator-ai/repos/CodeFormer
+/opt/media-manipulator-ai/repos/FBCNN
+/opt/media-manipulator-ai/repos/HAT
+/opt/media-manipulator-ai/repos/NAFNet
+/opt/media-manipulator-ai/repos/RVRT
+/opt/media-manipulator-ai/repos/SCUNet
+/opt/media-manipulator-ai/repos/SwinIR
+/opt/media-manipulator-ai/repos/VRT
+/opt/media-manipulator-ai/models/restore
+/opt/media-manipulator-ai/bin/realesrgan-ncnn-vulkan
+/opt/media-manipulator-ai/env/vulkan-nvidia.sh
+/opt/media-manipulator-ai/env/cuda-nvidia.sh
+/opt/media-manipulator-ai/vulkan/nvidia_icd_egl.json
+/opt/media-manipulator-ai/scripts/restore_frames.py
+/opt/media-manipulator-ai/scripts/restore_video.py
+/opt/media-manipulator-ai/scripts/restore_image_faces.py
+/opt/media-manipulator-ai/scripts/preclean_image.py

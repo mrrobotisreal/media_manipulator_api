@@ -30,6 +30,7 @@ var (
 	ErrNotBurstable = errors.New("burst: kind is not burstable")
 	ErrDisabled     = errors.New("burst: workload not enabled")
 	ErrMaxInstances = errors.New("burst: max live instances reached")
+	ErrStaleImage   = errors.New("burst: worker image is stale vs host (BURST_REFUSE_STALE_IMAGES)")
 )
 
 // UserDataFunc builds the instance user-data (MM125's template). The Tailscale
@@ -46,8 +47,12 @@ type Planner struct {
 	Minter   KeyMinter
 	Prefixes PrefixStore // may be nil
 	UserData UserDataFunc
-	Log      *slog.Logger
-	Now      func() time.Time
+	// Stale reports whether a family's image differs from the host runtime
+	// (MM126 drift check). Nil = never stale. Only consulted when
+	// Cfg.RefuseStaleImages is set; otherwise stale images still run.
+	Stale func(family string) bool
+	Log   *slog.Logger
+	Now   func() time.Time
 
 	mu   sync.Mutex
 	live map[string]*Run
@@ -125,6 +130,9 @@ func (p *Planner) Launch(ctx context.Context, offer Offer) (*Run, error) {
 	if len(p.Live()) >= p.Cfg.MaxInstances {
 		return nil, ErrMaxInstances
 	}
+	if p.Cfg.RefuseStaleImages && p.Stale != nil && p.Stale(prof.Family) {
+		return nil, fmt.Errorf("%w: %s", ErrStaleImage, prof.Family)
+	}
 	cands := CandidatesFor(prof, p.Cfg.InstanceTypes)
 	if offer.InstanceTypeOverride != "" {
 		cands = []string{offer.InstanceTypeOverride}
@@ -187,7 +195,7 @@ func (p *Planner) Launch(ctx context.Context, offer Offer) (*Run, error) {
 	inst, err := p.Provider.Launch(ctx, LaunchRequest{
 		RunID: run.ID, JobID: run.JobID, Workload: prof.Key, Candidates: cands, Subnets: p.Cfg.SubnetIDs,
 		AMIFor: amiFor, SecurityGroupID: p.Cfg.SecurityGroupID, InstanceProfile: p.Cfg.InstanceProfile,
-		RootGiB: prof.RootGiB, UserData: ud,
+		RootGiB: prof.RootGiB, RootDevice: p.Cfg.RootDevice, UserData: ud,
 	})
 	if err != nil {
 		errType := "error"

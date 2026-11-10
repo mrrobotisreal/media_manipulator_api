@@ -1,0 +1,12 @@
+# MM126 audio family: DeepFilterNet, Demucs htdemucs, faster-whisper (ct2).
+# Whisper "small" and large-v3-turbo are NOT on the host's HF cache (S0 finding); only medium and large-v3 are.
+/opt/media-manipulator-ai/venvs/audio-clean
+/opt/media-manipulator-ai/venvs/audio-separate
+/opt/creatv/whisper-ct2
+/var/lib/creatv/hf/hub/models--Systran--faster-whisper-medium
+/var/lib/creatv/hf/hub/models--Systran--faster-whisper-large-v3
+/opt/media-manipulator-ai/env/cuda-nvidia.sh
+/opt/media-manipulator-ai/vulkan/nvidia_icd_egl.json
+/home/mwintrow/.cache/DeepFilterNet/DeepFilterNet3/checkpoints => /opt/mm-burst-home/.cache/DeepFilterNet/DeepFilterNet3/checkpoints
+/home/mwintrow/.cache/DeepFilterNet/DeepFilterNet3/config.ini => /opt/mm-burst-home/.cache/DeepFilterNet/DeepFilterNet3/config.ini
+/home/mwintrow/.cache/torch/hub/checkpoints/955717e8-8726e21a.th => /opt/mm-burst-home/.cache/torch/hub/checkpoints/955717e8-8726e21a.th

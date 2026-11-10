@@ -6,6 +6,7 @@
 //	burst-ctl reap [--yes]
 //	burst-ctl launch-test --workload remove_background --i-know-this-costs-money
 //	burst-ctl prices
+//	burst-ctl manifest <family> [--json]   (MM126: the host runtime fingerprint)
 package main
 
 import (
@@ -41,18 +42,27 @@ type env struct {
 	store    burst.Store
 	prefixes burst.PrefixStore
 	minter   burst.KeyMinter
+	images   burst.ImageAPI // MM126: DescribeImages for the stale flag (nil = skip)
+	host     burst.HostManifest
 	now      func() time.Time
 	out      io.Writer
 	log      *slog.Logger
 }
 
 func main() {
-	_ = godotenv.Load(".env")
-	_ = godotenv.Load(".env.local")
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(2)
 	}
+	if os.Args[1] == "manifest" {
+		// MM126: a pure filesystem read. Never loads .env, never touches AWS or the DB.
+		if err := (&env{out: os.Stdout}).manifest(os.Args[2:]); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load(".env.local")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 	full := config.Load()
@@ -63,6 +73,7 @@ func main() {
 			fatal(err)
 		}
 		e.provider = burst.NewEC2Provider(client, e.log)
+		e.images = client
 	}
 	if pool, err := db.New(ctx, full); err == nil && pool != nil {
 		defer pool.Close()
@@ -107,7 +118,8 @@ func usage() {
   runs --since 24h                         recent burst runs
   reap [--yes]                             one reaper pass (dry run unless --yes)
   launch-test --workload <key> --i-know-this-costs-money
-  prices                                   AWS Pricing API vs BURST_PRICE_USD_PER_HOUR`)
+  prices                                   AWS Pricing API vs BURST_PRICE_USD_PER_HOUR
+  manifest <family> [--json|--paths]       host runtime fingerprint of a worker-image family (MM126)`)
 }
 
 func fatal(err error) {
@@ -142,6 +154,7 @@ func (e *env) status(ctx context.Context) error {
 		fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\trun=%s\tage=%s\n", in.ID, in.Type, in.AZ, in.State, in.RunID, age)
 	}
 	tw.Flush()
+	e.imageStatus(ctx)
 	if e.store == nil {
 		fmt.Fprintln(e.out, "(no database: spend unavailable)")
 		return nil
