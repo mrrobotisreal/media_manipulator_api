@@ -6,8 +6,8 @@ export HOME="${HOME_OVERRIDE:-$([ -d /opt/mm-burst-home ] && echo /opt/mm-burst-
 
 mkdir -p "$WORK/df" "$WORK/dm"
 ffmpeg -v error -y -i "$FIX/speech.wav" -ac 1 -ar 48000 "$WORK/in48.wav"
-valid_wav() { echo "[ \"\$(ffprobe -v error -show_entries format=duration -of csv=p=0 '$1' | cut -d. -f1)\" -ge 1 ]"; }
-case_run deepfilter 1 "$(cuda_env)" "$(valid_wav "$WORK/df/in48_DeepFilterNet3.wav")" -- \
+# DeepFilterNet names its output after its model version; take the one WAV it wrote.
+case_run deepfilter 1 "$(cuda_env)" "$(valid_wav_in "$WORK/df")" -- \
   "$MM_ROOT/venvs/audio-clean/bin/deepFilter" --output-dir "$WORK/df" "$WORK/in48.wav"
 case_run demucs 1 "$(cuda_env)" "ls '$WORK'/dm/htdemucs/*/vocals.wav >/dev/null" -- \
   "$MM_ROOT/venvs/audio-separate/bin/demucs" -n htdemucs --two-stems=vocals --segment 7 -o "$WORK/dm" "$FIX/speech.wav"

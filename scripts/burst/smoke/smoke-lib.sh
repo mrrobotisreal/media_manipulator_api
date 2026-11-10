@@ -68,6 +68,22 @@ case_run() {
     "$(awk -v a="$t0" -v b="$t1" 'BEGIN{printf "%.2f", b-a}')" "$extra" "$why" >&2
 }
 
+# valid_wav_in DIR: like valid_wav for the first .wav in DIR (DeepFilterNet
+# names its output after its model version, as findEnhancedWav expects).
+valid_wav_in() {
+  local f
+  f="$(find "$1" -maxdepth 1 -name '*.wav' -type f 2>/dev/null | sort | sed -n '1p')"
+  if [ -z "$f" ]; then echo "false"; else valid_wav "$f"; fi
+}
+
+# instance_type: the EC2 instance type via IMDSv2 (a token is required), or
+# "host" when not on EC2.
+instance_type() {
+  local tok
+  tok="$(curl -fsS -m 2 -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null)" || { echo host; return; }
+  curl -fsS -m 2 -H "X-aws-ec2-metadata-token: $tok" http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || echo host
+}
+
 smoke_finish() {
   local family="$1"
   local drv cuda ff
@@ -75,7 +91,7 @@ smoke_finish() {
   cuda="$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: \([0-9.]*\).*/\1/p' | sed -n '1p')"
   ff="$(ffmpeg -version 2>/dev/null | sed -n '1p' | cut -d' ' -f3)"
   jq -s --arg family "$family" --arg drv "$drv" --arg cuda "$cuda" --arg ff "$ff" --arg date "$(date -u +%FT%TZ)" \
-    --arg itype "$(curl -fsS -m 2 http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || echo host)" --argjson fails "$FAILS" \
+    --arg itype "$(instance_type)" --argjson fails "$FAILS" \
     '{family: $family, passed: ($fails == 0), failures: $fails, instanceType: $itype, driverAndGpu: $drv, cudaDriver: $cuda, ffmpeg: $ff, at: $date, cases: .}' \
     "$CASES_FILE" > "$SMOKE_OUT"
   echo "smoke: $family $([ "$FAILS" -eq 0 ] && echo ALL-PASS || echo "$FAILS FAILED") -> $SMOKE_OUT" >&2
@@ -83,4 +99,9 @@ smoke_finish() {
 }
 
 # Small helpers for the check strings.
-is_png() { echo "identify -format %w x '$1' >/dev/null 2>&1 && [ \"\$(identify -format %w '$1' | sed -n '1p')\" -gt 0 ]"; }
+# is_png FILE: the check string passes when FILE is a readable PNG wider than 0 px.
+# (On 2026-11-10 a stray "x" after -format made identify also open a file
+# named "x", so every image check failed on good outputs.)
+is_png() { echo "[ -s '$1' ] && [ \"\$(identify -format '%m %w' '$1' 2>/dev/null | sed -n '1p' | cut -d' ' -f1)\" = PNG ] && [ \"\$(identify -format '%w' '$1' 2>/dev/null | sed -n '1p')\" -gt 0 ]"; }
+# valid_wav FILE: the check string passes when FILE decodes and lasts >= 1 s.
+valid_wav() { echo "[ -s '$1' ] && [ \"\$(ffprobe -v error -show_entries format=duration -of csv=p=0 '$1' | cut -d. -f1)\" -ge 1 ]"; }
