@@ -221,6 +221,60 @@ esac
 	}
 }
 
+// Under `set -o pipefail`, `producer | grep -q x` and `producer | head -1`
+// report failure when the producer is cut off (SIGPIPE, exit 141) even though
+// the match is there. On 2026-11-10 that failed a builder with "ffmpeg has no
+// h264_nvenc" on an ffmpeg that has NVENC. No burst script may use either.
+func TestBurstScriptsNeverPipeIntoEarlyExitReaders(t *testing.T) {
+	bad := regexp.MustCompile(`\|\s*(grep\s+(-[a-zA-Z]*[qm][a-zA-Z]*|--quiet|--max-count)|head(\s|$))`)
+	err := filepath.Walk(scriptsDir(t), func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".sh") {
+			return err
+		}
+		b, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return rerr
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "#") {
+				continue
+			}
+			if bad.MatchString(line) {
+				t.Errorf("%s:%d pipes into an early-exit reader (use output_has or sed -n '1p'): %s", filepath.Base(path), i+1, strings.TrimSpace(line))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// output_has must find a match early in a long output under pipefail (the
+// shape that failed), and must not match what is absent.
+func TestOutputHasIsSafeUnderPipefail(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("no bash")
+	}
+	common := filepath.Join(scriptsDir(t), "provision-common.sh")
+	run := func(script string) error {
+		cmd := exec.Command("bash", "-c", ". \""+common+"\"; "+script)
+		cmd.Env = append(os.Environ(), "MM_DRY=1", "MM_FAMILY=video")
+		return cmd.Run()
+	}
+	long := `bash -c "echo h264_nvenc; seq 1 300000"`
+	if err := run("output_has h264_nvenc " + long); err != nil {
+		t.Fatalf("a match at the top of a long output must be found: %v", err)
+	}
+	if err := run("output_has av1_qsv " + long); err == nil {
+		t.Fatal("an absent pattern must not match")
+	}
+	// The old shape really does fail here, which is the bug this guards.
+	if err := run("seq 1 300000 | grep -q 1"); err == nil {
+		t.Log("note: this bash did not SIGPIPE the producer; the lint test above still forbids the shape")
+	}
+}
+
 func TestExportDryRunListsPathsWithoutTouchingTheHost(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("no bash")

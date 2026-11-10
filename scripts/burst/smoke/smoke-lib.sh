@@ -28,7 +28,7 @@ FAILS=0
 smoke_cleanup() { if [ "${SMOKE_KEEP:-0}" != "1" ]; then rm -rf "${WORK:?}"; fi; }
 trap smoke_cleanup EXIT
 
-gpu_used() { nvidia-smi -i "$SMOKE_CARD" --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' '; }
+gpu_used() { nvidia-smi -i "$SMOKE_CARD" --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | sed -n '1p' | tr -d ' '; }
 
 # gpu_env prints the env the Go callers set for a CUDA tool.
 cuda_env() { echo "CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=$SMOKE_CARD PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True"; }
@@ -71,9 +71,9 @@ case_run() {
 smoke_finish() {
   local family="$1"
   local drv cuda ff
-  drv="$(nvidia-smi --query-gpu=driver_version,name --format=csv,noheader | head -1)"
-  cuda="$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: \([0-9.]*\).*/\1/p' | head -1)"
-  ff="$(ffmpeg -version 2>/dev/null | head -1 | cut -d' ' -f3)"
+  drv="$(nvidia-smi --query-gpu=driver_version,name --format=csv,noheader | sed -n '1p')"
+  cuda="$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: \([0-9.]*\).*/\1/p' | sed -n '1p')"
+  ff="$(ffmpeg -version 2>/dev/null | sed -n '1p' | cut -d' ' -f3)"
   jq -s --arg family "$family" --arg drv "$drv" --arg cuda "$cuda" --arg ff "$ff" --arg date "$(date -u +%FT%TZ)" \
     --arg itype "$(curl -fsS -m 2 http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || echo host)" --argjson fails "$FAILS" \
     '{family: $family, passed: ($fails == 0), failures: $fails, instanceType: $itype, driverAndGpu: $drv, cudaDriver: $cuda, ffmpeg: $ff, at: $date, cases: .}' \
@@ -83,4 +83,4 @@ smoke_finish() {
 }
 
 # Small helpers for the check strings.
-is_png() { echo "identify -format %w x '$1' >/dev/null 2>&1 && [ \"\$(identify -format %w '$1' | head -1)\" -gt 0 ]"; }
+is_png() { echo "identify -format %w x '$1' >/dev/null 2>&1 && [ \"\$(identify -format %w '$1' | sed -n '1p')\" -gt 0 ]"; }
