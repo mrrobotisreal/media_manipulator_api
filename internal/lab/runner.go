@@ -276,12 +276,21 @@ func HomeRequest(cfg *config.Config, vramMiB int64, maxWait time.Duration) servi
 		ForceIndex: &force, Priority: services.GPUPriorityStandard}
 }
 
-// runHome runs a FitsHome model on a free home card (LAB_ALLOW_LOCAL). With
-// burst configured it waits at most a few seconds for a card, then bursts;
-// without burst it waits as long as it takes.
+// canBurst reports whether a model could run on a burst instance right now:
+// burst is configured and a worker image exists for the model's family.
+func (r *Runner) canBurst(m LabModel) bool {
+	return r.BurstAvailable() && r.Cfg.Burst.AMIs[m.Family+":x86_64"] != ""
+}
+
+// runHome runs a FitsHome model on a free home card (LAB_ALLOW_LOCAL). When
+// the model could burst instead it waits at most a few seconds for a card,
+// then bursts; otherwise (burst off, or no worker image for its family yet)
+// it waits as long as it takes. Without the image check, switching burst on
+// for the voice models would have made CodeFormer fail whenever the home card
+// was busy for more than 3 s, because no lab-image AMI exists.
 func (r *Runner) runHome(ctx context.Context, req RunRequest) error {
 	var maxWait time.Duration
-	if r.Launch != nil && r.Remote != nil {
+	if r.canBurst(req.Model) {
 		maxWait = 3 * time.Second
 	}
 	card, release, err := r.acquire(ctx, req.JobID, req.Model.HomeVRAMMiB, maxWait)

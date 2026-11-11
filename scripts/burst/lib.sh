@@ -16,6 +16,14 @@ MM_FAMILIES="image audio video restore"
 # their runtime manifest is computed on the builder from a recorded version
 # manifest (repo commit + weight revision + pip freeze hash per model).
 MM_FRESH_FAMILIES="lab-voice"
+# The ffmpeg 8 packages (the host's NVENC build). mirror-ffmpeg.sh keeps a signed
+# copy of the PPA in S3 so a build does not need Launchpad; the PPA is the fallback.
+MM_FFMPEG_PPA_URL="${MM_FFMPEG_PPA_URL:-https://ppa.launchpadcontent.net/ubuntuhandbook1/ffmpeg8/ubuntu}"
+MM_FFMPEG_MIRROR_KEY="${MM_FFMPEG_MIRROR_KEY:-burst-images/apt/ffmpeg8-noble-amd64.tar}"
+# ffmpeg_apt_line KEYRING URI [OPTION]: the apt source line for those packages,
+# verified with the PPA's own key (keys/ppa-ubuntuhandbook1-ffmpeg8.asc). The
+# builder and mirror-ffmpeg.sh's self-test use the same line.
+ffmpeg_apt_line() { printf 'deb [arch=amd64 signed-by=%s%s] %s noble main\n' "$1" "${3:+ $3}" "$2"; }
 MM_ROOT="/opt/media-manipulator-ai"
 MM_HOME="/opt/mm-burst-home"
 
@@ -51,6 +59,18 @@ price_per_hour() {
     g7.2xlarge) echo 2.52 ;;
     *) echo 0 ;;
   esac
+}
+
+# controller_key_env ENV_FILE: export the burst controller's AWS key from the API
+# .env for this process only. The values are never printed.
+controller_key_env() {
+  local f="$1" k s
+  [ -r "$f" ] || die "cannot read $f (the API .env)"
+  k="$(grep -E '^BURST_AWS_ACCESS_KEY_ID=' "$f" | tail -n 1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true)"
+  s="$(grep -E '^BURST_AWS_SECRET_ACCESS_KEY=' "$f" | tail -n 1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true)"
+  [ -n "$k" ] && [ -n "$s" ] || die "BURST_AWS_ACCESS_KEY_ID / BURST_AWS_SECRET_ACCESS_KEY are not set in $f"
+  export AWS_ACCESS_KEY_ID="$k" AWS_SECRET_ACCESS_KEY="$s" AWS_DEFAULT_REGION="$MM_REGION"
+  unset AWS_PROFILE AWS_SESSION_TOKEN
 }
 
 log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" >&2; }

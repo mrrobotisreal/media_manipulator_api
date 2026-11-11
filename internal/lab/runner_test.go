@@ -179,6 +179,7 @@ func newRig(t *testing.T, allowLocal, withBurst bool) *rig {
 	}
 	if withBurst {
 		r.Launch, r.Remote = rg.fb, rg.fb
+		cfg.Burst.AMIs = map[string]string{"lab-image:x86_64": "ami-test"}
 	}
 	rg.r = r
 	return rg
@@ -245,6 +246,37 @@ func TestRunner_BurstModelFailsClosedWithoutBurst(t *testing.T) {
 	}
 	if g.local != 0 {
 		t.Fatal("a burst-only model must not run locally")
+	}
+}
+
+// Burst is on (for the voice models, say) but there is no worker image for this
+// home model's family: the job must wait for the home card as long as it takes,
+// not give up after 3 s and fail on a launch that has no image.
+func TestRunner_HomeModelWaitsForTheCardWhenItsFamilyHasNoImage(t *testing.T) {
+	g := newRig(t, true, true)
+	g.r.Cfg.Burst.AMIs = map[string]string{"lab-voice:x86_64": "ami-voice"}
+	var waits []time.Duration
+	g.r.Acquire = func(_ context.Context, _ string, _ int64, maxWait time.Duration) (int, func(), error) {
+		waits = append(waits, maxWait)
+		return 1, func() {}, nil
+	}
+	g.r.Run(context.Background(), g.job(t, "j1"))
+	if st, msg := g.status("j1"); st != models.StatusCompleted {
+		t.Fatalf("status %s %q", st, msg)
+	}
+	if len(waits) != 1 || waits[0] != 0 {
+		t.Fatalf("home wait = %v, want one unlimited wait (0)", waits)
+	}
+	if g.local != 1 || g.fb.runs != 0 {
+		t.Fatalf("local=%d burst runs=%d, want 1 and 0", g.local, g.fb.runs)
+	}
+	// With an image for its family the short wait (then burst) is back.
+	g2 := newRig(t, true, true)
+	waits = nil
+	g2.r.Acquire = g.r.Acquire
+	g2.r.Run(context.Background(), g2.job(t, "j2"))
+	if len(waits) != 1 || waits[0] != 3*time.Second {
+		t.Fatalf("home wait with an image = %v, want 3s", waits)
 	}
 }
 

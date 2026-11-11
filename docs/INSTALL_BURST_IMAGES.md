@@ -28,7 +28,7 @@ The builder writes its status and smoke JSON under `burst/build/<date>/` because
 ## What the builder does (`provision-<family>.sh`, as root on the builder)
 
 1. apt: ImageMagick 6 (`convert`/`identify`, never `magick`), exiftool, vulkan-tools, jq, zstd, AWS CLI v2 if missing.
-2. ffmpeg 8.1.1 from `ppa:ubuntuhandbook1/ffmpeg8` (the host's own source; the build checks `h264_nvenc`). tailscale from `pkgs.tailscale.com`; `tailscale up` is left to each run's user-data.
+2. ffmpeg 8.1.x, the NVENC build of `ppa:ubuntuhandbook1/ffmpeg8` (the host's own source; the build checks the version and `h264_nvenc`). It is installed from the signed copy in `s3://media-manipulator/burst-images/apt/ffmpeg8-noble-amd64.tar` when that exists (see "The ffmpeg package copy" below), else from the PPA. Either way apt verifies it with the PPA's public key committed in `scripts/burst/keys/`; `add-apt-repository` is never used. tailscale from `pkgs.tailscale.com`; `tailscale up` is left to each run's user-data.
 3. Downloads the tarball, verifies the sha256, unpacks to `/` with `--numeric-owner`, then checks `burst-ctl manifest <family> --from-dest` equals the exported runtime manifest (so a bad copy fails before anything else).
 4. Vulkan: if `libEGL_nvidia.so.0` is missing it installs `libnvidia-gl-<driver major>-server`, and copies the system ICD's `api_version` into `/opt/media-manipulator-ai/vulkan/nvidia_icd_egl.json` (the path is hard-coded in Go; `library_path` stays `libEGL_nvidia.so.0`).
 5. `restore` only: rebuilds **mmcv v2.1.0** (commit `57c4e25e06e2d4f8a9357c84bcd24089a284dc88`, the version the host runs; `INSTALL_VIDEO_RESTORATION.md` still says v2.2.0) with `MMCV_WITH_OPS=1 FORCE_CUDA=1 TORCH_CUDA_ARCH_LIST="8.9;12.0"` against the venv's torch 2.11 cu128 and CUDA 12.8, then checks the `_ext` has `sm_89` and `sm_120`. Pre-builds RVRT's torch JIT extension `deform_attn` for both. Links `repos/mmagic` to the pip package's packaged configs (the host has no `repos/mmagic`; see below).
@@ -45,6 +45,16 @@ Each runs the workload's real command (the same argv as the Go code) on a commit
 Run one on the host for comparison: `SMOKE_CARD=1 SMOKE_OUT=/tmp/s.json scripts/burst/smoke/image.sh` (it uses the GPU for a few seconds; do it when idle).
 
 Deviations from the ticket's list, from the S0 inventory: the host has no faster-whisper `small` (only `medium`, the API default, and `large-v3`), so the audio test uses `medium`; the face-restore cases use a face-less fixture and assert the script's own `No faces were detected` error (the model still loads on the GPU); `basicvsrpp` runs 4 frames, `rvrt` and `vrt` run 32 (their temporal windows).
+
+## The ffmpeg package copy (`scripts/burst/mirror-ffmpeg.sh`)
+
+Every worker image installs ffmpeg from a Launchpad PPA. On 2026-11-11 Launchpad and Ubuntu's key server were unreachable for hours and a restore builder waited 170 minutes for them (about $7). Since then:
+
+- **A copy in our bucket.** `scripts/burst/mirror-ffmpeg.sh` (on the server, normal user, free, about a minute) downloads the PPA's signed index, checks its signature with the committed key (fingerprint `F4E48910A020E77056748B745738AE8480447DDF`, the one Launchpad reports for the PPA), checks every package list and all 36 packages against it by sha256, proves apt accepts the result, and uploads one 34 MiB tar to `burst-images/apt/` with the controller key from `.env`. The builder unpacks it and uses it as a local apt source; apt checks the PPA's signature again there, so nothing in S3 is trusted by itself. The image keeps neither the copy nor a source entry for it.
+- **When to run it again:** only when you want builds to pick up a newer ffmpeg from the PPA. It refuses anything that is not 8.1.x.
+- **Without the copy** a build still works as long as Launchpad answers, and now fails within minutes with a clear message when it does not.
+- **Time limits.** Every download in provisioning runs under `net SECONDS` (or `apt_get`, or curl's own limits); a test (`TestProvisionDownloadsAllHaveATimeLimit`) refuses a new one without. A timeout is written to the status as `TIMED OUT after Ns: <command>`.
+- **A quiet builder is a stuck builder.** `build-image.sh` terminates the builder and stops when its status has not changed for 90 minutes (`MM_STALL_SECONDS`). Smoke runs report after each case, so they never look quiet.
 
 ## Troubleshooting
 
