@@ -19,7 +19,7 @@ import (
 // Image tag keys written by scripts/burst/build-image.sh (MM126).
 const (
 	TagImage           = "mm-burst-image"       // =1 on every AMI and snapshot the builder makes
-	TagImageFamily     = "family"               // image|audio|video|restore
+	TagImageFamily     = "family"               // image|audio|video|restore|lab-voice
 	TagRuntimeManifest = "runtime-manifest"     // sha256 of the family's host manifest at export time
 	TagImageArch       = "arch"                 // ada+blackwell
 	TagImageBuilt      = "mm-burst-image-built" // YYYY-MM-DD
@@ -89,7 +89,7 @@ func (d *DriftChecker) families() map[string]string {
 		if i := strings.Index(k, ":"); i >= 0 {
 			fam = k[:i]
 		}
-		known := false
+		known := manifest.IsFresh(fam)
 		for _, f := range manifest.Families {
 			known = known || f == fam
 		}
@@ -140,6 +140,22 @@ func (d *DriftChecker) Check(ctx context.Context) []ImageStatus {
 			case TagImageBuilt:
 				st.Built = aws.ToString(t.Value)
 			}
+		}
+		if manifest.IsFresh(f) {
+			// MM139: installed fresh on the builder, nothing on the host to compare.
+			// Never stale; the tag is the recorded-versions fingerprint.
+			switch {
+			case err != nil:
+				st.Reason = "describe images failed"
+			case !ok:
+				st.Reason = "ami not found"
+			case st.ImageManifest == "":
+				st.Reason = "ami has no runtime-manifest tag"
+			default:
+				st.Reason = "fresh install (no host runtime to compare)"
+			}
+			out = append(out, st)
+			continue
 		}
 		hm, herr := d.Host(f)
 		switch {

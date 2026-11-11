@@ -159,3 +159,35 @@ func TestReaperSparesBuildersUntilTheyAreFourHoursOld(t *testing.T) {
 		t.Fatalf("only the runaway builder should be reaped: %+v", rep)
 	}
 }
+
+// MM139: a fresh-install family (lab-voice) has no host runtime. It is never
+// stale, the checker does not call the host manifest for it, and the status says why.
+func TestDriftFreshFamilyIsNeverStale(t *testing.T) {
+	api := &fakeImages{tags: map[string]map[string]string{
+		"ami-lab":   {TagRuntimeManifest: "recorded-sha"},
+		"ami-image": {TagRuntimeManifest: "h1"},
+	}}
+	host := func(f string) (manifest.Manifest, error) {
+		if f == "lab-voice" {
+			t.Fatal("the host manifest must not be computed for a fresh family")
+		}
+		return manifest.Manifest{Family: f, SHA256: "h1"}, nil
+	}
+	dc := &DriftChecker{API: api, AMIs: map[string]string{"lab-voice:x86_64": "ami-lab", "image:x86_64": "ami-image"}, Host: host}
+	got := map[string]ImageStatus{}
+	for _, s := range dc.Check(context.Background()) {
+		got[s.Family] = s
+	}
+	lab := got["lab-voice"]
+	if lab.Stale || !lab.Found || lab.ImageManifest != "recorded-sha" || !strings.Contains(lab.Reason, "fresh install") {
+		t.Fatalf("lab-voice: %+v", lab)
+	}
+	if got["image"].Stale || dc.Stale("lab-voice") {
+		t.Fatalf("image %+v", got["image"])
+	}
+	// An untagged or missing fresh AMI is still reported.
+	dc2 := &DriftChecker{API: &fakeImages{tags: map[string]map[string]string{"ami-lab": {}}}, AMIs: map[string]string{"lab-voice:x86_64": "ami-lab"}, Host: host}
+	if s := dc2.Check(context.Background())[0]; s.Reason != "ami has no runtime-manifest tag" || s.Stale {
+		t.Fatalf("untagged: %+v", s)
+	}
+}

@@ -29,7 +29,7 @@ KEEP_AMIS="${KEEP_AMIS:-}"
 
 [ "$YES" = 1 ] || echo "DRY RUN (add --yes to act)"
 total_gib=0
-for fam in ${ONLY:-$MM_FAMILIES}; do
+for fam in ${ONLY:-$MM_FAMILIES $MM_FRESH_FAMILIES}; do
   rows=()
   while IFS= read -r line; do rows+=("$line"); done < <(aws ec2 describe-images --owners self \
     --filters "Name=tag:mm-burst-image,Values=1" "Name=tag:family,Values=$fam" \

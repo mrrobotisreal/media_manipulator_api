@@ -31,6 +31,7 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+is_fresh_family "$FAMILY" && die "$FAMILY is installed fresh on the builder, there is nothing to export from this host: run scripts/burst/build-image.sh $FAMILY <date>"
 valid_family "$FAMILY" || die "family must be one of: $MM_FAMILIES"
 valid_date "$DATE" || die "--date must be YYYY-MM-DD"
 [ "$(id -u)" -ne 0 ] || die "do not run as root; this export is read-only on every source"
