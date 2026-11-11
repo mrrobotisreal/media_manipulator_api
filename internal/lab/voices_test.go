@@ -71,7 +71,7 @@ func TestVoiceRowsSchemaAndConsent(t *testing.T) {
 		}
 	}
 	// Licences as verified on 2026-11-11 (MM139 ticket log).
-	want := map[string]string{"fish_s2": LicenceNonCommercial, "indextts2": LicenceNonCommercial, "seedvc": LicenceCopyleft, "cosyvoice3": LicencePermissive}
+	want := map[string]string{"fish_s2": LicenceNonCommercial, "indextts2": LicenceDealRequired, "seedvc": LicenceCopyleft, "cosyvoice3": LicencePermissive}
 	for k, l := range want {
 		if mustGet(t, k).Licence != l {
 			t.Errorf("%s licence %s, want %s", k, mustGet(t, k).Licence, l)

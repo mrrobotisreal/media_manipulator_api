@@ -242,7 +242,10 @@ func voiceModels() []LabModel {
 		},
 		{
 			Key: "indextts2", Name: "IndexTTS-2 / 2.5", Area: AreaVoice,
-			Licence: LicenceNonCommercial, LicenceURL: "https://github.com/index-tts/index-tts/blob/main/LICENSE", SourceURL: "https://github.com/index-tts/index-tts",
+			// bilibili Model Use License: free below 100 M MAU / RMB 1 bn revenue, but the project's
+			// DISCLAIMER forbids commercial use of the voices without authorisation and the README says
+			// to contact indexspeech@bilibili.com for commercial use: "deal required" for a product.
+			Licence: LicenceDealRequired, LicenceURL: "https://github.com/index-tts/index-tts/blob/main/LICENSE", SourceURL: "https://github.com/index-tts/index-tts",
 			Family: voiceFamily, InstanceCandidates: big, MinGPUMemGiB: 16,
 			ParamsSchema: indexSchema,
 			Inputs: []Input{
@@ -264,7 +267,7 @@ func voiceModels() []LabModel {
 		},
 		{
 			Key: "cosyvoice3", Name: "Fun-CosyVoice3 0.5B (comparator)", Area: AreaVoice,
-			Licence: LicencePermissive, LicenceURL: "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512", SourceURL: "https://github.com/QwenAudio/CosyVoice",
+			Licence: LicencePermissive, LicenceURL: "https://github.com/QwenAudio/CosyVoice/blob/main/LICENSE", SourceURL: "https://github.com/QwenAudio/CosyVoice",
 			Family: voiceFamily, InstanceCandidates: small, MinGPUMemGiB: 12,
 			ParamsSchema: cosySchema,
 			Inputs:       []Input{{Name: "reference", Kind: "audio", Label: "Reference voice (5 to 30 s)", Required: true}},
