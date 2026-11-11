@@ -33,6 +33,7 @@ import (
 	"github.com/mrrobotisreal/media_manipulator_api/internal/burst"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/config"
 	"github.com/mrrobotisreal/media_manipulator_api/internal/db"
+	"github.com/mrrobotisreal/media_manipulator_api/internal/lab"
 )
 
 // env bundles what the commands need; tests build it from fakes.
@@ -117,7 +118,7 @@ func usage() {
   status                                   live instances, today's and this month's spend vs caps
   runs --since 24h                         recent burst runs
   reap [--yes]                             one reaper pass (dry run unless --yes)
-  launch-test --workload <key> --i-know-this-costs-money
+  launch-test --workload <key|lab_<model>> --i-know-this-costs-money
   prices                                   AWS Pricing API vs BURST_PRICE_USD_PER_HOUR
   manifest <family> [--json|--paths]       host runtime fingerprint of a worker-image family (MM126)`)
 }
@@ -239,7 +240,17 @@ func (e *env) launchTest(ctx context.Context, args []string) error {
 	if !*ack {
 		return fmt.Errorf("refusing: this launches a real instance; pass --i-know-this-costs-money")
 	}
-	prof, ok := burst.Lookup(*workload)
+	// MM139: a Lab workload (a Lab model's tool name) is accepted too, so the first live launch can
+	// be tested with the very instance and image a Lab run will use. It goes through LaunchDirect
+	// with the lab flag, exactly like a Lab job; product workloads keep the trigger path.
+	isLab := lab.IsLabTool(*workload)
+	var prof burst.Profile
+	var ok bool
+	if isLab {
+		prof, ok = burst.LookupAny(*workload)
+	} else {
+		prof, ok = burst.Lookup(*workload)
+	}
 	if !ok || prof.Never {
 		return fmt.Errorf("unknown or non-burstable workload %q", *workload)
 	}
@@ -255,7 +266,14 @@ func (e *env) launchTest(ctx context.Context, args []string) error {
 		UserData: func(burst.Run, burst.Profile, string) (string, error) {
 			return "#!/bin/bash\nshutdown -h +5\n", nil // no-op: no worker, no Tailscale
 		}}
-	run, err := pl.Launch(ctx, burst.Offer{JobID: "launch-test", Kind: prof.Key, Tier: "operator", InstanceTypeOverride: firstOf(burst.CandidatesFor(prof, e.cfg.InstanceTypes))})
+	offer := burst.Offer{JobID: "launch-test", Kind: prof.Key, Tier: "operator", InstanceTypeOverride: firstOf(burst.CandidatesFor(prof, e.cfg.InstanceTypes)), Lab: isLab}
+	var run *burst.Run
+	var err error
+	if isLab {
+		run, err = pl.LaunchDirect(ctx, prof, offer)
+	} else {
+		run, err = pl.Launch(ctx, offer)
+	}
 	if err != nil {
 		return err
 	}

@@ -167,7 +167,8 @@ func TestLabModelsPayload(t *testing.T) {
 			Inputs                                     []map[string]any
 		}
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || len(body.Models) != 1 {
+	// CodeFormer (image) sorts first; MM139 added the four voice rows after it.
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || len(body.Models) != len(lab.Models()) || len(body.Models) < 1 {
 		t.Fatalf("%v %s", err, w.Body)
 	}
 	m := body.Models[0]

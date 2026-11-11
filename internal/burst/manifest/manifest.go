@@ -36,6 +36,23 @@ const Version = 1
 // Families is the set of families that have a path list.
 var Families = []string{"image", "audio", "video", "restore"}
 
+// FreshFamilies are the Lab image families installed fresh on the builder (MM139):
+// they have no host runtime, so no path list, no export and no host fingerprint.
+// Their AMI's runtime-manifest tag is computed on the builder from the recorded
+// versions (repo commit + weight revision + pip freeze hash per model), and the
+// drift check reports them as "fresh install" instead of comparing.
+var FreshFamilies = []string{"lab-voice"}
+
+// IsFresh reports whether a family is installed fresh on the builder.
+func IsFresh(family string) bool {
+	for _, f := range FreshFamilies {
+		if f == family {
+			return true
+		}
+	}
+	return false
+}
+
 // Entry is one path of a family: Src on the host, Dest in the image (equal
 // unless the list says "SRC => DEST", used for operator HOME caches).
 type Entry struct{ Src, Dest string }

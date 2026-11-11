@@ -11,6 +11,11 @@ MM_SG="${MM_SG:-sg-005b8dbe0db36040e}"
 MM_PROFILE="${MM_PROFILE:-mm-burst-worker}"
 MM_SSM_PARAM="${MM_SSM_PARAM:-/aws/service/deeplearning/ami/x86_64/base-oss-nvidia-driver-gpu-ubuntu-24.04/latest/ami-id}"
 MM_FAMILIES="image audio video restore"
+# MM139: families that are installed FRESH on the builder (not copied from the
+# host). They have no host export, no host manifest and no drift comparison;
+# their runtime manifest is computed on the builder from a recorded version
+# manifest (repo commit + weight revision + pip freeze hash per model).
+MM_FRESH_FAMILIES="lab-voice"
 MM_ROOT="/opt/media-manipulator-ai"
 MM_HOME="/opt/mm-burst-home"
 
@@ -23,6 +28,7 @@ profile_root_gib() {
     audio) echo 100 ;;
     video) echo 100 ;;
     restore) echo 150 ;;
+    lab-voice) echo 200 ;; # internal/lab LabModel.Profile RootGiB; a Go test keeps them equal
     *) return 1 ;;
   esac
 }
@@ -34,6 +40,7 @@ build_hours() {
     audio) echo 1.0 ;;
     video) echo 0.6 ;;
     restore) echo 2.5 ;;
+    lab-voice) echo 2.0 ;; # estimated, not measured: installs + about 40 GB of weights + 5 model smoke runs
   esac
 }
 
@@ -51,7 +58,14 @@ die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 valid_family() {
   local f
-  for f in $MM_FAMILIES; do [ "$f" = "$1" ] && return 0; done
+  for f in $MM_FAMILIES $MM_FRESH_FAMILIES; do [ "$f" = "$1" ] && return 0; done
+  return 1
+}
+
+# is_fresh_family NAME: true for a family installed fresh on the builder (MM139).
+is_fresh_family() {
+  local f
+  for f in $MM_FRESH_FAMILIES; do [ "$f" = "$1" ] && return 0; done
   return 1
 }
 

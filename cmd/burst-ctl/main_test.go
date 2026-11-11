@@ -144,3 +144,43 @@ func TestPricesCompareToConfig(t *testing.T) {
 		t.Fatalf("prices:\n%s", buf.String())
 	}
 }
+
+// launchProv launches and reports running at once.
+type launchProv struct {
+	memProv
+	req burst.LaunchRequest
+}
+
+func (p *launchProv) Launch(_ context.Context, r burst.LaunchRequest) (burst.Instance, error) {
+	p.req = r
+	return burst.Instance{ID: "i-0lab", Type: r.Candidates[0], AMI: r.AMIFor(r.Candidates[0]), State: "running"}, nil
+}
+func (p *launchProv) Describe(context.Context, []string) ([]burst.Instance, error) {
+	return []burst.Instance{{ID: "i-0lab", State: "running"}}, nil
+}
+
+// MM139: the first live burst launch is tested with a Lab workload, so launch-test
+// accepts a Lab tool name and launches the lab-voice image through LaunchDirect.
+func TestLaunchTestAcceptsALabWorkload(t *testing.T) {
+	var buf bytes.Buffer
+	e, _ := testEnv(&buf)
+	prov := &launchProv{}
+	e.provider = prov
+	e.cfg.MaxInstances = 2
+	e.cfg.AMIs = map[string]string{"lab-voice:x86_64": "ami-voice"}
+	e.cfg.SubnetIDs = []string{"subnet-1"}
+	e.cfg.SecurityGroupID, e.cfg.InstanceProfile = "sg-1", "mm-burst-worker"
+	if err := e.launchTest(context.Background(), []string{"--workload", "lab_fish_s2", "--i-know-this-costs-money", "--wait", "1s"}); err != nil {
+		t.Fatalf("%v\n%s", err, buf.String())
+	}
+	if len(prov.req.Candidates) != 1 || prov.req.Candidates[0] != "g6e.xlarge" || prov.req.AMIFor("g6e.xlarge") != "ami-voice" {
+		t.Fatalf("launched %+v", prov.req)
+	}
+	if !strings.Contains(buf.String(), "launched i-0lab") || !strings.Contains(buf.String(), "terminated; cost") {
+		t.Fatalf("output:\n%s", buf.String())
+	}
+	// A product workload name still goes through the product table, and an unknown lab name is refused.
+	if err := e.launchTest(context.Background(), []string{"--workload", "lab_nope", "--i-know-this-costs-money"}); err == nil {
+		t.Fatal("an unknown lab workload must be refused")
+	}
+}

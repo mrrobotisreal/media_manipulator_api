@@ -1,7 +1,11 @@
 package lab
 
 import (
+	"encoding/json"
 	"errors"
+	"os"
+	"regexp"
+	"strconv"
 	"testing"
 )
 
@@ -45,7 +49,7 @@ func TestRegistry_RowsAreValidAndLabOnly(t *testing.T) {
 		if p := m.Profile(); !p.LabOnly || p.Key != ToolPrefix+m.Key || p.Never {
 			t.Errorf("%s: profile %+v", m.Key, p)
 		}
-		if _, err := ValidateParams(m, nil); err != nil {
+		if _, err := ValidateParams(m, requiredPlaceholders(m)); err != nil {
 			t.Errorf("%s: defaults must validate: %v", m.Key, err)
 		}
 		if m.Licence == LicencePermissive {
@@ -71,5 +75,45 @@ func TestEstimate_HomeIsFreeBurstIsPriced(t *testing.T) {
 	// g6e.xlarge $1.86/h x (300 s boot + 60 s) = $0.186 plus 200 GiB EBS for 6 min.
 	if got < 180_000 || got > 260_000 {
 		t.Fatalf("burst estimate %d micros", got)
+	}
+}
+
+// requiredPlaceholders fills the required properties that have no default (text,
+// the consent confirmation) so a schema's own defaults can be validated.
+func requiredPlaceholders(m LabModel) map[string]any {
+	var sch struct {
+		Required   []string `json:"required"`
+		Properties map[string]struct {
+			Type string `json:"type"`
+		} `json:"properties"`
+	}
+	_ = json.Unmarshal(m.ParamsSchema, &sch)
+	out := map[string]any{}
+	for _, k := range sch.Required {
+		switch sch.Properties[k].Type {
+		case "boolean":
+			out[k] = true
+		case "string":
+			out[k] = "x"
+		}
+	}
+	return out
+}
+
+// lib.sh mirrors the Lab image's root size (the builder launches with it, and an
+// AMI cannot be launched with a smaller root than its snapshot).
+func TestLibRootSizeMatchesTheLabProfile(t *testing.T) {
+	b, err := os.ReadFile("../../scripts/burst/lib.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^\s+lab-voice\) echo (\d+) ;;`).FindStringSubmatch(string(b))
+	if m == nil {
+		t.Fatal("lib.sh has no lab-voice root size")
+	}
+	for _, mm := range Models() {
+		if mm.Family == "lab-voice" && strconv.Itoa(mm.Profile().RootGiB) != m[1] {
+			t.Errorf("%s: profile root %d GiB, lib.sh %s GiB", mm.Key, mm.Profile().RootGiB, m[1])
+		}
 	}
 }

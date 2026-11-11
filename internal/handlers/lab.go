@@ -192,6 +192,14 @@ func (h *LabHandler) CreateJob(c *gin.Context) {
 		return
 	}
 
+	// MM139 decision 5: any reference voice needs the consent confirmation, stored on the job.
+	if m.RequiresConsent() {
+		if ok, _ := params["consent"].(bool); !ok {
+			labErr(c, http.StatusBadRequest, "consent_required", "Confirm that this is your voice, or that you have the explicit permission of the person whose voice it is", "consent")
+			return
+		}
+	}
+
 	// Availability and caps come before any file is written.
 	v := h.view(m)
 	if !v.Available {
@@ -264,6 +272,11 @@ func (h *LabHandler) CreateJob(c *gin.Context) {
 	}
 
 	options := map[string]interface{}{"mode": m.Tool(), "tool": m.Tool(), "lab": true, "model": m.Key}
+	if m.RequiresConsent() {
+		options["consent"] = true
+		options["consentAt"] = h.now().UTC().Format(time.RFC3339)
+		options["consentTextVersion"] = lab.VoiceConsentVersion
+	}
 	job := h.jobs.CreateJobWithID(jobID, models.OriginalFileInfo{Name: safeFilename(firstName), Size: firstSize, Type: firstType}, options)
 	_ = h.jobs.SetMode(job.ID, m.Tool())
 	recordJobCreated(c, h.jobs, job, services.JobFacts{

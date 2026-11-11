@@ -150,3 +150,77 @@ func TestLabCreateJob(t *testing.T) {
 		t.Fatalf("spend: %d %s", w2.Code, w2.Body)
 	}
 }
+
+// MM139 decision 5: a reference voice needs the consent confirmation. Without it
+// the request is a 400 before anything is written; with it the job stores the
+// consent, its time and the text version.
+func TestLabCreateJobRequiresVoiceConsent(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{UploadDir: dir + "/up", OutputDir: dir + "/out", CommandTimeout: 10 * time.Second,
+		Lab: config.LabConfig{DailySpendCapUSD: 10, MonthlySpendCapUSD: 100},
+		Burst: config.BurstConfig{BootTimeoutSeconds: 600, PriceUSDPerHour: map[string]float64{"g6e.xlarge": 1.86, "g7.2xlarge": 2.52},
+			AMIs: map[string]string{"lab-voice:x86_64": "ami-voice", "lab-image:x86_64": "ami-image"}}}
+	jm := services.NewJobManager()
+	runner := &recordingRunner{done: make(chan struct{}, 4)}
+	runner.burst = true
+	h := NewLabHandler(cfg, jm, services.NewMediaInspector(5*time.Second), runner, nil)
+	r, _ := labEngine(t, []string{"mwintrow@creatv.io"}, func(api gin.IRouter, gate *lab.Gate) { RegisterLabRoutes(api, h, gate) })
+	wav := wavBytes()
+
+	body, ct := labMultipart(t, `{"model":"cosyvoice3","params":{"text":"Hello","reference_text":"Hi"}}`, map[string][]byte{"reference": wav})
+	if w := labPost(r, body, ct, "mitch"); w.Code != 400 {
+		t.Fatalf("no consent: %d %s", w.Code, w.Body)
+	}
+	body, ct = labMultipart(t, `{"model":"cosyvoice3","params":{"text":"Hello","reference_text":"Hi","consent":false}}`, map[string][]byte{"reference": wav})
+	if w := labPost(r, body, ct, "mitch"); w.Code != 400 || len(runner.reqs) != 0 {
+		t.Fatalf("consent false: %d %s", w.Code, w.Body)
+	}
+	body, ct = labMultipart(t, `{"model":"cosyvoice3","params":{"text":"Hello","reference_text":"Hi","consent":true}}`, map[string][]byte{"reference": wav})
+	w := labPost(r, body, ct, "mitch")
+	if w.Code != 202 {
+		t.Fatalf("with consent: %d %s", w.Code, w.Body)
+	}
+	var out struct{ JobID string }
+	_ = json.Unmarshal([]byte(strings.Replace(w.Body.String(), "jobId", "JobID", 1)), &out)
+	<-runner.done
+	job, err := jm.GetJob(out.JobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.Options["consent"] != true || job.Options["consentTextVersion"] != lab.VoiceConsentVersion || job.Options["consentAt"] == "" || job.Options["lab"] != true {
+		t.Fatalf("consent not stored on the job: %+v", job.Options)
+	}
+	if runner.reqs[0].Inputs["reference"] == "" || runner.reqs[0].Model.Key != "cosyvoice3" {
+		t.Fatalf("run request: %+v", runner.reqs[0])
+	}
+	// CodeFormer takes no reference voice: no consent needed, none stored.
+	body, ct = labMultipart(t, `{"model":"codeformer"}`, map[string][]byte{"image": pngBytes()})
+	if w := labPost(r, body, ct, "mitch"); w.Code != 202 {
+		t.Fatalf("codeformer: %d %s", w.Code, w.Body)
+	}
+}
+
+// wavBytes is a valid 1 s mono 16 kHz silent WAV (the type check sniffs the RIFF header).
+func wavBytes() []byte {
+	var b bytes.Buffer
+	n := 16000 * 2
+	le := func(v uint32, size int) {
+		for i := 0; i < size; i++ {
+			b.WriteByte(byte(v >> (8 * i)))
+		}
+	}
+	b.WriteString("RIFF")
+	le(uint32(36+n), 4)
+	b.WriteString("WAVEfmt ")
+	le(16, 4)
+	le(1, 2)
+	le(1, 2)
+	le(16000, 4)
+	le(32000, 4)
+	le(2, 2)
+	le(16, 2)
+	b.WriteString("data")
+	le(uint32(n), 4)
+	b.Write(make([]byte, n))
+	return b.Bytes()
+}

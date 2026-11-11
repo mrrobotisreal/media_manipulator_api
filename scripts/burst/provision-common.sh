@@ -5,7 +5,7 @@
 # whole thing can be read on a laptop.
 #
 # Inputs (environment, set by the builder's user-data):
-#   MM_FAMILY  image|audio|video|restore
+#   MM_FAMILY  image|audio|video|restore|lab-voice (lab-voice is a fresh install, MM139)
 #   MM_DATE    the export date (s3://$MM_BUCKET/burst-images/$MM_DATE/$MM_FAMILY.tar.zst)
 #   MM_BUCKET, MM_REGION
 #   MM_BUILD_PREFIX   burst/build/$MM_DATE   (status + smoke json are written here;
@@ -279,8 +279,15 @@ provision_main() {
   step_base_packages
   step_ffmpeg
   step_tailscale
-  step_unpack
-  step_vulkan_driver_bits
+  if is_fresh_family "$MM_FAMILY"; then
+    # MM139: installed fresh on the builder. No host export to unpack and no
+    # Vulkan ICD (the Lab voice models are CUDA only); the family script's
+    # install function does everything and sets RUNTIME_MANIFEST.
+    status "fresh install: no host export for $MM_FAMILY"
+  else
+    step_unpack
+    step_vulkan_driver_bits
+  fi
   "$rebuild"
   step_dirs_and_unit
   step_image_json

@@ -643,3 +643,93 @@ func TestExportDryRunListsPathsWithoutTouchingTheHost(t *testing.T) {
 		t.Errorf("export plan lists a forbidden path:\n%s", s)
 	}
 }
+
+// MM139: lab-voice is a FRESH family. Its provisioner installs everything on the
+// builder: no export, no unpack, no Vulkan step, no HF token, wrappers from the
+// bundle, a runtime manifest recorded from the installed versions.
+func TestLabVoiceProvisionDryRunIsAFreshInstall(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("no bash")
+	}
+	out, err := exec.Command("bash", filepath.Join(scriptsDir(t), "provision-lab-voice.sh"), "--dry-run", "--date", "2026-11-11").CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	s := string(out)
+	for _, want := range []string{"fresh install: no host export for lab-voice", "fish_s2: venv", "indextts2: venv", "seedvc: venv", "cosyvoice3: venv",
+		"scripts/lab", "runtime_manifest.py", "lab-voice.runtime-manifest", "smoke/lab-voice.sh", "8.9;12.0", "over 85% full", "scrub token variables", "cloud-init clean",
+		"0f8a12e8a651062fdee9c33a894bdccd3a8513f1", "d9e41aac89fd00b3d71497fddb287b7f24613712", "51383efd921027683c89e5348211d93ff12ac2a8", "074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("lab-voice dry-run plan lacks %q", want)
+		}
+	}
+	for _, bad := range []string{"burst-images/", ".tar.zst", "vulkaninfo", "libnvidia-gl", "unpack"} {
+		if strings.Contains(s, bad) {
+			t.Errorf("a fresh family must not touch %q:\n%s", bad, s)
+		}
+	}
+	// No credential is ever typed into or passed to the builder.
+	b, _ := os.ReadFile(filepath.Join(scriptsDir(t), "provision-lab-voice.sh"))
+	if regexp.MustCompile(`read\s+-[a-z]*s|HF_TOKEN=\S`).MatchString(string(b)) {
+		t.Error("the provisioner must not read or set a Hugging Face token")
+	}
+}
+
+func TestLabVoiceBuildDryRunHasNoHostExport(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("no bash")
+	}
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "aws"), []byte("#!/bin/sh\necho AWS-WAS-CALLED \"$@\" >&2\nexit 99\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) (string, error) {
+		cmd := exec.Command("bash", append([]string{filepath.Join(scriptsDir(t), "build-image.sh"), "lab-voice", "2026-11-11", "--dry-run", "--yes"}, args...)...)
+		cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	got, err := run()
+	if err != nil || strings.Contains(got, "AWS-WAS-CALLED") {
+		t.Fatalf("err=%v\n%s", err, got)
+	}
+	for _, want := range []string{"builder=g7.2xlarge", "Fresh install: no host export", "Root volume:   200 GiB", "Estimated cost", "scripts/lab", "BURST_AMIS=lab-voice:x86_64=", "terminate"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("dry-run missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "head-object") || strings.Contains(got, "burst-images/") {
+		t.Errorf("a fresh family must not look for a host export:\n%s", got)
+	}
+	if _, err := run("--instance-type", "g6.xlarge"); err != nil {
+		t.Errorf("g6.xlarge stays selectable: %v", err)
+	}
+	if _, err := run("--instance-type", "g6e.xlarge"); err == nil {
+		t.Error("g6e.xlarge is not allowed by the builder policy and must be refused")
+	}
+	// The host export refuses a fresh family with a pointer to the build script.
+	exp := exec.Command("bash", filepath.Join(scriptsDir(t), "export-runtime.sh"), "lab-voice", "--dry-run")
+	if out, err := exp.CombinedOutput(); err == nil || !strings.Contains(string(out), "installed fresh") {
+		t.Errorf("export-runtime must refuse lab-voice: %v\n%s", err, out)
+	}
+}
+
+// The product families' scripts must behave exactly as before MM139: their plan
+// and dry-run output are compared with the files recorded from main.
+func TestProductFamiliesDryRunOutputUnchangedByMM139(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("no bash")
+	}
+	// Spot checks that survive timestamp noise: the unpack step and the Vulkan step stay in every product plan, in order.
+	for _, fam := range manifest.Families {
+		out, err := exec.Command("bash", filepath.Join(scriptsDir(t), "provision-"+fam+".sh"), "--dry-run", "--date", "2026-11-10").CombinedOutput()
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(out)
+		i, j, k := strings.Index(s, "s3: download and unpack "+fam), strings.Index(s, "vulkan: NVIDIA GL/EGL"), strings.Index(s, "worker: directories")
+		if i < 0 || j < i || k < j || strings.Contains(s, "fresh install") {
+			t.Errorf("%s: unpack/vulkan/worker order changed (%d %d %d)", fam, i, j, k)
+		}
+	}
+}

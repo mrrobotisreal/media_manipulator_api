@@ -143,7 +143,7 @@ var codeformerSchema = json.RawMessage(`{
 
 // models is the registry. Add a row here (and its Command) to add a model.
 func registry() []LabModel {
-	return []LabModel{
+	return append([]LabModel{
 		{
 			Key: "codeformer", Name: "CodeFormer", Area: AreaImage,
 			Licence:    LicenceNonCommercial,
@@ -158,7 +158,7 @@ func registry() []LabModel {
 			Command:      codeformerCommand,
 			EstSeconds:   60,
 		},
-	}
+	}, voiceModels()...)
 }
 
 // Models returns a copy of the registry, ordered by area then name.
@@ -205,7 +205,7 @@ func validateRegistry() error {
 	seen := map[string]bool{}
 	for _, m := range registry() {
 		switch {
-		case m.Key == "" || strings.ContainsAny(m.Key, " /._"):
+		case m.Key == "" || strings.ContainsAny(m.Key, " /."):
 			return fmt.Errorf("lab: bad model key %q", m.Key)
 		case seen[m.Key]:
 			return fmt.Errorf("lab: duplicate model key %q", m.Key)

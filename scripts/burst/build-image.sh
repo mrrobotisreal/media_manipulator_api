@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # MM126: build one worker-image family into an AMI.
 #
-#   scripts/burst/build-image.sh <image|audio|video|restore> <YYYY-MM-DD export date>
+#   scripts/burst/build-image.sh <image|audio|video|restore|lab-voice> <YYYY-MM-DD export date>
 #        [--instance-type g6.xlarge|g7.2xlarge] [--yes] [--dry-run]
 #        [--smoke-ami ami-... ]     test an ALREADY BUILT AMI (e.g. on g7.2xlarge); no image is created
 #        [--result ami-... ]        print the BUILD RESULT box for an image that finished after the script stopped
@@ -9,6 +9,10 @@
 # Runs ON THE SERVER (or anywhere with Go, AWS CLI v2 and the profile below).
 # Needs the AWS profile `mm-burst-builder` (policy scripts/burst/iam/mm-burst-builder-policy.json),
 # NOT the controller key and NOT .env. Override with AWS_PROFILE.
+#
+# lab-voice (MM139) is a FRESH family: nothing is copied from the host. The builder installs
+# every model itself (venvs + weights), step 1 is skipped, the runtime manifest tag is computed
+# on the builder from the recorded versions, and the default builder is g7.2xlarge.
 #
 # What it does:
 #   1. checks the export exists in s3://<bucket>/burst-images/<date>/
@@ -30,7 +34,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FAMILY="${1:-}" DATE="${2:-}"
 [ $# -ge 2 ] || { sed -n 2,6p "$0"; exit 2; }
 shift 2
-ITYPE="g6.xlarge" DRY=0 SMOKE_AMI="" RESULT_AMI=""
+ITYPE="g6.xlarge" DRY=0 SMOKE_AMI="" RESULT_AMI="" FRESH=0
+# A fresh family is smoked on the bigger Blackwell card (Fish S2 Pro wants 24 GB).
+if is_fresh_family "$FAMILY"; then FRESH=1; ITYPE="g7.2xlarge"; fi
 API_DIR="${MM_API_DIR:-$(cd "$HERE/../.." && pwd)}"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -101,8 +107,11 @@ echo "Root volume:   ${ROOT_GIB} GiB gp3, encrypted by default (same size the bu
 echo "Estimated cost: about \$$EST (about $HOURS h on $ITYPE at \$$PRICE/h, plus disk), then snapshot storage ~\$0.05/GB-month"
 echo "Self-shutdown: 3 h after launch (instance-initiated shutdown = terminate)"
 
-# 1. The export must exist.
-if [ -z "$SMOKE_AMI" ]; then
+# 1. The export must exist (a fresh family has none: the builder installs it).
+if [ "$FRESH" = 1 ]; then
+  RUNTIME_MANIFEST="<computed on the builder from its recorded versions>"
+  echo "Fresh install: no host export; the builder installs every model itself."
+elif [ -z "$SMOKE_AMI" ]; then
   if [ "$DRY" = 1 ]; then
     echo "AWS   aws s3api head-object s3://$MM_BUCKET/burst-images/$DATE/$FAMILY.manifest.json (dry run: not called)"
     RUNTIME_MANIFEST="<runtime manifest from $FAMILY.manifest.json>"
@@ -162,19 +171,27 @@ cleanup() {
 }
 trap cleanup EXIT
 if [ "$DRY" = 1 ]; then
-  echo "BUILD go build ./cmd/burst-ctl (linux/amd64) + tar scripts/burst -> s3://$MM_BUCKET/$BUILD_PREFIX/bundle.tgz"
+  echo "BUILD go build ./cmd/burst-ctl (linux/amd64) + tar scripts/burst$([ "$FRESH" = 1 ] && echo ' + scripts/lab') -> s3://$MM_BUCKET/$BUILD_PREFIX/bundle.tgz"
 else
   command -v go >/dev/null 2>&1 || export PATH="$PATH:/usr/local/go/bin"
   (cd "$API_DIR" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$BUNDLE_DIR/burst-ctl" ./cmd/burst-ctl)
   mkdir -p "$BUNDLE_DIR/burst"
   cp -R "$HERE"/. "$BUNDLE_DIR/burst/"
   mv "$BUNDLE_DIR/burst-ctl" "$BUNDLE_DIR/burst/burst-ctl"
-  tar -C "$BUNDLE_DIR" -czf "$BUNDLE_DIR/bundle.tgz" burst
+  BUNDLE_ITEMS="burst"
+  if [ "$FRESH" = 1 ]; then
+    # the model wrappers (scripts/lab) are installed into the image by provision-<family>.sh
+    cp -R "$HERE/../lab" "$BUNDLE_DIR/lab"
+    BUNDLE_ITEMS="burst lab"
+  fi
+  # shellcheck disable=SC2086  # BUNDLE_ITEMS is a short word list
+  tar -C "$BUNDLE_DIR" -czf "$BUNDLE_DIR/bundle.tgz" $BUNDLE_ITEMS
   aws s3 cp "$BUNDLE_DIR/bundle.tgz" "s3://$MM_BUCKET/$BUILD_PREFIX/bundle.tgz" --only-show-errors
   # Stale results from an earlier attempt would be mistaken for this one's.
   for ext in status failed ready smoke.json verified log; do
     aws s3 rm "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.$ext" >/dev/null 2>&1 || true
   done
+  if [ "$FRESH" = 1 ]; then aws s3 rm "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.runtime-manifest" >/dev/null 2>&1 || true; fi
 fi
 
 # 4. User-data (no secrets: the worker role's S3 access is the only credential).
@@ -262,6 +279,11 @@ if [ -n "$SMOKE_AMI" ]; then
   exit 0
 fi
 [ "$(echo "$SMOKE" | jq .passed)" = "true" ] || die "smoke tests did not all pass; no image created"
+if [ "$FRESH" = 1 ]; then
+  RUNTIME_MANIFEST="$(aws s3 cp "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.runtime-manifest" - | tr -d '[:space:]')"
+  [[ "$RUNTIME_MANIFEST" =~ ^[0-9a-f]{64}$ ]] || die "the builder did not record a runtime manifest for $FAMILY (got '$RUNTIME_MANIFEST')"
+  log "runtime manifest (from the recorded versions): $RUNTIME_MANIFEST"
+fi
 
 # 7. Image.
 STAMP="$(date -u +%H%M)"
@@ -270,7 +292,7 @@ TSPEC="$(printf 'ResourceType=image,Tags=[%s] ResourceType=snapshot,Tags=[%s]' \
   "$(printf '{Key=%s,Value=%s},' mm-burst-image 1 family "$FAMILY" runtime-manifest "$RUNTIME_MANIFEST" | sed 's/,$//')")"
 # shellcheck disable=SC2086  # TSPEC is two --tag-specifications words
 AMI="$(aws ec2 create-image --instance-id "$INSTANCE_ID" --name "mm-burst-$FAMILY-$DATE-$STAMP" --no-reboot \
-  --description "MM126 $FAMILY worker image, export $DATE, driver $(echo "$SMOKE" | jq -r .driverAndGpu | cut -d, -f1)" \
+  --description "MM126 $FAMILY worker image, $([ "$FRESH" = 1 ] && echo "fresh install" || echo "export") $DATE, driver $(echo "$SMOKE" | jq -r .driverAndGpu | cut -d, -f1)" \
   --tag-specifications $TSPEC --query ImageId --output text)"
 log "image $AMI is being created (snapshot of $ROOT_GIB GiB)"
 # The snapshot is point-in-time: once AWS has taken it (snapshot state
