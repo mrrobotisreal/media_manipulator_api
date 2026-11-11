@@ -46,6 +46,52 @@ output_has() {
   grep -q -- "$pat" <<<"$out"
 }
 
+# net SECONDS cmd...: run ONE network-bound command under a hard time limit.
+# Nothing that downloads may run without it. On 2026-11-11 a builder sat in
+# `add-apt-repository` for 170 minutes (about $7 on g7.2xlarge) because Ubuntu's
+# Launchpad and key server were unreachable and nothing had a time limit.
+# On a timeout the reason goes to the status object and the caller gets 124.
+# MM_NET_LIMIT_CAP (seconds) caps every limit; tests use it.
+net() {
+  local limit="$1" rc=0 t0=$SECONDS
+  shift
+  if [ -n "${MM_NET_LIMIT_CAP:-}" ] && [ "$limit" -gt "$MM_NET_LIMIT_CAP" ]; then limit="$MM_NET_LIMIT_CAP"; fi
+  timeout --kill-after=20 "$limit" "$@" || rc=$?
+  # 124 = timeout ended it; 137 = it had to be killed (only counted as a
+  # timeout when the limit really passed: an out-of-memory kill is also 137).
+  if [ "$rc" -eq 124 ] || { [ "$rc" -eq 137 ] && [ $((SECONDS - t0)) -ge "$limit" ]; }; then
+    status "TIMED OUT after ${limit}s: $(printf '%s ' "$@" | cut -c1-140)"
+    return 124
+  fi
+  return "$rc"
+}
+
+# apt_get args...: apt-get with connection timeouts, retries, a wait for the
+# dpkg lock (cloud-init may still hold it at boot) and the hard limit of net.
+APT_OPTS=(-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3 -o DPkg::Lock::Timeout=300)
+apt_get() { net "${MM_APT_LIMIT:-1200}" apt-get "${APT_OPTS[@]}" "$@"; }
+
+# with_heartbeat "label" cmd...: run a long LOCAL step (a compile; nothing that
+# downloads) and report "still running" every 10 minutes, so the builder script
+# does not take a long quiet compile for a stuck builder.
+with_heartbeat() {
+  local label="$1" hb rc=0 t0=$SECONDS
+  shift
+  (
+    while sleep "${MM_HEARTBEAT_SECONDS:-600}"; do
+      status "still running: $label ($(( (SECONDS - t0) / 60 )) min)"
+    done
+  ) &
+  hb=$!
+  "$@" || rc=$?
+  kill "$hb" 2>/dev/null || true
+  wait "$hb" 2>/dev/null || true
+  return "$rc"
+}
+
+# curl flags for every download: fail on HTTP errors, 20 s to connect, a total limit, 3 tries.
+CURL_NET=(-fsSL --connect-timeout 20 --max-time 300 --retry 3 --retry-delay 5)
+
 # plan "text": prints the step; returns 0 (true) when dry so callers can `plan x && return 0`.
 plan() {
   printf 'PLAN  %s\n' "$*"
@@ -59,14 +105,14 @@ status() {
   if dry; then printf 'STATUS %s\n' "$line"; return 0; fi
   # stderr only: the builder's user-data already appends stdout+stderr to $LOGFILE.
   printf '%s\n' "$line" >&2
-  printf '%s\n' "$line" | aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.status" --only-show-errors || true
+  printf '%s\n' "$line" | timeout 60 aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.status" --only-show-errors || true
 }
 
 fail_build() {
   status "FAILED: $*"
   if ! dry; then
-    printf '%s\n' "$*" | aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.failed" --only-show-errors || true
-    tail -n 200 "$LOGFILE" 2>/dev/null | aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.log" --only-show-errors || true
+    printf '%s\n' "$*" | timeout 60 aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.failed" --only-show-errors || true
+    tail -n 200 "$LOGFILE" 2>/dev/null | timeout 60 aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.log" --only-show-errors || true
   fi
   exit 1
 }
@@ -75,46 +121,93 @@ step_base_packages() {
   status "apt: base packages"
   plan "apt-get install: jq ca-certificates curl zstd unzip imagemagick (6.x: convert/identify, never magick) libimage-exiftool-perl vulkan-tools libvulkan1 libgomp1 libgl1 libglib2.0-0t64 python3-venv" && return 0
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq
-  apt-get install -y -qq jq ca-certificates curl zstd unzip imagemagick libimage-exiftool-perl \
+  apt_get update -qq
+  apt_get install -y -qq jq ca-certificates curl zstd unzip imagemagick libimage-exiftool-perl \
     vulkan-tools libvulkan1 libgomp1 libgl1 libglib2.0-0t64 python3-venv software-properties-common gnupg
   if ! command -v aws >/dev/null 2>&1; then
-    curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscli.zip
+    curl "${CURL_NET[@]}" https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscli.zip
     unzip -q /tmp/awscli.zip -d /tmp/awscli && /tmp/awscli/aws/install && rm -rf /tmp/awscli /tmp/awscli.zip
   fi
 }
 
+# The ffmpeg 8 package source. The host's build comes from ppa:ubuntuhandbook1/ffmpeg8
+# (NVENC, nonfree, fdk-aac). Two ways to reach it, both verified by apt with the
+# PPA's own signing key, which is committed in keys/ (a public key, fingerprint
+# F4E48910A020E77056748B745738AE8480447DDF, the one Launchpad reports for the PPA):
+#   1. the copy in our S3 bucket (scripts/burst/mirror-ffmpeg.sh), so a build
+#      needs nothing from Launchpad;
+#   2. the PPA itself, as a fallback.
+# `add-apt-repository` is never used: it asks api.launchpad.net and
+# keyserver.ubuntu.com for the key and waits for ever when they are down.
+FFMPEG_KEYRING="${MM_KEYRING_DIR:-/usr/share/keyrings}/mm-ffmpeg8.asc"
+FFMPEG_LIST="${MM_APT_LIST_DIR:-/etc/apt/sources.list.d}/mm-ffmpeg8.list"
+FFMPEG_MIRROR_DIR="${MM_APT_MIRROR_DIR:-/opt/mm-apt}/ffmpeg8"
+
+# ffmpeg_candidate_ok: apt's candidate for ffmpeg is an 8.1.x build (Ubuntu's own is 6.1).
+ffmpeg_candidate_ok() {
+  local cand
+  cand="$(apt-cache policy ffmpeg 2>/dev/null | sed -n 's/^ *Candidate: *//p' | sed -n '1p')"
+  case "$cand" in *:8.1.*|8.1.*) return 0 ;; esac
+  FFMPEG_CANDIDATE="${cand:-none}"
+  return 1
+}
+
+# ffmpeg_source_mirror: put the S3 copy in place as an apt source. Any failure
+# returns non-zero and the caller falls back to the PPA.
+ffmpeg_source_mirror() {
+  local tarf
+  tarf="$(mktemp /tmp/mm-ffmpeg8.XXXXXX)"
+  net 300 aws s3 cp "s3://$MM_BUCKET/$MM_FFMPEG_MIRROR_KEY" "$tarf" --only-show-errors 2>/dev/null || { rm -f "$tarf"; return 1; }
+  rm -rf "$FFMPEG_MIRROR_DIR"
+  mkdir -p "$FFMPEG_MIRROR_DIR"
+  tar -xf "$tarf" -C "$FFMPEG_MIRROR_DIR" || { rm -f "$tarf"; return 1; }
+  rm -f "$tarf"
+  [ -f "$FFMPEG_MIRROR_DIR/ubuntu/dists/noble/InRelease" ] || return 1
+  chmod -R a+rX "$FFMPEG_MIRROR_DIR"
+  ffmpeg_apt_line "$FFMPEG_KEYRING" "file:$FFMPEG_MIRROR_DIR/ubuntu" "by-hash=no" > "$FFMPEG_LIST"
+  apt_get update -qq || return 1
+  ffmpeg_candidate_ok
+}
+
 step_ffmpeg() {
-  # Host: 10:8.1.1-0build1~ubuntu24.04 from ppa:ubuntuhandbook1/ffmpeg8, NVENC build (nonfree, fdk-aac).
-  status "apt: ffmpeg 8.1.1 (host build) from ppa:ubuntuhandbook1/ffmpeg8"
-  plan "add-apt-repository ppa:ubuntuhandbook1/ffmpeg8; apt-get install ffmpeg=10:8.1.1-0build1~ubuntu24.04 (falls back to the PPA's newest, recorded in image.json)" && return 0
-  add-apt-repository -y ppa:ubuntuhandbook1/ffmpeg8 >/dev/null
-  apt-get update -qq
-  if ! apt-get install -y -qq "ffmpeg=10:8.1.1-0build1~ubuntu24.04"; then
-    # The PPA keeps only its newest build (8.1.1 was superseded by 8.1.2 on
-    # 2026-06-20), so the exact host version cannot be installed. A newer 8.1.x
-    # patch release is accepted; any other series stops the build. The version
-    # used is recorded in /etc/mm-burst/image.json.
-    status "note: ffmpeg 8.1.1 is no longer in the PPA (superseded); installing the newest 8.1.x"
-    apt-get install -y -qq ffmpeg
+  # Host: 10:8.1.1-0build1~ubuntu24.04. The PPA keeps only its newest build
+  # (8.1.2 since 2026-06-20), so a newer 8.1.x patch release is accepted; any
+  # other series stops the build. The version used is recorded in /etc/mm-burst/image.json.
+  status "apt: ffmpeg 8.1.x (the host's NVENC build of ppa:ubuntuhandbook1/ffmpeg8)"
+  plan "ffmpeg 8.1.x, verified with the PPA's committed signing key (no add-apt-repository, no key server): first the copy in s3://$MM_BUCKET/$MM_FFMPEG_MIRROR_KEY (scripts/burst/mirror-ffmpeg.sh), else $MM_FFMPEG_PPA_URL; every download has a time limit; then check the version is 8.1.x and that h264_nvenc is there" && return 0
+  mkdir -p "$(dirname "$FFMPEG_KEYRING")" "$(dirname "$FFMPEG_LIST")"
+  install -m 644 "$PHERE/keys/ppa-ubuntuhandbook1-ffmpeg8.asc" "$FFMPEG_KEYRING"
+  local src="the S3 copy" FFMPEG_CANDIDATE=""
+  if ! ffmpeg_source_mirror; then
+    src="the PPA"
+    status "note: no usable ffmpeg copy in S3 (run scripts/burst/mirror-ffmpeg.sh once on the server); using $MM_FFMPEG_PPA_URL"
+    rm -rf "$FFMPEG_MIRROR_DIR"
+    ffmpeg_apt_line "$FFMPEG_KEYRING" "$MM_FFMPEG_PPA_URL" > "$FFMPEG_LIST"
+    apt_get update -qq || fail_build "apt-get update failed or timed out after adding the ffmpeg 8 source ($MM_FFMPEG_PPA_URL)"
+    ffmpeg_candidate_ok || fail_build "the ffmpeg 8 package source did not load (apt offers ffmpeg $FFMPEG_CANDIDATE, need 8.1.x): ppa.launchpadcontent.net is unreachable or slow. Nothing is wrong with the image. Retry later, or run scripts/burst/mirror-ffmpeg.sh on the server once Launchpad answers so builds stop depending on it."
   fi
+  apt_get install -y -qq ffmpeg || fail_build "installing ffmpeg from $src failed or timed out"
   local ffv
   ffv="$(ffmpeg -version 2>/dev/null | sed -n '1p' | cut -d' ' -f3)"
   case "$ffv" in
-    8.1|8.1.*) status "ffmpeg $ffv installed (host has 8.1.1)" ;;
+    8.1|8.1.*) status "ffmpeg $ffv installed from $src (host has 8.1.1)" ;;
     *) fail_build "ffmpeg $ffv is not an 8.1.x release (host has 8.1.1)" ;;
   esac
   output_has h264_nvenc ffmpeg -hide_banner -encoders || fail_build "ffmpeg has no h264_nvenc"
+  if [ "$src" = "the S3 copy" ]; then
+    # The local copy was only an install source: the image keeps neither it nor a source entry pointing at it.
+    rm -rf "$FFMPEG_MIRROR_DIR" "$FFMPEG_LIST"
+  fi
 }
 
 step_tailscale() {
   status "apt: tailscale"
   plan "install tailscale from pkgs.tailscale.com (noble); do NOT run 'tailscale up' (the run's user-data does)" && return 0
   if ! command -v tailscale >/dev/null 2>&1; then
-    curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg
-    curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list
-    apt-get update -qq
-    apt-get install -y -qq tailscale
+    curl "${CURL_NET[@]}" https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg
+    curl "${CURL_NET[@]}" https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list
+    apt_get update -qq
+    apt_get install -y -qq tailscale
   fi
   systemctl enable tailscaled >/dev/null 2>&1 || true
 }
@@ -132,9 +225,9 @@ step_vulkan_driver_bits() {
   major="${drv%%.*}"
   status "vulkan: driver $drv; driver packages: $(dpkg -l 2>/dev/null | awk '/^ii/ && $2 ~ /nvidia/ {print $2"="$3}' | tr '\n' ' ' | cut -c1-400)"
   if ! output_has 'libEGL_nvidia.so.0' ldconfig -p; then
-    apt-get install -y -qq "libnvidia-gl-${major}-server=${drv}-0ubuntu1" \
-      || apt-get install -y -qq "libnvidia-gl-${major}-server" \
-      || apt-get install -y -qq "libnvidia-gl-${major}" \
+    apt_get install -y -qq "libnvidia-gl-${major}-server=${drv}-0ubuntu1" \
+      || apt_get install -y -qq "libnvidia-gl-${major}-server" \
+      || apt_get install -y -qq "libnvidia-gl-${major}" \
       || fail_build "no libnvidia-gl package for driver $drv (Vulkan ICD would fail); driver packages: $(dpkg -l | awk '/^ii/ && $2 ~ /nvidia/ {print $2}' | tr '\n' ' ')"
     ldconfig
     output_has 'libEGL_nvidia.so.0' ldconfig -p || fail_build "libEGL_nvidia.so.0 still missing after installing libnvidia-gl for driver $drv"
@@ -164,8 +257,8 @@ step_unpack() {
   local dir=/opt/dlami/nvme
   mountpoint -q "$dir" || dir=/var/tmp
   mkdir -p "$dir/mm-import"
-  aws s3 cp "s3://$MM_BUCKET/burst-images/$MM_DATE/$MM_FAMILY.manifest.json" "$dir/mm-import/manifest.json" --only-show-errors
-  aws s3 cp "s3://$MM_BUCKET/burst-images/$MM_DATE/$MM_FAMILY.tar.zst" "$dir/mm-import/t.tar.zst" --only-show-errors
+  net 300 aws s3 cp "s3://$MM_BUCKET/burst-images/$MM_DATE/$MM_FAMILY.manifest.json" "$dir/mm-import/manifest.json" --only-show-errors
+  net 3600 aws s3 cp "s3://$MM_BUCKET/burst-images/$MM_DATE/$MM_FAMILY.tar.zst" "$dir/mm-import/t.tar.zst" --only-show-errors
   local want got
   want="$(jq -r .tarball.sha256 "$dir/mm-import/manifest.json")"
   got="$(sha256sum "$dir/mm-import/t.tar.zst" | cut -d' ' -f1)"
@@ -224,8 +317,8 @@ step_image_json() {
   status "write /etc/mm-burst/image.json"
   plan "/etc/mm-burst/image.json: family, arch=ada+blackwell, base AMI (from IMDS), driver, CUDA, ffmpeg, runtime manifest sha, build date" && return 0
   local tok base drv ff
-  tok="$(curl -fsS -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' || true)"
-  base="$(curl -fsS -H "X-aws-ec2-metadata-token: $tok" http://169.254.169.254/latest/meta-data/ami-id || echo unknown)"
+  tok="$(curl -fsS -m 5 -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' || true)"
+  base="$(curl -fsS -m 5 -H "X-aws-ec2-metadata-token: $tok" http://169.254.169.254/latest/meta-data/ami-id || echo unknown)"
   drv="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | sed -n '1p')"
   ff="$(ffmpeg -version | sed -n '1p' | cut -d' ' -f3)"
   jq -n --arg family "$MM_FAMILY" --arg base "$base" --arg drv "$drv" --arg cuda "$(basename "$(readlink -f "$CUDA_HOME_DIR")")" \
@@ -238,8 +331,31 @@ step_smoke() {
   status "smoke: running $MM_FAMILY on the real GPU"
   plan "bash $PHERE/smoke/$MM_FAMILY.sh -> /tmp/mm-smoke-$MM_FAMILY.json (each workload's real command on a committed tiny fixture; asserts exit 0, a valid output, and GPU memory in use)" && return 0
   local out="/tmp/mm-smoke-$MM_FAMILY.json" rc=0
-  SMOKE_OUT="$out" SMOKE_CARD=0 bash "$PHERE/smoke/$MM_FAMILY.sh" || rc=$?
-  aws s3 cp "$out" "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.smoke.json" --only-show-errors
+  # Each finished case prints one "name PASS|FAIL ..." line on stderr. Pass it on
+  # as a status, so the build shows progress and a long smoke run is never
+  # mistaken for a stuck builder.
+  local errf="/tmp/mm-smoke-$MM_FAMILY.err" pid seen=0
+  # report_cases: one status per case result not reported yet.
+  report_cases() {
+    local n line
+    n="$(grep -c -E ' (PASS|FAIL) ' "$errf" 2>/dev/null || true)"
+    while [ "$seen" -lt "${n:-0}" ]; do
+      seen=$((seen + 1))
+      line="$(grep -E ' (PASS|FAIL) ' "$errf" | sed -n "${seen}p" | tr -s ' ' | cut -c1-110)"
+      status "smoke: $line"
+    done
+  }
+  SMOKE_OUT="$out" SMOKE_CARD=0 bash "$PHERE/smoke/$MM_FAMILY.sh" 2>"$errf" &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    report_cases
+    sleep "${MM_SMOKE_POLL_SECONDS:-5}"
+  done
+  wait "$pid" || rc=$?
+  report_cases
+  cat "$errf" >&2
+  rm -f "$errf"
+  net 300 aws s3 cp "$out" "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.smoke.json" --only-show-errors
   if [ "$rc" -ne 0 ]; then
     fail_build "smoke test failed (see $MM_FAMILY.smoke.json)"
   fi
@@ -262,7 +378,7 @@ step_cleanup() {
 step_ready_and_wait() {
   status "READY: image can be created"
   plan "upload $MM_FAMILY.ready; sleep until the builder script creates the image and terminates this instance" && return 0
-  printf 'ready\n' | aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.ready" --only-show-errors
+  printf 'ready\n' | net 300 aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.ready" --only-show-errors
   sleep 10800
 }
 
@@ -273,7 +389,7 @@ provision_main() {
   if [ "$MM_MODE" = "smoke" ]; then
     status "smoke-only mode on an already-built image"
     step_smoke
-    printf 'smoke-only\n' | { dry || aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.verified" --only-show-errors; }
+    printf 'smoke-only\n' | { dry || net 300 aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.verified" --only-show-errors; }
     return 0
   fi
   step_base_packages
@@ -323,14 +439,15 @@ step_rebuild_mmcv() {
   [ -d "$CUDA_HOME_DIR" ] || fail_build "$CUDA_HOME_DIR missing on this DLAMI (need CUDA 12.8 toolkit for the cu128 torch)"
   mkdir -p /opt/dlami/nvme
   rm -rf "$src"
-  git clone -q --depth 1 --branch "$MMCV_TAG" https://github.com/open-mmlab/mmcv.git "$src"
+  net 600 git clone -q --depth 1 --branch "$MMCV_TAG" https://github.com/open-mmlab/mmcv.git "$src" || fail_build "could not clone mmcv $MMCV_TAG from github.com (unreachable or timed out)"
   [ "$(git -C "$src" rev-parse HEAD)" = "$MMCV_COMMIT" ] || fail_build "mmcv $MMCV_TAG is not commit $MMCV_COMMIT"
   "$py" -m pip uninstall -y -q mmcv
   (
     cd "$src"
     export CUDA_HOME="$CUDA_HOME_DIR" PATH="$CUDA_HOME_DIR/bin:$PATH" MMCV_WITH_OPS=1 FORCE_CUDA=1 \
       TORCH_CUDA_ARCH_LIST="$CUDA_ARCHES" MAX_JOBS=3
-    "$py" -m pip install --no-build-isolation --no-deps -q .
+    # A local compile (no build isolation, no deps: nothing is downloaded), so no time limit; it reports while it runs.
+    with_heartbeat "mmcv build" "$py" -m pip install --no-build-isolation --no-deps -q .
   ) || fail_build "mmcv build failed (see $LOGFILE)"
   rm -rf "$src"
   "$py" -c "import mmcv, mmcv.ops; print('mmcv', mmcv.__version__)" || fail_build "mmcv.ops does not import"
@@ -349,7 +466,7 @@ step_prebuild_rvrt_ext() {
   (
     export HOME="$MM_HOME" CUDA_HOME="$CUDA_HOME_DIR" PATH="$CUDA_HOME_DIR/bin:$PATH" TORCH_CUDA_ARCH_LIST="$CUDA_ARCHES" MAX_JOBS=3
     cd "$MM_ROOT/repos/RVRT"
-    "$MM_ROOT/venvs/restore-sr/bin/python" -c "from models.op.deform_attn import deform_attn_ext; print('deform_attn ext ok')"
+    with_heartbeat "rvrt deform_attn build" "$MM_ROOT/venvs/restore-sr/bin/python" -c "from models.op.deform_attn import deform_attn_ext; print('deform_attn ext ok')"
   ) || fail_build "RVRT deform_attn extension build failed"
 }
 

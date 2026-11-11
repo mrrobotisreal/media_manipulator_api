@@ -76,7 +76,8 @@ hf_get() {
   local inc=()
   [ $# -eq 0 ] || inc=(--include "$@")
   status "weights: $repo@${rev%"${rev#????????}"} -> $dest"
-  "$LAB_TOOLS/bin/hf" download "$repo" --revision "$rev" --local-dir "$dest" ${inc[@]+"${inc[@]}"} --quiet >/dev/null
+  net 3600 "$LAB_TOOLS/bin/hf" download "$repo" --revision "$rev" --local-dir "$dest" ${inc[@]+"${inc[@]}"} --quiet >/dev/null \
+    || fail_build "weights: the download of $repo from huggingface.co failed or timed out"
 }
 
 # hf_cache_get REPO REVISION CACHE_DIR [include globs...]: pinned download into an HF cache layout,
@@ -88,7 +89,8 @@ hf_cache_get() {
   local inc=() key
   [ $# -eq 0 ] || inc=(--include "$@")
   status "weights (cache): $repo@${rev%"${rev#????????}"} -> $cache"
-  "$LAB_TOOLS/bin/hf" download "$repo" --revision "$rev" --cache-dir "$cache" ${inc[@]+"${inc[@]}"} --quiet >/dev/null
+  net 3600 "$LAB_TOOLS/bin/hf" download "$repo" --revision "$rev" --cache-dir "$cache" ${inc[@]+"${inc[@]}"} --quiet >/dev/null \
+    || fail_build "weights: the download of $repo from huggingface.co failed or timed out"
   key="models--${repo//\//--}"
   mkdir -p "$cache/$key/refs"
   printf '%s' "$rev" > "$cache/$key/refs/main"
@@ -98,10 +100,12 @@ git_pin() {
   # git_pin URL COMMIT DEST: clone and check out exactly COMMIT (the repo's own submodules, if any, are initialised).
   local url="$1" commit="$2" dest="$3"
   rm -rf "$dest"
-  git clone -q "$url" "$dest"
+  net 900 git clone -q "$url" "$dest" || fail_build "could not clone $url (unreachable or timed out)"
   git -C "$dest" checkout -q "$commit"
   [ "$(git -C "$dest" rev-parse HEAD)" = "$commit" ] || fail_build "$url is not at $commit"
-  if [ -f "$dest/.gitmodules" ]; then git -C "$dest" submodule update -q --init; fi
+  if [ -f "$dest/.gitmodules" ]; then
+    net 900 git -C "$dest" submodule update -q --init || fail_build "could not fetch the submodules of $url (unreachable or timed out)"
+  fi
 }
 
 record_versions() {
@@ -124,10 +128,11 @@ step_lab_tools() {
   status "tools: uv $UV_VERSION + huggingface_hub $HUB_VERSION"
   plan "python3 -m venv $LAB_TOOLS; pip install uv==$UV_VERSION huggingface-hub[hf-xet]==$HUB_VERSION (the 'hf' downloader); apt: build-essential portaudio19-dev libsox-dev (Fish Speech's pyaudio/sox); UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR UV_LINK_MODE=copy" && return 0
   scrub_hf_token
-  apt-get install -y -qq build-essential portaudio19-dev libsox-dev libsndfile1 >/dev/null
+  apt_get install -y -qq build-essential portaudio19-dev libsox-dev libsndfile1 >/dev/null
   mkdir -p /opt/mm-build
   python3 -m venv "$LAB_TOOLS"
-  "$LAB_TOOLS/bin/pip" install -q "uv==$UV_VERSION" "huggingface-hub[hf-xet]==$HUB_VERSION"
+  net 900 "$LAB_TOOLS/bin/pip" install -q "uv==$UV_VERSION" "huggingface-hub[hf-xet]==$HUB_VERSION" \
+    || fail_build "tools: installing uv and the hf downloader from pypi.org failed or timed out"
   mkdir -p "$LAB_ROOT_DIR" "$LAB_REPOS_DIR" "$MM_ROOT/scripts/lab"
 }
 
@@ -136,7 +141,7 @@ step_install_fish_s2() {
   plan "git clone $FISH_REPO @ $FISH_COMMIT -> $LAB_REPOS_DIR/fish_s2; UV_PROJECT_ENVIRONMENT=$LAB_VENVS_DIR/lab-voice-fish_s2 uv sync --frozen --python 3.12 --extra cu128; hf download fishaudio/s2-pro@$REV_FISH -> $LAB_ROOT_DIR/fish_s2/s2-pro (11 GB, un-gated); record versions.json" && return 0
   local repo="$LAB_REPOS_DIR/fish_s2" venv="$LAB_VENVS_DIR/lab-voice-fish_s2"
   git_pin "$FISH_REPO" "$FISH_COMMIT" "$repo"
-  (cd "$repo" && UV_PROJECT_ENVIRONMENT="$venv" "$LAB_TOOLS/bin/uv" sync --frozen --no-dev --python 3.12 --extra cu128) || fail_build "fish_s2: uv sync failed (see $LOGFILE)"
+  (cd "$repo" && export UV_PROJECT_ENVIRONMENT="$venv" && net 3000 "$LAB_TOOLS/bin/uv" sync --frozen --no-dev --python 3.12 --extra cu128) || fail_build "fish_s2: uv sync failed or timed out (see $LOGFILE)"
   hf_get fishaudio/s2-pro "$REV_FISH" "$LAB_ROOT_DIR/fish_s2/s2-pro"
   [ -f "$LAB_ROOT_DIR/fish_s2/s2-pro/codec.pth" ] || fail_build "fish_s2: codec.pth missing after the download"
   record_versions fish_s2 "$FISH_REPO" "$FISH_COMMIT" "$venv" 3.12 "fishaudio/s2-pro@$REV_FISH"
@@ -147,7 +152,7 @@ step_install_indextts2() {
   plan "git clone $INDEX_REPO @ $INDEX_COMMIT -> $LAB_REPOS_DIR/indextts2; UV_PROJECT_ENVIRONMENT=$LAB_VENVS_DIR/lab-voice-indextts2 uv sync --frozen --no-dev --python 3.11; hf download IndexTeam/IndexTTS-2@$REV_INDEX2 -> checkpoints_2, IndexTeam/IndexTTS-2.5@$REV_INDEX25 -> checkpoints_25; aux models pre-placed in checkpoints_2/hf_cache (w2v-bert-2.0@$REV_W2VBERT, MaskGCT semantic codec@$REV_MASKGCT, campplus@$REV_CAMPPLUS, bigvgan 22k@$REV_BIGVGAN22), checkpoints_25/hf_cache is a symlink to it; warm g2p_en (nltk data) with HOME=$MM_HOME; record versions.json" && return 0
   local repo="$LAB_REPOS_DIR/indextts2" venv="$LAB_VENVS_DIR/lab-voice-indextts2" w="$LAB_ROOT_DIR/indextts2"
   git_pin "$INDEX_REPO" "$INDEX_COMMIT" "$repo"
-  (cd "$repo" && UV_PROJECT_ENVIRONMENT="$venv" "$LAB_TOOLS/bin/uv" sync --frozen --no-dev --python 3.11) || fail_build "indextts2: uv sync failed (see $LOGFILE)"
+  (cd "$repo" && export UV_PROJECT_ENVIRONMENT="$venv" && net 3000 "$LAB_TOOLS/bin/uv" sync --frozen --no-dev --python 3.11) || fail_build "indextts2: uv sync failed or timed out (see $LOGFILE)"
   hf_get IndexTeam/IndexTTS-2 "$REV_INDEX2" "$w/checkpoints_2"
   hf_get IndexTeam/IndexTTS-2.5 "$REV_INDEX25" "$w/checkpoints_25"
   local aux="$w/checkpoints_2/hf_cache"
@@ -162,7 +167,7 @@ step_install_indextts2() {
   hf_get nvidia/bigvgan_v2_22khz_80band_256x "$REV_BIGVGAN22" "$aux/bigvgan" "config.json" "bigvgan_generator.pt"
   ln -sfn ../checkpoints_2/hf_cache "$w/checkpoints_25/hf_cache"
   [ -f "$w/checkpoints_2/gpt.pth" ] && [ -f "$w/checkpoints_25/gpt.pth" ] || fail_build "indextts2: gpt.pth missing after the downloads"
-  HOME="$MM_HOME" "$venv/bin/python" -c "import g2p_en" || fail_build "indextts2: g2p_en does not import (nltk data)"
+  net 900 env HOME="$MM_HOME" "$venv/bin/python" -c "import g2p_en" || fail_build "indextts2: g2p_en does not import (nltk data)"
   record_versions indextts2 "$INDEX_REPO" "$INDEX_COMMIT" "$venv" 3.11 \
     "IndexTeam/IndexTTS-2@$REV_INDEX2 IndexTeam/IndexTTS-2.5@$REV_INDEX25 facebook/w2v-bert-2.0@$REV_W2VBERT amphion/MaskGCT@$REV_MASKGCT funasr/campplus@$REV_CAMPPLUS nvidia/bigvgan_v2_22khz_80band_256x@$REV_BIGVGAN22"
 }
@@ -172,10 +177,10 @@ step_install_seedvc() {
   plan "git clone $SEEDVC_REPO @ $SEEDVC_COMMIT -> $LAB_REPOS_DIR/seedvc; uv venv --python 3.10; uv pip install torch==2.8.0 torchaudio==2.8.0 (cu128 index) then the packages inference.py imports (numpy 1.26.4, scipy 1.13.1, librosa 0.10.2, transformers 4.46.3, descript-audio-codec 1.0.0, munch, einops, matplotlib, pyyaml, soundfile, tqdm, huggingface-hub); weights into the repo's ./checkpoints HF cache layout with refs/main pinned: Plachta/Seed-VC@$REV_SEEDVC (small wavenet 22k + base f0 44k v2 + configs), lj1995/VoiceConversionWebUI@$REV_RMVPE rmvpe.pt, funasr/campplus@$REV_CAMPPLUS, bigvgan 22k@$REV_BIGVGAN22 + 44k@$REV_BIGVGAN44, openai/whisper-small@$REV_WHISPER; one online warm-up conversion fills anything the pins missed" && return 0
   local repo="$LAB_REPOS_DIR/seedvc" venv="$LAB_VENVS_DIR/lab-voice-seedvc" ck cc
   git_pin "$SEEDVC_REPO" "$SEEDVC_COMMIT" "$repo"
-  "$LAB_TOOLS/bin/uv" venv --python 3.10 "$venv" -q
-  "$LAB_TOOLS/bin/uv" pip install --python "$venv/bin/python" -q --index-url https://download.pytorch.org/whl/cu128 "torch==2.8.0" "torchaudio==2.8.0" \
+  net 900 "$LAB_TOOLS/bin/uv" venv --python 3.10 "$venv" -q || fail_build "uv could not create the python 3.10 venv (download failed or timed out)"
+  net 2400 "$LAB_TOOLS/bin/uv" pip install --python "$venv/bin/python" -q --index-url https://download.pytorch.org/whl/cu128 "torch==2.8.0" "torchaudio==2.8.0" \
     || fail_build "seedvc: torch cu128 install failed"
-  "$LAB_TOOLS/bin/uv" pip install --python "$venv/bin/python" -q "numpy==1.26.4" "scipy==1.13.1" "librosa==0.10.2" "transformers==4.46.3" \
+  net 2400 "$LAB_TOOLS/bin/uv" pip install --python "$venv/bin/python" -q "numpy==1.26.4" "scipy==1.13.1" "librosa==0.10.2" "transformers==4.46.3" \
     "descript-audio-codec==1.0.0" "munch==4.0.0" "einops==0.8.0" matplotlib pyyaml "soundfile==0.12.1" tqdm "huggingface-hub==$HUB_VERSION" \
     || fail_build "seedvc: dependency install failed (see $LOGFILE)"
   ck="$repo/checkpoints"
@@ -191,10 +196,10 @@ step_install_seedvc() {
   # One ONLINE warm-up conversion per mode (the smoke later runs offline): any file the pins missed is fetched now.
   local fx="$PHERE/smoke/fixtures" warm=/opt/mm-build/seedvc-warm
   mkdir -p "$warm"
-  HOME="$MM_HOME" HF_HUB_OFFLINE=0 CUDA_VISIBLE_DEVICES=0 "$venv/bin/python" "$MM_ROOT/scripts/lab/voice_seedvc.py" --source "$fx/speech.wav" --ref "$fx/lab_ref.wav" \
-    --out "$warm/a.wav" --diffusion-steps 4 || fail_build "seedvc: warm-up conversion failed"
-  HOME="$MM_HOME" HF_HUB_OFFLINE=0 CUDA_VISIBLE_DEVICES=0 "$venv/bin/python" "$MM_ROOT/scripts/lab/voice_seedvc.py" --source "$fx/speech.wav" --ref "$fx/lab_ref.wav" \
-    --out "$warm/b.wav" --diffusion-steps 4 --f0-condition true || fail_build "seedvc: warm-up f0 conversion failed"
+  net 1800 env HOME="$MM_HOME" HF_HUB_OFFLINE=0 CUDA_VISIBLE_DEVICES=0 "$venv/bin/python" "$MM_ROOT/scripts/lab/voice_seedvc.py" --source "$fx/speech.wav" --ref "$fx/lab_ref.wav" \
+    --out "$warm/a.wav" --diffusion-steps 4 || fail_build "seedvc: warm-up conversion failed or timed out"
+  net 1800 env HOME="$MM_HOME" HF_HUB_OFFLINE=0 CUDA_VISIBLE_DEVICES=0 "$venv/bin/python" "$MM_ROOT/scripts/lab/voice_seedvc.py" --source "$fx/speech.wav" --ref "$fx/lab_ref.wav" \
+    --out "$warm/b.wav" --diffusion-steps 4 --f0-condition true || fail_build "seedvc: warm-up f0 conversion failed or timed out"
   rm -rf "$warm"
   record_versions seedvc "$SEEDVC_REPO" "$SEEDVC_COMMIT" "$venv" 3.10 \
     "Plachta/Seed-VC@$REV_SEEDVC lj1995/VoiceConversionWebUI@$REV_RMVPE funasr/campplus@$REV_CAMPPLUS nvidia/bigvgan_v2_22khz_80band_256x@$REV_BIGVGAN22 nvidia/bigvgan_v2_44khz_128band_512x@$REV_BIGVGAN44 openai/whisper-small@$REV_WHISPER"
@@ -205,10 +210,10 @@ step_install_cosyvoice3() {
   plan "git clone $COSY_REPO @ $COSY_COMMIT (+ the Matcha-TTS submodule) -> $LAB_REPOS_DIR/cosyvoice3; uv venv --python 3.10; torch 2.8.0 cu128, then the packages cosyvoice/ and Matcha-TTS import (onnxruntime-gpu 1.22.0, conformer, diffusers, hyperpyyaml, inflect, librosa, lightning, modelscope, openai-whisper, transformers 4.51.3, wetext, x-transformers, ...); hf download FunAudioLLM/Fun-CosyVoice3-0.5B-2512@$REV_COSY without the TensorRT/batch onnx extras -> $LAB_ROOT_DIR/cosyvoice3/Fun-CosyVoice3-0.5B" && return 0
   local repo="$LAB_REPOS_DIR/cosyvoice3" venv="$LAB_VENVS_DIR/lab-voice-cosyvoice3"
   git_pin "$COSY_REPO" "$COSY_COMMIT" "$repo"
-  "$LAB_TOOLS/bin/uv" venv --python 3.10 "$venv" -q
-  "$LAB_TOOLS/bin/uv" pip install --python "$venv/bin/python" -q --index-url https://download.pytorch.org/whl/cu128 "torch==2.8.0" "torchaudio==2.8.0" \
+  net 900 "$LAB_TOOLS/bin/uv" venv --python 3.10 "$venv" -q || fail_build "uv could not create the python 3.10 venv (download failed or timed out)"
+  net 2400 "$LAB_TOOLS/bin/uv" pip install --python "$venv/bin/python" -q --index-url https://download.pytorch.org/whl/cu128 "torch==2.8.0" "torchaudio==2.8.0" \
     || fail_build "cosyvoice3: torch cu128 install failed"
-  "$LAB_TOOLS/bin/uv" pip install --python "$venv/bin/python" -q "numpy==1.26.4" "scipy==1.13.1" "librosa==0.10.2" "transformers==4.51.3" \
+  net 2400 "$LAB_TOOLS/bin/uv" pip install --python "$venv/bin/python" -q "numpy==1.26.4" "scipy==1.13.1" "librosa==0.10.2" "transformers==4.51.3" \
     "onnxruntime-gpu==1.22.0" "conformer==0.3.2" "diffusers==0.29.0" "HyperPyYAML==1.2.3" "inflect==7.3.1" "lightning==2.2.4" "modelscope==1.20.0" \
     "omegaconf==2.3.0" "hydra-core==1.3.2" rich "openai-whisper==20231117" "huggingface-hub==$HUB_VERSION" "x-transformers==2.11.24" "wetext==0.0.4" einops regex "soundfile==0.12.1" tqdm pyyaml "protobuf==4.25" \
     || fail_build "cosyvoice3: dependency install failed (see $LOGFILE)"
@@ -233,7 +238,7 @@ step_record_runtime_manifest() {
   RUNTIME_MANIFEST="$(python3 "$MM_ROOT/scripts/lab/runtime_manifest.py" --weights "$LAB_ROOT_DIR" --wrappers "$MM_ROOT/scripts/lab")"
   [[ "$RUNTIME_MANIFEST" =~ ^[0-9a-f]{64}$ ]] || fail_build "runtime manifest is not a sha256 ('$RUNTIME_MANIFEST')"
   jq -n --arg rm "$RUNTIME_MANIFEST" '{runtimeManifest: $rm, fresh: true}' > /etc/mm-burst-export-manifest.json
-  printf '%s\n' "$RUNTIME_MANIFEST" | aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.runtime-manifest" --only-show-errors
+  printf '%s\n' "$RUNTIME_MANIFEST" | net 300 aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.runtime-manifest" --only-show-errors
   status "runtime manifest $RUNTIME_MANIFEST"
 }
 

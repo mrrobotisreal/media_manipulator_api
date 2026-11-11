@@ -663,7 +663,9 @@ func TestLabVoiceProvisionDryRunIsAFreshInstall(t *testing.T) {
 			t.Errorf("lab-voice dry-run plan lacks %q", want)
 		}
 	}
-	for _, bad := range []string{"burst-images/", ".tar.zst", "vulkaninfo", "libnvidia-gl", "unpack"} {
+	// No host export: nothing dated under burst-images/ and no export tarball.
+	// (burst-images/apt/ is the shared ffmpeg package copy, which every family may read.)
+	for _, bad := range []string{"burst-images/2026", ".tar.zst", "vulkaninfo", "libnvidia-gl", "unpack"} {
 		if strings.Contains(s, bad) {
 			t.Errorf("a fresh family must not touch %q:\n%s", bad, s)
 		}

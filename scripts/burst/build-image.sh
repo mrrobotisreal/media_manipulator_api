@@ -202,10 +202,10 @@ USERDATA="#!/bin/bash
 shutdown -h +180
 export MM_FAMILY=$FAMILY MM_DATE=$DATE MM_BUCKET=$MM_BUCKET MM_REGION=$MM_REGION AWS_DEFAULT_REGION=$MM_REGION MM_BUILD_PREFIX=$BUILD_PREFIX MM_CTL=/opt/mm-burst-build/burst/burst-ctl
 mkdir -p /opt/mm-burst-build
-aws s3 cp s3://$MM_BUCKET/$BUILD_PREFIX/bundle.tgz /opt/mm-burst-build/bundle.tgz --only-show-errors
+timeout 600 aws s3 cp s3://$MM_BUCKET/$BUILD_PREFIX/bundle.tgz /opt/mm-burst-build/bundle.tgz --only-show-errors
 tar -xzf /opt/mm-burst-build/bundle.tgz -C /opt/mm-burst-build
 bash /opt/mm-burst-build/burst/provision-$FAMILY.sh --date $DATE $MODE_FLAG >> /var/log/mm-burst-provision.log 2>&1 \\
-  || { tail -n 200 /var/log/mm-burst-provision.log | aws s3 cp - s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.log --only-show-errors; echo failed | aws s3 cp - s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.failed --only-show-errors; shutdown -h now; }
+  || { tail -n 200 /var/log/mm-burst-provision.log | timeout 120 aws s3 cp - s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.log --only-show-errors; echo failed | timeout 120 aws s3 cp - s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.failed --only-show-errors; shutdown -h now; }
 "
 
 # 5. Launch: try every subnet (one per AZ) until one has capacity.
@@ -214,7 +214,7 @@ VTAGS="ResourceType=volume,Tags=[{Key=mm-burst,Value=1},{Key=mm-burst-build,Valu
 BDM="[{\"DeviceName\":\"$ROOT_DEV\",\"Ebs\":{\"VolumeSize\":$ROOT_GIB,\"VolumeType\":\"gp3\",\"DeleteOnTermination\":true,\"Encrypted\":true}}]"
 if [ "$DRY" = 1 ]; then
   echo "AWS   aws ec2 run-instances --image-id $BASE_AMI --instance-type $ITYPE --subnet-id <each of $MM_SUBNETS in turn> --security-group-ids $MM_SG --iam-instance-profile Name=$MM_PROFILE --instance-initiated-shutdown-behavior terminate --metadata-options HttpTokens=required --block-device-mappings '$BDM' --tag-specifications '$TAGS' '$VTAGS' --user-data <$(printf '%s' "$USERDATA" | wc -c | tr -d ' ') bytes>"
-  echo "WAIT  poll s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.{status,smoke.json,ready,failed} every 20 s, up to 170 min"
+  echo "WAIT  poll s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.{status,smoke.json,ready,failed} every 20 s, up to 170 min; stop and terminate the builder when its status has not changed for $(( ${MM_STALL_SECONDS:-5400} / 60 )) min"
   echo "AWS   aws ec2 create-image --no-reboot --instance-id <builder> --name mm-burst-$FAMILY-$DATE-<hhmm> + tags mm-burst-image=1 family=$FAMILY arch=ada+blackwell runtime-manifest=$RUNTIME_MANIFEST"
   echo "AWS   aws ec2 terminate-instances --instance-ids <builder>"
   echo "OUT   BURST_AMIS=$FAMILY:x86_64=<new ami>"
@@ -235,9 +235,21 @@ done
 # 6. Wait.
 START="$(date +%s)"
 last=""
+# A builder that stops reporting is stuck, not busy: every step reports when it
+# starts, and every download in provisioning has its own time limit. On
+# 2026-11-11 one sat at "apt: ffmpeg" for 170 minutes (about $7) because
+# Launchpad was unreachable and this loop only knew the 170-minute limit.
+# 90 min: well past the longest single time limit in provisioning (60 min) and
+# the longest quiet step (the mmcv source build); smoke reports after each case.
+STALL="${MM_STALL_SECONDS:-5400}"
+last_change="$START"
 while :; do
-  el=$(( $(date +%s) - START ))
+  now="$(date +%s)"
+  el=$(( now - START ))
   [ "$el" -lt 10200 ] || die "timed out after 170 min waiting for the builder"
+  if [ $(( now - last_change )) -ge "$STALL" ]; then
+    die "the builder has reported nothing new for $(( STALL / 60 )) min (last status: ${last:-none}); it is stuck, so it is being terminated. Nothing is wrong on your side. Paste this line into chat."
+  fi
   if aws s3api head-object --bucket "$MM_BUCKET" --key "$BUILD_PREFIX/$FAMILY.failed" >/dev/null 2>&1; then
     log "BUILD FAILED. Last log lines:"
     aws s3 cp "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.log" - 2>/dev/null | tail -n 40 >&2 || true
@@ -245,7 +257,7 @@ while :; do
     exit 1
   fi
   cur="$(aws s3 cp "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.status" - 2>/dev/null | tail -n 1 || true)"
-  if [ -n "$cur" ] && [ "$cur" != "$last" ]; then log "builder: $cur"; last="$cur"; fi
+  if [ -n "$cur" ] && [ "$cur" != "$last" ]; then log "builder: $cur"; last="$cur"; last_change="$now"; fi
   # The builder can vanish without writing .failed: terminated by someone else
   # (on 2026-11-10 an API reaper older than MM126 killed one a minute after
   # launch), its 3 h self-shutdown, or an AWS problem. Stop at once with the
