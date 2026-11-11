@@ -72,8 +72,9 @@ assert_no_hf_token() {
 hf_get() {
   local repo="$1" rev="$2" dest="$3"
   shift 3
-  local inc=() g
-  for g in "$@"; do inc+=(--include "$g"); done
+  # --include takes a LIST after one flag (nargs="*"); repeating the flag keeps only the last, so pass it once.
+  local inc=()
+  [ $# -eq 0 ] || inc=(--include "$@")
   status "weights: $repo@${rev%"${rev#????????}"} -> $dest"
   "$LAB_TOOLS/bin/hf" download "$repo" --revision "$rev" --local-dir "$dest" ${inc[@]+"${inc[@]}"} --quiet >/dev/null
 }
@@ -84,8 +85,8 @@ hf_get() {
 hf_cache_get() {
   local repo="$1" rev="$2" cache="$3"
   shift 3
-  local inc=() g key
-  for g in "$@"; do inc+=(--include "$g"); done
+  local inc=() key
+  [ $# -eq 0 ] || inc=(--include "$@")
   status "weights (cache): $repo@${rev%"${rev#????????}"} -> $cache"
   "$LAB_TOOLS/bin/hf" download "$repo" --revision "$rev" --cache-dir "$cache" ${inc[@]+"${inc[@]}"} --quiet >/dev/null
   key="models--${repo//\//--}"
@@ -209,7 +210,7 @@ step_install_cosyvoice3() {
     || fail_build "cosyvoice3: torch cu128 install failed"
   "$LAB_TOOLS/bin/uv" pip install --python "$venv/bin/python" -q "numpy==1.26.4" "scipy==1.13.1" "librosa==0.10.2" "transformers==4.51.3" \
     "onnxruntime-gpu==1.22.0" "conformer==0.3.2" "diffusers==0.29.0" "HyperPyYAML==1.2.3" "inflect==7.3.1" "lightning==2.2.4" "modelscope==1.20.0" \
-    "omegaconf==2.3.0" "openai-whisper==20231117" "x-transformers==2.11.24" "wetext==0.0.4" einops regex "soundfile==0.12.1" tqdm pyyaml "protobuf==4.25" \
+    "omegaconf==2.3.0" "hydra-core==1.3.2" rich "openai-whisper==20231117" "x-transformers==2.11.24" "wetext==0.0.4" einops regex "soundfile==0.12.1" tqdm pyyaml "protobuf==4.25" \
     || fail_build "cosyvoice3: dependency install failed (see $LOGFILE)"
   hf_get FunAudioLLM/Fun-CosyVoice3-0.5B-2512 "$REV_COSY" "$LAB_ROOT_DIR/cosyvoice3/Fun-CosyVoice3-0.5B" \
     "cosyvoice3.yaml" "config.json" "llm.pt" "flow.pt" "hift.pt" "campplus.onnx" "speech_tokenizer_v3.onnx" "CosyVoice-BlankEN/*"
