@@ -1387,6 +1387,32 @@ Enabled but missing any of AWS credentials, subnets, security group, instance pr
 
 **How to stop everything now.** Set `BURST_ENABLED=false` and restart the API, then `go run ./cmd/burst-ctl reap --yes` (terminates every `mm-burst=1` instance and deletes `burst/` staging prefixes). For a hard stop at AWS: detach the controller user's policies or attach the deny-`RunInstances` policy by hand (the monthly budget action does this at $250).
 
+### 4.20 Lab (MM138)
+
+Mitch's private Lab (`docs/design/OPERATOR_LAB.md`, ADR-0021): `/api/lab/*` plus a hidden English-only `/lab` page for models the product cannot sell (non-commercial, research, deal-required, copyleft, or too big for the home cards). One account uses it; everyone else gets the router's own 404, indistinguishable from a missing route.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LAB_EMAILS` | empty | CSV of lowercase emails. **Empty turns the Lab off for everyone.** Operator tier alone is not enough: the caller must be a verified Firebase email, resolve to the operator tier (`OPERATOR_EMAILS`, re-derived per request) **and** be listed here. Startup prints `lab: enabled for N account(s)` or `lab: disabled` (a count, never the addresses). |
+| `LAB_DAILY_SPEND_CAP_USD` | `10` | Lab sub-cap per UTC day. Enforced with the burst ledger's `Reserve` on `burst_runs` rows with `purpose = 'lab'`; the burst caps (`BURST_DAILY/MONTHLY_SPEND_CAP_USD`) still apply on top. |
+| `LAB_MONTHLY_SPEND_CAP_USD` | `100` | Lab sub-cap per UTC month. |
+| `LAB_ALLOW_LOCAL` | `true` | A `FitsHome` model runs on a free home card (scheduler priority Standard, never Premium; the Lab yields to customers) and bursts only when no card frees up within a few seconds and burst is configured. |
+| `LAB_SESSION_IDLE_SECONDS` | `120` | After a burst run, the instance waits this long for another run of the same model (a queued job reuses it at once), then terminates. |
+
+**Routes** (all behind the gate): `GET /api/lab/models` (registry rows, licence, instance, estimate, `available`), `POST /api/lab/jobs` (multipart: `request` JSON `{model, params, inputs:{name:{fromJob}}}` plus a file part per upload input; 202 `{jobId}`, 400 bad params, 409 `lab_cap`, 503 `lab_unavailable`), `GET /api/lab/spend` (today and month vs the Lab caps, warm sessions), `POST /api/lab/sessions/{model}/end`. A Lab job is an ordinary job (`mode`/`tool` = `lab_<model>`, options `lab: true`); status, events, result and download use the existing job routes, which refuse a Lab job (404) to anyone failing the gate as defence in depth, and `POST /api/jobs/:id/share` answers 404 for it.
+
+**Burst not configured.** A model that needs a remote GPU fails closed (`503 lab_unavailable`; the page shows why). `FitsHome` models (CodeFormer) still run on the home GPU. CodeFormer for customers stays off (`IMAGE_RESTORE_CODEFORMER_ENABLED=false`); the Lab reaches it through its own registry row.
+
+**Sessions and the reaper.** A burst run leaves its instance up (`burst_runs.session_until` = now + idle). The reaper treats a parked instance as live only while `session_until` is in the future; `BURST_MAX_INSTANCE_MINUTES` still kills it. The worker runs in session mode (`"session": true` in its run file), accepts a new run once the previous finished, and has no finished-run shutdown; its orphan timer (10 minutes without an authenticated request) is the backstop.
+
+**Migration.** `20261111001_lab_burst_runs_purpose`: nullable `purpose` (`burst|lab`, default `burst`) and `session_until` on `burst_runs`, plus a partial index. Additive; old rows read as `burst`. Mitch runs it.
+
+**Adding a Lab model.** Add one `LabModel` row to `registry()` in `internal/lab/registry.go` and its `Command` func (returns an `exec.Spec`: steps, declared inputs/outputs/scratch, `CardArgs`). Fields: `Key` (tool is `lab_<Key>`), `Name`, `Area` (voice|image|video), `Licence` and `LicenceURL`/`SourceURL`, `Family` (`lab-voice|lab-image|lab-video`; `BURST_AMIS` needs `<family>:x86_64`), `InstanceCandidates`, `MinGPUMemGiB`, `FitsHome`/`HomeVRAMMiB`, `ParamsSchema` (JSON Schema subset; drives server validation and the UI form), `Inputs`, `Outputs`, `ResultFile` (one file in the job's output dir), `EstSeconds`. Its burst profile is generated with `LabOnly: true`; nothing else needs editing, and the isolation tests (`internal/lab/isolation_test.go`, `internal/handlers/lab_isolation_test.go`) cover it automatically.
+
+**The personal-use rule (Mitch's, not enforced by code).** Lab outputs are for personal use only; never in Media Manipulator or CreaTV marketing, products or client work. Clone only your own voice or someone's with their permission.
+
+**Shared burst runtime.** `cmd/api/burst_runtime.go` `newBurstRuntime(cfg, pool, s3Client, prov, prefixes, drift, logging) *burstRuntime` returns the planner, remote executor, staging store, token holder and both ledgers when burst is `Configured()`, else nil. `startBurst` builds it and `cmd/api/lab_wiring.go` passes it to the Lab. MM127 session b reuses it for `NewBurstPlanner(...)` and `runGPUStep`.
+
 ## 5. HTTP API surface
 
 All routes live under `/api/` except `/healthz`.

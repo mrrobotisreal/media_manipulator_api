@@ -290,3 +290,58 @@ func TestWorker_Health(t *testing.T) {
 		t.Fatal("not ready after 5 minutes")
 	}
 }
+
+// MM138 Lab sessions: with Config.Session the worker accepts a second run once
+// the first finished (wiping the run directory), never while one is in flight,
+// and does not arm the finished-run shutdown.
+func TestWorker_SessionAcceptsASecondRunAfterTheFirstFinished(t *testing.T) {
+	r := newRig(t, 100)
+	r.w.cfg.Session = true
+	cp := wire.Cmd{Exe: "sh", Args: []string{"-c", "cp " + r.root + "/run1/in/0/in.txt " + r.root + "/run1/out/0/out.txt"}}
+	r.stageInput(t, "hello")
+	if resp, b := r.do(t, "POST", "/v1/runs", r.req(cp), nil); resp.StatusCode != 202 {
+		t.Fatalf("%d %s", resp.StatusCode, b)
+	}
+	if st := r.waitTerminal(t); st.State != wire.StateDone {
+		t.Fatalf("%+v", st)
+	}
+	time.Sleep(50 * time.Millisecond)
+	r.clk.Add(10 * time.Minute) // far past the 5-minute finished-run deadline, orphan clock kept fresh below
+	r.do(t, "GET", "/v1/health", nil, nil)
+	if r.w.CheckOrphan(r.clk.Now()) || r.shut.Load() != 0 {
+		t.Fatal("a session worker must not arm the finished-run shutdown")
+	}
+	if _, b := r.do(t, "GET", "/v1/health", nil, nil); strings.Contains(string(b), `"busy":true`) {
+		t.Fatalf("a finished run is not busy: %s", b)
+	}
+	if _, err := os.Stat(filepath.Join(r.root, "run1", "out", "0", "out.txt")); err != nil {
+		t.Fatal(err)
+	}
+	// Second run: the API stages new inputs under the same prefix (and deleted the old ones).
+	r.mem.DeletePrefix(context.Background(), "burst/run1/")
+	r.stageInput(t, "second")
+	if resp, b := r.do(t, "POST", "/v1/runs", r.req(cp), nil); resp.StatusCode != 202 {
+		t.Fatalf("second run in a session: %d %s", resp.StatusCode, b)
+	}
+	if st := r.waitTerminal(t); st.State != wire.StateDone {
+		t.Fatalf("%+v", st)
+	}
+	b, _ := os.ReadFile(filepath.Join(r.root, "run1", "out", "0", "out.txt"))
+	if string(b) != "second" {
+		t.Fatalf("the second run must start from a clean directory and see its own input: %q", b)
+	}
+}
+
+func TestWorker_SessionRefusesASecondRunWhileOneIsRunning(t *testing.T) {
+	r := newRig(t, 100)
+	r.w.cfg.Session = true
+	r.stageInput(t, "hello")
+	slow := wire.Cmd{Exe: "sh", Args: []string{"-c", "sleep 1; cp " + r.root + "/run1/in/0/in.txt " + r.root + "/run1/out/0/out.txt"}}
+	if resp, _ := r.do(t, "POST", "/v1/runs", r.req(slow), nil); resp.StatusCode != 202 {
+		t.Fatal(resp.StatusCode)
+	}
+	if resp, _ := r.do(t, "POST", "/v1/runs", r.req(slow), nil); resp.StatusCode != 409 {
+		t.Fatalf("a run in flight: %d", resp.StatusCode)
+	}
+	r.waitTerminal(t)
+}

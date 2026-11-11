@@ -244,6 +244,10 @@ func (r *Remote) Run(ctx context.Context, run *Run, spec exec.Spec) (err error) 
 		if derr := r.Store.DeletePrefix(bg, RunPrefix(r.Prefix, run.WorkerRunID())+"/"); derr != nil {
 			r.log().Warn("burst: staging prefix delete failed; the reaper will retry", "run", run.ID, "error", derr.Error())
 		}
+		if err == nil && run.Keep && run.Purpose == PurposeLab {
+			r.log().Info("burst: staging prefix deleted, instance kept for the Lab session", "run", run.ID)
+			return
+		}
 		if err == nil {
 			outcome = StateCompleted
 		}

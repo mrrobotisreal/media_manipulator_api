@@ -101,6 +101,9 @@ func recordAccessAllowed(c *gin.Context, rec telemetry.JobRecord, allowQuerySID 
 
 // authorizeRecordAccess applies RESULT_OWNERSHIP_ENFORCE around recordAccessAllowed.
 func authorizeRecordAccess(c *gin.Context, rec telemetry.JobRecord, jobID string, allowQuerySID bool) bool {
+	if labRecordBlocked(c, rec) { // MM138
+		return false
+	}
 	if recordAccessAllowed(c, rec, allowQuerySID) {
 		return true
 	}

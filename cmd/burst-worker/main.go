@@ -43,6 +43,7 @@ type runFile struct {
 	Manifest string   `json:"manifestHash"`
 	Orphan   int      `json:"orphanMinutes"`
 	Prewarm  []string `json:"prewarm"`
+	Session  bool     `json:"session"`
 }
 
 func main() {
@@ -78,7 +79,7 @@ func main() {
 	w := worker.New(worker.Config{
 		RunID: rf.RunID, Token: rf.RunToken, Prefix: rf.Prefix, Version: version,
 		Image:     wire.ImageInfo{Family: rf.Family, Arch: rf.Arch, ManifestHash: rf.Manifest},
-		OrphanMin: rf.Orphan, Store: store, Log: log, Workers: staging.DefaultConcurrency,
+		OrphanMin: rf.Orphan, Session: rf.Session, Store: store, Log: log, Workers: staging.DefaultConcurrency,
 		Shutdown:    func() { _ = exec.Command("shutdown", "-h", "now").Run() },
 		FreeGiB:     func() float64 { return freeGiB("/opt/dlami/nvme") },
 		GPU:         gpuInfo,

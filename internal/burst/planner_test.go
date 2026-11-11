@@ -283,7 +283,7 @@ func TestBurstDark_NoProviderOrMinterCalls(t *testing.T) {
 	}
 	prov, min := &fakeProvider{}, &fakeMinter{}
 	// The wiring rule (cmd/api): no creds -> no reaper, no planner. Model it:
-	if Start(context.Background(), cfg, prov, nil, nil, nil, nil, nil) != nil {
+	if Start(context.Background(), cfg, prov, nil, nil, nil, nil, nil, nil) != nil {
 		t.Fatal("Start must return no reaper when creds are absent")
 	}
 	if prov.calls != 0 || min.calls != 0 {

@@ -657,6 +657,8 @@ type Config struct {
 	Assistant AssistantConfig
 	// Burst is the GPU burst configuration (MM124, burst.go).
 	Burst BurstConfig
+	// Lab is the private Lab configuration (MM138, lab.go).
+	Lab LabConfig
 
 	// DR AI Chat Test Lab (/dr/demos/chat-lab) — a ChatGPT-style chat backed by
 	// OpenRouter, called from THIS API (never from the Next.js layer) so the key
@@ -1140,6 +1142,7 @@ func Load() *Config {
 		// Medi (MM104).
 		Assistant: loadAssistantConfig(),
 		Burst:     loadBurstConfig(),
+		Lab:       loadLabConfig(),
 
 		// DR AI Chat Test Lab (see struct doc). The key is the one true secret
 		// here — never log or echo it.

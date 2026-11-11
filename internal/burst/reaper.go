@@ -28,8 +28,10 @@ type Reaper struct {
 	// Live returns the in-memory runs of THIS process (nil = none).
 	Live   func() []Run
 	Ledger *Ledger // may be nil
-	Log    *slog.Logger
-	Now    func() time.Time
+	// LabLedger settles lab rows' Lab sub-cap reservations (MM138); may be nil.
+	LabLedger *Ledger
+	Log       *slog.Logger
+	Now       func() time.Time
 }
 
 // Report is one pass's outcome.
@@ -70,6 +72,12 @@ func (r *Reaper) Pass(ctx context.Context, boot, dry bool) Report {
 	liveInst := map[string]bool{}
 	if r.Live != nil {
 		for _, run := range r.Live() {
+			// MM138: a parked Lab session instance is live only while its
+			// session_until is in the future; past it the reaper may take it.
+			parkedOver := run.SessionUntil != nil && !now.Before(*run.SessionUntil)
+			if parkedOver {
+				continue
+			}
 			liveRuns[run.ID] = run
 			liveRuns[run.WorkerRunID()] = run // an adopted run's staging prefix is the worker's
 			if run.InstanceID != "" {
@@ -176,13 +184,16 @@ func (r *Reaper) Pass(ctx context.Context, boot, dry bool) Report {
 		}
 		if from != nil && (row.InstanceID != "" || inst.ID != "") {
 			ebs := 0
-			if pr, ok := Lookup(row.Kind); ok {
+			if pr, ok := LookupAny(row.Kind); ok {
 				ebs = pr.RootGiB
 			}
 			row.CostMicros = CostMicros(RatesFor(r.Cfg, typ), *from, end, ebs, row.BytesOut, false)
 		}
 		if r.Ledger != nil {
 			r.Ledger.Settle(row.ID, row.CostMicros)
+		}
+		if r.LabLedger != nil && row.Purpose == PurposeLab {
+			r.LabLedger.Settle(row.ID, row.CostMicros)
 		}
 		if err := r.Store.Update(ctx, &row); err != nil {
 			rep.Errors = append(rep.Errors, "update row: "+err.Error())

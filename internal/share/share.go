@@ -189,5 +189,12 @@ func Shareable(in Input, k Kind) bool {
 // BlockedWorkflow is the part of Shareable that needs no file: the job's mode or
 // tool already says metadata report or Darkroom.
 func BlockedWorkflow(in Input) bool {
-	return isStudio(in.Mode) || isStudio(in.Tool) || isMetadataLabel(in.Mode) || isMetadataLabel(in.Tool)
+	return isStudio(in.Mode) || isStudio(in.Tool) || isMetadataLabel(in.Mode) || isMetadataLabel(in.Tool) ||
+		IsLab(in.Mode) || IsLab(in.Tool)
+}
+
+// IsLab reports whether a mode or tool names a Lab job (MM138): never shareable,
+// never offered to anyone but the Lab gate.
+func IsLab(s string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(s)), "lab_")
 }

@@ -13,7 +13,7 @@ import (
 // prov must be non-nil when creds are present; the caller builds it. The
 // returned reaper is already running in a goroutine.
 func Start(ctx context.Context, cfg config.BurstConfig, prov Provider, st Store, prefixes PrefixStore,
-	live func() []Run, ledger *Ledger, log *slog.Logger) *Reaper {
+	live func() []Run, ledger *Ledger, labLedger *Ledger, log *slog.Logger) *Reaper {
 	if log == nil {
 		log = slog.Default()
 	}
@@ -21,7 +21,7 @@ func Start(ctx context.Context, cfg config.BurstConfig, prov Provider, st Store,
 	if !cfg.AWSConfigured() || prov == nil {
 		return nil
 	}
-	r := &Reaper{Cfg: cfg, Provider: prov, Store: st, Prefixes: prefixes, Live: live, Ledger: ledger, Log: log}
+	r := &Reaper{Cfg: cfg, Provider: prov, Store: st, Prefixes: prefixes, Live: live, Ledger: ledger, LabLedger: labLedger, Log: log}
 	go r.Run(ctx)
 	return r
 }

@@ -195,8 +195,14 @@ func (h *ShareHandler) CreateShare(c *gin.Context) {
 		return
 	}
 	jobID := strings.TrimSpace(c.Param("jobId"))
-	userID, session, _, ok := requireJobOwnerRec(c, h.store, h.jobs, h.logger, jobID)
+	userID, session, rec, ok := requireJobOwnerRec(c, h.store, h.jobs, h.logger, jobID)
 	if !ok {
+		return
+	}
+	// MM138: a Lab result is never shareable. 404, like a job the caller does not
+	// own, so the route says nothing about Lab jobs.
+	if share.IsLab(rec.Tool) || share.IsLab(rec.Mode) || (h.jobs != nil && jobIsLab(h.jobs, jobID)) {
+		denyJobAccess(c)
 		return
 	}
 	ttl := shareDefaultTTL
@@ -410,4 +416,10 @@ func (h *ShareHandler) GetShareFile(c *gin.Context) {
 	}
 	defer f.Close()
 	serveResultFile(c, f, res.info, res.mime, publicName(res.path), c.Query("download") != "1", "private, no-store")
+}
+
+// jobIsLab reports whether the in-memory job is a Lab job.
+func jobIsLab(jm *services.JobManager, jobID string) bool {
+	job, err := jm.GetJob(jobID)
+	return err == nil && isLabJob(job)
 }

@@ -5,7 +5,10 @@
 // internal/services; services import burst.
 package burst
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 // Worker families (design §9): which image holds a profile's runtime.
 const (
@@ -38,7 +41,10 @@ type Profile struct {
 	RemoteTimeout   int // seconds
 	// Never rows are in the table explicitly so a new GPU tool cannot silently
 	// become burstable or be forgotten.
-	Never       bool
+	Never bool
+	// LabOnly marks a Lab model profile (MM138). It is never in the profiles
+	// table; the planner refuses it unless the job carries the lab flag.
+	LabOnly     bool
 	NeverReason string
 }
 
@@ -87,6 +93,11 @@ var profiles = []Profile{
 	never("document-scan-", "document-scan secondary stages run on a local card; only their ollama[...] primaries burst (wave 2)"),
 }
 
+// RemoteTimeoutDuration is RemoteTimeout as a duration (0 when unset).
+func (p Profile) RemoteTimeoutDuration() time.Duration {
+	return time.Duration(p.RemoteTimeout) * time.Second
+}
+
 // Profiles returns a copy of the table.
 func Profiles() []Profile {
 	return append([]Profile(nil), profiles...)
@@ -113,6 +124,24 @@ func Lookup(kind string) (Profile, bool) {
 				return p, true
 			}
 		}
+	}
+	return Profile{}, false
+}
+
+// LabProfileLookup resolves a Lab Kind ("lab_<model>") to its LabOnly profile.
+// internal/lab sets it at start-up; burst cannot import lab. Lookup (the
+// product table) never consults it, so no product path can reach a LabOnly
+// profile (ADR-0021, test (a)).
+var LabProfileLookup func(kind string) (Profile, bool)
+
+// LookupAny is Lookup plus the Lab registry. Only the planner's lab paths, the
+// reaper's cost estimate and Terminate use it.
+func LookupAny(kind string) (Profile, bool) {
+	if p, ok := Lookup(kind); ok {
+		return p, true
+	}
+	if LabProfileLookup != nil {
+		return LabProfileLookup(kind)
 	}
 	return Profile{}, false
 }

@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+// Run purposes (burst_runs.purpose).
+const (
+	PurposeBurst = "burst"
+	PurposeLab   = "lab"
+)
+
 // State is burst_runs.state (design §6).
 type State string
 
@@ -50,13 +56,15 @@ var exits = []State{StateLostRace, StateAdopted, StateLaunchFailed, StateBootTim
 // transitions is the enforced edge table. offered may be refused by the cap;
 // the happy path is a straight line.
 var transitions = map[State][]State{
-	StateOffered:    {StateLaunching, StateCapRefused},
-	StateLaunching:  {StateBooting},
-	StateBooting:    {StateReady},
-	StateReady:      {StateStagingIn},
-	StateStagingIn:  {StateRunning},
-	StateRunning:    {StateStagingOut},
-	StateStagingOut: {StateCompleted},
+	StateOffered:   {StateLaunching, StateCapRefused},
+	StateLaunching: {StateBooting},
+	StateBooting:   {StateReady},
+	StateReady:     {StateStagingIn},
+	StateStagingIn: {StateRunning},
+	StateRunning:   {StateStagingOut},
+	// staging_out -> staging_in is the Lab session re-arm (MM138): a parked
+	// instance takes its next job without going through ready again.
+	StateStagingOut: {StateCompleted, StateStagingIn},
 }
 
 // CanTransition reports whether from -> to is legal.
@@ -109,6 +117,15 @@ type Run struct {
 	CostMicros      int64
 	ErrorType       string
 	AdoptedFrom     string
+	// Purpose is burst_runs.purpose: PurposeBurst (default) or PurposeLab (MM138).
+	Purpose string
+	// SessionUntil is burst_runs.session_until: while a Lab session instance is
+	// parked it is the time the instance is kept until; nil = not parked.
+	SessionUntil *time.Time
+	// Keep (not persisted) asks Remote.Run to leave the instance running after
+	// a successful run, for the next job of a Lab session. A failed run still
+	// terminates.
+	Keep bool
 	// WorkerID is the run id baked into the instance (its tailnet hostname, run
 	// token, staging prefix and data dir). It equals ID except on an adopted
 	// run (MM127): the new row gets a new ID but the instance still answers to

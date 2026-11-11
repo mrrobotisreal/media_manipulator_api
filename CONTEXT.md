@@ -240,3 +240,14 @@ A local file or directory named in a Spec's `Inputs`, `Outputs` or `Scratch`. On
 **Hedged race** (MM124, used by MM127):
 From the offer until the worker reports `ready`, the job is still a local waiter. A local slot first: the run becomes `lost_race` (or the booting instance is adopted by another eligible waiter). The remote first: the waiter leaves the local queue.
 
+**Lab** (MM138):
+Mitch's private page (`/lab`, English only, 404 for everyone else) and `/api/lab/*` routes for models the product cannot sell. Reachable only by a verified Firebase email that resolves to the operator tier and is in `LAB_EMAILS`. Never in nav, the sitemap, Medi, legal copy, analytics or the portfolio.
+_Avoid_: "admin tool", "beta feature" (it is neither offered nor tested for users).
+
+**Lab model** (MM138):
+One `internal/lab.LabModel` registry row: licence (`noncommercial`, `research`, `deal_required`, `copyleft`, `permissive`), source and licence URLs, worker image family, instance candidates, whether it fits a home card, a JSON-Schema params form and a `Command` that builds an `exec.Spec`. Its burst profile is generated with `LabOnly: true`, lives only in the Lab registry, and the planner refuses it for any job without the lab flag. Jobs run as tool `lab_<key>`.
+_Avoid_: "Lab tool" (a tool is a product tool).
+
+**Lab session** (MM138):
+A burst instance kept up after a Lab run, for `LAB_SESSION_IDLE_SECONDS`, so the next run of the same model skips the 6 to 10 minute boot. `burst_runs.session_until` marks it; the reaper treats it as live only until then. The one exception to "terminate when done", for Lab jobs only.
+
