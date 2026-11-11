@@ -24,8 +24,8 @@ MM_FFMPEG_MIRROR_KEY="${MM_FFMPEG_MIRROR_KEY:-burst-images/apt/ffmpeg8-noble-amd
 # verified with the PPA's own key (keys/ppa-ubuntuhandbook1-ffmpeg8.asc). The
 # builder and mirror-ffmpeg.sh's self-test use the same line.
 ffmpeg_apt_line() { printf 'deb [arch=amd64 signed-by=%s%s] %s noble main\n' "$1" "${3:+ $3}" "$2"; }
-MM_ROOT="/opt/media-manipulator-ai"
-MM_HOME="/opt/mm-burst-home"
+MM_ROOT="${MM_ROOT:-/opt/media-manipulator-ai}"
+MM_HOME="${MM_HOME:-/opt/mm-burst-home}"
 
 # Root volume size (GiB) a family's burst profile launches with
 # (internal/burst/profiles.go). An AMI cannot be launched with a smaller root

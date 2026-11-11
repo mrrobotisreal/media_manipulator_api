@@ -243,6 +243,7 @@ last=""
 # the longest quiet step (the mmcv source build); smoke reports after each case.
 STALL="${MM_STALL_SECONDS:-5400}"
 last_change="$START"
+shown=0
 while :; do
   now="$(date +%s)"
   el=$(( now - START ))
@@ -256,8 +257,19 @@ while :; do
     aws s3 cp "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.smoke.json" - 2>/dev/null | jq -c '.cases[]? | select(.ok==false)' >&2 || true
     exit 1
   fi
-  cur="$(aws s3 cp "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.status" - 2>/dev/null | tail -n 1 || true)"
-  if [ -n "$cur" ] && [ "$cur" != "$last" ]; then log "builder: $cur"; last="$cur"; last_change="$now"; fi
+  # The status object holds every line the builder has reported: print the ones not shown yet.
+  hist="$(aws s3 cp "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.status" - 2>/dev/null || true)"
+  cur="$(printf '%s\n' "$hist" | sed -n '$p')"
+  n="$(printf '%s\n' "$hist" | grep -c . || true)"
+  if [ -n "$cur" ] && { [ "$n" -ne "$shown" ] || [ "$cur" != "$last" ]; }; then
+    if [ "$n" -lt "$shown" ] || [ "$n" -eq "$shown" ]; then shown=$((n - 1)); fi
+    while IFS= read -r l; do
+      if [ -n "$l" ]; then log "builder: $l"; fi
+    done <<SEEN
+$(printf '%s\n' "$hist" | sed -n "$((shown + 1)),\$p")
+SEEN
+    shown="$n"; last="$cur"; last_change="$now"
+  fi
   # The builder can vanish without writing .failed: terminated by someone else
   # (on 2026-11-10 an API reaper older than MM126 killed one a minute after
   # launch), its 3 h self-shutdown, or an AWS problem. Stop at once with the

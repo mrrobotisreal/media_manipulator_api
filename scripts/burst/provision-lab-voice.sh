@@ -30,10 +30,11 @@ LAB_ROOT_DIR="$MM_ROOT/models/lab-voice"
 LAB_REPOS_DIR="$MM_ROOT/repos/lab-voice"
 LAB_VENVS_DIR="$MM_ROOT/venvs"
 LAB_WRAPPERS_SRC="${LAB_WRAPPERS_SRC:-$PHERE/../lab}"
-LAB_TOOLS=/opt/mm-build/tools
+LAB_BUILD_DIR="${LAB_BUILD_DIR:-/opt/mm-build}"
+LAB_TOOLS="$LAB_BUILD_DIR/tools"
 UV_VERSION=0.13.7
 HUB_VERSION=0.35.3
-export UV_PYTHON_INSTALL_DIR="$MM_ROOT/python" UV_CACHE_DIR=/opt/mm-build/uv-cache UV_LINK_MODE=copy
+export UV_PYTHON_INSTALL_DIR="$MM_ROOT/python" UV_CACHE_DIR="$LAB_BUILD_DIR/uv-cache" UV_LINK_MODE=copy
 
 # Pins, all read from the primary sources on 2026-11-11 (MM139 ticket log).
 FISH_REPO=https://github.com/fishaudio/fish-speech.git FISH_COMMIT=0f8a12e8a651062fdee9c33a894bdccd3a8513f1
@@ -116,12 +117,15 @@ record_versions() {
   "$LAB_TOOLS/bin/uv" pip freeze --python "$venv/bin/python" > "$freeze"
   fh="$(sha256sum "$freeze" | cut -d' ' -f1)"
   torchv="$("$venv/bin/python" -c 'import torch; print(torch.__version__)')"
-  jq -n --arg model "$model" --arg url "$url" --arg commit "$commit" --arg fh "$fh" --arg py "$pyver" --arg torch "$torchv" \
+  jq -n --arg model "$model" --arg url "$url" --arg commit "$commit" --arg fh "$fh" --arg py "$pyver" --arg torchv "$torchv" \
     --arg weights "$weights" --arg at "$(date -u +%FT%TZ)" \
     '{model: $model, repo: $url, repoCommit: $commit, pipFreezeSha256: $fh, python: $py, torch: $torchv, weights: ($weights | split(" ")), builtAt: $at}' \
     > "$LAB_ROOT_DIR/$model/versions.json"
   # versions.json must be deterministic input to the manifest: builtAt is informational, so it is dropped when hashing.
   jq 'del(.builtAt)' "$LAB_ROOT_DIR/$model/versions.json" > "$LAB_ROOT_DIR/$model/versions.json.tmp" && mv "$LAB_ROOT_DIR/$model/versions.json.tmp" "$LAB_ROOT_DIR/$model/versions.json"
+  # A half-written record must stop the build here, not surface later as a wrong manifest.
+  jq -e '(.repoCommit | length) == 40 and (.pipFreezeSha256 | length) == 64 and (.torch | length) > 0 and (.weights | length) > 0' \
+    "$LAB_ROOT_DIR/$model/versions.json" >/dev/null || fail_build "$model: versions.json is incomplete"
 }
 
 step_lab_tools() {
@@ -129,7 +133,12 @@ step_lab_tools() {
   plan "python3 -m venv $LAB_TOOLS; pip install uv==$UV_VERSION huggingface-hub[hf-xet]==$HUB_VERSION (the 'hf' downloader); apt: build-essential portaudio19-dev libsox-dev (Fish Speech's pyaudio/sox); UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR UV_LINK_MODE=copy" && return 0
   scrub_hf_token
   apt_get install -y -qq build-essential portaudio19-dev libsox-dev libsndfile1 >/dev/null
-  mkdir -p /opt/mm-build
+  mkdir -p "$LAB_BUILD_DIR" "$MM_HOME"
+  # Source builds use setuptools < 81: newer ones dropped pkg_resources, and
+  # openai-whisper 20231117 (a CosyVoice dependency, source only) imports it in
+  # its setup.py. Found 2026-11-11 by resolving the pin lists with uv before a build.
+  printf 'setuptools<81\n' > "$LAB_BUILD_DIR/build-constraints.txt"
+  export UV_BUILD_CONSTRAINT="$LAB_BUILD_DIR/build-constraints.txt"
   python3 -m venv "$LAB_TOOLS"
   net 900 "$LAB_TOOLS/bin/pip" install -q "uv==$UV_VERSION" "huggingface-hub[hf-xet]==$HUB_VERSION" \
     || fail_build "tools: installing uv and the hf downloader from pypi.org failed or timed out"
@@ -181,7 +190,7 @@ step_install_seedvc() {
   net 2400 "$LAB_TOOLS/bin/uv" pip install --python "$venv/bin/python" -q --index-url https://download.pytorch.org/whl/cu128 "torch==2.8.0" "torchaudio==2.8.0" \
     || fail_build "seedvc: torch cu128 install failed"
   net 2400 "$LAB_TOOLS/bin/uv" pip install --python "$venv/bin/python" -q "numpy==1.26.4" "scipy==1.13.1" "librosa==0.10.2" "transformers==4.46.3" \
-    "descript-audio-codec==1.0.0" "munch==4.0.0" "einops==0.8.0" matplotlib pyyaml "soundfile==0.12.1" tqdm "huggingface-hub==$HUB_VERSION" \
+    "descript-audio-codec==1.0.0" "munch==4.0.0" "einops==0.8.0" matplotlib pyyaml "soundfile==0.12.1" tqdm "huggingface-hub==$HUB_VERSION" "setuptools<81" \
     || fail_build "seedvc: dependency install failed (see $LOGFILE)"
   ck="$repo/checkpoints"
   cc="$ck/hf_cache"
@@ -194,7 +203,7 @@ step_install_seedvc() {
   hf_cache_get nvidia/bigvgan_v2_44khz_128band_512x "$REV_BIGVGAN44" "$cc" "config.json" "bigvgan_generator.pt"
   hf_cache_get openai/whisper-small "$REV_WHISPER" "$cc" "config.json" "preprocessor_config.json" "model.safetensors" "generation_config.json"
   # One ONLINE warm-up conversion per mode (the smoke later runs offline): any file the pins missed is fetched now.
-  local fx="$PHERE/smoke/fixtures" warm=/opt/mm-build/seedvc-warm
+  local fx="$PHERE/smoke/fixtures" warm="$LAB_BUILD_DIR/seedvc-warm"
   mkdir -p "$warm"
   net 1800 env HOME="$MM_HOME" HF_HUB_OFFLINE=0 CUDA_VISIBLE_DEVICES=0 "$venv/bin/python" "$MM_ROOT/scripts/lab/voice_seedvc.py" --source "$fx/speech.wav" --ref "$fx/lab_ref.wav" \
     --out "$warm/a.wav" --diffusion-steps 4 || fail_build "seedvc: warm-up conversion failed or timed out"
@@ -215,7 +224,7 @@ step_install_cosyvoice3() {
     || fail_build "cosyvoice3: torch cu128 install failed"
   net 2400 "$LAB_TOOLS/bin/uv" pip install --python "$venv/bin/python" -q "numpy==1.26.4" "scipy==1.13.1" "librosa==0.10.2" "transformers==4.51.3" \
     "onnxruntime-gpu==1.22.0" "conformer==0.3.2" "diffusers==0.29.0" "HyperPyYAML==1.2.3" "inflect==7.3.1" "lightning==2.2.4" "modelscope==1.20.0" \
-    "omegaconf==2.3.0" "hydra-core==1.3.2" rich "openai-whisper==20231117" "huggingface-hub==$HUB_VERSION" "x-transformers==2.11.24" "wetext==0.0.4" einops regex "soundfile==0.12.1" tqdm pyyaml "protobuf==4.25" \
+    "omegaconf==2.3.0" "hydra-core==1.3.2" rich "openai-whisper==20231117" "huggingface-hub==$HUB_VERSION" "x-transformers==2.11.24" "wetext==0.0.4" einops regex "soundfile==0.12.1" tqdm pyyaml "protobuf==4.25" "setuptools<81" \
     || fail_build "cosyvoice3: dependency install failed (see $LOGFILE)"
   hf_get FunAudioLLM/Fun-CosyVoice3-0.5B-2512 "$REV_COSY" "$LAB_ROOT_DIR/cosyvoice3/Fun-CosyVoice3-0.5B" \
     "cosyvoice3.yaml" "config.json" "llm.pt" "flow.pt" "hift.pt" "campplus.onnx" "speech_tokenizer_v3.onnx" "CosyVoice-BlankEN/*"
@@ -237,7 +246,7 @@ step_record_runtime_manifest() {
   plan "python3 $MM_ROOT/scripts/lab/runtime_manifest.py --weights $LAB_ROOT_DIR --wrappers $MM_ROOT/scripts/lab -> RUNTIME_MANIFEST; upload $MM_FAMILY.runtime-manifest next to the status object; write /etc/mm-burst-export-manifest.json {runtimeManifest}" && return 0
   RUNTIME_MANIFEST="$(python3 "$MM_ROOT/scripts/lab/runtime_manifest.py" --weights "$LAB_ROOT_DIR" --wrappers "$MM_ROOT/scripts/lab")"
   [[ "$RUNTIME_MANIFEST" =~ ^[0-9a-f]{64}$ ]] || fail_build "runtime manifest is not a sha256 ('$RUNTIME_MANIFEST')"
-  jq -n --arg rm "$RUNTIME_MANIFEST" '{runtimeManifest: $rm, fresh: true}' > /etc/mm-burst-export-manifest.json
+  jq -n --arg rm "$RUNTIME_MANIFEST" '{runtimeManifest: $rm, fresh: true}' > "$EXPORT_MANIFEST"
   printf '%s\n' "$RUNTIME_MANIFEST" | net 300 aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.runtime-manifest" --only-show-errors
   status "runtime manifest $RUNTIME_MANIFEST"
 }
@@ -256,7 +265,7 @@ step_lab_cleanup_extras() {
   status "cleanup: uv cache, tools, build leftovers, HF token files"
   plan "rm -rf /opt/mm-build (uv cache + tools) and every venv's __pycache__ is kept; scrub token variables and files; assert none remain" && return 0
   scrub_hf_token
-  rm -rf /opt/mm-build "$HOME/.cache/uv" "$HOME/.cache/pip" 2>/dev/null || true
+  rm -rf "${LAB_BUILD_DIR:?}" "$HOME/.cache/uv" "$HOME/.cache/pip" 2>/dev/null || true
   assert_no_hf_token
 }
 
@@ -273,4 +282,6 @@ lab_voice_install() {
   step_lab_cleanup_extras
 }
 
+# MM_PROVISION_LIB_ONLY=1: define the steps and stop (the tests run them against stand-ins).
+if [ "${MM_PROVISION_LIB_ONLY:-0}" = 1 ]; then return 0 2>/dev/null || exit 0; fi
 provision_main lab_voice_install
