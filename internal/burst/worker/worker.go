@@ -66,6 +66,10 @@ type Config struct {
 	PrewarmDone func() bool
 	// Workers is the staging concurrency.
 	Workers int
+	// Session (MM138 Lab sessions) lets the worker accept another run once the
+	// previous one has finished: the run directory is wiped and the finished-run
+	// shutdown timer is disarmed. False is the product rule: one spec, then 409.
+	Session bool
 }
 
 // Worker is the server state.
@@ -171,8 +175,9 @@ func (w *Worker) health(rw http.ResponseWriter, _ *http.Request, _ []byte) {
 	}
 	h.Ready = w.cfg.PrewarmDone == nil || w.cfg.PrewarmDone() || w.cfg.Now().Sub(w.started) >= ReadyAfter
 	w.mu.Lock()
-	h.Busy = w.run != nil
+	rs := w.run
 	w.mu.Unlock()
+	h.Busy = rs != nil && !rs.finished()
 	writeJSON(rw, http.StatusOK, h)
 }
 
@@ -204,7 +209,7 @@ func (w *Worker) postRun(rw http.ResponseWriter, _ *http.Request, body []byte) {
 		return
 	}
 	w.mu.Lock()
-	if w.accepted {
+	if w.accepted && (!w.cfg.Session || w.run == nil || !w.run.finished()) {
 		w.mu.Unlock()
 		writeJSON(rw, http.StatusConflict, wire.ErrorBody{Error: "a run was already accepted on this instance"})
 		return
@@ -222,6 +227,10 @@ func (w *Worker) postRun(rw http.ResponseWriter, _ *http.Request, body []byte) {
 			writeJSON(rw, http.StatusInsufficientStorage, wire.ErrorBody{Error: "disk_guard"})
 			return
 		}
+	}
+	if w.accepted { // a Lab session re-arm: start from an empty run directory, disarm the finished-run shutdown
+		_ = os.RemoveAll(path.Join(w.cfg.Root, w.cfg.RunID))
+		w.deadline = time.Time{}
 	}
 	w.accepted = true
 	ctx, cancel := context.WithCancel(context.Background())
@@ -282,6 +291,13 @@ func (w *Worker) cancelRun(rw http.ResponseWriter, r *http.Request, _ []byte) {
 	writeJSON(rw, http.StatusOK, map[string]string{"runId": rs.req.RunID})
 }
 
+// finished reports whether the run reached a terminal worker state.
+func (rs *runState) finished() bool {
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	return rs.state == wire.StateDone || rs.state == wire.StateFailed || rs.state == wire.StateCancelled
+}
+
 func (rs *runState) set(state string) {
 	rs.mu.Lock()
 	rs.state = state
@@ -312,6 +328,9 @@ func (rs *runState) addLine(l string) {
 
 // finish arms the post-run shutdown.
 func (w *Worker) finish() {
+	if w.cfg.Session {
+		return // the API ends a session instance; the orphan timer is the backstop
+	}
 	w.mu.Lock()
 	w.deadline = w.cfg.Now().Add(FinishedShutdown)
 	w.mu.Unlock()

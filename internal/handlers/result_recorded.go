@@ -51,6 +51,13 @@ func findResultFile(outputRoot, jobID string) string {
 			return filepath.Join(dir, e.Name())
 		}
 	}
+	for _, name := range labResultFiles() { // MM138
+		for _, e := range entries {
+			if !e.IsDir() && e.Name() == name {
+				return filepath.Join(dir, e.Name())
+			}
+		}
+	}
 	for _, prefix := range resultFilePrefixes {
 		for _, e := range entries {
 			if e.IsDir() || !strings.HasPrefix(e.Name(), prefix+".") {

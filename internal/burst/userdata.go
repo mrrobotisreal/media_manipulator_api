@@ -35,6 +35,9 @@ type UserDataParams struct {
 	Arch          string
 	ManifestHash  string
 	Prewarm       []string
+	// Session lets the worker take another run after one finishes (MM138 Lab
+	// sessions); false keeps the one-spec-per-instance rule.
+	Session bool
 }
 
 var safeValue = regexp.MustCompile(`^[A-Za-z0-9._:/@=+-]+$`)
@@ -114,6 +117,7 @@ type runJSON struct {
 	Manifest string   `json:"manifestHash,omitempty"`
 	Orphan   int      `json:"orphanMinutes"`
 	Prewarm  []string `json:"prewarm,omitempty"`
+	Session  bool     `json:"session,omitempty"`
 }
 
 // RenderUserData renders the cloud-init script. It validates every value
@@ -123,7 +127,7 @@ func RenderUserData(p UserDataParams) (string, error) {
 		return "", err
 	}
 	rj, _ := json.Marshal(runJSON{RunID: p.RunID, RunToken: p.RunToken, Bucket: p.Bucket, Prefix: p.Prefix, Port: p.Port,
-		Region: p.Region, Family: p.Family, Arch: p.Arch, Manifest: p.ManifestHash, Orphan: p.OrphanMinutes, Prewarm: p.Prewarm})
+		Region: p.Region, Family: p.Family, Arch: p.Arch, Manifest: p.ManifestHash, Orphan: p.OrphanMinutes, Prewarm: p.Prewarm, Session: p.Session})
 	var b bytes.Buffer
 	err := userDataTmpl.Execute(&b, struct {
 		UserDataParams
@@ -232,7 +236,7 @@ func (b *UserDataBuilder) Build(run Run, prof Profile, tsKey string) (string, er
 		RunID: run.ID, Hostname: WorkerHostname(run.ID), Tag: b.Cfg.Tag, TailscaleKey: tsKey, RunToken: tok,
 		Bucket: b.Cfg.Bucket, Region: b.Cfg.Region, Prefix: RunPrefix(b.Cfg.Prefix, run.ID), WorkerHash: hash, WorkerKey: key,
 		Port: b.Cfg.Port, MaxMinutes: maxMin, OrphanMinutes: b.Cfg.OrphanMinutes, Family: prof.Family, Arch: run.Arch,
-		Prewarm: prof.Prewarm,
+		Prewarm: prof.Prewarm, Session: run.Purpose == PurposeLab,
 	})
 	if err != nil {
 		return "", err

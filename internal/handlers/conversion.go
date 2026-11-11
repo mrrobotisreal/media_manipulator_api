@@ -1074,6 +1074,10 @@ func (h *ConversionHandler) getOutputFilename(job *models.ConversionJob) string 
 }
 
 func (h *ConversionHandler) outputPath(job *models.ConversionJob, outputDir string) string {
+	// MM138: a Lab job's result is the model's one declared file.
+	if name, ok := labResultFile(job); ok {
+		return filepath.Join(outputDir, name)
+	}
 	// MM96: Aperture jobs (photo_export, stateless photo_heal) write their
 	// result under the recorded ResultFileName ("<name> (retouched).<ext>",
 	// "healed.png"), not converted<ext>.

@@ -325,7 +325,8 @@ func main() {
 	// MM124 GPU burst (dark): logs one line; the reaper runs whenever the
 	// BURST_AWS_* credentials are present, even with BURST_ENABLED=false, so a
 	// flag flip cannot strand an instance. No scheduler or tool is wired here.
-	startBurst(ctx, cfg, pool, s3Client, logging)
+	rt := startBurst(ctx, cfg, pool, s3Client, logging)
+	labHandler, labGateVal = newLabWiring(cfg, jobManager, inspector, gpuMgr, cmdRunner, rt, logging)
 
 	// Cleanup worker
 	if cfg.CleanupEnabled {
@@ -678,6 +679,9 @@ func setupRouter(cfg *config.Config, conversionHandler *handlers.ConversionHandl
 		// handler spends assistant_turns on copilot messages only. nil (tests)
 		// mounts nothing.
 		handlers.RegisterAssistantRoutes(api, assistantHandler)
+		// MM138 Lab: /api/lab/* behind the LAB_EMAILS gate (404 for everyone
+		// else, also when LAB_EMAILS is empty). nil (tests) mounts nothing.
+		mountLab(api)
 
 		// Double Raven partner portal document API. ALWAYS Firebase-gated and
 		// fail-closed via RequireDoubleRavenAuth (nil verifier -> 503; bad/missing
@@ -1425,23 +1429,26 @@ func onAPIPaths(h gin.HandlerFunc) gin.HandlerFunc {
 	}
 }
 
-// startBurst wires the MM124 burst reaper (see internal/burst). With no AWS
-// credentials it only logs the startup line and makes no AWS or Tailscale call.
-func startBurst(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, s3Client *s3.Client, logging *slog.Logger) {
+// startBurst wires the MM124 burst reaper (see internal/burst) and, when burst
+// is fully configured, builds the shared burst runtime (burst_runtime.go). With
+// no AWS credentials it only logs the startup line and makes no AWS or
+// Tailscale call. It returns nil for the runtime when burst is not Configured().
+func startBurst(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, s3Client *s3.Client, logging *slog.Logger) *burstRuntime {
 	var prov burst.Provider
+	var drift *burst.DriftChecker
 	if cfg.Burst.AWSConfigured() {
 		client, err := burst.NewEC2Client(ctx, cfg.Burst.Region, cfg.Burst.AccessKey, cfg.Burst.SecretKey)
 		if err != nil {
 			logging.Error("burst: could not build the EC2 client; reaper not started", "error", err.Error())
-			return
+			return nil
 		}
 		prov = burst.NewEC2Provider(client, logging)
 		// MM126: image drift check, in the background (file list + sizes +
 		// mtimes of the host runtime vs each AMI's runtime-manifest tag).
 		if len(cfg.Burst.AMIs) > 0 {
-			dc := &burst.DriftChecker{API: client, AMIs: cfg.Burst.AMIs, Log: logging,
+			drift = &burst.DriftChecker{API: client, AMIs: cfg.Burst.AMIs, Log: logging,
 				Host: func(f string) (manifest.Manifest, error) { return manifest.Compute(f) }}
-			go dc.Run(ctx)
+			go drift.Run(ctx)
 		}
 	}
 	var st burst.Store
@@ -1452,14 +1459,19 @@ func startBurst(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, s3C
 	if s3Client != nil {
 		prefixes = &burst.S3Staging{API: s3Client, Bucket: cfg.S3Bucket, Prefix: cfg.Burst.S3Prefix}
 	}
-	var ledger *burst.Ledger
-	if st != nil {
+	rt := newBurstRuntime(cfg, pool, s3Client, prov, prefixes, drift, logging)
+	var ledger, labLedger *burst.Ledger
+	var live func() []burst.Run
+	if rt != nil {
+		ledger, labLedger, live = rt.Ledger, rt.LabLedger, rt.Planner.Live
+	} else if st != nil {
 		ledger = burst.NewLedger(cfg.Burst.DailySpendCapUSD, cfg.Burst.MonthlySpendCapUSD, st, nil)
 	}
-	burst.Start(ctx, cfg.Burst, prov, st, prefixes, nil, ledger, logging)
+	burst.Start(ctx, cfg.Burst, prov, st, prefixes, live, ledger, labLedger, logging)
 	// MM125: with burst fully configured, publish the deploy-built worker by hash
 	// (no build here; a missing binary is logged and nothing else changes).
 	if cfg.Burst.Configured() && s3Client != nil {
 		go burst.PublishWorkerBinary(ctx, &staging.S3Store{API: s3Client, Bucket: cfg.S3Bucket}, cfg.Burst.S3Prefix, logging)
 	}
+	return rt
 }

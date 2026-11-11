@@ -49,6 +49,9 @@ var jobStatusWouldDenyLogged sync.Map
 // Call it after the job lookup and BEFORE TouchJobPoll: a stranger must not
 // suppress the job-finished email by polling.
 func authorizeJobStatus(c *gin.Context, jm *services.JobManager, job *models.ConversionJob) bool {
+	if labJobBlocked(c, job) { // MM138: defence in depth, before any enforcement flag
+		return false
+	}
 	if jobAccessAllowed(c, jm, job, true) {
 		return true
 	}
@@ -81,6 +84,9 @@ func authorizeJobAccess(c *gin.Context, jm *services.JobManager, job *models.Con
 // headers. Only GET inline routes may pass true. Firebase tokens are never
 // accepted from a query string.
 func authorizeJobAccessSID(c *gin.Context, jm *services.JobManager, job *models.ConversionJob, allowQuerySID bool) bool {
+	if labJobBlocked(c, job) { // MM138
+		return false
+	}
 	if jobAccessAllowed(c, jm, job, allowQuerySID) {
 		return true
 	}

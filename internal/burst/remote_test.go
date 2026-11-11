@@ -68,6 +68,9 @@ type e2e struct {
 
 const tsSecret = "tskey-auth-E2ESECRET"
 
+// e2eSession makes newE2E start its worker in Lab session mode (MM138).
+var e2eSession bool
+
 func newE2E(t *testing.T, corrupt bool) *e2e {
 	t.Helper()
 	cfg := testCfg()
@@ -93,7 +96,7 @@ func newE2E(t *testing.T, corrupt bool) *e2e {
 	local, remoteDir := t.TempDir(), t.TempDir()
 	shut := 0
 	w := worker.New(worker.Config{RunID: run.ID, Token: tok, Prefix: "burst/" + run.ID, Root: remoteDir, Version: "e2e", Store: mem,
-		Log: slog.New(slog.NewTextHandler(logb, nil)), Shutdown: func() { shut++ }, Workers: 2,
+		Log: slog.New(slog.NewTextHandler(logb, nil)), Shutdown: func() { shut++ }, Workers: 2, Session: e2eSession,
 		FreeGiB: func() float64 { return 100 }})
 	srv := httptest.NewServer(w.Handler())
 	t.Cleanup(srv.Close)
@@ -271,4 +274,78 @@ func TestRemote_ProgressLinesAreNotDuplicatedAcrossPolls(t *testing.T) {
 		t.Fatalf("lines: %q", out.String())
 	}
 	_ = fmt.Sprint
+}
+
+// MM138: a Lab run with Keep leaves the instance running and the run in
+// staging_out; the same run then takes a second spec (staging_out -> staging_in),
+// each time deleting its staging prefix; a final Keep=false run terminates.
+func TestRemote_LabSessionRunsTwiceOnOneInstance(t *testing.T) {
+	e2eSession = true
+	defer func() { e2eSession = false }()
+	e := newE2E(t, false)
+	e.run.Purpose = PurposeLab
+	ctx := context.Background()
+
+	spec, outDir := e.spec(t, nil)
+	e.run.Keep = true
+	if err := e.remote.Run(ctx, e.run, spec); err != nil {
+		t.Fatalf("first run: %v\n%s", err, e.logb.String())
+	}
+	if len(e.rig.prov.terminated) != 0 || e.run.State != StateStagingOut || e.run.TerminatedAt != nil {
+		t.Fatalf("a kept run must stay up: terminated=%v state=%s", e.rig.prov.terminated, e.run.State)
+	}
+	if _, ok := e.ub.Token(e.run.ID); !ok {
+		t.Fatal("the token must survive for the next run of the session")
+	}
+	if k := e.mem.Keys(); len(k) != 0 {
+		t.Fatalf("staging prefix must be deleted after every run: %v", k)
+	}
+	b, _ := os.ReadFile(filepath.Join(outDir, "result.txt"))
+	if string(b) != "remote gpu says hi" {
+		t.Fatalf("first output %q", b)
+	}
+
+	// Second job: new input content, same instance.
+	spec2, _ := e.spec(t, nil)
+	if err := os.WriteFile(spec2.Inputs[0].Local, []byte("second job"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.RemoveAll(outDir)
+	e.run.Keep = false
+	if err := e.remote.Run(ctx, e.run, spec2); err != nil {
+		t.Fatalf("second run: %v\n%s", err, e.logb.String())
+	}
+	b, _ = os.ReadFile(filepath.Join(outDir, "result.txt"))
+	if string(b) != "second job" {
+		t.Fatalf("second output %q", b)
+	}
+	if e.run.State != StateCompleted || len(e.rig.prov.terminated) != 1 {
+		t.Fatalf("the last run terminates: state=%s terminated=%v", e.run.State, e.rig.prov.terminated)
+	}
+}
+
+// A failed run terminates even with Keep set (the instance is in an unknown state).
+func TestRemote_KeepIsIgnoredOnFailure(t *testing.T) {
+	e := newE2E(t, true) // corrupt output -> staging_out failure
+	e.run.Purpose, e.run.Keep = PurposeLab, true
+	spec, _ := e.spec(t, nil)
+	if err := e.remote.Run(context.Background(), e.run, spec); err == nil {
+		t.Fatal("want a failure")
+	}
+	if len(e.rig.prov.terminated) != 1 || !e.run.State.Terminal() {
+		t.Fatalf("terminated=%v state=%s", e.rig.prov.terminated, e.run.State)
+	}
+}
+
+// Keep never applies to a non-lab run.
+func TestRemote_KeepIgnoredForProductRuns(t *testing.T) {
+	e := newE2E(t, false)
+	e.run.Keep = true // Purpose is burst
+	spec, _ := e.spec(t, nil)
+	if err := e.remote.Run(context.Background(), e.run, spec); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.rig.prov.terminated) != 1 {
+		t.Fatal("a product run always terminates")
+	}
 }
