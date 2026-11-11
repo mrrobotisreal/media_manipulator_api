@@ -731,7 +731,7 @@
    "remove ads",
    "billing"
   ],
-  "tokens": 1045
+  "tokens": 1042
  },
  "pages/privacy-policy": {
   "title": "Privacy Policy",
@@ -811,7 +811,7 @@
    "getting started",
    "guide"
   ],
-  "tokens": 733
+  "tokens": 745
  },
  "pages/tutorials/ai-frame-interpolation": {
   "title": "What Is AI Frame Interpolation? How Video FPS Smoothing Works",
