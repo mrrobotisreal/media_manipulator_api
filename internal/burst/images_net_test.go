@@ -48,15 +48,15 @@ exit 124
 	return bin, rec
 }
 
-// fakeAWS records every `aws s3 cp - s3://.../<name>` body into $MM_REC/s3/<name>
-// and serves $MM_REC/mirror.tar as the ffmpeg copy when it exists.
+// fakeAWS keeps the newest `aws s3 cp - s3://.../<name>` body in $MM_REC/s3/<name>
+// (like S3: an upload replaces the object) and serves $MM_REC/mirror.tar as the ffmpeg copy when it exists.
 const fakeAWS = `#!/bin/bash
 mkdir -p "$MM_REC/s3"
 echo "$*" >> "$MM_REC/aws.log"
 case "$*" in
   "s3 cp - s3://"*)
     name="${4##*/}"
-    cat >> "$MM_REC/s3/$name"
+    cat > "$MM_REC/s3/$name"
     ;;
   "s3 cp s3://"*"ffmpeg8-noble-amd64.tar "*)
     [ -f "$MM_REC/mirror.tar" ] || { echo "An error occurred (404) when calling the HeadObject operation: Not Found" >&2; exit 1; }
@@ -339,7 +339,7 @@ case "$*" in
   *"s3api head-object"*manifest.json*) exit 0 ;;
   *"s3api head-object"*) exit 1 ;;
   *"s3 cp s3://"*manifest.json*) echo '{"runtimeManifest":"abc123"}' ;;
-  *"s3 cp s3://"*".status -"*) echo "12:39:27 apt: ffmpeg 8.1.x" ;;
+  *"s3 cp s3://"*".status -"*) printf '12:39:20 apt: base packages\n12:39:25 ffmpeg 8.1.2 installed from the S3 copy (host has 8.1.1)\n12:39:27 apt: ffmpeg 8.1.x\n' ;;
   *"s3 cp "*|*"s3 rm "*) exit 0 ;;
   *"ssm get-parameter"*) echo ami-0e5b7b1a57b07ca51 ;;
   *"Images[0].Name"*) echo "Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 24.04) 20261106" ;;
@@ -371,6 +371,13 @@ esac
 	for _, want := range []string{"the builder has reported nothing new for", "last status: 12:39:27 apt: ffmpeg 8.1.x", "terminating builder i-0builder"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q:\n%s", want, got)
+		}
+	}
+	// Every status line the builder wrote is shown once, also the ones written
+	// between two polls (on 2026-11-11 the line naming the ffmpeg source was lost).
+	for _, line := range []string{"builder: 12:39:20 apt: base packages", "builder: 12:39:25 ffmpeg 8.1.2 installed from the S3 copy", "builder: 12:39:27 apt: ffmpeg 8.1.x"} {
+		if n := strings.Count(got, line); n != 1 {
+			t.Errorf("%q shown %d times, want once:\n%s", line, n, got)
 		}
 	}
 	if term := recorded(rec, "terminated"); !strings.Contains(term, "i-0builder") {

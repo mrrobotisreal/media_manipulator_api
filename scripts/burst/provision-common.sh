@@ -32,6 +32,10 @@ CUDA_ARCHES="${CUDA_ARCHES:-8.9;12.0}"
 MMCV_TAG="${MMCV_TAG:-v2.1.0}"
 MMCV_COMMIT="${MMCV_COMMIT:-57c4e25e06e2d4f8a9357c84bcd24089a284dc88}"
 
+STATUS_HISTORY="${MM_STATUS_HISTORY:-$LOGFILE.status}"
+# The export manifest left in the image ({runtimeManifest: ...}); image.json reads it.
+EXPORT_MANIFEST="${MM_EXPORT_MANIFEST:-/etc/mm-burst-export-manifest.json}"
+
 dry() { [ "$MM_DRY" = "1" ]; }
 
 # output_has "pattern" cmd args...: true when cmd's output contains pattern.
@@ -105,7 +109,11 @@ status() {
   if dry; then printf 'STATUS %s\n' "$line"; return 0; fi
   # stderr only: the builder's user-data already appends stdout+stderr to $LOGFILE.
   printf '%s\n' "$line" >&2
-  printf '%s\n' "$line" | timeout 60 aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.status" --only-show-errors || true
+  # The status object holds EVERY line so far, not only the newest: the builder
+  # script polls every 20 s and used to miss lines written between two polls
+  # (on 2026-11-11 the line saying where ffmpeg came from was never shown).
+  printf '%s\n' "$line" >> "$STATUS_HISTORY" 2>/dev/null || true
+  { cat "$STATUS_HISTORY" 2>/dev/null || printf '%s\n' "$line"; } | timeout 60 aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.status" --only-show-errors || true
 }
 
 fail_build() {
@@ -269,7 +277,7 @@ step_unpack() {
   exp="$(jq -r .runtimeManifest "$dir/mm-import/manifest.json")"
   have="$("${MM_CTL:-burst-ctl}" manifest "$MM_FAMILY" --from-dest)"
   [ "$exp" = "$have" ] || fail_build "unpacked runtime differs from the export (want $exp got $have)"
-  cp "$dir/mm-import/manifest.json" /etc/mm-burst-export-manifest.json
+  cp "$dir/mm-import/manifest.json" "$EXPORT_MANIFEST"
   RUNTIME_MANIFEST="$exp"
   rm -rf "$dir/mm-import"
   status "disk after unpack: $(df -h / | awk 'NR==2{print $3" used of "$2" ("$5")"}')"
@@ -322,7 +330,7 @@ step_image_json() {
   drv="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | sed -n '1p')"
   ff="$(ffmpeg -version | sed -n '1p' | cut -d' ' -f3)"
   jq -n --arg family "$MM_FAMILY" --arg base "$base" --arg drv "$drv" --arg cuda "$(basename "$(readlink -f "$CUDA_HOME_DIR")")" \
-    --arg ff "$ff" --arg rm "${RUNTIME_MANIFEST:-$(jq -r .runtimeManifest /etc/mm-burst-export-manifest.json)}" --arg date "$(date -u +%F)" --arg exp "$MM_DATE" \
+    --arg ff "$ff" --arg rm "${RUNTIME_MANIFEST:-$(jq -r .runtimeManifest "$EXPORT_MANIFEST")}" --arg date "$(date -u +%F)" --arg exp "$MM_DATE" \
     '{family: $family, arch: "ada+blackwell", baseAmi: $base, driver: $drv, cuda: $cuda, ffmpeg: $ff, runtimeManifest: $rm, exportDate: $exp, builtAt: $date}' \
     > /etc/mm-burst/image.json
 }
@@ -423,7 +431,7 @@ parse_provision_args() {
     esac
     shift
   done
-  if [ "$MM_DRY" != "1" ] && [ "$(id -u)" -ne 0 ]; then die "run as root on the builder instance (or use --dry-run)"; fi
+  if [ "$MM_DRY" != "1" ] && [ "${MM_ALLOW_NONROOT:-0}" != 1 ] && [ "$(id -u)" -ne 0 ]; then die "run as root on the builder instance (or use --dry-run)"; fi
   if [ "$MM_DRY" = "1" ]; then
     echo "== provision-$MM_FAMILY.sh dry-run plan (nothing is executed) =="
     echo "export date: $MM_DATE   bucket: $MM_BUCKET   mode: $MM_MODE   arches: $CUDA_ARCHES"
