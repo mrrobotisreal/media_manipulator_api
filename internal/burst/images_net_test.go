@@ -62,6 +62,12 @@ case "$*" in
     [ -f "$MM_REC/mirror.tar" ] || { echo "An error occurred (404) when calling the HeadObject operation: Not Found" >&2; exit 1; }
     cp "$MM_REC/mirror.tar" "$4"
     ;;
+  "s3 cp s3://"*)
+    # Any other download: served from $MM_REC/serve/<file name>, else "not found".
+    f="$MM_REC/serve/${3##*/}"
+    [ -f "$f" ] || { echo "An error occurred (404) when calling the HeadObject operation: Not Found" >&2; exit 1; }
+    cp "$f" "$4"
+    ;;
   *) exit 0 ;;
 esac
 `
@@ -156,12 +162,8 @@ func TestProvisionDownloadsAllHaveATimeLimit(t *testing.T) {
 			if curl.MatchString(tl) && !curlBounded.MatchString(tl) {
 				t.Errorf("%s: curl without a time limit (use \"${CURL_NET[@]}\" or -m): %s", where, tl)
 			}
-			// The one pip call that downloads nothing: a source build of an already
-			// cloned tree with no dependency resolution and no build isolation. It
-			// is a long compile, reported by with_heartbeat instead of being limited.
-			localBuild := strings.Contains(tl, "--no-build-isolation") && strings.Contains(tl, "--no-deps") && strings.Contains(tl, "with_heartbeat ")
 			for _, re := range downloads {
-				if re.MatchString(tl) && !bounded.MatchString(tl) && !localBuild {
+				if re.MatchString(tl) && !bounded.MatchString(tl) {
 					t.Errorf("%s: a download without a time limit (wrap it in `net SECONDS` or use apt_get): %s", where, tl)
 				}
 			}
@@ -353,7 +355,8 @@ esac
 		t.Fatal(err)
 	}
 	cmd := exec.Command("bash", filepath.Join(scriptsDir(t), "build-image.sh"), "restore", "2026-11-10", "--yes", "--instance-type", "g7.2xlarge")
-	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "MM_POLL_SECONDS=1", "MM_STALL_SECONDS=3", "MM_REC="+rec)
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "MM_POLL_SECONDS=1", "MM_STALL_SECONDS=3", "MM_REC="+rec,
+		"MM_MMCV_VENV=/nonexistent") // the mmcv wheel pre-check has its own test
 	done := make(chan struct{})
 	var out []byte
 	var err error

@@ -108,14 +108,22 @@ esac
 	root, home, build := filepath.Join(work, "ai"), filepath.Join(work, "home"), filepath.Join(work, "build")
 	script := filepath.Join(scriptsDir(t), "provision-lab-voice.sh")
 	cmd := exec.Command("bash", "-c", `. "`+script+`"; lab_voice_install; echo "INSTALL-DONE manifest=$RUNTIME_MANIFEST"`)
-	cmd.Env = append(os.Environ(),
+	// HOME is NOT set, as on the builder: its user-data runs under cloud-init
+	// without one. On 2026-11-12 the cleanup step read $HOME under `set -u` and
+	// ended a build in which all four models had installed.
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "HOME=") {
+			cmd.Env = append(cmd.Env, kv)
+		}
+	}
+	cmd.Env = append(cmd.Env,
 		"PATH="+bin+":"+os.Getenv("PATH"), "MM_REC="+rec, "MM_FAKES="+fakes, "MM_REAL_PYTHON="+realPy,
 		"MM_PROVISION_LIB_ONLY=1", "MM_ALLOW_NONROOT=1", "MM_DATE=2026-11-11",
 		"MM_ROOT="+root, "MM_HOME="+home, "LAB_BUILD_DIR="+build,
 		"MM_EXPORT_MANIFEST="+filepath.Join(work, "export-manifest.json"),
 		"MM_PROVISION_LOG="+filepath.Join(rec, "provision.log"),
-		// The cleanup step removes $HOME/.cache/uv and pip: never the developer's own.
-		"HOME="+filepath.Join(work, "userhome"))
+		// The cleanup step removes the build user's .cache/uv and pip: never the developer's own.
+		"MM_BUILDER_HOME="+filepath.Join(work, "userhome"))
 	out, err := cmd.CombinedOutput()
 	got := string(out)
 	if err != nil || !strings.Contains(got, "INSTALL-DONE manifest=") {
@@ -271,5 +279,84 @@ func TestBurstScriptsJqProgramsUseOnlyDeclaredVariables(t *testing.T) {
 	}
 	if checked < 5 {
 		t.Fatalf("only %d jq calls with arguments were checked; the scan is broken", checked)
+	}
+}
+
+// The lab-voice smoke script runs end to end against stand-in models with HOME
+// unset (as on the builder): every case line, check string and the result JSON
+// are exercised, so a shell error in the smoke script cannot cost a paid build.
+// The models themselves are only proven on a real GPU.
+func TestLabVoiceSmokeScriptRunsAgainstStandInModels(t *testing.T) {
+	for _, tool := range []string{"bash", "jq", "ffmpeg", "ffprobe"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skip("no " + tool)
+		}
+	}
+	work := t.TempDir()
+	bin, root := filepath.Join(work, "bin"), filepath.Join(work, "ai")
+	model := `#!/bin/bash
+out=""; prev=""
+for a in "$@"; do [ "$prev" = "--out" ] && out="$a"; prev="$a"; done
+echo "$*" >> "$MM_T/calls.log"
+touch "$MM_T/running"
+ffmpeg -v error -y -f lavfi -i "sine=duration=2" "$out"
+printf '{"model":"x","sampleRate":22050,"durationSeconds":2.0}' > "${out%.wav}.json"
+sleep 1; rm -f "$MM_T/running"
+`
+	for _, m := range []string{"fish_s2", "indextts2", "seedvc", "cosyvoice3"} {
+		d := filepath.Join(root, "venvs", "lab-voice-"+m, "bin")
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(d, "python"), []byte(model), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// GPU memory reads higher while a model runs, like a real card.
+	smi := "#!/bin/bash\ncase \"$*\" in *memory.used*) [ -f \"$MM_T/running\" ] && echo 900 || echo 100 ;; *) echo \"595.1, FAKE GPU\" ;; esac\n"
+	if err := os.WriteFile(filepath.Join(bin, "nvidia-smi"), []byte(smi), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(work, "smoke.json")
+	cmd := exec.Command("bash", filepath.Join(scriptsDir(t), "smoke", "lab-voice.sh"))
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "HOME=") {
+			cmd.Env = append(cmd.Env, kv)
+		}
+	}
+	cmd.Env = append(cmd.Env, "PATH="+bin+":"+os.Getenv("PATH"), "MM_T="+work, "MM_ROOT="+root, "SMOKE_OUT="+out)
+	b, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v\n%s", err, b)
+	}
+	var res struct {
+		Passed bool `json:"passed"`
+		Cases  []struct {
+			Name string `json:"name"`
+			OK   bool   `json:"ok"`
+		} `json:"cases"`
+	}
+	raw, _ := os.ReadFile(out)
+	if err := json.Unmarshal(raw, &res); err != nil {
+		t.Fatalf("%v\n%s", err, raw)
+	}
+	want := []string{"hf-token-absent", "fish-s2", "indextts2-v2", "indextts2-v25", "seedvc", "seedvc-f0", "cosyvoice3"}
+	if !res.Passed || len(res.Cases) != len(want) {
+		t.Fatalf("passed=%v cases=%d\n%s\n%s", res.Passed, len(res.Cases), raw, b)
+	}
+	for i, c := range res.Cases {
+		if c.Name != want[i] || !c.OK {
+			t.Errorf("case %d = %s ok=%v, want %s ok", i, c.Name, c.OK, want[i])
+		}
+	}
+	// Each model was called through its wrapper with an output path.
+	calls, _ := os.ReadFile(filepath.Join(work, "calls.log"))
+	for _, w := range []string{"voice_fish_s2.py", "voice_indextts2.py --version 2 ", "voice_indextts2.py --version 2.5 ", "voice_seedvc.py", "--f0-condition true", "voice_cosyvoice3.py"} {
+		if !strings.Contains(string(calls), w) {
+			t.Errorf("no call with %q:\n%s", w, calls)
+		}
 	}
 }

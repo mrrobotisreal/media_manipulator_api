@@ -23,14 +23,6 @@ MM_MODE="${MM_MODE:-build}"
 MM_DATE="${MM_DATE:-1970-01-01}"
 MM_BUILD_PREFIX="${MM_BUILD_PREFIX:-burst/build/$MM_DATE}"
 LOGFILE="${MM_PROVISION_LOG:-/var/log/mm-burst-provision.log}"
-# The torch cu128 build used by every venv. nvcc for source builds comes from here.
-CUDA_HOME_DIR="${CUDA_HOME_DIR:-/usr/local/cuda-12.8}"
-# Both target architectures: Ada (L4, g6/g6e) and Blackwell (g7). 8.6 is added
-# only if MM128 keeps a g5/A10G candidate.
-CUDA_ARCHES="${CUDA_ARCHES:-8.9;12.0}"
-# mmcv: the exact tag the host runs (pip list says 2.1.0; INSTALL_VIDEO_RESTORATION.md says 2.2.0 and is stale).
-MMCV_TAG="${MMCV_TAG:-v2.1.0}"
-MMCV_COMMIT="${MMCV_COMMIT:-57c4e25e06e2d4f8a9357c84bcd24089a284dc88}"
 
 STATUS_HISTORY="${MM_STATUS_HISTORY:-$LOGFILE.status}"
 # The export manifest left in the image ({runtimeManifest: ...}); image.json reads it.
@@ -93,6 +85,34 @@ with_heartbeat() {
   return "$rc"
 }
 
+# require_cuda_archs LABEL FILE [OTHER_PROOF]: FILE must carry CUDA code for
+# every architecture in CUDA_ARCHES; the failure names what is there instead.
+# OTHER_PROOF says what else vouches for the file (a sha256 checked against a
+# build that was verified elsewhere, the compiler flags in build.ninja). With
+# it, a cuobjdump that is missing or broken on this machine is only a note:
+# a tool problem must never be reported as "the code is not there".
+require_cuda_archs() {
+  local label="$1" file="$2" proof="${3:-}" have="" rc=0 a missing="" errf
+  errf="$(mktemp /tmp/mm-cuobjdump.XXXXXX)"
+  have="$(cuda_archs "$file" 2>"$errf")" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    local why="cuobjdump is not on this machine"
+    [ "$rc" -eq 3 ] || why="cuobjdump could not read it: $(tr '\n' ' ' < "$errf" | cut -c1-160)"
+    rm -f "$errf"
+    [ -n "$proof" ] || fail_build "cannot list the CUDA architectures in $label ($why)"
+    status "note: the CUDA architectures in $label were not listed here ($why); $proof"
+    return 0
+  fi
+  rm -f "$errf"
+  for a in $(wanted_archs); do
+    grep -qx "$a" <<<"$have" || missing="$missing $a"
+  done
+  if [ -n "$missing" ]; then
+    fail_build "$label has no CUDA code for:$missing (it has: $(printf '%s' "$have" | tr '\n' ' '); wanted TORCH_CUDA_ARCH_LIST=\"$CUDA_ARCHES\")"
+  fi
+  status "$label: CUDA code for $(printf '%s' "$have" | tr '\n' ' ')"
+}
+
 # curl flags for every download: fail on HTTP errors, 20 s to connect, a total limit, 3 tries.
 CURL_NET=(-fsSL --connect-timeout 20 --max-time 300 --retry 3 --retry-delay 5)
 
@@ -116,7 +136,33 @@ status() {
   { cat "$STATUS_HISTORY" 2>/dev/null || printf '%s\n' "$line"; } | timeout 60 aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.status" --only-show-errors || true
 }
 
+# Set by fail_build (a file, because fail_build also runs inside subshells).
+FAILED_MARK="${MM_FAILED_MARK:-/tmp/mm-provision-failed.$$}"
+
+# on_provision_exit: the EXIT trap of provision_main. A script error that is not
+# a fail_build (an unset variable under `set -u`, a command failing under
+# `set -e`) used to end the build with no FAILED line at all: on 2026-11-12 the
+# only trace was "HOME: unbound variable" in the middle of 40 log lines. Now it
+# is reported like any other failure, with the script's own last message.
+on_provision_exit() {
+  local rc=$?
+  # "Did it finish" is PROVISION_OK, not the exit code: after an unset-variable
+  # error some bash versions (3.2 on a Mac) hand the trap the PREVIOUS command's
+  # status, 0, and would then leave with 0, which reads as success.
+  if [ "${PROVISION_OK:-0}" != 1 ] && ! dry; then
+    [ "$rc" -ne 0 ] || rc=1
+    if [ ! -e "$FAILED_MARK" ]; then
+      local last
+      last="$(grep -v -e '^PLAN ' -e '^$' "$LOGFILE" 2>/dev/null | tail -n 1 | cut -c1-240)"
+      status "FAILED: the build script itself stopped; this is a bug in the script, not a failed check. Its last message: ${last:-none}"
+    fi
+  fi
+  rm -f "$FAILED_MARK"
+  exit "$rc"
+}
+
 fail_build() {
+  : > "$FAILED_MARK" 2>/dev/null || true
   status "FAILED: $*"
   if ! dry; then
     printf '%s\n' "$*" | timeout 60 aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.failed" --only-show-errors || true
@@ -394,10 +440,12 @@ step_ready_and_wait() {
 # rebuild function (or "true") as $1; it runs after the unpack and its manifest check.
 provision_main() {
   local rebuild="${1:-true}"
+  trap on_provision_exit EXIT
   if [ "$MM_MODE" = "smoke" ]; then
     status "smoke-only mode on an already-built image"
     step_smoke
     printf 'smoke-only\n' | { dry || net 300 aws s3 cp - "s3://$MM_BUCKET/$MM_BUILD_PREFIX/$MM_FAMILY.verified" --only-show-errors; }
+    PROVISION_OK=1
     return 0
   fi
   step_base_packages
@@ -418,6 +466,7 @@ provision_main() {
   step_smoke
   step_cleanup
   step_ready_and_wait
+  PROVISION_OK=1
 }
 
 parse_provision_args() {
@@ -438,31 +487,36 @@ parse_provision_args() {
   fi
 }
 
-# Shared by the families that carry torch-based CUDA extensions: a source build
-# for both architectures, so no first-run JIT on the worker.
+# The restore family's mmcv. The host's mmcv is compiled for sm_120 only (its
+# own cards); a worker image must also run on Ada (g6). Compiling mmcv on the
+# builder took 40 minutes of rented GPU time on 2026-11-11 and then failed its
+# check, so the two-architecture build is now made ONCE on the server
+# (scripts/burst/build-mmcv-wheel.sh: free, checked there with cuobjdump) and
+# the builder only installs that wheel, by sha256.
 step_rebuild_mmcv() {
-  status "mmcv: rebuild $MMCV_TAG for TORCH_CUDA_ARCH_LIST=\"$CUDA_ARCHES\" (host: sm_120 only)"
-  plan "restore-vsr-mm venv: pip uninstall mmcv; git clone open-mmlab/mmcv $MMCV_TAG (commit $MMCV_COMMIT, verified); MMCV_WITH_OPS=1 FORCE_CUDA=1 TORCH_CUDA_ARCH_LIST=\"$CUDA_ARCHES\" MAX_JOBS=3 pip install --no-build-isolation --no-deps . ; import mmcv.ops; cuobjdump/cuda-ELF check that _ext carries sm_89 and sm_120" && return 0
-  local py="$MM_ROOT/venvs/restore-vsr-mm/bin/python" src=/opt/dlami/nvme/mmcv-src
-  [ -d "$CUDA_HOME_DIR" ] || fail_build "$CUDA_HOME_DIR missing on this DLAMI (need CUDA 12.8 toolkit for the cu128 torch)"
-  mkdir -p /opt/dlami/nvme
-  rm -rf "$src"
-  net 600 git clone -q --depth 1 --branch "$MMCV_TAG" https://github.com/open-mmlab/mmcv.git "$src" || fail_build "could not clone mmcv $MMCV_TAG from github.com (unreachable or timed out)"
-  [ "$(git -C "$src" rev-parse HEAD)" = "$MMCV_COMMIT" ] || fail_build "mmcv $MMCV_TAG is not commit $MMCV_COMMIT"
-  "$py" -m pip uninstall -y -q mmcv
-  (
-    cd "$src"
-    export CUDA_HOME="$CUDA_HOME_DIR" PATH="$CUDA_HOME_DIR/bin:$PATH" MMCV_WITH_OPS=1 FORCE_CUDA=1 \
-      TORCH_CUDA_ARCH_LIST="$CUDA_ARCHES" MAX_JOBS=3
-    # A local compile (no build isolation, no deps: nothing is downloaded), so no time limit; it reports while it runs.
-    with_heartbeat "mmcv build" "$py" -m pip install --no-build-isolation --no-deps -q .
-  ) || fail_build "mmcv build failed (see $LOGFILE)"
-  rm -rf "$src"
+  status "mmcv: install the $MMCV_TAG build for TORCH_CUDA_ARCH_LIST=\"$CUDA_ARCHES\" made on the server (host venv: sm_120 only)"
+  plan "restore-vsr-mm venv: download the mmcv wheel built by scripts/burst/build-mmcv-wheel.sh from s3://$MM_BUCKET/burst-images/wheels/ (key holds the venv's torch and python version); check commit $MMCV_COMMIT and the sha256; pip install --no-index --no-deps --force-reinstall; import mmcv.ops; list the architectures in _ext with cuobjdump when it is on the image (sm_89 and sm_120). Nothing is compiled on the builder" && return 0
+  local py="$MM_ROOT/venvs/restore-vsr-mm/bin/python" torchv pytag key dir name want got commit
+  torchv="$("$py" -c 'import torch; print(torch.__version__)')" || fail_build "torch does not import in the restore-vsr-mm venv"
+  pytag="$("$py" -c 'import sys; print("cp%d%d" % sys.version_info[:2])')"
+  key="$(mmcv_wheel_key "$torchv" "$pytag")"
+  dir="$(mktemp -d /tmp/mm-mmcv.XXXXXX)"
+  net 300 aws s3 cp "s3://$MM_BUCKET/$key.json" "$dir/wheel.json" --only-show-errors 2>/dev/null \
+    || fail_build "there is no two-architecture mmcv build in S3 for torch $torchv / $pytag (s3://$MM_BUCKET/$key.json). On the server run: scripts/burst/build-mmcv-wheel.sh   (free, no machine is launched). Then start this build again."
+  name="$(jq -r '.wheel // empty' "$dir/wheel.json")"
+  want="$(jq -r '.sha256 // empty' "$dir/wheel.json")"
+  commit="$(jq -r '.commit // empty' "$dir/wheel.json")"
+  [[ "$name" =~ ^mmcv-[A-Za-z0-9._+-]+\.whl$ ]] || fail_build "the mmcv build record in S3 names no wheel ('$name')"
+  [ "$commit" = "$MMCV_COMMIT" ] || fail_build "the mmcv build in S3 is commit '$commit', not $MMCV_COMMIT: run scripts/burst/build-mmcv-wheel.sh on the server again"
+  net 600 aws s3 cp "s3://$MM_BUCKET/$key.whl" "$dir/$name" --only-show-errors || fail_build "could not download the mmcv wheel from S3"
+  got="$(sha256sum "$dir/$name" | cut -d' ' -f1)"
+  [ "$want" = "$got" ] || fail_build "mmcv wheel sha256 mismatch (want $want got $got)"
+  net 600 "$py" -m pip install --no-index --no-deps --force-reinstall -q "$dir/$name" || fail_build "installing the mmcv wheel failed (see $LOGFILE)"
+  rm -rf "$dir"
   "$py" -c "import mmcv, mmcv.ops; print('mmcv', mmcv.__version__)" || fail_build "mmcv.ops does not import"
   local so
   so="$("$py" -c "import mmcv,os;print(os.path.join(os.path.dirname(mmcv.__file__),[f for f in os.listdir(os.path.dirname(mmcv.__file__)) if f.startswith('_ext')][0]))")"
-  output_has 'sm_89' "$CUDA_HOME_DIR/bin/cuobjdump" --list-elf "$so" || fail_build "mmcv _ext has no sm_89 code"
-  output_has 'sm_120' "$CUDA_HOME_DIR/bin/cuobjdump" --list-elf "$so" || fail_build "mmcv _ext has no sm_120 code"
+  require_cuda_archs "mmcv _ext" "$so" "the wheel's sha256 matches the build that was checked on the server"
 }
 
 # RVRT's deform_attn is a torch JIT extension. The host cache has it for sm_120
@@ -470,12 +524,27 @@ step_rebuild_mmcv() {
 # the same TORCH_CUDA_ARCH_LIST, so the build flags (and cache key) match at run time.
 step_prebuild_rvrt_ext() {
   status "rvrt: pre-build deform_attn for TORCH_CUDA_ARCH_LIST=\"$CUDA_ARCHES\""
+  plan "apt: ninja-build if no ninja is on PATH (torch needs it to compile an extension at import time)" || {
+    # torch's cpp_extension.load() has no fallback without ninja; the restore-sr venv carries none.
+    command -v ninja >/dev/null 2>&1 || apt_get install -y -qq ninja-build || fail_build "could not install ninja-build (RVRT's extension cannot be compiled without it)"
+  }
   plan "restore-sr venv: import RVRT models.op.deform_attn with HOME=$MM_HOME TORCH_CUDA_ARCH_LIST=\"$CUDA_ARCHES\" CUDA_HOME=$CUDA_HOME_DIR so the JIT build lands in $MM_HOME/.cache/torch_extensions" && return 0
   (
     export HOME="$MM_HOME" CUDA_HOME="$CUDA_HOME_DIR" PATH="$CUDA_HOME_DIR/bin:$PATH" TORCH_CUDA_ARCH_LIST="$CUDA_ARCHES" MAX_JOBS=3
     cd "$MM_ROOT/repos/RVRT"
     with_heartbeat "rvrt deform_attn build" "$MM_ROOT/venvs/restore-sr/bin/python" -c "from models.op.deform_attn import deform_attn_ext; print('deform_attn ext ok')"
   ) || fail_build "RVRT deform_attn extension build failed"
+  local so
+  so="$(find "$MM_HOME/.cache/torch_extensions" -name 'deform_attn*.so' -type f 2>/dev/null | sort | sed -n '1p')"
+  [ -n "$so" ] || fail_build "RVRT deform_attn was built but its .so is not under $MM_HOME/.cache/torch_extensions"
+  # First proof, with no tool needed: the compiler flags torch wrote for this build.
+  local ninja a
+  ninja="$(dirname "$so")/build.ninja"
+  [ -f "$ninja" ] || fail_build "RVRT deform_attn: no build.ninja beside $so"
+  for a in $(wanted_archs); do
+    grep -qE -- "code=${a}( |\$)" "$ninja" || fail_build "RVRT deform_attn was not compiled for $a (build.ninja has: $(grep -o 'code=sm_[0-9a-z]*' "$ninja" | sort -u | tr '\n' ' '))"
+  done
+  require_cuda_archs "RVRT deform_attn" "$so" "its build.ninja compiled for $(wanted_archs | tr '\n' ' ')"
 }
 
 # S0 finding: restore_video.py reads the BasicVSR++ config from

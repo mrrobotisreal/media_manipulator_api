@@ -2,7 +2,7 @@
 # MM126 smoke: audio family (DeepFilterNet, Demucs, faster-whisper small -> medium).
 # shellcheck source=smoke-lib.sh disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/smoke-lib.sh"
-export HOME="${HOME_OVERRIDE:-$([ -d /opt/mm-burst-home ] && echo /opt/mm-burst-home || echo "$HOME")}"
+export HOME="${HOME_OVERRIDE:-$([ -d /opt/mm-burst-home ] && echo /opt/mm-burst-home || echo "${HOME:-/root}")}"
 
 mkdir -p "$WORK/df-in" "$WORK/df" "$WORK/dm"
 ffmpeg -v error -y -i "$FIX/speech.wav" -ac 1 -ar 48000 "$WORK/df-in/in48.wav"

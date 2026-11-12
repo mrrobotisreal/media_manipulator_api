@@ -16,7 +16,7 @@ set -uo pipefail
 
 SMOKE_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FIX="$SMOKE_HERE/fixtures"
-MM_ROOT="/opt/media-manipulator-ai"
+MM_ROOT="${MM_ROOT:-/opt/media-manipulator-ai}"
 SMOKE_CARD="${SMOKE_CARD:-0}"
 SMOKE_OUT="${SMOKE_OUT:-/tmp/mm-smoke.json}"
 SMOKE_MIN_GPU_MIB="${SMOKE_MIN_GPU_MIB:-40}"
@@ -70,7 +70,7 @@ case_run() {
   $ok || FAILS=$((FAILS + 1))
   jq -cn --arg name "$name" --argjson ok "$ok" --arg why "$why" --argjson rc "$rc" \
     --argjson sec "$(awk -v a="$t0" -v b="$t1" 'BEGIN{printf "%.2f", b-a}')" --argjson gpu "$extra" \
-    --arg tail "$(tail -n 8 "$log" | tr -d '\000' | cut -c1-300)" \
+    --arg tail "$(tail -n 30 "$log" | tr -d '\000' | cut -c1-300)" \
     '{name: $name, ok: $ok, seconds: $sec, gpuPeakMiB: $gpu, exit: $rc} + (if $ok then {} else {why: $why, logTail: $tail} end)' >> "$CASES_FILE"
   printf '%-22s %s  %6.2fs  gpu+%s MiB  %s\n' "$name" "$($ok && echo PASS || echo FAIL)" \
     "$(awk -v a="$t0" -v b="$t1" 'BEGIN{printf "%.2f", b-a}')" "$extra" "$why" >&2

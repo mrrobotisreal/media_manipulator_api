@@ -70,7 +70,7 @@ func TestProvisionDryRunPrintsAPlanAndRunsNothing(t *testing.T) {
 				t.Errorf("%s dry-run plan lacks %q", fam, want)
 			}
 		}
-		hasMMCV := strings.Contains(s, "mmcv: rebuild")
+		hasMMCV := strings.Contains(s, "mmcv: install")
 		if (fam == "restore") != hasMMCV {
 			t.Errorf("%s: mmcv rebuild presence wrong (%v)", fam, hasMMCV)
 		}
