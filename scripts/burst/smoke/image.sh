@@ -2,7 +2,7 @@
 # MM126 smoke: image family (rembg, upscale, redact, LaMa).
 # shellcheck source=smoke-lib.sh disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/smoke-lib.sh"
-export HOME="${HOME_OVERRIDE:-$([ -d /opt/mm-burst-home ] && echo /opt/mm-burst-home || echo "$HOME")}"
+export HOME="${HOME_OVERRIDE:-$([ -d /opt/mm-burst-home ] && echo /opt/mm-burst-home || echo "${HOME:-/root}")}"
 
 # rembg: the exact bash -lc script shape the Go code uses.
 case_run rembg 1 "" "$(is_png "$WORK/rembg.png")" -- bash -lc \

@@ -4,7 +4,7 @@
 # Flags and outputs of each tool were read from its source (see the wrappers' headers).
 # shellcheck source=smoke-lib.sh disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/smoke-lib.sh"
-export HOME="${HOME_OVERRIDE:-$([ -d /opt/mm-burst-home ] && echo /opt/mm-burst-home || echo "$HOME")}"
+export HOME="${HOME_OVERRIDE:-$([ -d /opt/mm-burst-home ] && echo /opt/mm-burst-home || echo "${HOME:-/root}")}"
 
 LAB="$MM_ROOT/scripts/lab"
 REF="$FIX/lab_ref.wav"

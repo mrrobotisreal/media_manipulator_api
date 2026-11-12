@@ -122,6 +122,23 @@ elif [ -z "$SMOKE_AMI" ]; then
   fi
 fi
 
+# 1b. restore installs a two-architecture mmcv wheel made on the server
+# (build-mmcv-wheel.sh). Without it the builder would stop after unpacking
+# 34 GB, so check before anything is launched.
+if [ "$FAMILY" = restore ] && [ -z "$SMOKE_AMI" ]; then
+  MMCV_PY="${MM_MMCV_VENV:-$MM_ROOT/venvs/restore-vsr-mm}/bin/python"
+  if [ "$DRY" = 1 ]; then
+    echo "AWS   aws s3api head-object s3://$MM_BUCKET/burst-images/wheels/mmcv-<version>-torch<venv torch>-<python>-$(wanted_archs | tr '\n' '-' | sed 's/-$//').json (dry run: not called; made by scripts/burst/build-mmcv-wheel.sh)"
+  elif [ -x "$MMCV_PY" ]; then
+    MMCV_KEY="$(mmcv_wheel_key "$(PYTHONDONTWRITEBYTECODE=1 "$MMCV_PY" -c 'import torch; print(torch.__version__)')" "$(PYTHONDONTWRITEBYTECODE=1 "$MMCV_PY" -c 'import sys; print("cp%d%d" % sys.version_info[:2])')")"
+    aws s3api head-object --bucket "$MM_BUCKET" --key "$MMCV_KEY.json" >/dev/null 2>&1 \
+      || die "the two-architecture mmcv build is not in S3 yet (s3://$MM_BUCKET/$MMCV_KEY.json). Run this first (free, 10 to 20 minutes, launches nothing): scripts/burst/build-mmcv-wheel.sh"
+    echo "mmcv wheel:    s3://$MM_BUCKET/$MMCV_KEY.whl (built on the server for both architectures)"
+  else
+    echo "mmcv wheel:    not checked here (the restore venv is not on this machine); the builder stops early if it is missing"
+  fi
+fi
+
 # 2. Base image.
 if [ -n "$SMOKE_AMI" ]; then
   BASE_AMI="$SMOKE_AMI"
@@ -255,6 +272,13 @@ while :; do
     log "BUILD FAILED. Last log lines:"
     aws s3 cp "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.log" - 2>/dev/null | tail -n 40 >&2 || true
     aws s3 cp "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.smoke.json" - 2>/dev/null | jq -c '.cases[]? | select(.ok==false)' >&2 || true
+    # The one line that says why, last, so it is the first thing read.
+    why="$(aws s3 cp "s3://$MM_BUCKET/$BUILD_PREFIX/$FAMILY.status" - 2>/dev/null | grep 'FAILED:' | sed -n '$p' || true)"
+    echo >&2
+    echo "================ BUILD FAILED (paste from here up into chat) ================" >&2
+    echo "REASON: ${why:-not reported by the builder; the log lines above are all there is}" >&2
+    echo "The builder is being terminated. No image was made." >&2
+    echo "=============================================================================" >&2
     exit 1
   fi
   # The status object holds every line the builder has reported: print the ones not shown yet.

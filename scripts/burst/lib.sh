@@ -24,6 +24,36 @@ MM_FFMPEG_MIRROR_KEY="${MM_FFMPEG_MIRROR_KEY:-burst-images/apt/ffmpeg8-noble-amd
 # verified with the PPA's own key (keys/ppa-ubuntuhandbook1-ffmpeg8.asc). The
 # builder and mirror-ffmpeg.sh's self-test use the same line.
 ffmpeg_apt_line() { printf 'deb [arch=amd64 signed-by=%s%s] %s noble main\n' "$1" "${3:+ $3}" "$2"; }
+# The CUDA toolkit of the torch cu128 build used by every venv (nvcc, cuobjdump).
+CUDA_HOME_DIR="${CUDA_HOME_DIR:-/usr/local/cuda-12.8}"
+# Both target architectures: Ada (L4, g6/g6e) and Blackwell (g7). 8.6 is added
+# only if MM128 keeps a g5/A10G candidate.
+CUDA_ARCHES="${CUDA_ARCHES:-8.9;12.0}"
+# mmcv: the exact tag the host runs (pip list says 2.1.0; INSTALL_VIDEO_RESTORATION.md says 2.2.0 and is stale).
+MMCV_TAG="${MMCV_TAG:-v2.1.0}"
+MMCV_COMMIT="${MMCV_COMMIT:-57c4e25e06e2d4f8a9357c84bcd24089a284dc88}"
+# wanted_archs: CUDA_ARCHES as the names cuobjdump prints (sm_89, sm_120), one per line.
+wanted_archs() { printf '%s\n' "$CUDA_ARCHES" | tr ';' '\n' | sed -e 's/\.//' -e 's/^/sm_/'; }
+# cuda_archs FILE: the distinct CUDA architectures (sm_89, sm_120, ...) compiled
+# into FILE, one per line. Returns 3 when cuobjdump is not on this machine and
+# 4 when cuobjdump cannot read the file (its message goes to stderr). On
+# 2026-11-11 the old check sent cuobjdump's errors to /dev/null, so "the tool is
+# missing or failed" and "the code is not there" produced the same message.
+cuda_archs() {
+  local tool="$CUDA_HOME_DIR/bin/cuobjdump" out
+  [ -x "$tool" ] || tool="$(command -v cuobjdump 2>/dev/null || true)"
+  if [ -z "$tool" ] || [ ! -x "$tool" ]; then return 3; fi
+  out="$("$tool" --list-elf "$1" 2>&1)" || { printf '%s\n' "$out" | sed -n '1,3p' >&2; return 4; }
+  printf '%s\n' "$out" | sed -n 's/.*\.\(sm_[0-9a-z]*\)\.cubin.*/\1/p' | sort -u
+}
+
+# mmcv_wheel_key TORCH_VERSION PYTHON_TAG: the S3 key (without .whl/.json) of the
+# two-architecture mmcv build for that torch and python. build-mmcv-wheel.sh
+# writes it, the restore builder reads it: a different torch gets a different key.
+mmcv_wheel_key() {
+  local t="$1"
+  printf 'burst-images/wheels/mmcv-%s-torch%s-%s-%s' "${MMCV_TAG#v}" "${t//+/_}" "$2" "$(wanted_archs | tr '\n' '-' | sed 's/-$//')"
+}
 MM_ROOT="${MM_ROOT:-/opt/media-manipulator-ai}"
 MM_HOME="${MM_HOME:-/opt/mm-burst-home}"
 

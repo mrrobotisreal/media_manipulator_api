@@ -4,7 +4,7 @@
 # image_restore_models.go, on a 4 -> 32 frame PNG fixture (64x64).
 # shellcheck source=smoke-lib.sh disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/smoke-lib.sh"
-export HOME="${HOME_OVERRIDE:-$([ -d /opt/mm-burst-home ] && echo /opt/mm-burst-home || echo "$HOME")}"
+export HOME="${HOME_OVERRIDE:-$([ -d /opt/mm-burst-home ] && echo /opt/mm-burst-home || echo "${HOME:-/root}")}"
 
 R="$MM_ROOT"
 SR="$R/venvs/restore-sr/bin/python"

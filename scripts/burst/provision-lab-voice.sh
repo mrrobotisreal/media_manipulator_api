@@ -31,6 +31,10 @@ LAB_REPOS_DIR="$MM_ROOT/repos/lab-voice"
 LAB_VENVS_DIR="$MM_ROOT/venvs"
 LAB_WRAPPERS_SRC="${LAB_WRAPPERS_SRC:-$PHERE/../lab}"
 LAB_BUILD_DIR="${LAB_BUILD_DIR:-/opt/mm-build}"
+# The build user's home. NEVER read $HOME here: the builder's user-data runs
+# under cloud-init with HOME unset, and with `set -u` a bare $HOME ends the
+# build (2026-11-12: all four models were installed, then the cleanup step died on it).
+BUILDER_HOME="${MM_BUILDER_HOME:-/root}"
 LAB_TOOLS="$LAB_BUILD_DIR/tools"
 UV_VERSION=0.13.7
 HUB_VERSION=0.35.3
@@ -56,12 +60,12 @@ REV_COSY=29e01c4e8d000f4bcd70751be16fa94bf3d85a18          # FunAudioLLM/Fun-Cos
 
 scrub_hf_token() {
   unset HF_TOKEN HUGGING_FACE_HUB_TOKEN HUGGINGFACE_TOKEN HF_API_TOKEN HUGGINGFACE_HUB_TOKEN
-  rm -f /root/.cache/huggingface/token /root/.huggingface/token "$MM_HOME/.cache/huggingface/token" 2>/dev/null || true
+  rm -f "$BUILDER_HOME/.cache/huggingface/token" "$BUILDER_HOME/.huggingface/token" "$MM_HOME/.cache/huggingface/token" 2>/dev/null || true
 }
 
 assert_no_hf_token() {
   local t
-  for t in /root/.cache/huggingface/token /root/.huggingface/token "$MM_HOME/.cache/huggingface/token"; do
+  for t in "$BUILDER_HOME/.cache/huggingface/token" "$BUILDER_HOME/.huggingface/token" "$MM_HOME/.cache/huggingface/token"; do
     [ ! -e "$t" ] || fail_build "a Hugging Face token file is present at $t (it must never be in the image)"
   done
   if [ -n "${HF_TOKEN:-}${HUGGING_FACE_HUB_TOKEN:-}${HUGGINGFACE_TOKEN:-}${HF_API_TOKEN:-}" ]; then
@@ -265,7 +269,7 @@ step_lab_cleanup_extras() {
   status "cleanup: uv cache, tools, build leftovers, HF token files"
   plan "rm -rf /opt/mm-build (uv cache + tools) and every venv's __pycache__ is kept; scrub token variables and files; assert none remain" && return 0
   scrub_hf_token
-  rm -rf "${LAB_BUILD_DIR:?}" "$HOME/.cache/uv" "$HOME/.cache/pip" 2>/dev/null || true
+  rm -rf "${LAB_BUILD_DIR:?}" "${BUILDER_HOME:?}/.cache/uv" "${BUILDER_HOME:?}/.cache/pip" 2>/dev/null || true
   assert_no_hf_token
 }
 
