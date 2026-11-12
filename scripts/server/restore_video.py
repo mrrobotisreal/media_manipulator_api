@@ -44,7 +44,6 @@ import threading
 from pathlib import Path
 from typing import List, Optional
 
-BASICVSRPP_CONFIG = "configs/basicvsr_pp/basicvsr-pp_c64n7_8xb1-600k_reds4.py"
 BASICVSRPP_WEIGHTS = "basicvsr_plusplus_c64n7_8x1_600k_reds4_20210217-db622b2f.pth"
 KAIR_DEFAULT_TASKS = {
     "rvrt": "001_RVRT_videosr_bi_REDS_30frames",
@@ -86,33 +85,90 @@ def resolve_weights(models_dir: Path, model: str, preferred: str) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# BasicVSR++ via mmagic. We call the generator network directly (bypassing the
-# inferencer's data pipeline) over fixed-size windows so VRAM stays bounded.
+# BasicVSR++ (the network class from mmagic). We call the generator network
+# directly over fixed-size windows so VRAM stays bounded.
+#
+# The network is loaded WITHOUT `from mmagic.apis import init_model`. That
+# import pulls in every editor and inferencer mmagic ships (ControlNet,
+# AnimateDiff, ...), and two of those do not import with the packages in the
+# restore-vsr-mm venv: controlnet_aux needs `mediapipe.solutions` (gone from
+# mediapipe 0.10.35) and animatediff needs a diffusers module that 0.38 no
+# longer has. From the first BasicVSR++ job on 2026-06-10 until 2026-11-12
+# every one of them failed with "mmagic environment not importable". None of
+# that code is used by BasicVSR++, so only the network's own module is
+# imported, and the weights are loaded strictly (any mismatch is an error).
 # ---------------------------------------------------------------------------
+
+# Packages whose __init__.py is NOT run (they import the unrelated editors).
+_BASICVSRPP_SKIP_INIT = (
+    "mmagic.models",
+    "mmagic.models.editors",
+    "mmagic.models.editors.basicvsr",
+    "mmagic.models.editors.basicvsr_plusplus_net",
+)
+_BASICVSRPP_NET_MODULE = "mmagic.models.editors.basicvsr_plusplus_net.basicvsr_plusplus_net"
+# The generator of configs/basicvsr_pp/basicvsr-pp_c64n7_8xb1-600k_reds4.py,
+# the config these weights were trained with. spynet_pretrained is None: the
+# checkpoint carries the SPyNet weights, so nothing is downloaded.
+_BASICVSRPP_NET_ARGS = {"mid_channels": 64, "num_blocks": 7, "is_low_res_input": True, "spynet_pretrained": None}
+
+
+def import_basicvsrpp_net_class():
+    """The BasicVSRPlusPlusNet class, importing only what the network needs."""
+    import importlib  # noqa: PLC0415
+    import os  # noqa: PLC0415
+    import types  # noqa: PLC0415
+
+    import mmagic  # noqa: PLC0415  (its own __init__ only checks the mmcv/mmengine versions)
+
+    root = os.path.dirname(mmagic.__file__)
+    for name in _BASICVSRPP_SKIP_INIT:
+        if name in sys.modules:
+            continue
+        pkg = types.ModuleType(name)
+        pkg.__path__ = [os.path.join(root, *name.split(".")[1:])]
+        pkg.__package__ = name
+        sys.modules[name] = pkg
+        parent, _, leaf = name.rpartition(".")
+        setattr(sys.modules[parent], leaf, pkg)
+    return importlib.import_module(_BASICVSRPP_NET_MODULE).BasicVSRPlusPlusNet
+
+
+def load_basicvsrpp_generator(weights: Path, device: str):
+    """The BasicVSR++ generator with its weights, in eval mode on `device`."""
+    import torch  # noqa: PLC0415
+
+    net = import_basicvsrpp_net_class()(**_BASICVSRPP_NET_ARGS)
+    checkpoint = torch.load(str(weights), map_location="cpu", weights_only=True)
+    state = checkpoint.get("state_dict", checkpoint)
+    generator = {k[len("generator."):]: v for k, v in state.items() if k.startswith("generator.")}
+    if not generator:
+        fail("the BasicVSR++ checkpoint has no generator weights (unexpected file)")
+    net.load_state_dict(generator, strict=True)
+    return net.to(device).eval()
+
 
 def run_basicvsrpp(repos_dir: Path, models_dir: Path, frames: List[Path], out_frames: Path, gpu: str, max_seq_len: int) -> None:
     try:
         import cv2  # noqa: PLC0415
         import numpy as np  # noqa: PLC0415
         import torch  # noqa: PLC0415
-        from mmagic.apis import init_model  # noqa: PLC0415
     except Exception as exc:  # noqa: BLE001
-        fail(f"mmagic environment not importable: {exc}")
+        fail(f"restore-vsr-mm environment not importable: {exc}")
         raise
 
-    config = repos_dir / "mmagic" / BASICVSRPP_CONFIG
-    if not config.exists():
-        fail(f"mmagic config not found at {config} (clone the mmagic repo)")
     weights = resolve_weights(models_dir, "basicvsrpp", BASICVSRPP_WEIGHTS)
     if not torch.cuda.is_available():
         fail("CUDA is not available in this venv (check driver / CUDA_VISIBLE_DEVICES)")
     device = f"cuda:{gpu}"
 
-    model = init_model(str(config), str(weights), device=device)
-    generator = getattr(model, "generator", None)
-    if generator is None:
-        fail("loaded mmagic model has no generator network (unexpected mmagic version)")
-    generator.eval()
+    try:
+        generator = load_basicvsrpp_generator(weights, device)
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        fail(f"BasicVSR++ network could not be loaded: {type(exc).__name__}: {exc}")
+        raise
 
     total = len(frames)
     done = 0

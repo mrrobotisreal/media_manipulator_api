@@ -166,3 +166,24 @@ sudo systemctl restart mm-voices
 ```
 
 See `docs/INSTALL_VOICES.md` for the full install flow (MM76).
+
+## restore_video.py: BasicVSR++ loader (2026-11-12)
+
+`restore_video.py` loads BasicVSR++ without `mmagic.apis`. That import pulls in
+every editor mmagic ships, and in the `restore-vsr-mm` venv two of them fail
+(`module 'mediapipe' has no attribute 'solutions'`, then a missing `diffusers`
+module), so every BasicVSR++ job failed from the first one on 2026-06-10. The
+script now registers the four parent packages without running their
+`__init__.py`, imports only `basicvsr_plusplus_net`, builds the network with the
+config's generator arguments, and loads the `generator.*` weights strictly.
+
+Deploy (the file is owned by the normal user, no sudo needed):
+
+```bash
+cd ~/media-manipulator/api
+cp /opt/media-manipulator-ai/scripts/restore_video.py /opt/media-manipulator-ai/scripts/restore_video.py.bak.mm-$(date +%Y%m%d-%H%M%S)
+cp scripts/server/restore_video.py /opt/media-manipulator-ai/scripts/restore_video.py
+```
+
+No restart: the API starts the script fresh for each job. Tests (stdlib only):
+`python3 -m unittest scripts/server/test_restore_video.py`.

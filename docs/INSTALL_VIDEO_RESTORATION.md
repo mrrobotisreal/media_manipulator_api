@@ -127,7 +127,11 @@ cd mmcv
 sudo MMCV_WITH_OPS=1 TORCH_CUDA_ARCH_LIST="12.0" FORCE_CUDA=1 \
   /opt/media-manipulator-ai/venvs/restore-vsr-mm/bin/pip install -e . --no-build-isolation
 
-# mmagic (provides the BasicVSR++ config + inference API)
+# mmagic (provides the BasicVSR++ network class). Since 2026-11-12 restore_video.py
+# imports only that class's module and loads the weights itself: `from mmagic.apis
+# import init_model` does not import in this venv (controlnet_aux needs
+# mediapipe.solutions, animatediff needs a diffusers module that is gone), which
+# failed every BasicVSR++ job from 2026-06-10 on. No mmagic config file is read.
 cd /opt/media-manipulator-ai/repos
 sudo git clone https://github.com/open-mmlab/mmagic.git
 sudo /opt/media-manipulator-ai/venvs/restore-vsr-mm/bin/pip install -e ./mmagic --no-build-isolation
